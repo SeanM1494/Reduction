@@ -14,6 +14,7 @@ import { Router, type Request, type Response } from "express";
 import crypto from "node:crypto";
 import { fetchSource } from "../lib/fetchSource";
 import { structureRecipe } from "../lib/structureRecipe";
+import { structureRecipeFromUrl } from "../lib/fetchViaClaude";
 import type { Recipe } from "../../shared/layout";
 
 export const recipesRouter = Router();
@@ -86,16 +87,38 @@ recipesRouter.post("/extract", async (req: Request, res: Response) => {
       if (cached)
         return res.json({ recipe: cached, meta: { cached: true, source: "url" } });
 
-      const src = await fetchSource(url);
-      const { recipe, attempts, repaired } = await structureRecipe({
-        title: src.title,
-        yieldText: src.yieldText,
-        ingredients: src.ingredients,
-        instructions: src.instructions,
-        text: src.quality === "text" ? src.text : undefined,
-        sourceUrl: url,
-      });
-      recipe.source = src.siteName;
+      let recipe;
+      let attempts = 1;
+      let repaired: string[] = [];
+      let via: "self" | "claude" = "self";
+      let extraction: "jsonld" | "text" | undefined;
+
+      try {
+        // Our own fetch is cheaper and gives us JSON-LD when the site has it.
+        const src = await fetchSource(url);
+        const out = await structureRecipe({
+          title: src.title,
+          yieldText: src.yieldText,
+          ingredients: src.ingredients,
+          instructions: src.instructions,
+          text: src.quality === "text" ? src.text : undefined,
+          sourceUrl: url,
+        });
+        recipe = out.recipe;
+        attempts = out.attempts;
+        repaired = out.repaired;
+        recipe.source = src.siteName;
+        extraction = src.quality;
+      } catch (selfErr) {
+        // Blocked, JS-rendered, or unreadable. Let Claude fetch it instead —
+        // the request comes from Anthropic's infrastructure, not this Repl.
+        console.warn("[extract] self-fetch failed, using web_fetch:", (selfErr as Error).message);
+        const out = await structureRecipeFromUrl(url);
+        recipe = out.recipe;
+        attempts = out.attempts;
+        repaired = out.repaired;
+        via = "claude";
+      }
 
       cache.set(key, { recipe, at: Date.now() });
       return res.json({
@@ -105,7 +128,8 @@ recipesRouter.post("/extract", async (req: Request, res: Response) => {
           source: "url",
           // "text" means we parsed prose rather than structured data — a
           // useful signal that the result deserves a closer look.
-          extraction: src.quality,
+          extraction,
+          via,
           attempts,
           repaired,
         },

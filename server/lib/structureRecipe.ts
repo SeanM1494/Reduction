@@ -10,7 +10,13 @@ import Anthropic from "@anthropic-ai/sdk";
 import { SYSTEM_PROMPT, buildUserText, buildRepairText } from "./prompt";
 import { validateRecipe, type Recipe } from "../../shared/layout";
 
-const client = new Anthropic(); // reads ANTHROPIC_API_KEY from the environment
+let _client: Anthropic | null = null;
+function getClient(): Anthropic {
+  if (!process.env.ANTHROPIC_API_KEY)
+    throw new Error("ANTHROPIC_API_KEY is not set. Add it in the Secrets tab.");
+  if (!_client) _client = new Anthropic();
+  return _client;
+}
 
 const MODEL = "claude-sonnet-5";
 const MAX_TOKENS = 8000;
@@ -89,7 +95,7 @@ export async function structureRecipe(
   let repaired: string[] = [];
 
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
-    const msg = await client.messages.create({
+    const msg = await getClient().messages.create({
       model: MODEL,
       max_tokens: MAX_TOKENS,
       system: SYSTEM_PROMPT,
