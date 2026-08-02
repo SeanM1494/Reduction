@@ -426,3 +426,122 @@ body {
   .rd-op.is-ready::after { display: none; }
   .rd-frame { box-shadow: none; }
 }
+
+/* ==================================================================
+ * Finish strip + handoff
+ * ==================================================================
+ * The linear tail of a recipe leaves the table and becomes a row of chips.
+ * When every ingredient has joined the mixture, the table tucks into a
+ * one-line summary and the strip comes forward.
+ * ================================================================== */
+
+.rd-swap { animation: rd-swap-in .38s cubic-bezier(.2,.7,.3,1); }
+@keyframes rd-swap-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: none; }
+}
+
+.rd-under {
+  display: flex; align-items: baseline; justify-content: space-between;
+  gap: 12px; flex-wrap: wrap;
+}
+.rd-tuck-btn {
+  font: inherit; font-size: 12px; background: none; border: 0;
+  color: var(--muted); cursor: pointer; padding: 6px 2px 0;
+  text-decoration: underline; text-underline-offset: 3px;
+}
+.rd-tuck-btn:hover { color: var(--ink); }
+
+/* the collapsed stand-in for the table */
+.rd-tucked {
+  display: flex; align-items: center; gap: 11px; width: 100%;
+  font: inherit; text-align: left; cursor: pointer;
+  background: var(--cool-bg); border: 1px solid var(--cool-line);
+  border-radius: 10px; padding: 13px 15px; color: var(--cool-ink);
+}
+.rd-tucked:hover { background: #d8dcba; }
+.rd-tucked-check {
+  flex: none; width: 15px; height: 15px; background: var(--cool-ink);
+  clip-path: polygon(14% 48%, 0 62%, 38% 100%, 100% 22%, 86% 8%, 38% 72%);
+}
+.rd-tucked-text { flex: 1; font-size: 14px; font-weight: 600; }
+.rd-tucked-more {
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 10.5px; letter-spacing: .05em; text-transform: uppercase;
+  color: var(--muted); white-space: nowrap;
+}
+
+/* the strip itself */
+.rd-finish {
+  list-style: none; margin: 12px 0 0; padding: 0;
+  display: flex; align-items: stretch; gap: 0; flex-wrap: wrap;
+}
+.rd-fin-item { display: flex; align-items: center; }
+.rd-fin-item:not(:last-child)::after {
+  content: ""; flex: none; width: 18px; height: 1px;
+  background: var(--line-strong); margin: 0 2px;
+}
+.rd-fin {
+  display: flex; align-items: center; gap: 9px;
+  background: var(--card); border: 1px solid var(--line);
+  border-radius: 9px; padding: 11px 14px; cursor: pointer;
+  transition: background .16s ease, border-color .16s ease, transform .2s ease;
+}
+.rd-fin:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+.rd-fin:hover { background: #f7eee1; }
+.rd-fin-num {
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 10px; color: var(--faint);
+  border: 1px solid var(--line); border-radius: 50%;
+  width: 19px; height: 19px; display: grid; place-items: center; flex: none;
+}
+.rd-fin-label { font-size: 14px; font-weight: 500; line-height: 1.25; }
+.rd-fin-time {
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 10.5px; color: var(--muted); white-space: nowrap;
+}
+
+.rd-fin.is-ready {
+  background: var(--warm-bg); border-color: var(--warm-line);
+  box-shadow: inset 0 0 0 1px var(--warm-line);
+}
+.rd-fin.is-ready .rd-fin-label { color: var(--warm-ink); font-weight: 600; }
+.rd-fin.is-ready .rd-fin-num { border-color: var(--warm-line); color: var(--warm-ink); }
+.rd-fin.is-ready:hover { background: #ffd3b0; }
+
+.rd-fin.is-preview { background: #fff3e6; border-color: var(--warm-line); }
+.rd-fin.is-preview .rd-fin-label { color: var(--warm-ink); }
+
+.rd-fin.is-done {
+  background: var(--cool-bg); border-color: var(--cool-line); color: var(--cool-ink);
+}
+.rd-fin.is-done .rd-fin-label { text-decoration: line-through; opacity: .78; }
+.rd-fin.is-done .rd-fin-num { border-color: var(--cool-line); color: var(--cool-ink); }
+.rd-fin.is-done .rd-fin-time { color: #6c7a41; }
+.rd-fin.is-done:hover { background: #d8dcba; }
+
+/* once the tree is complete the strip is the whole show */
+.rd-finish.is-focus { margin-top: 14px; animation: rd-focus-in .45s cubic-bezier(.2,.7,.3,1); }
+.rd-finish.is-focus .rd-fin { padding: 15px 18px; }
+.rd-finish.is-focus .rd-fin-label { font-size: 15.5px; }
+@keyframes rd-focus-in {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: none; }
+}
+
+@media (max-width: 700px) {
+  .rd-finish { flex-direction: column; align-items: stretch; }
+  .rd-fin-item { flex-direction: column; align-items: stretch; }
+  .rd-fin-item:not(:last-child)::after {
+    width: 1px; height: 12px; margin: 3px 0 3px 26px;
+  }
+  .rd-finish.is-focus .rd-fin { padding: 14px 15px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rd-swap, .rd-finish.is-focus { animation: none; }
+}
+
+@media print {
+  .rd-tuck-btn, .rd-tucked-more { display: none; }
+}
