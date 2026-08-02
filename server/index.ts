@@ -36,7 +36,7 @@ if (isProd) {
 app.listen(PORT, "0.0.0.0", () => {
   console.log(
     isProd
-      ? `Logic Cooking listening on ${PORT}`
+      ? `Reduction listening on ${PORT}`
       : `API listening on ${PORT} (client runs on 5000)`
   );
 });

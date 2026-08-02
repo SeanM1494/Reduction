@@ -1,4 +1,4 @@
-# Logic Cooking
+# Reduction
 
 Turns any recipe into a dependency diagram: ingredients down the left, operations nesting to the right, each step's box spanning exactly the rows it consumes. Check things off as you cook and the next available step lights up.
 

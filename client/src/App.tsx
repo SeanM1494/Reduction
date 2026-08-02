@@ -85,7 +85,7 @@ export default function App() {
       <nav className="rd-nav no-print">
         <button className="rd-brand" onClick={() => setOpenId(null)}>
           <span className="rd-logo" aria-hidden="true" />
-          Logic Cooking
+          Reduction
         </button>
         {entry ? null : (
           <span className="rd-nav-meta">{library.length} saved</span>
