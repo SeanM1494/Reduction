@@ -1,0 +1,48 @@
+/* Variant: Ink & Paper — cookbook-as-manuscript. Near-black ink on warm
+   paper, one confident vermillion accent, deep bottle-green in place of
+   sage, a serif display face for headings, a typewriter mono for meta. */
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,600;0,700;1,600&family=IBM+Plex+Mono:wght@400;500&display=swap');
+
+.rd-root {
+  --ink: #1a1512;
+  --muted: #6b5d4f;
+  --faint: #a89a89;
+  --page: #f2ece1;
+  --card: #fffdf9;
+  --ing-bg: #ece3d3;
+  --line: #ddd0bb;
+  --line-strong: #b7a488;
+  --warm-bg: #f6d9c9;
+  --warm-line: #b53a1f;
+  --warm-ink: #7a2712;
+  --cool-bg: #dde3d0;
+  --cool-line: #5c6e4a;
+  --cool-ink: #33421f;
+}
+
+.rd-brand,
+.rd-hero-title,
+.rd-lib-title,
+.rd-card-title,
+.rd-title {
+  font-family: "Playfair Display", Georgia, "Times New Roman", serif;
+  letter-spacing: 0;
+}
+
+.rd-nav-meta,
+.rd-lib-count,
+.rd-card-meta,
+.rd-card-pct,
+.rd-yield,
+.rd-servings-label,
+.rd-step-val,
+.rd-count,
+.rd-eyebrow-num,
+.rd-oven,
+.rd-amount,
+.rd-swipe,
+.rd-tucked-more,
+.rd-fin-num,
+.rd-fin-time {
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+}

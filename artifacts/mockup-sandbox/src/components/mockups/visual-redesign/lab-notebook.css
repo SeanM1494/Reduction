@@ -1,0 +1,47 @@
+/* Variant: Lab Notebook — leans into the "logic" half of the app's
+   duality. Cool graphite/blue-grey paper, a geometric technical display
+   face, amber "ready" + teal "done" accents instead of orange/sage. */
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Space+Mono:wght@400;700&display=swap');
+
+.rd-root {
+  --ink: #1b2430;
+  --muted: #5c6b7a;
+  --faint: #93a2b0;
+  --page: #e7ebee;
+  --card: #ffffff;
+  --ing-bg: #eef1f4;
+  --line: #ccd4db;
+  --line-strong: #9fb0bd;
+  --warm-bg: #ffe8bf;
+  --warm-line: #d68a00;
+  --warm-ink: #8a5700;
+  --cool-bg: #d7eef0;
+  --cool-line: #3f9aa3;
+  --cool-ink: #1f5459;
+}
+
+.rd-brand,
+.rd-hero-title,
+.rd-lib-title,
+.rd-card-title,
+.rd-title {
+  font-family: "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
+}
+
+.rd-nav-meta,
+.rd-lib-count,
+.rd-card-meta,
+.rd-card-pct,
+.rd-yield,
+.rd-servings-label,
+.rd-step-val,
+.rd-count,
+.rd-eyebrow-num,
+.rd-oven,
+.rd-amount,
+.rd-swipe,
+.rd-tucked-more,
+.rd-fin-num,
+.rd-fin-time {
+  font-family: "Space Mono", ui-monospace, monospace;
+}

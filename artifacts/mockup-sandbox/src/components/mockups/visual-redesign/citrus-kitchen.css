@@ -1,0 +1,49 @@
+/* Variant: Citrus Kitchen — friendlier, more consumer-facing direction.
+   Brighter citrus-cream paper, punchier orange + leaf-green accents, a
+   rounded geometric display face, and mono swapped for a humanist sans
+   in meta text (less "spec sheet", more approachable). */
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@500;600;700&family=DM+Sans:wght@400;500;600&display=swap');
+
+.rd-root {
+  --ink: #2b1c0f;
+  --muted: #7a5a3a;
+  --faint: #b08a5e;
+  --page: #fff3e0;
+  --card: #ffffff;
+  --ing-bg: #fff0dc;
+  --line: #f0d9b5;
+  --line-strong: #e3b978;
+  --warm-bg: #ffdca8;
+  --warm-line: #ff8a1e;
+  --warm-ink: #b85400;
+  --cool-bg: #ddf0c2;
+  --cool-line: #6fae3a;
+  --cool-ink: #2f6614;
+}
+
+.rd-brand,
+.rd-hero-title,
+.rd-lib-title,
+.rd-card-title,
+.rd-title {
+  font-family: "Outfit", ui-sans-serif, system-ui, sans-serif;
+}
+
+.rd-nav-meta,
+.rd-lib-count,
+.rd-card-meta,
+.rd-card-pct,
+.rd-yield,
+.rd-servings-label,
+.rd-step-val,
+.rd-count,
+.rd-eyebrow-num,
+.rd-oven,
+.rd-amount,
+.rd-swipe,
+.rd-tucked-more,
+.rd-fin-num,
+.rd-fin-time {
+  font-family: "DM Sans", ui-sans-serif, system-ui, sans-serif;
+  letter-spacing: 0.02em;
+}
