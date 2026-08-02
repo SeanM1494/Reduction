@@ -66,6 +66,9 @@ export default function Diagram({
   // ---- terminal chain ----------------------------------------------------
   // Walk down from the root while each step spans every row. A step spanning
   // everything is combining the whole dish, so it has no structure left to show.
+  // But the step where the *last* ingredient actually joins is the join itself,
+  // not a consequence of it — it stays in the table even though it also spans
+  // every row, so the table always shows where every ingredient lands.
   const nodeById = new Map(section.nodes.map((n) => [n.id, n]));
   const spanById = new Map<string, number>();
   rows.forEach((r) =>
@@ -79,9 +82,12 @@ export default function Diagram({
   while (cursor && spanById.get(cursor) === totalRows) {
     const node = nodeById.get(cursor);
     if (!node) break;
+    const stepInputs = node.inputs || [];
+    const joinsIngredient = stepInputs.some((i) => !nodeById.has(i));
+    if (joinsIngredient) break;
     tail.unshift(node);
-    const stepInputs = (node.inputs || []).filter((i) => nodeById.has(i));
-    cursor = stepInputs.length === 1 ? stepInputs[0] : undefined;
+    const priorSteps = stepInputs.filter((i) => nodeById.has(i));
+    cursor = priorSteps.length === 1 ? priorSteps[0] : undefined;
   }
   const tailIds = new Set(tail.map((n) => n.id));
 
