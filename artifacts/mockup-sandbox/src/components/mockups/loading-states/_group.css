@@ -1,0 +1,64 @@
+/* Shared tokens for the Reduction loading-state mockups — copied from the
+   real app's client/src/index.css so these previews match exactly. */
+.rd-mock {
+  --ink: #211d18;
+  --muted: #6b6154;
+  --faint: #948b7d;
+  --page: #f0e2c8;
+  --card: #fffcf3;
+  --ing-bg: #f7f0df;
+  --line: #e4d6b8;
+  --line-strong: #c9b48a;
+  --warm-bg: #f7dad5;
+  --warm-line: #c8362b;
+  --warm-ink: #7a2118;
+  --cool-bg: #e7ecd5;
+  --cool-line: #7c9b54;
+  --cool-ink: #445a2e;
+
+  min-height: 100vh;
+  background: var(--page);
+  color: var(--ink);
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 20px;
+  -webkit-font-smoothing: antialiased;
+}
+
+.rd-mock-shell { width: 100%; max-width: 460px; }
+
+.rd-mock-hero-title {
+  font-family: "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
+  font-weight: 700; font-size: clamp(26px, 5vw, 34px);
+  line-height: 1.05; letter-spacing: -.03em; margin: 0 0 8px; max-width: 16ch;
+}
+.rd-mock-hero-sub {
+  margin: 0 0 18px; font-size: 14px; line-height: 1.45; color: var(--muted);
+  max-width: 42ch;
+}
+
+.rd-mock-import {
+  background: var(--card); border: 1px solid var(--line);
+  border-radius: 14px; padding: 14px; margin-bottom: 20px;
+  box-shadow: 0 1px 3px rgba(70, 45, 20, .08);
+  overflow: hidden;
+  position: relative;
+}
+.rd-mock-tabs { display: flex; gap: 4px; margin-bottom: 11px; }
+.rd-mock-tab {
+  font: inherit; font-size: 12.5px; padding: 5px 11px;
+  background: none; border: 1px solid transparent; border-radius: 99px;
+  color: var(--muted);
+}
+.rd-mock-tab.is-on {
+  background: var(--ing-bg); border-color: var(--line);
+  color: var(--ink); font-weight: 600;
+}
+
+.rd-mock-caption-label {
+  font-family: "Space Mono", ui-monospace, monospace;
+  font-size: 10.5px; color: var(--faint); letter-spacing: .04em;
+  text-transform: uppercase; margin: 10px 2px 0;
+}
