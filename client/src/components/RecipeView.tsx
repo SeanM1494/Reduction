@@ -6,10 +6,11 @@
  *   undoing a step clears everything downstream, which is no longer valid
  */
 
-import React, { useState, useMemo, useCallback } from "react";
+import React, { useState, useMemo, useCallback, useRef } from "react";
 import { computeLayout } from "../../../shared/layout";
 import type { Entry } from "../lib/storage";
 import Diagram from "./Diagram";
+import { saveRecipeAsImage, slugForFile } from "../lib/exportImage";
 
 interface Props {
   entry: Entry;
@@ -21,6 +22,8 @@ interface Props {
 export default function RecipeView({ entry, onBack, onUpdate, onDelete }: Props) {
   const { recipe } = entry;
   const [hovered, setHovered] = useState<string | null>(null);
+  const [savingImage, setSavingImage] = useState(false);
+  const captureRef = useRef<HTMLDivElement | null>(null);
   const done = useMemo(() => new Set(entry.done || []), [entry.done]);
 
   const baseServings = recipe.servings;
@@ -91,8 +94,22 @@ export default function RecipeView({ entry, onBack, onUpdate, onDelete }: Props)
 
   const pct = total ? Math.round((done.size / total) * 100) : 0;
 
+  const saveAsImage = useCallback(async () => {
+    if (!captureRef.current || savingImage) return;
+    setSavingImage(true);
+    try {
+      await saveRecipeAsImage(captureRef.current, slugForFile(recipe.title));
+    } catch (e) {
+      window.alert(
+        `Couldn't save that image: ${(e as Error).message || "unknown error"}`
+      );
+    } finally {
+      setSavingImage(false);
+    }
+  }, [recipe.title, savingImage]);
+
   return (
-    <>
+    <div ref={captureRef} className="rd-capture">
       <div className="rd-crumb no-print">
         <button className="rd-back" onClick={onBack}>
           &larr; All recipes
@@ -104,8 +121,8 @@ export default function RecipeView({ entry, onBack, onUpdate, onDelete }: Props)
           >
             Clear progress
           </button>
-          <button className="rd-btn" onClick={() => window.print()}>
-            Print
+          <button className="rd-btn" onClick={saveAsImage} disabled={savingImage}>
+            {savingImage ? "Saving…" : "Save as Image"}
           </button>
           <button className="rd-btn rd-btn-danger" onClick={onDelete}>
             Delete
@@ -205,6 +222,6 @@ export default function RecipeView({ entry, onBack, onUpdate, onDelete }: Props)
           </a>
         </p>
       ) : null}
-    </>
+    </div>
   );
 }

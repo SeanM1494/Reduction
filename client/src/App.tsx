@@ -84,7 +84,12 @@ export default function App() {
     <div className="rd-root">
       <nav className="rd-nav no-print">
         <button className="rd-brand" onClick={() => setOpenId(null)}>
-          <span className="rd-logo" aria-hidden="true" />
+          <img
+            className="rd-logo"
+            src="/brand/reduction-icon-transparent.svg"
+            alt=""
+            aria-hidden="true"
+          />
           Reduction
         </button>
         {entry ? null : (
