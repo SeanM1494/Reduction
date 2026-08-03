@@ -433,13 +433,13 @@ body {
 .rd-capture.is-exporting .rd-swipe { display: none !important; }
 .rd-capture.is-exporting .rd-frame { margin: 0 !important; }
 
-/* ==================================================================
+/* ------------------------------------------------------------------
  * Finish strip + handoff
- * ==================================================================
+ * ------------------------------------------------------------------
  * The linear tail of a recipe leaves the table and becomes a row of chips.
  * When every ingredient has joined the mixture, the table tucks into a
  * one-line summary and the strip comes forward.
- * ================================================================== */
+ * ------------------------------------------------------------------ */
 
 .rd-swap { animation: rd-swap-in .38s cubic-bezier(.2,.7,.3,1); }
 @keyframes rd-swap-in {

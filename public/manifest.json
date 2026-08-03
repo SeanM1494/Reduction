@@ -1,0 +1,37 @@
+{
+  "name": "Reduction",
+  "short_name": "Reduction",
+  "description": "Turn any recipe into a diagram that shows what mixes into what.",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "theme_color": "#F0E2C8",
+  "background_color": "#F0E2C8",
+  "icons": [
+    {
+      "src": "/brand/reduction-icon-32.png",
+      "sizes": "32x32",
+      "type": "image/png"
+    },
+    {
+      "src": "/brand/reduction-icon-64.png",
+      "sizes": "64x64",
+      "type": "image/png"
+    },
+    {
+      "src": "/brand/reduction-icon-180.png",
+      "sizes": "180x180",
+      "type": "image/png"
+    },
+    {
+      "src": "/brand/reduction-icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    },
+    {
+      "src": "/brand/reduction-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ]
+}
