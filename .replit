@@ -29,7 +29,6 @@ localPort = 8081
 externalPort = 8081
 
 [deployment]
-router = "application"
 deploymentTarget = "cloudrun"
 build = ["sh", "-c", "npm run build"]
 run = ["sh", "-c", "npm run start"]

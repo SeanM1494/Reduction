@@ -1,0 +1,1 @@
+- [Monorepo artifact deployment can hijack the root app](artifact-deployment-routing.md) — a registered "runnable" (kind=api) artifact can silently become the only thing served in production, 404-ing the real site.

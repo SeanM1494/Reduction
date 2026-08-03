@@ -1,0 +1,10 @@
+---
+name: Monorepo artifact deployment can hijack the root app
+description: In a project with registered artifacts (artifact.toml under <dir>/.replit-artifact/), a "runnable" artifact (kind=api) can become the sole thing production serves, 404-ing the actual root app.
+---
+
+Production deployment logs show `artifact mode enabled runnable=N` — the deployment orchestrator only starts processes for formally registered runnable artifacts (kind values like "api"; kind="design" is not runnable). It does not automatically also run the root project's own `[deployment]` run/build command from `.replit` if a runnable artifact already exists — the runnable artifact's health check path (from its `artifact.toml`) becomes *the* deployment health check, and its port becomes the only one served. Visitors hitting any other path get "This deployment has no previewable artifacts."
+
+**Why:** Traced a real production outage where an intentionally-unused placeholder API scaffold artifact (explicitly commented "freed up this path for the standalone app at project root") was the only registered runnable artifact. It silently became the entire production deployment, and the real user-facing app (living outside `artifacts/`, un-registered) never started at all. Adding `router = "application"` to `.replit`'s `[deployment]` section (mimicking an old pre-migration config) had **no effect** — that field is not what controls this behavior (or is no longer respected).
+
+**How to apply:** If a published app 404s with "no previewable artifacts" while `getDeploymentInfo()` shows `hasSuccessfulBuild: true`, check `fetchDeploymentLogs()` for `artifact mode enabled runnable=N`. If `N >= 1` and the real app isn't one of the registered artifacts, the fix is to remove/deregister the unused runnable artifact (delete its directory including `.replit-artifact/artifact.toml`; the platform auto-detects removal and drops its generated workflow) so the root app's own `[deployment]` run command can be served instead. Confirm via a fresh `fetchDeploymentLogs()` after the user republishes — don't trust logs fetched before the new publish.
