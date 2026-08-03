@@ -92,7 +92,7 @@ body {
 .rd-url {
   flex: 1; min-width: 0; font: inherit; font-size: 15px;
   padding: 12px 13px; border: 1px solid var(--line); border-radius: 9px;
-  background: #fffcf7; color: var(--ink);
+  background: #fafbfc; color: var(--ink);
 }
 .rd-url::placeholder, .rd-paste::placeholder { color: var(--faint); }
 .rd-pastebox {
@@ -102,7 +102,7 @@ body {
   width: 100%; min-height: 160px; resize: vertical;
   font: inherit; font-size: 14px; line-height: 1.5;
   padding: 12px 13px; border: 1px solid var(--line); border-radius: 9px;
-  background: #fffcf7; color: var(--ink);
+  background: #fafbfc; color: var(--ink);
 }
 .rd-url:focus-visible, .rd-paste:focus-visible {
   outline: 2px solid var(--warm-line); outline-offset: 1px;
@@ -112,11 +112,11 @@ body {
 .rd-file { font: inherit; font-size: 13px; color: var(--muted); }
 .rd-go {
   font: inherit; font-size: 14px; font-weight: 600; white-space: nowrap;
-  background: var(--ink); color: #fffcf7; border: 0;
+  background: var(--ink); color: #fafbfc; border: 0;
   padding: 12px 20px; border-radius: 9px; cursor: pointer;
 }
-.rd-go:disabled { background: #c6b5a1; cursor: default; }
-.rd-go:not(:disabled):hover { background: #3d3022; }
+.rd-go:disabled { background: #b3c0c9; cursor: default; }
+.rd-go:not(:disabled):hover { background: #111926; }
 
 .rd-alert {
   display: flex; gap: 10px; align-items: flex-start;
@@ -173,7 +173,7 @@ body {
   font-size: 10.5px; color: var(--faint); line-height: 1.4;
 }
 .rd-card-bar {
-  height: 4px; border-radius: 99px; background: #e2d4c1;
+  height: 4px; border-radius: 99px; background: #dde4ea;
   overflow: hidden; margin-top: 3px;
 }
 .rd-card-fill {
@@ -234,7 +234,7 @@ body {
   font: inherit; font-size: 16px; line-height: 1; width: 32px; height: 30px;
   background: var(--ing-bg); border: 0; color: var(--ink); cursor: pointer;
 }
-.rd-step-btn:hover { background: #f2e8d9; }
+.rd-step-btn:hover { background: #e4eaf0; }
 .rd-step-val {
   font-family: "Space Mono", ui-monospace, monospace;
   font-size: 13px; min-width: 34px; text-align: center;
@@ -242,7 +242,7 @@ body {
 .rd-scale-note { font-size: 12px; color: var(--muted); line-height: 1.4; }
 
 .rd-progress { display: flex; flex-direction: column; gap: 9px; }
-.rd-bar { height: 5px; border-radius: 99px; background: #ded0bd; overflow: hidden; }
+.rd-bar { height: 5px; border-radius: 99px; background: #dde4ea; overflow: hidden; }
 .rd-bar-fill {
   height: 100%; border-radius: 99px;
   background: linear-gradient(90deg, var(--warm-line), var(--cool-ink));
@@ -340,7 +340,7 @@ body {
 
 .rd-cell.is-done { background: var(--cool-bg); color: var(--cool-ink); }
 .rd-ing.is-done { box-shadow: inset 3px 0 0 var(--cool-line), var(--pin); }
-.rd-cell.is-done .rd-amount { color: #6c7a41; }
+.rd-cell.is-done .rd-amount { color: #2d6e73; }
 .rd-cell.is-done .rd-op-label { color: var(--cool-ink); }
 .rd-cell.is-done .rd-name,
 .rd-cell.is-done .rd-op-label { text-decoration: line-through; opacity: .78; }
@@ -353,11 +353,11 @@ body {
 .rd-cell.is-preview .rd-op-label { color: var(--warm-ink); }
 .rd-ing.is-preview { box-shadow: inset 3px 0 0 var(--warm-line), var(--pin); }
 
-.rd-cell:hover { background: #f7eee1; }
-.rd-ing:hover { background: #f2e8d9; }
+.rd-cell:hover { background: #eef2f5; }
+.rd-ing:hover { background: #e4eaf0; }
 .rd-op.is-ready:hover { background: #ffd3b0; }
 .rd-cell.is-preview:hover { background: #ffe8d3; }
-.rd-cell.is-done:hover { background: #d8dcba; }
+.rd-cell.is-done:hover { background: #c9e4e2; }
 
 .rd-hint {
   font-size: 12px; color: var(--muted); margin: 4px 2px 14px; max-width: 62ch;
@@ -459,7 +459,7 @@ body {
   background: var(--cool-bg); border: 1px solid var(--cool-line);
   border-radius: 10px; padding: 13px 15px; color: var(--cool-ink);
 }
-.rd-tucked:hover { background: #d8dcba; }
+.rd-tucked:hover { background: #c9e4e2; }
 .rd-tucked-check {
   flex: none; width: 15px; height: 15px; background: var(--cool-ink);
   clip-path: polygon(14% 48%, 0 62%, 38% 100%, 100% 22%, 86% 8%, 38% 72%);
@@ -488,7 +488,7 @@ body {
   transition: background .16s ease, border-color .16s ease, transform .2s ease;
 }
 .rd-fin:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
-.rd-fin:hover { background: #f7eee1; }
+.rd-fin:hover { background: #eef2f5; }
 .rd-fin-num {
   font-family: "Space Mono", ui-monospace, monospace;
   font-size: 10px; color: var(--faint);
@@ -517,8 +517,8 @@ body {
 }
 .rd-fin.is-done .rd-fin-label { text-decoration: line-through; opacity: .78; }
 .rd-fin.is-done .rd-fin-num { border-color: var(--cool-line); color: var(--cool-ink); }
-.rd-fin.is-done .rd-fin-time { color: #6c7a41; }
-.rd-fin.is-done:hover { background: #d8dcba; }
+.rd-fin.is-done .rd-fin-time { color: #2d6e73; }
+.rd-fin.is-done:hover { background: #c9e4e2; }
 
 /* once the tree is complete the strip is the whole show */
 .rd-finish.is-focus { margin-top: 14px; animation: rd-focus-in .45s cubic-bezier(.2,.7,.3,1); }
