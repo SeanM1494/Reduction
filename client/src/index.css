@@ -10,25 +10,25 @@ html, body, #root { height: 100%; }
 
 body {
   margin: 0;
-  background: #ece1d2;
+  background: #e7ebee;
   -webkit-text-size-adjust: 100%;
 }
 
 .rd-root {
-  --ink: #201911;
-  --muted: #6d5f52;
-  --faint: #9c8a78;
-  --page: #ece1d2;
-  --card: #fffcf7;
-  --ing-bg: #f8f0e4;
-  --line: #d8c8b3;
-  --line-strong: #b89d7e;
-  --warm-bg: #ffe1c8;
-  --warm-line: #d1601f;
-  --warm-ink: #8a3410;
-  --cool-bg: #e3e6c9;
-  --cool-line: #98a366;
-  --cool-ink: #4a5926;
+  --ink: #1b2430;
+  --muted: #5c6b7a;
+  --faint: #93a2b0;
+  --page: #e7ebee;
+  --card: #ffffff;
+  --ing-bg: #eef1f4;
+  --line: #ccd4db;
+  --line-strong: #9fb0bd;
+  --warm-bg: #ffe8bf;
+  --warm-line: #d68a00;
+  --warm-ink: #8a5700;
+  --cool-bg: #d7eef0;
+  --cool-line: #3f9aa3;
+  --cool-ink: #1f5459;
   --pin: 9px 0 10px -9px rgba(70, 45, 20, .32);
 
   background: var(--page);
@@ -49,7 +49,7 @@ body {
 .rd-brand {
   display: flex; align-items: center; gap: 8px;
   background: none; border: 0; padding: 0; cursor: pointer;
-  font-family: "Bricolage Grotesque", ui-sans-serif, system-ui, sans-serif;
+  font-family: "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
   font-weight: 700; font-size: 17px; letter-spacing: -.02em; color: var(--ink);
 }
 .rd-logo {
@@ -58,14 +58,14 @@ body {
   box-shadow: 5px 5px 0 -1px var(--cool-ink);
 }
 .rd-nav-meta {
-  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-family: "Space Mono", ui-monospace, monospace;
   font-size: 11px; color: var(--faint); letter-spacing: .04em;
 }
 
 /* ---------- hero + import ---------- */
 .rd-hero { margin: 18px 2px 20px; }
 .rd-hero-title {
-  font-family: "Bricolage Grotesque", ui-sans-serif, system-ui, sans-serif;
+  font-family: "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
   font-weight: 700; font-size: clamp(30px, 6vw, 46px);
   line-height: 1.0; letter-spacing: -.03em; margin: 0 0 10px; max-width: 16ch;
 }
@@ -136,11 +136,11 @@ body {
   margin: 0 2px 12px;
 }
 .rd-lib-title {
-  font-family: "Bricolage Grotesque", ui-sans-serif, system-ui, sans-serif;
+  font-family: "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
   font-size: 19px; font-weight: 700; letter-spacing: -.02em; margin: 0;
 }
 .rd-lib-count {
-  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-family: "Space Mono", ui-monospace, monospace;
   font-size: 11px; color: var(--faint);
 }
 .rd-empty {
@@ -165,11 +165,11 @@ body {
   box-shadow: 0 3px 8px rgba(70, 45, 20, .13);
 }
 .rd-card-title {
-  font-family: "Bricolage Grotesque", ui-sans-serif, system-ui, sans-serif;
+  font-family: "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
   font-size: 16px; font-weight: 600; line-height: 1.15; letter-spacing: -.015em;
 }
 .rd-card-meta {
-  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-family: "Space Mono", ui-monospace, monospace;
   font-size: 10.5px; color: var(--faint); line-height: 1.4;
 }
 .rd-card-bar {
@@ -181,7 +181,7 @@ body {
   background: linear-gradient(90deg, var(--warm-line), var(--cool-ink));
 }
 .rd-card-pct {
-  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-family: "Space Mono", ui-monospace, monospace;
   font-size: 10px; color: var(--muted); letter-spacing: .04em;
 }
 
@@ -207,12 +207,12 @@ body {
   margin-bottom: 16px;
 }
 .rd-title {
-  font-family: "Bricolage Grotesque", ui-sans-serif, system-ui, sans-serif;
+  font-family: "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
   font-weight: 700; font-size: clamp(24px, 4.2vw, 38px);
   line-height: 1.03; letter-spacing: -.025em; margin: 0;
 }
 .rd-yield {
-  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-family: "Space Mono", ui-monospace, monospace;
   font-size: 11px; letter-spacing: .09em; text-transform: uppercase;
   color: var(--muted);
 }
@@ -222,7 +222,7 @@ body {
   border-bottom: 1px solid var(--line);
 }
 .rd-servings-label {
-  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-family: "Space Mono", ui-monospace, monospace;
   font-size: 10.5px; letter-spacing: .09em; text-transform: uppercase;
   color: var(--muted);
 }
@@ -236,7 +236,7 @@ body {
 }
 .rd-step-btn:hover { background: #f2e8d9; }
 .rd-step-val {
-  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-family: "Space Mono", ui-monospace, monospace;
   font-size: 13px; min-width: 34px; text-align: center;
 }
 .rd-scale-note { font-size: 12px; color: var(--muted); line-height: 1.4; }
@@ -252,7 +252,7 @@ body {
   display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap;
 }
 .rd-count {
-  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-family: "Space Mono", ui-monospace, monospace;
   font-size: 12px; font-weight: 500;
 }
 .rd-ready-line { font-size: 13px; color: var(--muted); }
@@ -268,12 +268,12 @@ body {
   font-size: 13px; font-weight: 600;
 }
 .rd-eyebrow-num {
-  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-family: "Space Mono", ui-monospace, monospace;
   font-size: 11px; font-weight: 400; color: var(--faint);
 }
 .rd-oven {
   margin: 0;
-  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-family: "Space Mono", ui-monospace, monospace;
   font-size: 11px; letter-spacing: .05em;
   color: var(--warm-ink); background: var(--warm-bg);
   border: 1px solid #eec4a0; border-radius: 99px; padding: 3px 10px;
@@ -309,7 +309,7 @@ body {
 .rd-op { text-align: center; min-width: 100px; }
 .rd-ing-body { display: flex; flex-direction: column; gap: 3px; }
 .rd-amount {
-  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-family: "Space Mono", ui-monospace, monospace;
   font-size: 11px; color: var(--muted); letter-spacing: -.01em;
 }
 .rd-name { font-size: 14px; line-height: 1.25; }
@@ -370,7 +370,7 @@ body {
 }
 .rd-swipe {
   display: none;
-  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-family: "Space Mono", ui-monospace, monospace;
   font-size: 10.5px; letter-spacing: .04em; text-transform: uppercase;
   color: var(--faint); margin: 7px 2px 0;
 }
@@ -466,7 +466,7 @@ body {
 }
 .rd-tucked-text { flex: 1; font-size: 14px; font-weight: 600; }
 .rd-tucked-more {
-  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-family: "Space Mono", ui-monospace, monospace;
   font-size: 10.5px; letter-spacing: .05em; text-transform: uppercase;
   color: var(--muted); white-space: nowrap;
 }
@@ -490,14 +490,14 @@ body {
 .rd-fin:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
 .rd-fin:hover { background: #f7eee1; }
 .rd-fin-num {
-  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-family: "Space Mono", ui-monospace, monospace;
   font-size: 10px; color: var(--faint);
   border: 1px solid var(--line); border-radius: 50%;
   width: 19px; height: 19px; display: grid; place-items: center; flex: none;
 }
 .rd-fin-label { font-size: 14px; font-weight: 500; line-height: 1.25; }
 .rd-fin-time {
-  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-family: "Space Mono", ui-monospace, monospace;
   font-size: 10.5px; color: var(--muted); white-space: nowrap;
 }
 
