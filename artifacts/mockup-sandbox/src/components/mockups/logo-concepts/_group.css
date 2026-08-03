@@ -1,0 +1,112 @@
+/* Shared tokens for Reduction logo concepts — mirrors the production app's
+   Lab Notebook palette (client/src/index.css) so these read as on-brand,
+   not generic logo-design filler. */
+.logo-sheet {
+  --ink: #1b2430;
+  --muted: #5c6b7a;
+  --faint: #93a2b0;
+  --page: #e7ebee;
+  --card: #ffffff;
+  --line: #ccd4db;
+  --warm-line: #d68a00;
+  --warm-ink: #8a5700;
+  --warm-bg: #ffe8bf;
+  --cool-line: #3f9aa3;
+  --cool-ink: #1f5459;
+  --cool-bg: #d7eef0;
+
+  min-height: 100vh;
+  background: var(--page);
+  color: var(--ink);
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  padding: 40px;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+  -webkit-font-smoothing: antialiased;
+}
+
+.logo-sheet * { box-sizing: border-box; }
+
+.logo-eyebrow {
+  margin: 0;
+  font-family: "Space Mono", ui-monospace, monospace;
+  font-size: 11px;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+
+.logo-name {
+  margin: 0;
+  font-family: "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
+  font-weight: 700;
+  font-size: 26px;
+  letter-spacing: -0.02em;
+}
+
+.logo-blurb {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--muted);
+  max-width: 56ch;
+}
+
+.logo-row {
+  display: flex;
+  align-items: stretch;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.logo-tile {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  box-shadow: 0 1px 3px rgba(27, 36, 48, 0.08);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+.logo-tile.is-hero { flex: 1 1 260px; min-height: 220px; }
+.logo-tile.is-lockup { flex: 2 1 380px; min-height: 220px; justify-content: flex-start; gap: 16px; }
+.logo-tile.is-dark { background: var(--ink); border-color: var(--ink); }
+.logo-tile.is-small { flex: 0 0 96px; height: 96px; padding: 20px; }
+.logo-tile.is-fav { flex: 0 0 56px; height: 56px; padding: 12px; border-radius: 12px; }
+
+.logo-lockup-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.logo-wordmark {
+  font-family: "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
+  font-weight: 700;
+  font-size: 28px;
+  letter-spacing: -0.02em;
+  color: var(--ink);
+}
+
+.logo-tile.is-dark .logo-wordmark { color: #fafbfc; }
+
+.logo-tagline {
+  font-family: "Space Mono", ui-monospace, monospace;
+  font-size: 11px;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+}
+
+.logo-tile.is-dark .logo-tagline { color: var(--faint); }
+
+.logo-caption {
+  margin: 0;
+  font-size: 11px;
+  text-align: center;
+  color: var(--faint);
+  font-family: "Space Mono", ui-monospace, monospace;
+}
