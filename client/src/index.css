@@ -52,7 +52,7 @@ body {
   font-family: "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
   font-weight: 700; font-size: 17px; letter-spacing: -.02em; color: var(--ink);
 }
-.rd-logo { width: 30px; height: 30px; display: block; }
+.rd-logo { width: 44px; height: 44px; display: block; }
 .rd-nav-meta {
   font-family: "Space Mono", ui-monospace, monospace;
   font-size: 11px; color: var(--faint); letter-spacing: .04em;
