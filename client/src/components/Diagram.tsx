@@ -54,13 +54,15 @@ export default function Diagram({
   onHover,
 }: Props) {
   const [override, setOverride] = useState(false);
+  // Ids the user has manually reopened after they qualified for collapse.
+  // Once reopened they stay open for the life of this component — unchecking
+  // a step inside a collapsed branch also reopens it, since that step's
+  // parent chain (the collapsed step itself) gets un-done by the same click.
+  const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
 
-  let rows;
-  let totalRows = 0;
+  let baseLayout;
   try {
-    const layout = computeLayout(section);
-    rows = layout.rows;
-    totalRows = layout.totalRows;
+    baseLayout = computeLayout(section);
   } catch (e) {
     return (
       <section className="rd-section">
@@ -69,6 +71,7 @@ export default function Diagram({
       </section>
     );
   }
+  const baseTotalRows = baseLayout.totalRows;
 
   // ---- terminal chain ----------------------------------------------------
   // Walk down from the root while each step spans every row. A step spanning
@@ -76,9 +79,11 @@ export default function Diagram({
   // But the step where the *last* ingredient actually joins is the join itself,
   // not a consequence of it — it stays in the table even though it also spans
   // every row, so the table always shows where every ingredient lands.
+  // This always walks the uncollapsed layout, so the finish strip is entirely
+  // unaffected by progressive collapse below.
   const nodeById = new Map(section.nodes.map((n) => [n.id, n]));
   const spanById = new Map<string, number>();
-  rows.forEach((r) =>
+  baseLayout.rows.forEach((r) =>
     r.forEach((c) => {
       if (c.kind === "op") spanById.set(c.key, c.rowSpan);
     })
@@ -86,7 +91,7 @@ export default function Diagram({
 
   const tail: Step[] = [];
   let cursor: string | undefined = section.root;
-  while (cursor && spanById.get(cursor) === totalRows) {
+  while (cursor && spanById.get(cursor) === baseTotalRows) {
     const node = nodeById.get(cursor);
     if (!node) break;
     const stepInputs = node.inputs || [];
@@ -97,6 +102,31 @@ export default function Diagram({
     cursor = priorSteps.length === 1 ? priorSteps[0] : undefined;
   }
   const tailIds = new Set(tail.map((n) => n.id));
+
+  // ---- progressive collapse -----------------------------------------------
+  // A finished step folds its whole subtree into one row once its parent
+  // isn't finished too (or it has no parent at all) — everything upstream of
+  // it is already done, so there is nothing left to decide in that branch.
+  // Tail steps are the finish strip's job, never the table's, so they're
+  // never eligible here regardless of done state.
+  const collapsedIds = new Set<string>();
+  for (const node of section.nodes) {
+    if (tailIds.has(node.id)) continue;
+    if (!done.has(node.id)) continue;
+    if (expanded.has(node.id)) continue;
+    const parent = baseLayout.parentOf.get(node.id);
+    if (parent && done.has(parent)) continue;
+    collapsedIds.add(node.id);
+  }
+
+  let rows = baseLayout.rows;
+  if (collapsedIds.size) {
+    try {
+      rows = computeLayout(section, { collapsed: collapsedIds }).rows;
+    } catch {
+      // Fall back to the uncollapsed layout rather than breaking the diagram.
+    }
+  }
 
   // ---- handoff -----------------------------------------------------------
   const treeIds = [
@@ -155,8 +185,38 @@ export default function Diagram({
                 {rows.map((cellsInRow, r) => (
                   <tr key={r}>
                     {cellsInRow
-                      .filter((c) => !(c.kind === "op" && tailIds.has(c.key)))
+                      .filter((c) => !tailIds.has(c.key))
                       .map((c) => {
+                        if (c.kind === "collapsed") {
+                          return (
+                            <td
+                              key={c.key}
+                              className="rd-cell rd-ing rd-collapsed"
+                              rowSpan={c.rowSpan}
+                              colSpan={c.colSpan}
+                            >
+                              <button
+                                type="button"
+                                className="rd-collapsed-chip rd-row-swap"
+                                onClick={() =>
+                                  setExpanded((prev) => {
+                                    const next = new Set(prev);
+                                    next.add(c.key);
+                                    return next;
+                                  })
+                                }
+                                aria-label={`Expand "${c.text}" to show its ${c.itemCount} ingredients and steps`}
+                              >
+                                <span className="rd-tucked-check" aria-hidden="true" />
+                                <span className="rd-collapsed-text">{c.text}</span>
+                                <span className="rd-collapsed-count">
+                                  {c.itemCount} items
+                                </span>
+                              </button>
+                            </td>
+                          );
+                        }
+
                         if (c.kind === "gap") {
                           const ownerDone = done.has(c.owner!);
                           const ownerPrev = !ownerDone && preview.has(c.owner!);
@@ -196,6 +256,7 @@ export default function Diagram({
                             key={c.key}
                             className={[
                               "rd-cell",
+                              "rd-row-swap",
                               c.kind === "ingredient" ? "rd-ing" : "rd-op",
                               isDone ? "is-done" : "",
                               !isDone && ready ? "is-ready" : "",

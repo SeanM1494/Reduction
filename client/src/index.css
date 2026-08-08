@@ -484,6 +484,31 @@ body {
 .rd-cell.is-preview:hover { background: var(--preview-hover); }
 .rd-cell.is-done:hover { background: var(--cool-hover); }
 
+/* A finished subtree tucked into one row — same cool/"done" language as the
+   whole-table tucked bar, just sized to fit inside the ingredient column. */
+.rd-ing.rd-collapsed {
+  padding: 0; cursor: default;
+  background: var(--cool-bg);
+  box-shadow: inset 3px 0 0 var(--cool-line), var(--pin);
+}
+.rd-collapsed-chip {
+  display: flex; align-items: center; gap: 9px; width: 100%; height: 100%;
+  font: inherit; text-align: left; cursor: pointer;
+  background: none; border: 0; border-radius: 6px;
+  padding: 10px 9px; color: var(--cool-ink);
+}
+.rd-collapsed-chip:hover { background: var(--cool-hover); }
+.rd-collapsed-chip:focus-visible { outline: 2px solid var(--cool-ink); outline-offset: -3px; }
+.rd-collapsed-text {
+  flex: 1; font-size: 14px; font-weight: 600; line-height: 1.25;
+  white-space: normal;
+}
+.rd-collapsed-count {
+  font-family: "Space Mono", ui-monospace, monospace;
+  font-size: 10.5px; letter-spacing: .05em; text-transform: uppercase;
+  color: var(--muted); white-space: nowrap; flex: none;
+}
+
 .rd-hint {
   font-size: 12px; color: var(--muted); margin: 4px 2px 14px; max-width: 62ch;
 }
@@ -575,6 +600,11 @@ body {
   from { opacity: 0; transform: translateY(6px); }
   to   { opacity: 1; transform: none; }
 }
+
+/* Same swap as .rd-swap, scoped to individual cells: whichever rows a
+   collapse/expand click actually mounts (the tucked chip, or the rows it
+   reveals) fade in on their own instead of restarting the whole table. */
+.rd-row-swap { animation: rd-swap-in .3s cubic-bezier(.2,.7,.3,1); }
 
 .rd-under {
   display: flex; align-items: baseline; justify-content: space-between;
@@ -687,7 +717,7 @@ body {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .rd-swap, .rd-finish.is-focus { animation: none; }
+  .rd-swap, .rd-finish.is-focus, .rd-row-swap { animation: none; }
 }
 
 @media print {

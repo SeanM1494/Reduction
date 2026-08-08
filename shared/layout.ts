@@ -55,7 +55,7 @@ export interface Recipe {
   sections: Section[];
 }
 
-export type CellKind = "ingredient" | "op" | "gap";
+export type CellKind = "ingredient" | "op" | "gap" | "collapsed";
 
 export interface Cell {
   key: string;
@@ -69,6 +69,8 @@ export interface Cell {
   inputs?: string[];
   ingredient?: Ingredient;
   text?: string;
+  /** "collapsed" cells only: how many ingredients+steps are folded inside. */
+  itemCount?: number;
 }
 
 export interface Layout {
@@ -76,6 +78,16 @@ export interface Layout {
   totalCols: number;
   totalRows: number;
   parentOf: Map<string, string>;
+}
+
+export interface LayoutOptions {
+  /**
+   * Step ids to draw as a single collapsed leaf instead of expanding their
+   * subtree. Traversal stops at each one — it lands at column 0 like an
+   * ingredient, carrying its label and a count of everything folded inside.
+   * Omitting this (or passing nothing) reproduces today's output exactly.
+   */
+  collapsed?: Set<string>;
 }
 
 /**
@@ -86,9 +98,15 @@ export interface Layout {
  * Leaves are emitted in DFS order, which is the only reason every node's
  * inputs land on contiguous rows and rowspan works at all.
  *
+ * A step id named in `opts.collapsed` is treated as a leaf too: its whole
+ * subtree is swallowed into one row/column-0 cell instead of being drawn.
+ * Row-collapsing and column-collapsing fall out of this one leaf treatment —
+ * there is no separate mechanism for each.
+ *
  * Throws on any tree that cannot be drawn. Messages are user-facing.
  */
-export function computeLayout(section: Section): Layout {
+export function computeLayout(section: Section, opts?: LayoutOptions): Layout {
+  const collapsed = opts?.collapsed;
   const ingById = new Map((section.ingredients || []).map((i) => [i.id, i]));
   const nodeById = new Map((section.nodes || []).map((n) => [n.id, n]));
 
@@ -101,6 +119,19 @@ export function computeLayout(section: Section): Layout {
   const parentOf = new Map<string, string>();
   const inPath = new Set<string>();
   const visited = new Set<string>();
+  const collapsedInfo = new Map<string, { label: string; count: number }>();
+  // Ids folded inside a collapsed subtree never get their own row, so they
+  // must not trip the "never used"/"not connected" checks below.
+  const swallowed = new Set<string>();
+
+  /** Every ingredient/step reachable from `id`, id included. */
+  const collectSubtree = (id: string, acc: Set<string>) => {
+    if (acc.has(id)) return;
+    acc.add(id);
+    const node = nodeById.get(id);
+    if (!node) return;
+    (node.inputs || []).forEach((child) => collectSubtree(child, acc));
+  };
 
   (function visit(id: string, parent: string | null) {
     if (parent) parentOf.set(id, parent);
@@ -121,19 +152,35 @@ export function computeLayout(section: Section): Layout {
     if (inPath.has(id)) throw new Error(`Cycle detected at "${id}".`);
     if (visited.has(id))
       throw new Error(`"${id}" feeds two later steps. This layout needs a tree.`);
+
+    if (collapsed?.has(id)) {
+      visited.add(id);
+      leafRow.set(id, order.length);
+      order.push(id);
+      const acc = new Set<string>();
+      collectSubtree(id, acc);
+      acc.forEach((x) => swallowed.add(x));
+      collapsedInfo.set(id, { label: node.label, count: acc.size });
+      return;
+    }
+
     inPath.add(id);
     visited.add(id);
     (node.inputs || []).forEach((child) => visit(child, id));
     inPath.delete(id);
   })(section.root, null);
 
-  const orphanIng = (section.ingredients || []).filter((i) => !leafRow.has(i.id));
+  const orphanIng = (section.ingredients || []).filter(
+    (i) => !leafRow.has(i.id) && !swallowed.has(i.id)
+  );
   if (orphanIng.length)
     throw new Error(
       `Never used in any step: ${orphanIng.map((i) => i.name).join(", ")}.`
     );
 
-  const orphanSteps = (section.nodes || []).filter((n) => !visited.has(n.id));
+  const orphanSteps = (section.nodes || []).filter(
+    (n) => !visited.has(n.id) && !swallowed.has(n.id)
+  );
   if (orphanSteps.length)
     throw new Error(
       `Steps not connected to the root: ${orphanSteps.map((n) => n.id).join(", ")}.`
@@ -142,6 +189,7 @@ export function computeLayout(section: Section): Layout {
   const colMemo = new Map<string, number>();
   const colOf = (id: string): number => {
     if (ingById.has(id)) return 0;
+    if (collapsed?.has(id)) return 0;
     if (colMemo.has(id)) return colMemo.get(id)!;
     const inputs = nodeById.get(id)!.inputs || [];
     const c = inputs.length ? 1 + Math.max(...inputs.map(colOf)) : 1;
@@ -151,7 +199,7 @@ export function computeLayout(section: Section): Layout {
 
   const spanMemo = new Map<string, [number, number]>();
   const spanOf = (id: string): [number, number] => {
-    if (ingById.has(id)) {
+    if (ingById.has(id) || collapsed?.has(id)) {
       const r = leafRow.get(id)!;
       return [r, r];
     }
@@ -171,19 +219,34 @@ export function computeLayout(section: Section): Layout {
   const cells: Cell[] = [];
 
   order.forEach((id) => {
+    if (ingById.has(id)) {
+      cells.push({
+        key: id,
+        row: leafRow.get(id)!,
+        col: 0,
+        rowSpan: 1,
+        colSpan: 1,
+        kind: "ingredient",
+        ingredient: ingById.get(id)!,
+      });
+      return;
+    }
+    const info = collapsedInfo.get(id)!;
     cells.push({
       key: id,
       row: leafRow.get(id)!,
       col: 0,
       rowSpan: 1,
       colSpan: 1,
-      kind: "ingredient",
-      ingredient: ingById.get(id)!,
+      kind: "collapsed",
+      text: info.label,
+      itemCount: info.count,
     });
   });
 
   for (const node of section.nodes) {
     if (!visited.has(node.id)) continue;
+    if (collapsed?.has(node.id)) continue;
     const c = colOf(node.id);
     const [lo, hi] = spanOf(node.id);
     cells.push({
