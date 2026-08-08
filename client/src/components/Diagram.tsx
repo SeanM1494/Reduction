@@ -109,6 +109,29 @@ export default function Diagram({
   // it is already done, so there is nothing left to decide in that branch.
   // Tail steps are the finish strip's job, never the table's, so they're
   // never eligible here regardless of done state.
+  //
+  // Steps only collapse alongside their whole column, not one at a time —
+  // columns share a depth/stage in the diagram's shading, so folding one
+  // step to column 0 while a sibling stays at its column reads as broken
+  // alignment rather than progress. A column is "done" once every step
+  // drawn at that depth is checked off.
+  const colOfNode = new Map<string, number>();
+  baseLayout.rows.forEach((r) =>
+    r.forEach((c) => {
+      if (c.kind === "op") colOfNode.set(c.key, c.depth!);
+    })
+  );
+  const stepsByColumn = new Map<number, string[]>();
+  for (const node of section.nodes) {
+    if (tailIds.has(node.id)) continue;
+    const col = colOfNode.get(node.id);
+    if (col == null) continue;
+    if (!stepsByColumn.has(col)) stepsByColumn.set(col, []);
+    stepsByColumn.get(col)!.push(node.id);
+  }
+  const columnFullyDone = (col: number) =>
+    (stepsByColumn.get(col) || []).every((id) => done.has(id));
+
   const collapsedIds = new Set<string>();
   for (const node of section.nodes) {
     if (tailIds.has(node.id)) continue;
@@ -116,6 +139,8 @@ export default function Diagram({
     if (expanded.has(node.id)) continue;
     const parent = baseLayout.parentOf.get(node.id);
     if (parent && done.has(parent)) continue;
+    const col = colOfNode.get(node.id);
+    if (col != null && !columnFullyDone(col)) continue;
     collapsedIds.add(node.id);
   }
 
