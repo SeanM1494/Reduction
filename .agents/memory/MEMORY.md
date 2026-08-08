@@ -1,1 +1,2 @@
 - [Monorepo artifact deployment can hijack the root app](artifact-deployment-routing.md) — a registered "runnable" (kind=api) artifact can silently become the only thing served in production, 404-ing the real site.
+- [Theming system (light/dark/colorblind)](theming-system.md) — data-attribute + CSS token cascade, colorblind as an overlay not a 4th base, pre-paint flash-prevention script duplication.

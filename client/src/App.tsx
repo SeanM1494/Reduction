@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useCallback } from "react";
 import Home from "./components/Home";
 import RecipeView from "./components/RecipeView";
+import ThemeToggle from "./components/ThemeToggle";
+import { useTheme } from "./hooks/useTheme";
 import { loadLibrary, saveLibrary, type Entry } from "./lib/storage";
 import {
   extractFromUrl,
@@ -79,6 +81,7 @@ export default function App() {
   );
 
   const entry = library.find((e) => e.id === openId) || null;
+  const { mode: themeMode, setMode: setThemeMode } = useTheme();
 
   return (
     <div className="rd-root">
@@ -92,9 +95,12 @@ export default function App() {
           />
           Reduction
         </button>
-        {entry ? null : (
-          <span className="rd-nav-meta">{library.length} saved</span>
-        )}
+        <div className="rd-nav-right">
+          {entry ? null : (
+            <span className="rd-nav-meta">{library.length} saved</span>
+          )}
+          <ThemeToggle mode={themeMode} onChange={setThemeMode} />
+        </div>
       </nav>
 
       <div className="rd-shell">

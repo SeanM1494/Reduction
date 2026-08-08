@@ -17,8 +17,15 @@ import React, { useState } from "react";
 import { computeLayout, type Section, type Step } from "../../../shared/layout";
 import { formatAmount } from "../../../shared/amounts";
 
-/** Columns shade deeper to the right, so stage depth reads before interaction. */
-const depthTint = (d: number) => `hsl(34 34% ${97.2 - Math.min(d, 12) * 0.95}%)`;
+/**
+ * Columns shade deeper to the right, so stage depth reads before interaction.
+ * Mixed from the theme's own card/ink tokens (not a fixed hue) so the same
+ * progression works unmodified in light, dark and colorblind mode.
+ */
+const depthTint = (d: number) => {
+  const pct = Math.min(d, 12) * 1.1;
+  return `color-mix(in srgb, var(--card) ${100 - pct}%, var(--ink) ${pct}%)`;
+};
 
 function fmtTime(min: number): string {
   if (min < 60) return `${min} min`;
@@ -277,6 +284,7 @@ export default function Diagram({
                     .join(" ")}
                   {...interaction(n.id, n.label, ready, isDone)}
                 >
+                  <span className="rd-fin-mark" aria-hidden="true" />
                   <span className="rd-fin-num">{i + 1}</span>
                   <span className="rd-fin-label">{n.label}</span>
                   {n.minutes ? (

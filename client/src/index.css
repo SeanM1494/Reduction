@@ -10,12 +10,21 @@ html, body, #root { height: 100%; }
 
 body {
   margin: 0;
-  background: #f0e2c8;
+  background: var(--page);
   -webkit-text-size-adjust: 100%;
 }
 
-.rd-root {
+/* ---------- theme tokens ----------
+   Every themeable color in the app is a variable here. :root carries the
+   light palette by default; [data-theme="dark"] (set on <html> by
+   useTheme) swaps in the dark palette. [data-colorblind="true"] layers a
+   colorblind-safe blue/orange pair over the warm/cool "ready vs. done"
+   accents on top of whichever base is active. */
+:root {
+  color-scheme: light;
   --ink: #211d18;
+  --ink-contrast: #fffcf3;
+  --ink-hover: #141009;
   --muted: #6b6154;
   --faint: #948b7d;
   --page: #f0e2c8;
@@ -23,20 +32,110 @@ body {
   --ing-bg: #f7f0df;
   --line: #e4d6b8;
   --line-strong: #c9b48a;
+  --disabled-bg: #c9bba0;
+  --hover-ing: #ede0c4;
+  --hover-cell: #f5edd9;
+  --oven-line: #efc0b8;
+  --shadow-rgb: 70, 45, 20;
+
   --warm-bg: #f7dad5;
   --warm-line: #c8362b;
   --warm-ink: #7a2118;
+  --warm-hover: #f0beb5;
+
   --cool-bg: #e7ecd5;
   --cool-line: #7c9b54;
   --cool-ink: #445a2e;
-  --pin: 9px 0 10px -9px rgba(120, 40, 25, .3);
+  --cool-hover: #d7e0be;
 
+  --preview-bg: #fbe4df;
+  --preview-hover: #f8dad3;
+
+  --danger-ink: #92351b;
+  --danger-bg: #fdeee5;
+  --danger-line: #eec9b4;
+
+  --pin: 9px 0 10px -9px rgba(120, 40, 25, .3);
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --ink: #ece6d9;
+  --ink-contrast: #1c1a16;
+  --ink-hover: #ffffff;
+  --muted: #a89f8f;
+  --faint: #786f60;
+  --page: #1b1815;
+  --card: #252220;
+  --ing-bg: #2b2723;
+  --line: #3b352c;
+  --line-strong: #4e463a;
+  --disabled-bg: #453f36;
+  --hover-ing: #342f28;
+  --hover-cell: #302b25;
+  --oven-line: rgba(226, 98, 79, .45);
+  --shadow-rgb: 0, 0, 0;
+
+  --warm-bg: rgba(224, 96, 78, .22);
+  --warm-line: #e2624f;
+  --warm-ink: #ffb4a3;
+  --warm-hover: rgba(224, 96, 78, .34);
+
+  --cool-bg: rgba(133, 168, 92, .2);
+  --cool-line: #9ac264;
+  --cool-ink: #cfe3ab;
+  --cool-hover: rgba(133, 168, 92, .32);
+
+  --preview-bg: rgba(224, 96, 78, .16);
+  --preview-hover: rgba(224, 96, 78, .26);
+
+  --danger-ink: #ff9c85;
+  --danger-bg: rgba(146, 53, 27, .28);
+  --danger-line: rgba(238, 201, 180, .35);
+
+  --pin: 9px 0 10px -9px rgba(0, 0, 0, .5);
+}
+
+/* Colorblind-safe accents (an Okabe-Ito style blue/orange pair) replace the
+   red/green warm-cool pair, on whichever base (light or dark) is active. */
+:root[data-colorblind="true"] {
+  --warm-bg: #fbe6c8;
+  --warm-line: #b5680a;
+  --warm-ink: #6b3d05;
+  --warm-hover: #f3d29c;
+
+  --cool-bg: #d8e8f5;
+  --cool-line: #0072b2;
+  --cool-ink: #0a3d5c;
+  --cool-hover: #b9d9ee;
+
+  --preview-bg: #fbe6c8;
+  --preview-hover: #f3d29c;
+}
+
+:root[data-theme="dark"][data-colorblind="true"] {
+  --warm-bg: rgba(230, 159, 0, .22);
+  --warm-line: #e6a324;
+  --warm-ink: #ffd68a;
+  --warm-hover: rgba(230, 159, 0, .34);
+
+  --cool-bg: rgba(86, 168, 224, .2);
+  --cool-line: #6fb3e0;
+  --cool-ink: #bfe3fa;
+  --cool-hover: rgba(86, 168, 224, .32);
+
+  --preview-bg: rgba(230, 159, 0, .16);
+  --preview-hover: rgba(230, 159, 0, .26);
+}
+
+.rd-root {
   background: var(--page);
   min-height: 100%;
   padding: 0 0 56px;
   color: var(--ink);
   font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
   -webkit-font-smoothing: antialiased;
+  transition: background-color .18s ease, color .18s ease;
 }
 
 .rd-shell { max-width: 1120px; margin: 0 auto; padding: 0 16px; }
@@ -57,6 +156,27 @@ body {
   font-family: "Space Mono", ui-monospace, monospace;
   font-size: 11px; color: var(--faint); letter-spacing: .04em;
 }
+.rd-nav-right { display: flex; align-items: center; gap: 14px; }
+
+/* ---------- theme toggle ---------- */
+.rd-theme-toggle {
+  display: flex; gap: 2px; padding: 2px;
+  border: 1px solid var(--line); border-radius: 99px; background: var(--ing-bg);
+}
+.rd-theme-btn {
+  font: inherit; font-size: 11.5px; font-weight: 500; letter-spacing: .01em;
+  padding: 5px 10px; border-radius: 99px; border: 0; background: none;
+  color: var(--muted); cursor: pointer;
+}
+.rd-theme-btn:hover { color: var(--ink); }
+.rd-theme-btn.is-on {
+  background: var(--card); color: var(--ink); font-weight: 600;
+  box-shadow: 0 1px 2px rgba(var(--shadow-rgb), .12);
+}
+.rd-theme-btn:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+@media (max-width: 520px) {
+  .rd-theme-btn { padding: 5px 7px; font-size: 10.5px; }
+}
 
 /* ---------- hero + import ---------- */
 .rd-hero { margin: 18px 2px 20px; }
@@ -72,7 +192,7 @@ body {
 .rd-import {
   background: var(--card); border: 1px solid var(--line);
   border-radius: 14px; padding: 14px; margin-bottom: 34px;
-  box-shadow: 0 1px 3px rgba(70, 45, 20, .08);
+  box-shadow: 0 1px 3px rgba(var(--shadow-rgb), .08);
 }
 .rd-tabs { display: flex; gap: 4px; margin-bottom: 11px; }
 .rd-tab {
@@ -88,7 +208,7 @@ body {
 .rd-url {
   flex: 1; min-width: 0; font: inherit; font-size: 15px;
   padding: 12px 13px; border: 1px solid var(--line); border-radius: 9px;
-  background: #fffcf3; color: var(--ink);
+  background: var(--card); color: var(--ink);
 }
 .rd-url::placeholder, .rd-paste::placeholder { color: var(--faint); }
 .rd-pastebox {
@@ -98,7 +218,7 @@ body {
   width: 100%; min-height: 160px; resize: vertical;
   font: inherit; font-size: 14px; line-height: 1.5;
   padding: 12px 13px; border: 1px solid var(--line); border-radius: 9px;
-  background: #fffcf3; color: var(--ink);
+  background: var(--card); color: var(--ink);
 }
 .rd-url:focus-visible, .rd-paste:focus-visible {
   outline: 2px solid var(--warm-line); outline-offset: 1px;
@@ -108,21 +228,21 @@ body {
 .rd-file { font: inherit; font-size: 13px; color: var(--muted); }
 .rd-go {
   font: inherit; font-size: 14px; font-weight: 600; white-space: nowrap;
-  background: var(--ink); color: #fffcf3; border: 0;
+  background: var(--ink); color: var(--ink-contrast); border: 0;
   padding: 12px 20px; border-radius: 9px; cursor: pointer;
 }
-.rd-go:disabled { background: #c9bba0; cursor: default; }
-.rd-go:not(:disabled):hover { background: #141009; }
+.rd-go:disabled { background: var(--disabled-bg); cursor: default; }
+.rd-go:not(:disabled):hover { background: var(--ink-hover); }
 
 .rd-alert {
   display: flex; gap: 10px; align-items: flex-start;
   justify-content: space-between; margin-top: 11px;
   font-size: 13px; line-height: 1.45;
-  color: #92351b; background: #fdeee5; border: 1px solid #eec9b4;
+  color: var(--danger-ink); background: var(--danger-bg); border: 1px solid var(--danger-line);
   border-radius: 9px; padding: 10px 12px;
 }
 .rd-alert-x {
-  background: none; border: 0; color: #92351b; font-size: 18px;
+  background: none; border: 0; color: var(--danger-ink); font-size: 18px;
   line-height: 1; cursor: pointer; padding: 0 2px;
 }
 
@@ -153,12 +273,12 @@ body {
   text-align: left; font: inherit; cursor: pointer;
   background: var(--card); border: 1px solid var(--line);
   border-radius: 12px; padding: 15px 16px 14px;
-  box-shadow: 0 1px 2px rgba(70, 45, 20, .07);
+  box-shadow: 0 1px 2px rgba(var(--shadow-rgb), .07);
   transition: border-color .15s ease, box-shadow .15s ease;
 }
 .rd-card:hover {
   border-color: var(--line-strong);
-  box-shadow: 0 3px 8px rgba(70, 45, 20, .13);
+  box-shadow: 0 3px 8px rgba(var(--shadow-rgb), .13);
 }
 .rd-card-title {
   font-family: "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
@@ -169,7 +289,7 @@ body {
   font-size: 10.5px; color: var(--faint); line-height: 1.4;
 }
 .rd-card-bar {
-  height: 4px; border-radius: 99px; background: #e4d6b8;
+  height: 4px; border-radius: 99px; background: var(--line);
   overflow: hidden; margin-top: 3px;
 }
 .rd-card-fill {
@@ -196,7 +316,7 @@ body {
 .rd-head {
   background: var(--card); border: 1px solid var(--line); border-radius: 14px;
   padding: 22px 22px 18px; margin-bottom: 26px;
-  box-shadow: 0 1px 3px rgba(70, 45, 20, .07);
+  box-shadow: 0 1px 3px rgba(var(--shadow-rgb), .07);
 }
 .rd-head-top {
   display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap;
@@ -230,7 +350,7 @@ body {
   font: inherit; font-size: 16px; line-height: 1; width: 32px; height: 30px;
   background: var(--ing-bg); border: 0; color: var(--ink); cursor: pointer;
 }
-.rd-step-btn:hover { background: #ede0c4; }
+.rd-step-btn:hover { background: var(--hover-ing); }
 .rd-step-val {
   font-family: "Space Mono", ui-monospace, monospace;
   font-size: 13px; min-width: 34px; text-align: center;
@@ -238,7 +358,7 @@ body {
 .rd-scale-note { font-size: 12px; color: var(--muted); line-height: 1.4; }
 
 .rd-progress { display: flex; flex-direction: column; gap: 9px; }
-.rd-bar { height: 5px; border-radius: 99px; background: #e4d6b8; overflow: hidden; }
+.rd-bar { height: 5px; border-radius: 99px; background: var(--line); overflow: hidden; }
 .rd-bar-fill {
   height: 100%; border-radius: 99px;
   background: linear-gradient(90deg, var(--warm-line), var(--cool-ink));
@@ -272,7 +392,7 @@ body {
   font-family: "Space Mono", ui-monospace, monospace;
   font-size: 11px; letter-spacing: .05em;
   color: var(--warm-ink); background: var(--warm-bg);
-  border: 1px solid #efc0b8; border-radius: 99px; padding: 3px 10px;
+  border: 1px solid var(--oven-line); border-radius: 99px; padding: 3px 10px;
 }
 
 /* The frame is also the scroll container. Sticky cells position against the
@@ -280,7 +400,7 @@ body {
 .rd-frame {
   overflow-x: auto; overflow-y: hidden;
   border: 1px solid var(--line-strong); border-radius: 10px;
-  background: var(--card); box-shadow: 0 1px 3px rgba(70, 45, 20, .09);
+  background: var(--card); box-shadow: 0 1px 3px rgba(var(--shadow-rgb), .09);
   -webkit-overflow-scrolling: touch;
 }
 /* Separate borders, not collapse: collapsed borders belong to the table, so a
@@ -320,7 +440,7 @@ body {
   border-bottom: 1px solid var(--line); padding: 0;
 }
 .rd-gap.is-done { background: var(--cool-bg); }
-.rd-gap.is-preview { background: #fbe4df; }
+.rd-gap.is-preview { background: var(--preview-bg); }
 
 /* Ready is steps only, so the accent always means "next action". */
 .rd-op.is-ready {
@@ -336,7 +456,7 @@ body {
 
 .rd-cell.is-done { background: var(--cool-bg); color: var(--cool-ink); }
 .rd-ing.is-done { box-shadow: inset 3px 0 0 var(--cool-line), var(--pin); }
-.rd-cell.is-done .rd-amount { color: #445a2e; }
+.rd-cell.is-done .rd-amount { color: var(--cool-ink); }
 .rd-cell.is-done .rd-op-label { color: var(--cool-ink); }
 .rd-cell.is-done .rd-name,
 .rd-cell.is-done .rd-op-label { text-decoration: line-through; opacity: .78; }
@@ -345,15 +465,24 @@ body {
   background: var(--cool-ink);
   clip-path: polygon(14% 48%, 0 62%, 38% 100%, 100% 22%, 86% 8%, 38% 72%);
 }
-.rd-cell.is-preview { background: #fbe4df; }
+.rd-cell.is-preview { background: var(--preview-bg); }
 .rd-cell.is-preview .rd-op-label { color: var(--warm-ink); }
 .rd-ing.is-preview { box-shadow: inset 3px 0 0 var(--warm-line), var(--pin); }
 
-.rd-cell:hover { background: #f5edd9; }
-.rd-ing:hover { background: #ede0c4; }
-.rd-op.is-ready:hover { background: #f0beb5; }
-.rd-cell.is-preview:hover { background: #f8dad3; }
-.rd-cell.is-done:hover { background: #d7e0be; }
+/* Colorblind mode: "ready" gets a non-color shape cue (a filled triangle)
+   next to the checkmark already used for "done", so the two states never
+   rely on hue alone. */
+:root[data-colorblind="true"] .rd-op.is-ready .rd-mark {
+  position: absolute; top: 7px; right: 8px; width: 0; height: 0;
+  border-left: 5px solid transparent; border-right: 5px solid transparent;
+  border-bottom: 9px solid var(--warm-line);
+}
+
+.rd-cell:hover { background: var(--hover-cell); }
+.rd-ing:hover { background: var(--hover-ing); }
+.rd-op.is-ready:hover { background: var(--warm-hover); }
+.rd-cell.is-preview:hover { background: var(--preview-hover); }
+.rd-cell.is-done:hover { background: var(--cool-hover); }
 
 .rd-hint {
   font-size: 12px; color: var(--muted); margin: 4px 2px 14px; max-width: 62ch;
@@ -361,8 +490,8 @@ body {
 .rd-source { font-size: 12px; color: var(--faint); margin: 0 2px 18px; }
 .rd-source a { color: var(--muted); }
 .rd-error {
-  color: #92351b; font-size: 13.5px; background: #fdeee5;
-  border: 1px solid #eec9b4; border-radius: 9px; padding: 11px 13px;
+  color: var(--danger-ink); font-size: 13.5px; background: var(--danger-bg);
+  border: 1px solid var(--danger-line); border-radius: 9px; padding: 11px 13px;
 }
 .rd-swipe {
   display: none;
@@ -376,10 +505,10 @@ body {
   font: inherit; font-size: 13px; background: var(--card);
   border: 1px solid var(--line); color: var(--ink);
   padding: 7px 13px; border-radius: 8px; cursor: pointer;
-  box-shadow: 0 1px 2px rgba(70, 45, 20, .07);
+  box-shadow: 0 1px 2px rgba(var(--shadow-rgb), .07);
 }
 .rd-btn:hover { border-color: var(--line-strong); }
-.rd-btn-danger { color: #92351b; }
+.rd-btn-danger { color: var(--danger-ink); }
 .rd-btn:focus-visible, .rd-go:focus-visible, .rd-card:focus-visible,
 .rd-tab:focus-visible, .rd-back:focus-visible, .rd-brand:focus-visible,
 .rd-step-btn:focus-visible {
@@ -465,7 +594,7 @@ body {
   background: var(--cool-bg); border: 1px solid var(--cool-line);
   border-radius: 10px; padding: 13px 15px; color: var(--cool-ink);
 }
-.rd-tucked:hover { background: #d7e0be; }
+.rd-tucked:hover { background: var(--cool-hover); }
 .rd-tucked-check {
   flex: none; width: 15px; height: 15px; background: var(--cool-ink);
   clip-path: polygon(14% 48%, 0 62%, 38% 100%, 100% 22%, 86% 8%, 38% 72%);
@@ -488,13 +617,14 @@ body {
   background: var(--line-strong); margin: 0 2px;
 }
 .rd-fin {
+  position: relative;
   display: flex; align-items: center; gap: 9px;
   background: var(--card); border: 1px solid var(--line);
   border-radius: 9px; padding: 11px 14px; cursor: pointer;
   transition: background .16s ease, border-color .16s ease, transform .2s ease;
 }
 .rd-fin:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
-.rd-fin:hover { background: #f5edd9; }
+.rd-fin:hover { background: var(--hover-cell); }
 .rd-fin-num {
   font-family: "Space Mono", ui-monospace, monospace;
   font-size: 10px; color: var(--faint);
@@ -513,9 +643,9 @@ body {
 }
 .rd-fin.is-ready .rd-fin-label { color: var(--warm-ink); font-weight: 600; }
 .rd-fin.is-ready .rd-fin-num { border-color: var(--warm-line); color: var(--warm-ink); }
-.rd-fin.is-ready:hover { background: #f0beb5; }
+.rd-fin.is-ready:hover { background: var(--warm-hover); }
 
-.rd-fin.is-preview { background: #fbe4df; border-color: var(--warm-line); }
+.rd-fin.is-preview { background: var(--preview-bg); border-color: var(--warm-line); }
 .rd-fin.is-preview .rd-fin-label { color: var(--warm-ink); }
 
 .rd-fin.is-done {
@@ -523,8 +653,20 @@ body {
 }
 .rd-fin.is-done .rd-fin-label { text-decoration: line-through; opacity: .78; }
 .rd-fin.is-done .rd-fin-num { border-color: var(--cool-line); color: var(--cool-ink); }
-.rd-fin.is-done .rd-fin-time { color: #445a2e; }
-.rd-fin.is-done:hover { background: #d7e0be; }
+.rd-fin.is-done .rd-fin-time { color: var(--cool-ink); }
+.rd-fin.is-done:hover { background: var(--cool-hover); }
+.rd-fin.is-done .rd-fin-mark {
+  position: absolute; top: 8px; right: 9px; width: 11px; height: 11px;
+  background: var(--cool-ink);
+  clip-path: polygon(14% 48%, 0 62%, 38% 100%, 100% 22%, 86% 8%, 38% 72%);
+}
+
+/* Colorblind mode: same non-color "ready" cue as the diagram cells. */
+:root[data-colorblind="true"] .rd-fin.is-ready .rd-fin-mark {
+  position: absolute; top: 9px; right: 10px; width: 0; height: 0;
+  border-left: 5px solid transparent; border-right: 5px solid transparent;
+  border-bottom: 9px solid var(--warm-line);
+}
 
 /* once the tree is complete the strip is the whole show */
 .rd-finish.is-focus { margin-top: 14px; animation: rd-focus-in .45s cubic-bezier(.2,.7,.3,1); }
