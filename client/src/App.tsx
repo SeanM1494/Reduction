@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import Home from "./components/Home";
 import RecipeView from "./components/RecipeView";
+import SearchBar from "./components/SearchBar";
 import ThemeToggle from "./components/ThemeToggle";
 import { useTheme } from "./hooks/useTheme";
 import { loadLibrary, saveLibrary, type Entry } from "./lib/storage";
@@ -80,6 +81,19 @@ export default function App() {
     [addRecipe]
   );
 
+  // Same extraction call and the same addRecipe/setOpenId success path as
+  // `run` above — just without the shared busy/error state, so a
+  // web-result card in the header search can own its own loading spinner
+  // and inline error (via the rejected promise) without touching the
+  // Link/Paste/Photo tabs.
+  const runSilently = useCallback(
+    async (fn: () => Promise<{ recipe: Recipe }>) => {
+      const { recipe } = await fn();
+      addRecipe(recipe);
+    },
+    [addRecipe]
+  );
+
   const entry = library.find((e) => e.id === openId) || null;
   const { mode: themeMode, setMode: setThemeMode } = useTheme();
 
@@ -95,6 +109,11 @@ export default function App() {
           />
           Reduction
         </button>
+        <SearchBar
+          library={library}
+          onOpen={setOpenId}
+          onPickWebResult={(url) => runSilently(() => extractFromUrl(url))}
+        />
         <div className="rd-nav-right">
           {entry ? null : (
             <span className="rd-nav-meta">{library.length} saved</span>

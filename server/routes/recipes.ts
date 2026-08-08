@@ -15,6 +15,7 @@ import crypto from "node:crypto";
 import { fetchSource } from "../lib/fetchSource";
 import { structureRecipe } from "../lib/structureRecipe";
 import { structureRecipeFromUrl } from "../lib/fetchViaClaude";
+import { searchRecipes, type SearchResult } from "../lib/searchRecipes";
 import type { Recipe } from "../../shared/layout";
 
 export const recipesRouter = Router();
@@ -49,6 +50,20 @@ function cacheGet(key: string): Recipe | null {
     return null;
   }
   return hit.recipe;
+}
+
+// Same idea as the extraction cache above, keyed and expired the same way,
+// just holding a list of candidates instead of a structured recipe.
+const searchCache = new Map<string, { results: SearchResult[]; at: number }>();
+
+function searchCacheGet(key: string): SearchResult[] | null {
+  const hit = searchCache.get(key);
+  if (!hit) return null;
+  if (Date.now() - hit.at > CACHE_TTL_MS) {
+    searchCache.delete(key);
+    return null;
+  }
+  return hit.results;
 }
 
 // Extraction is expensive enough to be worth a crude per-IP throttle.
@@ -193,6 +208,44 @@ recipesRouter.post("/extract", async (req: Request, res: Response) => {
     return res.status(isUserFacing ? 422 : 500).json({
       error: isUserFacing ? err.message : "Something went wrong reading that recipe.",
       details: err.details,
+    });
+  }
+});
+
+recipesRouter.post("/search", async (req: Request, res: Response) => {
+  const ip = req.ip ?? "unknown";
+  // Same throttle as extraction — a search also costs an API call.
+  if (overLimit(ip))
+    return res
+      .status(429)
+      .json({ error: "Too many searches this hour. Try again later." });
+
+  const { query } = req.body ?? {};
+  if (typeof query !== "string")
+    return res.status(400).json({ error: "query must be a string." });
+
+  const trimmed = query.trim();
+  if (trimmed.length < 3)
+    return res.status(400).json({ error: "Search for at least 3 characters." });
+  if (trimmed.length > 200)
+    return res.status(400).json({ error: "That search is too long." });
+
+  const key = hash(`search:${trimmed}`);
+  const cached = searchCacheGet(key);
+  if (cached) return res.json({ results: cached });
+
+  try {
+    const results = await searchRecipes(trimmed);
+    searchCache.set(key, { results, at: Date.now() });
+    return res.json({ results });
+  } catch (e) {
+    const err = e as Error;
+    const isUserFacing = /too short|too long|different search/i.test(err.message);
+    if (!isUserFacing) console.error("[recipes/search]", err);
+    return res.status(isUserFacing ? 422 : 500).json({
+      error: isUserFacing
+        ? err.message
+        : "Something went wrong searching for recipes.",
     });
   }
 });

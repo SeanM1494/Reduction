@@ -4,11 +4,11 @@ export const modules: ModuleMap = {
   "./components/mockups/loading-states/RecipeScan.tsx": () => import("../components/mockups/loading-states/RecipeScan.tsx"),
   "./components/mockups/loading-states/SimmeringPot.tsx": () => import("../components/mockups/loading-states/SimmeringPot.tsx"),
   "./components/mockups/loading-states/SizzlingTicker.tsx": () => import("../components/mockups/loading-states/SizzlingTicker.tsx"),
-  "./components/mockups/logo-concepts/Convergence.tsx": () => import("../components/mockups/logo-concepts/Convergence.tsx"),
-  "./components/mockups/logo-concepts/Funnel.tsx": () => import("../components/mockups/logo-concepts/Funnel.tsx"),
-  "./components/mockups/logo-concepts/Stack.tsx": () => import("../components/mockups/logo-concepts/Stack.tsx"),
   "./components/mockups/visual-redesign/CitrusKitchen.tsx": () => import("../components/mockups/visual-redesign/CitrusKitchen.tsx"),
   "./components/mockups/visual-redesign/Current.tsx": () => import("../components/mockups/visual-redesign/Current.tsx"),
   "./components/mockups/visual-redesign/InkAndPaper.tsx": () => import("../components/mockups/visual-redesign/InkAndPaper.tsx"),
-  "./components/mockups/visual-redesign/LabNotebook.tsx": () => import("../components/mockups/visual-redesign/LabNotebook.tsx")
+  "./components/mockups/visual-redesign/LabNotebook.tsx": () => import("../components/mockups/visual-redesign/LabNotebook.tsx"),
+  "./components/mockups/logo-concepts/Convergence.tsx": () => import("../components/mockups/logo-concepts/Convergence.tsx"),
+  "./components/mockups/logo-concepts/Funnel.tsx": () => import("../components/mockups/logo-concepts/Funnel.tsx"),
+  "./components/mockups/logo-concepts/Stack.tsx": () => import("../components/mockups/logo-concepts/Stack.tsx")
 };

@@ -1,0 +1,61 @@
+Move saved recipes from localStorage to Postgres. Replit has built-in
+Postgres — provision it so DATABASE_URL is set.
+
+1. Dependencies: drizzle-orm, drizzle-kit, @neondatabase/serverless
+   (or pg). Nothing else.
+
+2. shared/schema.ts — Drizzle schema, two tables:
+   recipes:
+     id text primary key            (client-generated, keep existing ids)
+     owner_key text not null         (see step 6)
+     recipe jsonb not null           (the whole validated Recipe object)
+     done jsonb not null default '[]'
+     servings integer
+     created_at timestamptz default now()
+     updated_at timestamptz default now()
+   extraction_cache:
+     hash text primary key, recipe jsonb, created_at timestamptz
+   Index recipes on (owner_key, updated_at desc).
+
+3. server/db.ts — connection + drizzle client. Fail with a clear message
+   if DATABASE_URL is missing; do not crash at import.
+
+4. server/routes/library.ts — CRUD, all scoped by owner_key:
+   GET    /api/library          list, newest first
+   POST   /api/library          create { id, recipe, done, servings }
+   PATCH  /api/library/:id      update done and/or servings
+   DELETE /api/library/:id
+   Validate the recipe body with the existing validateRecipe before
+   inserting. Reject anything that fails.
+
+5. Replace the in-memory Map cache in routes/recipes.ts with
+   extraction_cache. Same sha256 keys, same 30-day TTL check.
+
+6. Ownership without accounts: generate a random id on first load,
+   store it in localStorage as "owner_key", send it on every request as
+   an X-Owner-Key header. Server reads it and scopes all queries. This
+   is not security — it keeps separate browsers from seeing each other's
+   recipes and means adding real auth later is a column swap, not a
+   migration. Reject requests with no owner key.
+
+7. client/src/lib/storage.ts — rewrite loadLibrary/saveLibrary to call
+   the API. Nothing else in the client should change; if you find
+   yourself editing App.tsx state logic, stop and tell me.
+   Add a one-time migration: on first load, if localStorage has a
+   "library" key and GET /api/library returns empty, POST each entry up,
+   then rename the local key to "library.migrated" rather than deleting
+   it.
+
+8. Add a "db:push" script running drizzle-kit push.
+
+CONSTRAINTS
+- No auth, no login UI, no user table.
+- Do not touch layout.ts, Diagram.tsx, or RecipeView.tsx.
+
+ACCEPTANCE
+- Save a recipe, hard-refresh, restart the Repl: it is still there.
+- Checking off a step persists across reload.
+- Deleting removes it from the database.
+- An existing localStorage library migrates once and is not duplicated
+  on subsequent loads.
+- npm run check passes.

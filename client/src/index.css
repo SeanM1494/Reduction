@@ -143,10 +143,11 @@ body {
 /* ---------- nav ---------- */
 .rd-nav {
   display: flex; align-items: center; justify-content: space-between;
+  flex-wrap: wrap; gap: 10px 16px;
   max-width: 1120px; margin: 0 auto; padding: 14px 16px 18px;
 }
 .rd-brand {
-  display: flex; align-items: center; gap: 8px;
+  display: flex; align-items: center; gap: 8px; order: 1;
   background: none; border: 0; padding: 0; cursor: pointer;
   font-family: "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
   font-weight: 700; font-size: 17px; letter-spacing: -.02em; color: var(--ink);
@@ -156,7 +157,69 @@ body {
   font-family: "Space Mono", ui-monospace, monospace;
   font-size: 11px; color: var(--faint); letter-spacing: .04em;
 }
-.rd-nav-right { display: flex; align-items: center; gap: 14px; }
+.rd-nav-right { display: flex; align-items: center; gap: 14px; order: 2; }
+
+/* ---------- header search ---------- */
+.rd-searchbar {
+  position: relative; order: 3;
+  flex: 1 1 320px; min-width: 160px; max-width: 460px;
+}
+.rd-search-input {
+  width: 100%; font: inherit; font-size: 13.5px;
+  padding: 9px 14px; border: 1px solid var(--line); border-radius: 99px;
+  background: var(--ing-bg); color: var(--ink);
+}
+.rd-search-input::placeholder { color: var(--faint); }
+.rd-search-input:focus-visible {
+  outline: 2px solid var(--warm-line); outline-offset: 1px;
+  border-color: var(--warm-line); background: var(--card);
+}
+.rd-search-panel {
+  position: absolute; top: calc(100% + 8px); left: 0; right: 0; z-index: 40;
+  background: var(--card); border: 1px solid var(--line); border-radius: 14px;
+  box-shadow: 0 10px 28px rgba(var(--shadow-rgb), .18);
+  padding: 8px; max-height: 72vh; overflow-y: auto;
+}
+.rd-search-section { display: flex; flex-direction: column; gap: 2px; }
+.rd-search-row, .rd-search-web-card {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 2px;
+  width: 100%; text-align: left; font: inherit; cursor: pointer;
+  background: none; border: 1px solid transparent; border-radius: 9px;
+  padding: 8px 10px;
+}
+.rd-search-row:hover { background: var(--ing-bg); }
+.rd-search-row-title { font-size: 13.5px; font-weight: 600; color: var(--ink); }
+.rd-search-row-meta {
+  font-family: "Space Mono", ui-monospace, monospace;
+  font-size: 10.5px; color: var(--faint);
+}
+.rd-search-web-row {
+  display: block; width: 100%; text-align: left; font: inherit; font-size: 13px;
+  font-weight: 600; color: var(--muted); background: none;
+  border: 0; border-top: 1px solid var(--line); margin-top: 4px;
+  padding: 10px; cursor: pointer; border-radius: 9px;
+}
+.rd-search-web-row:hover:not(:disabled) { background: var(--ing-bg); color: var(--ink); }
+.rd-search-web-row:disabled { color: var(--faint); cursor: default; }
+.rd-search-web-error, .rd-search-web-empty {
+  font-size: 12.5px; margin: 6px 10px; line-height: 1.4;
+}
+.rd-search-web-error { color: var(--danger-ink); }
+.rd-search-web-empty { color: var(--muted); }
+.rd-search-web-results {
+  border-top: 1px dashed var(--line-strong); margin-top: 4px; padding-top: 6px;
+}
+.rd-search-web-card {
+  border-style: dashed; border-color: var(--line-strong); margin-bottom: 4px;
+}
+.rd-search-web-card:disabled { cursor: default; }
+.rd-search-web-card.is-loading { border-style: solid; border-color: var(--warm-line); }
+.rd-search-web-card.has-error { border-style: solid; border-color: var(--danger-line); }
+.rd-search-web-note { font-size: 12px; color: var(--muted); }
+.rd-search-web-status {
+  display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted);
+}
+.rd-search-web-card-error { font-size: 12px; color: var(--danger-ink); }
 
 /* ---------- theme toggle ---------- */
 .rd-theme-toggle {
@@ -245,6 +308,13 @@ body {
   background: none; border: 0; color: var(--danger-ink); font-size: 18px;
   line-height: 1; cursor: pointer; padding: 0 2px;
 }
+
+.rd-spinner {
+  width: 13px; height: 13px; border-radius: 50%; flex: none;
+  border: 2px solid var(--line); border-top-color: var(--muted);
+  animation: rd-spin .7s linear infinite;
+}
+@keyframes rd-spin { to { transform: rotate(360deg); } }
 
 /* ---------- library ---------- */
 .rd-lib-head {
@@ -571,6 +641,7 @@ body {
   .rd-urlbar { flex-direction: column; }
   .rd-go { width: 100%; }
   .rd-grid { grid-template-columns: 1fr; }
+  .rd-searchbar { flex-basis: 100%; max-width: none; order: 4; }
 }
 
 @media (max-width: 380px) {
