@@ -13,7 +13,7 @@
  * the table tucks away and the strip takes over.
  */
 
-import React, { useState } from "react";
+import React, { useLayoutEffect, useRef, useState } from "react";
 import { computeLayout, type Section, type Step } from "../../../shared/layout";
 import { formatAmount } from "../../../shared/amounts";
 
@@ -59,6 +59,53 @@ export default function Diagram({
   // a step inside a collapsed branch also reopens it, since that step's
   // parent chain (the collapsed step itself) gets un-done by the same click.
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
+
+  // Smooths the two things that change this section's rendered height — a
+  // branch folding into its collapsed chip, and the whole table tucking
+  // away once the tree is done — into one height transition instead of a
+  // jump. Runs after every commit and only acts when the measured height
+  // actually moved, so ordinary re-renders (hover in/out, etc.) are no-ops.
+  // No dependency array is needed: it reads only the DOM via the ref, never
+  // render-scoped variables, so it stays safe to call unconditionally ahead
+  // of the early return below.
+  const swapRef = useRef<HTMLDivElement>(null);
+  const prevHeightRef = useRef<number | null>(null);
+  const heightCleanupRef = useRef<(() => void) | null>(null);
+  useLayoutEffect(() => {
+    const el = swapRef.current;
+    if (!el) return;
+    const newHeight = el.scrollHeight;
+    const prevHeight = prevHeightRef.current;
+    if (prevHeight != null && prevHeight !== newHeight) {
+      heightCleanupRef.current?.();
+      heightCleanupRef.current = null;
+      const reduceMotion =
+        typeof window !== "undefined" &&
+        window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+      if (reduceMotion) {
+        el.style.transition = el.style.height = el.style.overflow = "";
+      } else {
+        el.style.transition = "";
+        el.style.height = `${prevHeight}px`;
+        el.style.overflow = "hidden";
+        // Force layout so the browser registers the start height before the
+        // target height is applied, or there is nothing to transition from.
+        void el.getBoundingClientRect();
+        el.style.transition = "height .28s cubic-bezier(.2,.7,.3,1)";
+        el.style.height = `${newHeight}px`;
+        const onEnd = (ev: TransitionEvent) => {
+          if (ev.propertyName !== "height") return;
+          el.style.transition = el.style.height = el.style.overflow = "";
+          el.removeEventListener("transitionend", onEnd);
+          heightCleanupRef.current = null;
+        };
+        el.addEventListener("transitionend", onEnd);
+        heightCleanupRef.current = () =>
+          el.removeEventListener("transitionend", onEnd);
+      }
+    }
+    prevHeightRef.current = newHeight;
+  });
 
   let baseLayout;
   try {
@@ -199,12 +246,16 @@ export default function Diagram({
       </div>
 
       {showTable ? (
-        <div className="rd-swap">
+        <div className="rd-swap" ref={swapRef}>
           <div className="rd-frame">
             <table className="rd-table">
               <tbody>
                 {rows.map((cellsInRow, r) => (
-                  <tr key={r}>
+                  // Keyed by the row's own leading (ingredient) cell, not by
+                  // index — a stable key so rows below a collapse point don't
+                  // all appear to change identity (and refade) just because
+                  // their index shifted when rows above them disappeared.
+                  <tr key={cellsInRow[0]?.key ?? r}>
                     {cellsInRow
                       .filter((c) => !tailIds.has(c.key))
                       .map((c) => {
@@ -340,7 +391,7 @@ export default function Diagram({
           </div>
         </div>
       ) : (
-        <div className="rd-swap">
+        <div className="rd-swap" ref={swapRef}>
           <button
             className="rd-tucked"
             onClick={() => setOverride(true)}

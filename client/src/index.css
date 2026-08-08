@@ -191,7 +191,7 @@ body {
 }
 .rd-import {
   background: var(--card); border: 1px solid var(--line);
-  border-radius: 14px; padding: 14px; margin-bottom: 34px;
+  border-radius: 17px; padding: 14px; margin-bottom: 34px;
   box-shadow: 0 1px 3px rgba(var(--shadow-rgb), .08);
 }
 .rd-tabs { display: flex; gap: 4px; margin-bottom: 11px; }
@@ -229,7 +229,7 @@ body {
 .rd-go {
   font: inherit; font-size: 14px; font-weight: 600; white-space: nowrap;
   background: var(--ink); color: var(--ink-contrast); border: 0;
-  padding: 12px 20px; border-radius: 9px; cursor: pointer;
+  padding: 12px 20px; border-radius: 12px; cursor: pointer;
 }
 .rd-go:disabled { background: var(--disabled-bg); cursor: default; }
 .rd-go:not(:disabled):hover { background: var(--ink-hover); }
@@ -272,7 +272,7 @@ body {
   display: flex; flex-direction: column; align-items: stretch; gap: 7px;
   text-align: left; font: inherit; cursor: pointer;
   background: var(--card); border: 1px solid var(--line);
-  border-radius: 12px; padding: 15px 16px 14px;
+  border-radius: 15px; padding: 15px 16px 14px;
   box-shadow: 0 1px 2px rgba(var(--shadow-rgb), .07);
   transition: border-color .15s ease, box-shadow .15s ease;
 }
@@ -314,7 +314,7 @@ body {
 .rd-crumb-actions { display: flex; gap: 7px; flex-wrap: wrap; }
 
 .rd-head {
-  background: var(--card); border: 1px solid var(--line); border-radius: 14px;
+  background: var(--card); border: 1px solid var(--line); border-radius: 17px;
   padding: 22px 22px 18px; margin-bottom: 26px;
   box-shadow: 0 1px 3px rgba(var(--shadow-rgb), .07);
 }
@@ -399,7 +399,7 @@ body {
    nearest scrolling ancestor, so these cannot be two elements. */
 .rd-frame {
   overflow-x: auto; overflow-y: hidden;
-  border: 1px solid var(--line-strong); border-radius: 10px;
+  border: 1px solid var(--line-strong); border-radius: 14px;
   background: var(--card); box-shadow: 0 1px 3px rgba(var(--shadow-rgb), .09);
   -webkit-overflow-scrolling: touch;
 }
@@ -408,6 +408,14 @@ body {
 .rd-table {
   border-collapse: separate; border-spacing: 0; width: 100%; min-width: 480px;
 }
+/* The frame's own overflow+radius already clips ordinary (non-sticky)
+   corners correctly. The sticky ingredient column is the exception —
+   `position: sticky` can visually escape that clip at the exact corner —
+   so its first and last row cells get matching radius directly. Scoped to
+   this exact position only, never the general .rd-cell/.rd-gap classes, so
+   no seam appears against their non-sticky, non-corner neighbors. */
+.rd-table tr:first-child > td:first-child { border-top-left-radius: 13px; }
+.rd-table tr:last-child > td:first-child { border-bottom-left-radius: 13px; }
 .rd-cell {
   position: relative; border: 0;
   border-right: 1px solid var(--line); border-bottom: 1px solid var(--line);
@@ -534,7 +542,7 @@ body {
 .rd-btn {
   font: inherit; font-size: 13px; background: var(--card);
   border: 1px solid var(--line); color: var(--ink);
-  padding: 7px 13px; border-radius: 8px; cursor: pointer;
+  padding: 7px 13px; border-radius: 11px; cursor: pointer;
   box-shadow: 0 1px 2px rgba(var(--shadow-rgb), .07);
 }
 .rd-btn:hover { border-color: var(--line-strong); }
@@ -549,7 +557,7 @@ body {
 @media (max-width: 700px) {
   .rd-shell { padding: 0 10px; }
   .rd-nav { padding: 12px 12px 14px; }
-  .rd-head { padding: 16px 15px 14px; border-radius: 12px; }
+  .rd-head { padding: 16px 15px 14px; border-radius: 15px; }
   .rd-swipe { display: block; }
   /* full-bleed so the diagram gets the whole screen width */
   .rd-frame { border-radius: 0; border-left: 0; border-right: 0; margin: 0 -10px; }
@@ -600,7 +608,7 @@ body {
  * one-line summary and the strip comes forward.
  * ------------------------------------------------------------------ */
 
-.rd-swap { animation: rd-swap-in .38s cubic-bezier(.2,.7,.3,1); }
+.rd-swap { animation: rd-swap-in .28s cubic-bezier(.2,.7,.3,1); }
 @keyframes rd-swap-in {
   from { opacity: 0; transform: translateY(6px); }
   to   { opacity: 1; transform: none; }
@@ -609,7 +617,7 @@ body {
 /* Same swap as .rd-swap, scoped to individual cells: whichever rows a
    collapse/expand click actually mounts (the tucked chip, or the rows it
    reveals) fade in on their own instead of restarting the whole table. */
-.rd-row-swap { animation: rd-swap-in .3s cubic-bezier(.2,.7,.3,1); }
+.rd-row-swap { animation: rd-swap-in .28s cubic-bezier(.2,.7,.3,1); }
 
 .rd-under {
   display: flex; align-items: baseline; justify-content: space-between;
@@ -627,7 +635,7 @@ body {
   display: flex; align-items: center; gap: 11px; width: 100%;
   font: inherit; text-align: left; cursor: pointer;
   background: var(--cool-bg); border: 1px solid var(--cool-line);
-  border-radius: 10px; padding: 13px 15px; color: var(--cool-ink);
+  border-radius: 13px; padding: 13px 15px; color: var(--cool-ink);
 }
 .rd-tucked:hover { background: var(--cool-hover); }
 .rd-tucked-check {
@@ -655,7 +663,7 @@ body {
   position: relative;
   display: flex; align-items: center; gap: 9px;
   background: var(--card); border: 1px solid var(--line);
-  border-radius: 9px; padding: 11px 14px; cursor: pointer;
+  border-radius: 12px; padding: 11px 14px; cursor: pointer;
   transition: background .16s ease, border-color .16s ease, transform .2s ease;
 }
 .rd-fin:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
