@@ -412,7 +412,7 @@ body {
   position: relative; border: 0;
   border-right: 1px solid var(--line); border-bottom: 1px solid var(--line);
   background: var(--card); color: var(--ink);
-  padding: 10px 9px; vertical-align: middle; cursor: pointer;
+  padding: 7px 8px; vertical-align: middle; cursor: pointer;
   transition: background .16s ease;
 }
 .rd-cell:focus-visible { outline: 2px solid var(--ink); outline-offset: -3px; }
@@ -500,7 +500,7 @@ body {
   display: flex; align-items: center; gap: 9px; width: 100%; height: 100%;
   font: inherit; text-align: left; cursor: pointer;
   background: none; border: 0; border-radius: 6px;
-  padding: 10px 9px; color: var(--cool-ink);
+  padding: 7px 8px; color: var(--cool-ink);
 }
 .rd-collapsed-chip:hover { background: var(--cool-hover); }
 .rd-collapsed-chip:focus-visible { outline: 2px solid var(--cool-ink); outline-offset: -3px; }
@@ -554,7 +554,7 @@ body {
   /* full-bleed so the diagram gets the whole screen width */
   .rd-frame { border-radius: 0; border-left: 0; border-right: 0; margin: 0 -10px; }
   .rd-table { min-width: 400px; }
-  .rd-cell { padding: 8px 7px; }
+  .rd-cell { padding: 6px 6px; }
   .rd-ing { white-space: normal; min-width: 96px; max-width: 120px; }
   .rd-name { font-size: 13px; }
   .rd-amount { font-size: 10px; }

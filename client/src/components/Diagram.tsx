@@ -110,27 +110,24 @@ export default function Diagram({
   // Tail steps are the finish strip's job, never the table's, so they're
   // never eligible here regardless of done state.
   //
-  // Steps only collapse alongside their whole column, not one at a time —
-  // columns share a depth/stage in the diagram's shading, so folding one
-  // step to column 0 while a sibling stays at its column reads as broken
-  // alignment rather than progress. A column is "done" once every step
-  // drawn at that depth is checked off.
-  const colOfNode = new Map<string, number>();
-  baseLayout.rows.forEach((r) =>
-    r.forEach((c) => {
-      if (c.kind === "op") colOfNode.set(c.key, c.depth!);
-    })
-  );
-  const stepsByColumn = new Map<number, string[]>();
+  // Steps only collapse alongside their fellow inputs of the same parent
+  // step, not one at a time — a parent's rowspan is the union of its
+  // inputs' rows, so folding one input away while a sibling input stays
+  // multi-row reads as broken alignment rather than progress. Grouping by
+  // shared parent (rather than by column) matters because layout now packs
+  // steps as-late-as-possible: an unrelated, short branch elsewhere in the
+  // tree can land in the same column as this step's real siblings purely by
+  // numeric coincidence, without actually feeding the same parent.
+  const siblingsByParent = new Map<string, string[]>();
   for (const node of section.nodes) {
     if (tailIds.has(node.id)) continue;
-    const col = colOfNode.get(node.id);
-    if (col == null) continue;
-    if (!stepsByColumn.has(col)) stepsByColumn.set(col, []);
-    stepsByColumn.get(col)!.push(node.id);
+    const parent = baseLayout.parentOf.get(node.id);
+    if (parent == null) continue;
+    if (!siblingsByParent.has(parent)) siblingsByParent.set(parent, []);
+    siblingsByParent.get(parent)!.push(node.id);
   }
-  const columnFullyDone = (col: number) =>
-    (stepsByColumn.get(col) || []).every((id) => done.has(id));
+  const siblingGroupFullyDone = (parent: string) =>
+    (siblingsByParent.get(parent) || []).every((id) => done.has(id));
 
   const collapsedIds = new Set<string>();
   for (const node of section.nodes) {
@@ -139,8 +136,7 @@ export default function Diagram({
     if (expanded.has(node.id)) continue;
     const parent = baseLayout.parentOf.get(node.id);
     if (parent && done.has(parent)) continue;
-    const col = colOfNode.get(node.id);
-    if (col != null && !columnFullyDone(col)) continue;
+    if (parent && !siblingGroupFullyDone(parent)) continue;
     collapsedIds.add(node.id);
   }
 
