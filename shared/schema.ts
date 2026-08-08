@@ -15,13 +15,19 @@ import {
   integer,
   timestamp,
   index,
+  primaryKey,
 } from "drizzle-orm/pg-core";
 import type { Recipe } from "./layout";
 
 export const recipes = pgTable(
   "recipes",
   {
-    id: text("id").primaryKey(),
+    // Client-generated, e.g. crypto.randomUUID() — but the bootstrap demo
+    // recipe hardcodes the literal id "seed", so id alone is NOT globally
+    // unique: every first-time browser bootstraps its own "seed" row. The
+    // key must be (owner_key, id) together, or the second browser to ever
+    // load the app collides on the first browser's demo recipe.
+    id: text("id").notNull(),
     ownerKey: text("owner_key").notNull(),
     recipe: jsonb("recipe").$type<Recipe>().notNull(),
     done: jsonb("done").$type<string[]>().notNull().default([]),
@@ -29,7 +35,10 @@ export const recipes = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),
   },
-  (table) => [index("recipes_owner_updated_idx").on(table.ownerKey, table.updatedAt)]
+  (table) => [
+    primaryKey({ columns: [table.ownerKey, table.id] }),
+    index("recipes_owner_updated_idx").on(table.ownerKey, table.updatedAt),
+  ]
 );
 
 export const extractionCache = pgTable("extraction_cache", {

@@ -87,7 +87,7 @@ libraryRouter.post("/", async (req: Request, res: Response) => {
         done: Array.isArray(done) ? done : [],
         servings: servings ?? null,
       })
-      .onConflictDoNothing({ target: recipes.id })
+      .onConflictDoNothing({ target: [recipes.ownerKey, recipes.id] })
       .returning();
 
     if (!row) return res.status(409).json({ error: "A recipe with that id already exists." });

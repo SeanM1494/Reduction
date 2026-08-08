@@ -3,3 +3,4 @@
 - [Progressive-collapse sibling grouping](collapse-sibling-grouping.md) — group collapse-eligibility by shared parent, never by layout column (columns can coincide across unrelated branches).
 - [npm package-firewall transitive version block](npm-package-firewall-transitive-block.md) — a blocked transitive dep version (e.g. drizzle-kit's tsx range) needs its own pin, not just the direct dependency's.
 - [localStorage-to-API migration via diffing adapter](local-to-api-migration-diffing-adapter.md) — keep loadLibrary/saveLibrary's shape, diff against a lastSynced snapshot internally to avoid touching call sites.
+- [Anonymous owner-key seed collision](anonymous-owner-key-seed-collision.md) — a hardcoded demo-record id needs a composite (owner_key, id) PK, or the second-ever browser collides with the first's.

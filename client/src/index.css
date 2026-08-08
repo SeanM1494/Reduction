@@ -27,7 +27,7 @@ body {
   --ink-hover: #141009;
   --muted: #6b6154;
   --faint: #948b7d;
-  --page: #f0e2c8;
+  --page: #ecdcbb;
   --card: #fffcf3;
   --ing-bg: #f7f0df;
   --line: #e4d6b8;
@@ -36,7 +36,7 @@ body {
   --hover-ing: #ede0c4;
   --hover-cell: #f5edd9;
   --oven-line: #efc0b8;
-  --shadow-rgb: 70, 45, 20;
+  --shadow-rgb: 60, 38, 16;
 
   --warm-bg: #f7dad5;
   --warm-line: #c8362b;
@@ -65,7 +65,7 @@ body {
   --ink-hover: #ffffff;
   --muted: #a89f8f;
   --faint: #786f60;
-  --page: #1b1815;
+  --page: #151210;
   --card: #252220;
   --ing-bg: #2b2723;
   --line: #3b352c;
@@ -74,7 +74,7 @@ body {
   --hover-ing: #342f28;
   --hover-cell: #302b25;
   --oven-line: rgba(226, 98, 79, .45);
-  --shadow-rgb: 0, 0, 0;
+  --shadow-rgb: 10, 5, 2;
 
   --warm-bg: rgba(224, 96, 78, .22);
   --warm-line: #e2624f;
@@ -343,12 +343,14 @@ body {
   text-align: left; font: inherit; cursor: pointer;
   background: var(--card); border: 1px solid var(--line);
   border-radius: 15px; padding: 15px 16px 14px;
-  box-shadow: 0 1px 2px rgba(var(--shadow-rgb), .07);
+  box-shadow: 0 1px 1px rgba(var(--shadow-rgb), .14),
+              0 6px 16px -9px rgba(var(--shadow-rgb), .32);
   transition: border-color .15s ease, box-shadow .15s ease;
 }
 .rd-card:hover {
   border-color: var(--line-strong);
-  box-shadow: 0 3px 8px rgba(var(--shadow-rgb), .13);
+  box-shadow: 0 1px 1px rgba(var(--shadow-rgb), .16),
+              0 10px 24px -8px rgba(var(--shadow-rgb), .38);
 }
 .rd-card-title {
   font-family: "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
@@ -386,7 +388,8 @@ body {
 .rd-head {
   background: var(--card); border: 1px solid var(--line); border-radius: 17px;
   padding: 22px 22px 18px; margin-bottom: 26px;
-  box-shadow: 0 1px 3px rgba(var(--shadow-rgb), .07);
+  box-shadow: 0 1px 1px rgba(var(--shadow-rgb), .14),
+              0 12px 28px -12px rgba(var(--shadow-rgb), .3);
 }
 .rd-head-top {
   display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap;
@@ -470,7 +473,9 @@ body {
 .rd-frame {
   overflow-x: auto; overflow-y: hidden;
   border: 1px solid var(--line-strong); border-radius: 14px;
-  background: var(--card); box-shadow: 0 1px 3px rgba(var(--shadow-rgb), .09);
+  background: var(--card);
+  box-shadow: 0 1px 1px rgba(var(--shadow-rgb), .16),
+              0 10px 24px -10px rgba(var(--shadow-rgb), .32);
   -webkit-overflow-scrolling: touch;
 }
 /* Separate borders, not collapse: collapsed borders belong to the table, so a
@@ -509,7 +514,8 @@ body {
 .rd-ing-body { display: flex; flex-direction: column; gap: 3px; }
 .rd-amount {
   font-family: "Space Mono", ui-monospace, monospace;
-  font-size: 11px; color: var(--muted); letter-spacing: -.01em;
+  font-size: 11px; color: color-mix(in srgb, var(--muted) 45%, var(--ink) 55%);
+  letter-spacing: -.01em;
 }
 .rd-name { font-size: 14px; line-height: 1.25; }
 .rd-note { color: var(--faint); font-style: italic; font-size: 12.5px; }
@@ -527,22 +533,31 @@ body {
 
 /* Ready is steps only, so the accent always means "next action". */
 .rd-op.is-ready {
-  background: var(--warm-bg); box-shadow: inset 0 0 0 1px var(--warm-line);
+  background: var(--warm-bg);
+  box-shadow: inset 0 0 0 1.5px var(--warm-line),
+              0 0 0 3px color-mix(in srgb, var(--warm-line) 16%, transparent);
 }
 .rd-op.is-ready .rd-op-label { color: var(--warm-ink); font-weight: 600; }
 .rd-op.is-ready::after {
   content: ""; position: absolute; inset: 0;
-  box-shadow: inset 0 0 0 2px var(--warm-line); opacity: .5;
+  box-shadow: inset 0 0 0 2px var(--warm-line),
+              0 0 14px 1px color-mix(in srgb, var(--warm-line) 55%, transparent);
+  opacity: .5;
   animation: rd-pulse 2.4s ease-in-out infinite; pointer-events: none;
 }
 @keyframes rd-pulse { 0%, 100% { opacity: .55; } 50% { opacity: .10; } }
 
-.rd-cell.is-done { background: var(--cool-bg); color: var(--cool-ink); }
-.rd-ing.is-done { box-shadow: inset 3px 0 0 var(--cool-line), var(--pin); }
+.rd-cell.is-done {
+  background: color-mix(in srgb, var(--cool-bg) 62%, var(--card));
+  color: var(--cool-ink);
+}
+.rd-ing.is-done {
+  box-shadow: inset 3px 0 0 color-mix(in srgb, var(--cool-line) 65%, var(--card)), var(--pin);
+}
 .rd-cell.is-done .rd-amount { color: var(--cool-ink); }
 .rd-cell.is-done .rd-op-label { color: var(--cool-ink); }
 .rd-cell.is-done .rd-name,
-.rd-cell.is-done .rd-op-label { text-decoration: line-through; opacity: .78; }
+.rd-cell.is-done .rd-op-label { text-decoration: line-through; opacity: .66; }
 .rd-cell.is-done .rd-mark {
   position: absolute; top: 6px; right: 7px; width: 12px; height: 12px;
   background: var(--cool-ink);
