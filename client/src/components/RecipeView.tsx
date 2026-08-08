@@ -4,9 +4,19 @@
  * Owns the completion logic. Two directions, both derived from the tree:
  *   completing a step marks everything upstream of it done
  *   undoing a step clears everything downstream, which is no longer valid
+ *
+ * Opening a recipe leads with a Diagram / Step-by-step chooser rather than
+ * dropping straight into a view with every control on screen at once.
+ * Once a mode is picked, the header collapses to a thin bar (back, title,
+ * progress, overflow menu) and the chosen view fills the rest of the
+ * available height. Going back to the chooser is deliberate — this is a
+ * "which mode am I cooking in" decision, not a toggle to flick mid-glance.
+ * `phase` is local, ephemeral state: App.tsx keys this component by
+ * `entry.id`, so switching recipes remounts it and always lands back on
+ * the chooser, matching what re-opening a recipe should feel like.
  */
 
-import React, { useState, useMemo, useCallback, useRef } from "react";
+import React, { useEffect, useMemo, useCallback, useRef, useState } from "react";
 import { computeLayout } from "../../../shared/layout";
 import type { Entry } from "../lib/storage";
 import Diagram from "./Diagram";
@@ -20,13 +30,36 @@ interface Props {
   onDelete: () => void;
 }
 
+type Phase = "choose" | "diagram" | "steps";
+
+const DiagramGlyph = () => (
+  <svg width="34" height="34" viewBox="0 0 34 34" fill="none" aria-hidden="true">
+    <rect x="1" y="4" width="9" height="9" rx="2" stroke="currentColor" strokeWidth="1.6" />
+    <rect x="1" y="21" width="9" height="9" rx="2" stroke="currentColor" strokeWidth="1.6" />
+    <rect x="20" y="12.5" width="9" height="9" rx="2" stroke="currentColor" strokeWidth="1.6" />
+    <path d="M10 8.5H15a2 2 0 0 1 2 2V17M10 25.5H15a2 2 0 0 1 2-2V17M17 17h3" stroke="currentColor" strokeWidth="1.6" fill="none" />
+  </svg>
+);
+
+const StepsGlyph = () => (
+  <svg width="34" height="34" viewBox="0 0 34 34" fill="none" aria-hidden="true">
+    <rect x="4" y="3" width="26" height="10" rx="2.5" stroke="currentColor" strokeWidth="1.6" />
+    <path d="M9 8h11" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+    <path d="M17 17v3" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeDasharray="0.5 4" />
+    <rect x="4" y="21" width="26" height="10" rx="2.5" stroke="currentColor" strokeWidth="1.6" opacity=".45" />
+    <path d="M9 26h8" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" opacity=".45" />
+  </svg>
+);
+
 export default function RecipeView({ entry, onBack, onUpdate, onDelete }: Props) {
   const { recipe } = entry;
+  const [phase, setPhase] = useState<Phase>("choose");
+  const [menuOpen, setMenuOpen] = useState(false);
   const [hovered, setHovered] = useState<string | null>(null);
   const [savingImage, setSavingImage] = useState(false);
   const captureRef = useRef<HTMLDivElement | null>(null);
+  const menuRef = useRef<HTMLDivElement | null>(null);
   const done = useMemo(() => new Set(entry.done || []), [entry.done]);
-  const viewMode = entry.mode ?? "diagram";
 
   const baseServings = recipe.servings;
   const servings = entry.servings ?? baseServings;
@@ -88,12 +121,6 @@ export default function RecipeView({ entry, onBack, onUpdate, onDelete }: Props)
     [done, parents, upstreamOf, entry, onUpdate]
   );
 
-  const readyLabels: string[] = [];
-  for (const s of recipe.sections)
-    for (const n of s.nodes || [])
-      if (!done.has(n.id) && (n.inputs || []).every((i) => done.has(i)))
-        readyLabels.push(n.label);
-
   const pct = total ? Math.round((done.size / total) * 100) : 0;
 
   const saveAsImage = useCallback(async () => {
@@ -110,149 +137,200 @@ export default function RecipeView({ entry, onBack, onUpdate, onDelete }: Props)
     }
   }, [recipe.title, savingImage]);
 
+  const pickMode = useCallback(
+    (m: "diagram" | "steps") => {
+      onUpdate({ ...entry, mode: m });
+      setPhase(m);
+    },
+    [entry, onUpdate]
+  );
+
+  // Close the overflow menu on outside click or Escape.
+  useEffect(() => {
+    if (!menuOpen) return;
+    const onDown = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setMenuOpen(false);
+      }
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setMenuOpen(false);
+    };
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [menuOpen]);
+
+  if (phase === "choose") {
+    return (
+      <div className="rfx-choose-page">
+        <div className="rd-crumb no-print">
+          <button className="rd-back" onClick={onBack}>
+            &larr; All recipes
+          </button>
+          <div className="rd-crumb-actions">
+            <button
+              className="rd-btn"
+              onClick={() => onUpdate({ ...entry, done: [] })}
+            >
+              Clear progress
+            </button>
+            <button className="rd-btn rd-btn-danger" onClick={onDelete}>
+              Delete
+            </button>
+          </div>
+        </div>
+
+        <div className="rfx-choose-main">
+          <p className="rfx-choose-eyebrow">{recipe.title}</p>
+          <h1 className="rfx-choose-title">How do you want to cook this?</h1>
+
+          <div className="rfx-choose-cards">
+            <button className="rfx-choose-card" onClick={() => pickMode("diagram")}>
+              <span className="rfx-choose-glyph"><DiagramGlyph /></span>
+              <span className="rfx-choose-card-title">Diagram</span>
+              <span className="rfx-choose-card-desc">
+                See the whole dependency tree at once — what mixes into what,
+                and what's ready right now.
+              </span>
+            </button>
+            <button className="rfx-choose-card" onClick={() => pickMode("steps")}>
+              <span className="rfx-choose-glyph"><StepsGlyph /></span>
+              <span className="rfx-choose-card-title">Step-by-step</span>
+              <span className="rfx-choose-card-desc">
+                One instruction at a time, in order — ingredients folded
+                right into the step that needs them.
+              </span>
+            </button>
+          </div>
+
+          {done.size > 0 ? (
+            <p className="rfx-choose-resume">
+              {done.size} / {total} already done — picking up where you left off.
+            </p>
+          ) : null}
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div ref={captureRef} className="rd-capture">
-      <div className="rd-crumb no-print">
-        <button className="rd-back" onClick={onBack}>
-          &larr; All recipes
+    <div ref={captureRef} className="rfx-page rd-capture">
+      <div className="rfx-bar">
+        <button
+          className="rfx-bar-back no-print"
+          onClick={() => setPhase("choose")}
+          title="Change view"
+        >
+          &larr;
         </button>
-        <div className="rd-crumb-actions">
+        <span className="rfx-bar-title">{recipe.title}</span>
+        <span className="rfx-bar-mode">{phase === "diagram" ? "Diagram" : "Steps"}</span>
+
+        <div className="rfx-bar-progress" title={`${done.size} of ${total} done`}>
+          <span className="rfx-bar-track">
+            <span className="rfx-bar-fill" style={{ width: `${pct}%` }} />
+          </span>
+          <span className="rfx-bar-count">
+            {done.size}/{total}
+          </span>
+        </div>
+
+        <div className="rfx-menu no-print" ref={menuRef}>
           <button
-            className="rd-btn"
-            onClick={() => onUpdate({ ...entry, done: [] })}
+            className="rfx-menu-btn"
+            onClick={() => setMenuOpen((o) => !o)}
+            aria-haspopup="true"
+            aria-expanded={menuOpen}
+            title="More actions"
           >
-            Clear progress
+            &#8942;
           </button>
-          <button className="rd-btn" onClick={saveAsImage} disabled={savingImage}>
-            {savingImage ? "Saving…" : "Save as Image"}
-          </button>
-          <button className="rd-btn rd-btn-danger" onClick={onDelete}>
-            Delete
-          </button>
+          {menuOpen ? (
+            <div className="rfx-menu-panel" role="menu">
+              <button
+                className="rfx-menu-item"
+                role="menuitem"
+                disabled={savingImage}
+                onClick={() => {
+                  setMenuOpen(false);
+                  saveAsImage();
+                }}
+              >
+                {savingImage ? "Saving…" : "Save as Image"}
+              </button>
+              <button
+                className="rfx-menu-item"
+                role="menuitem"
+                onClick={() => {
+                  setMenuOpen(false);
+                  onUpdate({ ...entry, done: [] });
+                }}
+              >
+                Clear progress
+              </button>
+              <button
+                className="rfx-menu-item rfx-menu-item-danger"
+                role="menuitem"
+                onClick={() => {
+                  setMenuOpen(false);
+                  onDelete();
+                }}
+              >
+                Delete recipe
+              </button>
+            </div>
+          ) : null}
         </div>
       </div>
 
-      <header className="rd-head">
-        <div className="rd-head-top">
-          <h1 className="rd-title">{recipe.title}</h1>
-          {recipe.yieldText ? (
-            <span className="rd-yield">{recipe.yieldText}</span>
-          ) : null}
-        </div>
-
-        <div className="rd-tabs rd-view-tabs no-print" role="tablist" aria-label="View">
-          {(["diagram", "steps"] as const).map((m) => (
-            <button
-              key={m}
-              role="tab"
-              aria-selected={viewMode === m}
-              className={`rd-tab ${viewMode === m ? "is-on" : ""}`}
-              onClick={() => onUpdate({ ...entry, mode: m })}
-            >
-              {m === "diagram" ? "Diagram" : "Steps"}
-            </button>
-          ))}
-        </div>
-
-        {baseServings ? (
-          <div className="rd-servings">
-            <span className="rd-servings-label">Servings</span>
-            <div className="rd-stepper">
-              <button
-                className="rd-step-btn"
-                aria-label="Fewer servings"
-                onClick={() =>
-                  onUpdate({
-                    ...entry,
-                    servings: Math.max(1, (servings || 1) - 1),
-                  })
-                }
-              >
-                &minus;
-              </button>
-              <span className="rd-step-val">{servings}</span>
-              <button
-                className="rd-step-btn"
-                aria-label="More servings"
-                onClick={() =>
-                  onUpdate({
-                    ...entry,
-                    servings: Math.min(99, (servings || 1) + 1),
-                  })
-                }
-              >
-                +
-              </button>
-            </div>
-            {scale !== 1 ? (
-              <span className="rd-scale-note">
-                Amounts scaled &times;{scale.toFixed(2).replace(/\.?0+$/, "")}.
-                Times and pan sizes still need your judgment.
-              </span>
-            ) : null}
-          </div>
-        ) : null}
-
-        <div className="rd-progress">
-          <div className="rd-bar">
-            <div className="rd-bar-fill" style={{ width: `${pct}%` }} />
-          </div>
-          <div className="rd-progress-meta">
-            <span className="rd-count">
-              {done.size} / {total}
-            </span>
-            <span className="rd-ready-line">
-              {total > 0 && done.size === total
-                ? "Done."
-                : readyLabels.length
-                  ? `Ready now: ${readyLabels.slice(0, 3).join(", ")}`
-                  : "Check off ingredients to unlock the first steps"}
-            </span>
-          </div>
-        </div>
-      </header>
-
-      {viewMode === "steps" ? (
-        <StepsMode
-          key={entry.id}
-          recipe={recipe}
-          entry={entry}
-          done={done}
-          scale={scale}
-          onToggle={toggle}
-          onUpdate={onUpdate}
-        />
-      ) : (
-        <>
-          {recipe.sections.map((s, i) => (
-            <Diagram
-              key={i}
-              index={i}
-              section={s}
+      <div className={`rfx-content ${phase === "steps" ? "rfx-content-center" : ""}`}>
+        {phase === "steps" ? (
+          <div className="rfx-steps-wrap">
+            <StepsMode
+              key={entry.id}
+              recipe={recipe}
+              entry={entry}
               done={done}
-              preview={preview}
               scale={scale}
               onToggle={toggle}
-              onHover={setHovered}
+              onUpdate={onUpdate}
             />
-          ))}
+          </div>
+        ) : (
+          <div className="rfx-diagram-wrap">
+            {recipe.sections.map((s, i) => (
+              <Diagram
+                key={i}
+                index={i}
+                section={s}
+                done={done}
+                preview={preview}
+                scale={scale}
+                onToggle={toggle}
+                onHover={setHovered}
+              />
+            ))}
+            <p className="rd-hint">
+              Amber means you can do it now. Click any step further right to
+              jump ahead &mdash; everything it depends on gets marked done
+              with it.
+            </p>
+          </div>
+        )}
 
-          <p className="rd-hint">
-            Amber means you can do it now. Click any step further right to
-            jump ahead &mdash; everything it depends on gets marked done with
-            it.
+        {recipe.sourceUrl ? (
+          <p className="rd-source">
+            From{" "}
+            <a href={recipe.sourceUrl} target="_blank" rel="noreferrer">
+              {recipe.source || recipe.sourceUrl}
+            </a>
           </p>
-        </>
-      )}
-
-      {recipe.sourceUrl ? (
-        <p className="rd-source">
-          From{" "}
-          <a href={recipe.sourceUrl} target="_blank" rel="noreferrer">
-            {recipe.source || recipe.sourceUrl}
-          </a>
-        </p>
-      ) : null}
+        ) : null}
+      </div>
     </div>
   );
 }

@@ -140,6 +140,7 @@ export default function App() {
       <div className="rd-shell">
         {entry ? (
           <RecipeView
+            key={entry.id}
             entry={entry}
             onBack={() => setOpenId(null)}
             onUpdate={(updated) =>

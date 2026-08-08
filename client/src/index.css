@@ -951,3 +951,144 @@ body {
 @media print {
   .rd-tuck-btn, .rd-tucked-more { display: none; }
 }
+
+/* ------------------------------------------------------------------
+ * Focused flow
+ * ------------------------------------------------------------------
+ * Opening a recipe leads with a Diagram / Step-by-step chooser. Once
+ * picked, the view fills the screen behind a thin bar (back, title,
+ * progress, overflow menu) instead of the full header + tabs staying on
+ * screen at once.
+ * ------------------------------------------------------------------ */
+
+.rfx-choose-page {
+  min-height: calc(100dvh - 64px); display: flex; flex-direction: column;
+}
+.rfx-choose-main {
+  flex: 1; min-height: 0; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 22px;
+  padding: 40px 24px; text-align: center;
+}
+.rfx-choose-eyebrow {
+  margin: 0; font-family: "Space Mono", ui-monospace, monospace;
+  font-size: 12px; letter-spacing: .06em; text-transform: uppercase; color: var(--faint);
+}
+.rfx-choose-title {
+  font-family: "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
+  font-weight: 700; font-size: clamp(24px, 4vw, 34px);
+  letter-spacing: -.02em; margin: 0; max-width: 22ch; color: var(--ink);
+}
+.rfx-choose-cards {
+  display: flex; gap: 20px; flex-wrap: wrap; justify-content: center;
+  margin-top: 6px;
+}
+.rfx-choose-card {
+  width: 300px; display: flex; flex-direction: column; align-items: flex-start;
+  gap: 10px; text-align: left; font: inherit; cursor: pointer;
+  background: var(--card); border: 1px solid var(--line); border-radius: 20px;
+  padding: 26px 24px; color: var(--ink);
+  box-shadow: 0 1px 1px rgba(var(--shadow-rgb), .14),
+              0 12px 28px -12px rgba(var(--shadow-rgb), .3);
+  transition: border-color .15s ease, box-shadow .15s ease, transform .15s ease;
+}
+.rfx-choose-card:hover {
+  border-color: var(--warm-line); transform: translateY(-2px);
+  box-shadow: 0 1px 1px rgba(var(--shadow-rgb), .16),
+              0 16px 32px -10px rgba(var(--shadow-rgb), .38);
+}
+.rfx-choose-card:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+.rfx-choose-glyph {
+  display: grid; place-items: center; width: 52px; height: 52px;
+  border-radius: 14px; background: var(--warm-bg); color: var(--warm-ink);
+}
+.rfx-choose-card-title {
+  font-family: "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
+  font-weight: 700; font-size: 19px; letter-spacing: -.01em;
+}
+.rfx-choose-card-desc { font-size: 13.5px; line-height: 1.5; color: var(--muted); }
+.rfx-choose-resume {
+  margin: 4px 0 0; font-size: 12.5px; color: var(--muted);
+  font-family: "Space Mono", ui-monospace, monospace;
+}
+
+/* ---- focused single-view chrome ---- */
+.rfx-page {
+  min-height: calc(100dvh - 64px); display: flex; flex-direction: column;
+  margin: 0 -24px; width: calc(100% + 48px);
+}
+.rfx-bar {
+  flex: none; display: flex; align-items: center; gap: 14px;
+  padding: 12px 24px; border-bottom: 1px solid var(--line);
+  background: var(--card); box-shadow: 0 1px 2px rgba(var(--shadow-rgb), .06);
+}
+.rfx-bar-back {
+  font: inherit; font-size: 17px; line-height: 1; background: var(--ing-bg);
+  border: 1px solid var(--line); color: var(--ink); cursor: pointer;
+  width: 32px; height: 32px; border-radius: 9px; flex: none;
+  display: grid; place-items: center;
+}
+.rfx-bar-back:hover { border-color: var(--line-strong); background: var(--hover-ing); }
+.rfx-bar-title {
+  font-family: "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
+  font-weight: 700; font-size: 15.5px; letter-spacing: -.01em; color: var(--ink);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0;
+}
+.rfx-bar-mode {
+  flex: none; font-family: "Space Mono", ui-monospace, monospace;
+  font-size: 10.5px; letter-spacing: .06em; text-transform: uppercase;
+  color: var(--warm-ink); background: var(--warm-bg); border: 1px solid var(--oven-line);
+  border-radius: 99px; padding: 3px 10px;
+}
+.rfx-bar-progress { flex: none; margin-left: auto; display: flex; align-items: center; gap: 9px; }
+.rfx-bar-track {
+  width: 96px; height: 5px; border-radius: 99px; background: var(--line);
+  overflow: hidden; display: block;
+}
+.rfx-bar-fill {
+  display: block; height: 100%; border-radius: 99px;
+  background: linear-gradient(90deg, var(--warm-line), var(--cool-ink));
+  transition: width .34s cubic-bezier(.2, .7, .3, 1);
+}
+.rfx-bar-count {
+  font-family: "Space Mono", ui-monospace, monospace; font-size: 11px;
+  color: var(--muted); white-space: nowrap;
+}
+
+.rfx-menu { position: relative; flex: none; }
+.rfx-menu-btn {
+  font: inherit; font-size: 17px; line-height: 1; background: var(--ing-bg);
+  border: 1px solid var(--line); color: var(--ink); cursor: pointer;
+  width: 32px; height: 32px; border-radius: 9px;
+  display: grid; place-items: center;
+}
+.rfx-menu-btn:hover { border-color: var(--line-strong); background: var(--hover-ing); }
+.rfx-menu-panel {
+  position: absolute; top: calc(100% + 6px); right: 0; z-index: 20;
+  display: flex; flex-direction: column; min-width: 176px;
+  background: var(--card); border: 1px solid var(--line); border-radius: 12px;
+  padding: 6px; box-shadow: 0 4px 8px rgba(var(--shadow-rgb), .12),
+                             0 14px 32px -10px rgba(var(--shadow-rgb), .32);
+}
+.rfx-menu-item {
+  font: inherit; font-size: 13.5px; text-align: left; background: none;
+  border: 0; border-radius: 8px; padding: 9px 10px; color: var(--ink); cursor: pointer;
+}
+.rfx-menu-item:hover { background: var(--hover-ing); }
+.rfx-menu-item:disabled { opacity: .55; cursor: default; background: none; }
+.rfx-menu-item-danger { color: var(--warm-line); }
+.rfx-menu-item-danger:hover { background: var(--warm-bg); }
+
+.rfx-content { flex: 1; min-height: 0; overflow: auto; padding: 26px 24px; }
+.rfx-content-center { display: flex; flex-direction: column; align-items: center; justify-content: center; }
+.rfx-diagram-wrap { max-width: 1040px; margin: 0 auto; }
+.rfx-steps-wrap { width: 100%; max-width: 640px; }
+
+@media (max-width: 700px) {
+  .rfx-choose-cards { flex-direction: column; align-items: stretch; }
+  .rfx-choose-card { width: 100%; }
+  .rfx-page { margin: 0 -16px; width: calc(100% + 32px); }
+  .rfx-bar { padding: 10px 16px; }
+  .rfx-bar-title { font-size: 14px; }
+  .rfx-bar-track { width: 60px; }
+  .rfx-content { padding: 18px 16px; }
+}
