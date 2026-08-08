@@ -21,24 +21,35 @@ export default function App() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    const saved = loadLibrary();
-    if (saved.length) {
-      setLibrary(saved);
-      return;
-    }
-    // First run gets the cheesecake so the app is not an empty box.
-    // Delete this branch and the seed file once you have real recipes.
-    const seeded: Entry[] = [
-      {
-        id: "seed",
-        recipe: SEED,
-        done: [],
-        servings: SEED.servings,
-        savedAt: Date.now(),
-      },
-    ];
-    setLibrary(seeded);
-    saveLibrary(seeded);
+    let cancelled = false;
+    (async () => {
+      try {
+        const saved = await loadLibrary();
+        if (cancelled) return;
+        if (saved.length) {
+          setLibrary(saved);
+          return;
+        }
+        // First run gets the cheesecake so the app is not an empty box.
+        // Delete this branch and the seed file once you have real recipes.
+        const seeded: Entry[] = [
+          {
+            id: "seed",
+            recipe: SEED,
+            done: [],
+            servings: SEED.servings,
+            savedAt: Date.now(),
+          },
+        ];
+        setLibrary(seeded);
+        saveLibrary(seeded);
+      } catch (e) {
+        if (!cancelled) setError((e as Error).message);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const persist = useCallback((next: Entry[]) => {

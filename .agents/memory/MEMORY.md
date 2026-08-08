@@ -1,3 +1,5 @@
 - [Monorepo artifact deployment can hijack the root app](artifact-deployment-routing.md) — a registered "runnable" (kind=api) artifact can silently become the only thing served in production, 404-ing the real site.
 - [Theming system (light/dark/colorblind)](theming-system.md) — data-attribute + CSS token cascade, colorblind as an overlay not a 4th base, pre-paint flash-prevention script duplication.
 - [Progressive-collapse sibling grouping](collapse-sibling-grouping.md) — group collapse-eligibility by shared parent, never by layout column (columns can coincide across unrelated branches).
+- [npm package-firewall transitive version block](npm-package-firewall-transitive-block.md) — a blocked transitive dep version (e.g. drizzle-kit's tsx range) needs its own pin, not just the direct dependency's.
+- [localStorage-to-API migration via diffing adapter](local-to-api-migration-diffing-adapter.md) — keep loadLibrary/saveLibrary's shape, diff against a lastSynced snapshot internally to avoid touching call sites.

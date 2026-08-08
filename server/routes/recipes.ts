@@ -12,6 +12,9 @@
 
 import { Router, type Request, type Response } from "express";
 import crypto from "node:crypto";
+import { eq, lt } from "drizzle-orm";
+import { getDb } from "../db";
+import { extractionCache } from "../../shared/schema";
 import { fetchSource } from "../lib/fetchSource";
 import { structureRecipe } from "../lib/structureRecipe";
 import { structureRecipeFromUrl } from "../lib/fetchViaClaude";
@@ -31,29 +34,36 @@ const ALLOWED_MEDIA = new Set([
 const MAX_TEXT = 30_000;
 const MAX_FILE_BYTES = 8 * 1024 * 1024;
 
-/**
- * Extraction is slow and costs an API call, so never do it twice for the same
- * input. Swap this for a Drizzle table keyed on the same hash when you want it
- * to survive restarts:
- *   recipe_cache(hash text primary key, recipe jsonb, created_at timestamptz)
- */
-const cache = new Map<string, { recipe: Recipe; at: number }>();
 const CACHE_TTL_MS = 1000 * 60 * 60 * 24 * 30;
 
 const hash = (s: string) => crypto.createHash("sha256").update(s).digest("hex");
 
-function cacheGet(key: string): Recipe | null {
-  const hit = cache.get(key);
+// Extraction is slow and costs an API call, so never do it twice for the
+// same input. Backed by the extraction_cache table so it survives restarts.
+async function cacheGet(key: string): Promise<Recipe | null> {
+  const db = getDb();
+  const [hit] = await db.select().from(extractionCache).where(eq(extractionCache.hash, key));
   if (!hit) return null;
-  if (Date.now() - hit.at > CACHE_TTL_MS) {
-    cache.delete(key);
+  const at = hit.createdAt ? new Date(hit.createdAt).getTime() : 0;
+  if (Date.now() - at > CACHE_TTL_MS) {
+    await db.delete(extractionCache).where(eq(extractionCache.hash, key));
     return null;
   }
   return hit.recipe;
 }
 
-// Same idea as the extraction cache above, keyed and expired the same way,
-// just holding a list of candidates instead of a structured recipe.
+async function cacheSet(key: string, recipe: Recipe): Promise<void> {
+  const db = getDb();
+  await db
+    .insert(extractionCache)
+    .values({ hash: key, recipe })
+    .onConflictDoUpdate({ target: extractionCache.hash, set: { recipe, createdAt: new Date() } });
+}
+
+// Search results are not worth a durable table — they go stale fast and a
+// missed cache hit just costs one more API call, not a redo of user data.
+// Keeping this one in memory (same TTL) is a deliberate, smaller-blast-radius
+// choice than the extraction cache above.
 const searchCache = new Map<string, { results: SearchResult[]; at: number }>();
 
 function searchCacheGet(key: string): SearchResult[] | null {
@@ -98,7 +108,7 @@ recipesRouter.post("/extract", async (req: Request, res: Response) => {
         return res.status(400).json({ error: "url must be a string." });
 
       const key = hash(`url:${url}`);
-      const cached = cacheGet(key);
+      const cached = await cacheGet(key);
       if (cached)
         return res.json({ recipe: cached, meta: { cached: true, source: "url" } });
 
@@ -135,7 +145,7 @@ recipesRouter.post("/extract", async (req: Request, res: Response) => {
         via = "claude";
       }
 
-      cache.set(key, { recipe, at: Date.now() });
+      await cacheSet(key, recipe);
       return res.json({
         recipe,
         meta: {
@@ -160,12 +170,12 @@ recipesRouter.post("/extract", async (req: Request, res: Response) => {
 
       const clipped = text.slice(0, MAX_TEXT);
       const key = hash(`text:${clipped}`);
-      const cached = cacheGet(key);
+      const cached = await cacheGet(key);
       if (cached)
         return res.json({ recipe: cached, meta: { cached: true, source: "text" } });
 
       const { recipe, attempts, repaired } = await structureRecipe({ text: clipped });
-      cache.set(key, { recipe, at: Date.now() });
+      await cacheSet(key, recipe);
       return res.json({
         recipe,
         meta: { cached: false, source: "text", attempts, repaired },
@@ -186,14 +196,14 @@ recipesRouter.post("/extract", async (req: Request, res: Response) => {
       return res.status(413).json({ error: "That file is larger than 8 MB." });
 
     const key = hash(`file:${clean.slice(0, 4096)}:${clean.length}`);
-    const cached = cacheGet(key);
+    const cached = await cacheGet(key);
     if (cached)
       return res.json({ recipe: cached, meta: { cached: true, source: "file" } });
 
     const { recipe, attempts, repaired } = await structureRecipe({
       file: { data: clean, mediaType },
     });
-    cache.set(key, { recipe, at: Date.now() });
+    await cacheSet(key, recipe);
     return res.json({
       recipe,
       meta: { cached: false, source: "file", attempts, repaired },

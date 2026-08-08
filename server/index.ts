@@ -10,6 +10,7 @@ import path from "node:path";
 import fs from "node:fs";
 import { fileURLToPath } from "node:url";
 import { recipesRouter } from "./routes/recipes";
+import { libraryRouter } from "./routes/library";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const isProd = process.env.NODE_ENV === "production";
@@ -22,6 +23,7 @@ app.use(express.json({ limit: "12mb" }));
 
 app.get("/api/health", (_req, res) => res.json({ ok: true }));
 app.use("/api/recipes", recipesRouter);
+app.use("/api/library", libraryRouter);
 
 if (isProd) {
   const clientDir = path.resolve(__dirname, "../dist/public");
