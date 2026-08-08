@@ -17,6 +17,12 @@
 
 import type { Recipe } from "../../../shared/layout";
 
+/** Absolute end time (epoch ms), never a countdown — see StepsMode.tsx. */
+export interface StepTimer {
+  stepId: string;
+  endsAt: number;
+}
+
 export interface Entry {
   id: string;
   recipe: Recipe;
@@ -24,6 +30,10 @@ export interface Entry {
   done: string[];
   /** Null when the source never stated a serving count. */
   servings: number | null;
+  /** Which view this recipe was last shown in. Remembered per recipe. */
+  mode: "diagram" | "steps";
+  /** The one active cooking-mode timer for this recipe, if any. */
+  timer: StepTimer | null;
   savedAt: number;
 }
 
@@ -116,6 +126,9 @@ async function migrateLocalLibraryIfNeeded(remoteIds: Set<string>): Promise<void
           recipe: entry.recipe,
           done: entry.done,
           servings: entry.servings,
+          // Old local entries predate mode/timer — start fresh in Diagram.
+          mode: entry.mode ?? "diagram",
+          timer: entry.timer ?? null,
         }),
       });
     } catch (e) {
@@ -144,6 +157,8 @@ function toEntry(row: any): Entry {
     recipe: row.recipe,
     done: row.done ?? [],
     servings: row.servings ?? null,
+    mode: row.mode === "steps" ? "steps" : "diagram",
+    timer: row.timer ?? null,
     savedAt: row.savedAt ?? Date.now(),
   };
 }
@@ -179,16 +194,25 @@ export function saveLibrary(entries: Entry[]): void {
           recipe: entry.recipe,
           done: entry.done,
           servings: entry.servings,
+          mode: entry.mode,
+          timer: entry.timer,
         }),
       }).catch((e) => console.error("[storage] could not save a new recipe:", e));
       continue;
     }
     const doneChanged = JSON.stringify(before.done) !== JSON.stringify(entry.done);
     const servingsChanged = before.servings !== entry.servings;
-    if (doneChanged || servingsChanged) {
+    const modeChanged = before.mode !== entry.mode;
+    const timerChanged = JSON.stringify(before.timer) !== JSON.stringify(entry.timer);
+    if (doneChanged || servingsChanged || modeChanged || timerChanged) {
       api(`/${encodeURIComponent(id)}`, {
         method: "PATCH",
-        body: JSON.stringify({ done: entry.done, servings: entry.servings }),
+        body: JSON.stringify({
+          done: entry.done,
+          servings: entry.servings,
+          mode: entry.mode,
+          timer: entry.timer,
+        }),
       }).catch((e) => console.error("[storage] could not update a recipe:", e));
     }
   }

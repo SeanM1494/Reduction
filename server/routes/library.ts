@@ -6,7 +6,7 @@
  *
  *   GET    /api/library          list, newest first
  *   POST   /api/library          create { id, recipe, done, servings }
- *   PATCH  /api/library/:id      update done and/or servings
+ *   PATCH  /api/library/:id      update done, servings, mode and/or timer
  *   DELETE /api/library/:id
  */
 
@@ -26,6 +26,16 @@ export const libraryRouter = Router();
  * and so that adding real auth later is a column swap (owner_key -> user
  * id) rather than a data migration.
  */
+type TimerValue = { stepId: string; endsAt: number } | null;
+
+/** `{stepId, endsAt}` or null — the shape stored in the `timer` jsonb column. */
+function isValidTimer(v: unknown): v is TimerValue {
+  if (v === null) return true;
+  if (typeof v !== "object") return false;
+  const t = v as Record<string, unknown>;
+  return typeof t.stepId === "string" && typeof t.endsAt === "number";
+}
+
 function requireOwnerKey(req: Request, res: Response, next: NextFunction) {
   const key = req.header("X-Owner-Key");
   if (!key || typeof key !== "string" || key.length < 8 || key.length > 200) {
@@ -53,6 +63,8 @@ libraryRouter.get("/", async (req: Request, res: Response) => {
         recipe: r.recipe,
         done: r.done,
         servings: r.servings,
+        mode: r.mode,
+        timer: r.timer,
         savedAt: r.createdAt ? new Date(r.createdAt).getTime() : Date.now(),
       })),
     });
@@ -63,7 +75,7 @@ libraryRouter.get("/", async (req: Request, res: Response) => {
 });
 
 libraryRouter.post("/", async (req: Request, res: Response) => {
-  const { id, recipe, done, servings } = req.body ?? {};
+  const { id, recipe, done, servings, mode, timer } = req.body ?? {};
   if (typeof id !== "string" || !id)
     return res.status(400).json({ error: "id must be a non-empty string." });
 
@@ -75,6 +87,10 @@ libraryRouter.post("/", async (req: Request, res: Response) => {
     return res.status(400).json({ error: "done must be an array of ids." });
   if (servings !== undefined && servings !== null && typeof servings !== "number")
     return res.status(400).json({ error: "servings must be a number or null." });
+  if (mode !== undefined && mode !== "diagram" && mode !== "steps")
+    return res.status(400).json({ error: 'mode must be "diagram" or "steps".' });
+  if (timer !== undefined && !isValidTimer(timer))
+    return res.status(400).json({ error: "timer must be {stepId, endsAt} or null." });
 
   try {
     const db = getDb();
@@ -86,6 +102,8 @@ libraryRouter.post("/", async (req: Request, res: Response) => {
         recipe,
         done: Array.isArray(done) ? done : [],
         servings: servings ?? null,
+        mode: mode ?? "diagram",
+        timer: timer ?? null,
       })
       .onConflictDoNothing({ target: [recipes.ownerKey, recipes.id] })
       .returning();
@@ -98,6 +116,8 @@ libraryRouter.post("/", async (req: Request, res: Response) => {
         recipe: row.recipe,
         done: row.done,
         servings: row.servings,
+        mode: row.mode,
+        timer: row.timer,
         savedAt: row.createdAt ? new Date(row.createdAt).getTime() : Date.now(),
       },
     });
@@ -109,7 +129,7 @@ libraryRouter.post("/", async (req: Request, res: Response) => {
 
 libraryRouter.patch("/:id", async (req: Request, res: Response) => {
   const id = String(req.params.id);
-  const { done, servings } = req.body ?? {};
+  const { done, servings, mode, timer } = req.body ?? {};
   const patch: Partial<typeof recipes.$inferInsert> = { updatedAt: new Date() };
 
   if (done !== undefined) {
@@ -120,6 +140,16 @@ libraryRouter.patch("/:id", async (req: Request, res: Response) => {
     if (servings !== null && typeof servings !== "number")
       return res.status(400).json({ error: "servings must be a number or null." });
     patch.servings = servings;
+  }
+  if (mode !== undefined) {
+    if (mode !== "diagram" && mode !== "steps")
+      return res.status(400).json({ error: 'mode must be "diagram" or "steps".' });
+    patch.mode = mode;
+  }
+  if (timer !== undefined) {
+    if (!isValidTimer(timer))
+      return res.status(400).json({ error: "timer must be {stepId, endsAt} or null." });
+    patch.timer = timer;
   }
 
   try {
@@ -138,6 +168,8 @@ libraryRouter.patch("/:id", async (req: Request, res: Response) => {
         recipe: row.recipe,
         done: row.done,
         servings: row.servings,
+        mode: row.mode,
+        timer: row.timer,
         savedAt: row.createdAt ? new Date(row.createdAt).getTime() : Date.now(),
       },
     });

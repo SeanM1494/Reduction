@@ -10,6 +10,7 @@ import React, { useState, useMemo, useCallback, useRef } from "react";
 import { computeLayout } from "../../../shared/layout";
 import type { Entry } from "../lib/storage";
 import Diagram from "./Diagram";
+import StepsMode from "./StepsMode";
 import { saveRecipeAsImage, slugForFile } from "../lib/exportImage";
 
 interface Props {
@@ -25,6 +26,7 @@ export default function RecipeView({ entry, onBack, onUpdate, onDelete }: Props)
   const [savingImage, setSavingImage] = useState(false);
   const captureRef = useRef<HTMLDivElement | null>(null);
   const done = useMemo(() => new Set(entry.done || []), [entry.done]);
+  const viewMode = entry.mode ?? "diagram";
 
   const baseServings = recipe.servings;
   const servings = entry.servings ?? baseServings;
@@ -138,6 +140,20 @@ export default function RecipeView({ entry, onBack, onUpdate, onDelete }: Props)
           ) : null}
         </div>
 
+        <div className="rd-tabs rd-view-tabs no-print" role="tablist" aria-label="View">
+          {(["diagram", "steps"] as const).map((m) => (
+            <button
+              key={m}
+              role="tab"
+              aria-selected={viewMode === m}
+              className={`rd-tab ${viewMode === m ? "is-on" : ""}`}
+              onClick={() => onUpdate({ ...entry, mode: m })}
+            >
+              {m === "diagram" ? "Diagram" : "Steps"}
+            </button>
+          ))}
+        </div>
+
         {baseServings ? (
           <div className="rd-servings">
             <span className="rd-servings-label">Servings</span>
@@ -196,23 +212,38 @@ export default function RecipeView({ entry, onBack, onUpdate, onDelete }: Props)
         </div>
       </header>
 
-      {recipe.sections.map((s, i) => (
-        <Diagram
-          key={i}
-          index={i}
-          section={s}
+      {viewMode === "steps" ? (
+        <StepsMode
+          key={entry.id}
+          recipe={recipe}
+          entry={entry}
           done={done}
-          preview={preview}
           scale={scale}
           onToggle={toggle}
-          onHover={setHovered}
+          onUpdate={onUpdate}
         />
-      ))}
+      ) : (
+        <>
+          {recipe.sections.map((s, i) => (
+            <Diagram
+              key={i}
+              index={i}
+              section={s}
+              done={done}
+              preview={preview}
+              scale={scale}
+              onToggle={toggle}
+              onHover={setHovered}
+            />
+          ))}
 
-      <p className="rd-hint">
-        Amber means you can do it now. Click any step further right to jump
-        ahead &mdash; everything it depends on gets marked done with it.
-      </p>
+          <p className="rd-hint">
+            Amber means you can do it now. Click any step further right to
+            jump ahead &mdash; everything it depends on gets marked done with
+            it.
+          </p>
+        </>
+      )}
 
       {recipe.sourceUrl ? (
         <p className="rd-source">

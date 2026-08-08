@@ -601,12 +601,6 @@ body {
   flex: 1; font-size: 14px; font-weight: 600; line-height: 1.25;
   white-space: normal;
 }
-.rd-collapsed-count {
-  font-family: "Space Mono", ui-monospace, monospace;
-  font-size: 10.5px; letter-spacing: .05em; text-transform: uppercase;
-  color: var(--muted); white-space: nowrap; flex: none;
-}
-
 .rd-hint {
   font-size: 12px; color: var(--muted); margin: 4px 2px 14px; max-width: 62ch;
 }
@@ -636,6 +630,105 @@ body {
 .rd-tab:focus-visible, .rd-back:focus-visible, .rd-brand:focus-visible,
 .rd-step-btn:focus-visible {
   outline: 2px solid var(--ink); outline-offset: 2px;
+}
+
+/* ---------- view toggle (Diagram / Steps) ---------- */
+.rd-view-tabs { margin-bottom: 0; }
+
+/* ---------- step-by-step cooking mode ---------- */
+.rd-steps { margin-bottom: 32px; }
+.rd-steps-empty {
+  color: var(--muted); font-size: 14px; padding: 20px 2px;
+}
+.rd-steps-return {
+  display: inline-flex; align-items: center; gap: 6px; margin-bottom: 12px;
+  font: inherit; font-size: 12.5px; font-weight: 600;
+  background: var(--warm-bg); border: 1px solid var(--warm-line);
+  color: var(--warm-ink); padding: 6px 12px; border-radius: 99px; cursor: pointer;
+}
+.rd-steps-return:hover { background: var(--warm-hover); }
+
+.rd-steps-card {
+  background: var(--card); border: 1px solid var(--line); border-radius: 17px;
+  padding: 24px 26px 20px; max-width: 560px;
+  box-shadow: 0 1px 1px rgba(var(--shadow-rgb), .14),
+              0 12px 28px -12px rgba(var(--shadow-rgb), .3);
+  animation: rd-swap-in .28s cubic-bezier(.2,.7,.3,1);
+}
+.rd-steps-eyebrow {
+  margin: 0 0 10px; font-size: 12.5px; font-weight: 600; color: var(--muted);
+}
+.rd-steps-label {
+  font-family: "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
+  font-weight: 700; font-size: clamp(22px, 3.6vw, 32px);
+  line-height: 1.08; letter-spacing: -.02em; margin: 0 0 10px;
+}
+.rd-steps-inline-ing { margin: 0 0 4px; font-size: 15px; color: var(--ink); }
+.rd-steps-builds {
+  margin: 0 0 18px; font-size: 12.5px; color: var(--faint);
+}
+.rd-steps-inline-ing + .rd-steps-builds { margin-top: -2px; }
+
+.rd-steps-prep-list { list-style: none; margin: 0 0 20px; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.rd-steps-prep-row {
+  display: flex; align-items: center; gap: 12px; width: 100%; text-align: left;
+  font: inherit; cursor: pointer; background: var(--ing-bg);
+  border: 1px solid var(--line); border-radius: 11px; padding: 11px 14px;
+  transition: background .15s ease, border-color .15s ease;
+}
+.rd-steps-prep-row:hover { background: var(--hover-ing); }
+.rd-steps-prep-row .rd-amount {
+  font-family: "Space Mono", ui-monospace, monospace; font-size: 12.5px;
+  color: var(--muted); flex: none; min-width: 52px;
+}
+.rd-steps-prep-row .rd-name { font-size: 14.5px; color: var(--ink); }
+.rd-steps-check {
+  flex: none; width: 17px; height: 17px; border-radius: 50%;
+  border: 1.5px solid var(--line-strong); background: var(--card);
+}
+.rd-steps-prep-row.is-done {
+  background: var(--cool-bg); border-color: var(--cool-line);
+}
+.rd-steps-prep-row.is-done .rd-name { text-decoration: line-through; opacity: .7; }
+.rd-steps-prep-row.is-done .rd-steps-check {
+  background: var(--cool-ink); border-color: var(--cool-ink);
+  clip-path: polygon(14% 48%, 0 62%, 38% 100%, 100% 22%, 86% 8%, 38% 72%);
+}
+
+.rd-steps-timer {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 10px;
+  margin: 4px 0 20px; padding: 14px 16px; border-radius: 13px;
+  background: var(--ing-bg); border: 1px solid var(--line);
+}
+.rd-steps-timer-count {
+  font-family: "Space Mono", ui-monospace, monospace;
+  font-size: 28px; font-weight: 600; margin: 0; letter-spacing: .02em;
+}
+.rd-steps-timer-alert {
+  margin: 0; font-size: 15px; font-weight: 600; color: var(--warm-ink);
+  animation: rd-timer-pulse 1.1s ease-in-out infinite;
+}
+@keyframes rd-timer-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: .55; }
+}
+.rd-steps-parallel {
+  font: inherit; font-size: 13px; text-align: left; cursor: pointer;
+  background: var(--warm-bg); border: 1px solid var(--warm-line);
+  color: var(--warm-ink); padding: 10px 13px; border-radius: 10px;
+  width: 100%;
+}
+.rd-steps-parallel:hover { background: var(--warm-hover); }
+
+.rd-steps-nav { display: flex; justify-content: space-between; gap: 10px; margin-top: 4px; }
+.rd-steps-primary {
+  background: var(--ink); color: var(--ink-contrast); border-color: var(--ink);
+}
+.rd-steps-primary:hover { background: var(--ink-hover); border-color: var(--ink-hover); }
+.rd-steps-finished-label { font-size: 16px; font-weight: 600; margin: 0 0 16px; }
+
+@media (max-width: 700px) {
+  .rd-steps-card { max-width: none; padding: 18px 16px 16px; }
 }
 
 /* ---------- mobile ---------- */
@@ -694,7 +787,7 @@ body {
  * one-line summary and the strip comes forward.
  * ------------------------------------------------------------------ */
 
-.rd-swap { animation: rd-swap-in .28s cubic-bezier(.2,.7,.3,1); }
+.rd-swap { animation: rd-swap-in .45s cubic-bezier(.2,.7,.3,1); }
 @keyframes rd-swap-in {
   from { opacity: 0; transform: translateY(6px); }
   to   { opacity: 1; transform: none; }
@@ -703,7 +796,7 @@ body {
 /* Same swap as .rd-swap, scoped to individual cells: whichever rows a
    collapse/expand click actually mounts (the tucked chip, or the rows it
    reveals) fade in on their own instead of restarting the whole table. */
-.rd-row-swap { animation: rd-swap-in .28s cubic-bezier(.2,.7,.3,1); }
+.rd-row-swap { animation: rd-swap-in .45s cubic-bezier(.2,.7,.3,1); }
 
 .rd-under {
   display: flex; align-items: baseline; justify-content: space-between;

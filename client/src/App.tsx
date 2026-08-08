@@ -38,6 +38,8 @@ export default function App() {
             recipe: SEED,
             done: [],
             servings: SEED.servings,
+            mode: "diagram",
+            timer: null,
             savedAt: Date.now(),
           },
         ];
@@ -64,6 +66,8 @@ export default function App() {
         recipe,
         done: [],
         servings: recipe.servings,
+        mode: "diagram",
+        timer: null,
         savedAt: Date.now(),
       };
       setLibrary((prev) => {

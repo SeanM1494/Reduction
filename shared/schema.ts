@@ -32,6 +32,11 @@ export const recipes = pgTable(
     recipe: jsonb("recipe").$type<Recipe>().notNull(),
     done: jsonb("done").$type<string[]>().notNull().default([]),
     servings: integer("servings"),
+    /** Which view the recipe was last shown in — remembered per recipe. */
+    mode: text("mode").notNull().default("diagram"),
+    /** Active cooking-mode timer, if any: an absolute end time (epoch ms),
+     *  never a countdown — see client/src/components/StepsMode.tsx. */
+    timer: jsonb("timer").$type<{ stepId: string; endsAt: number } | null>(),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),
   },
