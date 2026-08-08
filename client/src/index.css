@@ -753,8 +753,9 @@ body {
 }
 .rd-steps-parallel:hover { background: var(--warm-hover); }
 
-.rd-steps-nav { display: flex; justify-content: space-between; gap: 10px; margin-top: 4px; }
+.rd-steps-nav { display: flex; align-items: stretch; gap: 10px; margin-top: 4px; }
 .rd-steps-primary {
+  flex: 1 1 auto; padding: 15px 20px; font-size: 15px; font-weight: 600;
   background: var(--ink); color: var(--ink-contrast); border-color: var(--ink);
 }
 .rd-steps-primary:hover { background: var(--ink-hover); border-color: var(--ink-hover); }

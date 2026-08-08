@@ -3,8 +3,9 @@
  *
  * Same data, same `done` set as the diagram — this just walks it as a card
  * sequence instead of a table. Card order is derived from computeLayout's
- * existing row order (depth-first), never from a separate traversal, so it
- * always agrees with the diagram.
+ * own cell columns/rows, never from a separate traversal, so it always
+ * agrees with the diagram: left to right by column (depth in the recipe),
+ * top to bottom within a column.
  *
  * Every step is one card: ingredients (if any) live on the same card as the
  * step's action, framed as a short instruction — "In a bowl, add: ... Then
@@ -101,12 +102,16 @@ export default function StepsMode({ recipe, entry, done, scale, onToggle, onUpda
       const ingById = new Map(section.ingredients.map((i) => [i.id, i]));
       const nodeById = new Map(section.nodes.map((n) => [n.id, n]));
 
-      // Same rows computeLayout hands the diagram — flattened and sorted
-      // (row, col) reproduces the tree's depth-first order top to bottom.
+      // Same cells computeLayout hands the diagram — flattened and sorted
+      // (col, row) walks it left to right: every cell in a column is
+      // finished (top to bottom) before moving to the column to its right.
+      // This is always dependency-safe because computeLayout assigns column
+      // = 1 + max(column of inputs), so nothing in a column can depend on
+      // another cell in that same column.
       const opCells = layout.rows
         .flat()
         .filter((c) => c.kind === "op")
-        .sort((a, b) => a.row - b.row || a.col - b.col);
+        .sort((a, b) => a.col - b.col || a.row - b.row);
 
       for (const cell of opCells) {
         const step = nodeById.get(cell.key);
@@ -401,7 +406,7 @@ export default function StepsMode({ recipe, entry, done, scale, onToggle, onUpda
                 </button>
               ) : null}
               <button className="rd-btn rd-steps-primary" onClick={() => markDone(card)}>
-                Done
+                Next Step &rarr;
               </button>
             </div>
           </div>
