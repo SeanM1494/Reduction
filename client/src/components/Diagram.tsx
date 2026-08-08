@@ -91,7 +91,7 @@ export default function Diagram({
         // Force layout so the browser registers the start height before the
         // target height is applied, or there is nothing to transition from.
         void el.getBoundingClientRect();
-        el.style.transition = "height .45s cubic-bezier(.2,.7,.3,1)";
+        el.style.transition = "height 1s cubic-bezier(.2,.7,.3,1)";
         el.style.height = `${newHeight}px`;
         const onEnd = (ev: TransitionEvent) => {
           if (ev.propertyName !== "height") return;

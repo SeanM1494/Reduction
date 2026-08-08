@@ -6,6 +6,10 @@
  * existing row order (depth-first), never from a separate traversal, so it
  * always agrees with the diagram.
  *
+ * Every step is one card: ingredients (if any) live on the same card as the
+ * step's action, framed as a short instruction — "In a bowl, add: ... Then
+ * mix these together." — rather than a bare label with a separate prep card.
+ *
  * Timers persist via an absolute `endsAt` timestamp on the recipe row, not
  * a running countdown — see the comment above the timer effect below.
  */
@@ -15,31 +19,21 @@ import { computeLayout, type Ingredient, type Recipe, type Step } from "../../..
 import { formatAmount } from "../../../shared/amounts";
 import type { Entry, StepTimer } from "../lib/storage";
 
-interface PrepCard {
-  kind: "prep";
-  key: string;
-  stepId: string;
-  sectionIndex: number;
-  ingredients: Ingredient[];
-}
-
-interface ActionCard {
-  kind: "action";
+interface StepCard {
   key: string;
   stepId: string;
   step: Step;
   sectionIndex: number;
   sectionName: string;
-  /** Set when the step takes 0 or 1 ingredient inputs — named inline instead
-   *  of getting its own prep card. */
-  inlineIngredient: Ingredient | null;
+  /** Raw ingredient inputs for this step, in recipe order. Rendered as a
+   *  checkable list on the same card as the step's action, however many
+   *  there are — this is what used to be a separate "prep" card. */
+  ingredients: Ingredient[];
   /** Labels of earlier steps this one consumes, for the quiet "builds on"
-   *  line. Empty when every input is an ingredient. */
+   *  line. Empty when every input is a raw ingredient. */
   fromLabels: string[];
   actionNumber: number;
 }
-
-type Card = PrepCard | ActionCard;
 
 function fmtTime(min: number): string {
   if (min < 60) return `${min} min`;
@@ -55,12 +49,28 @@ function fmtRemaining(ms: number): string {
   return `${m}:${String(s).padStart(2, "0")}`;
 }
 
-function isPrepSatisfied(card: PrepCard, done: Set<string>): boolean {
-  return card.ingredients.every((i) => done.has(i.id));
+// Turns a step's raw label into a short lead-in + closing pair so the card
+// reads like an instruction rather than a bare verb: "In a bowl, add: ...
+// Then mix these together." Only steps with ingredients use this — steps
+// with nothing to add just show their label directly (see render below).
+function leadFor(label: string): string {
+  return /\bmix\b/i.test(label) ? "In a bowl, add" : "Add";
+}
+function closingFor(label: string): string {
+  const trimmed = label.trim();
+  return /^mix$/i.test(trimmed) ? "mix these together" : trimmed;
 }
 
-function isCardSatisfied(card: Card, done: Set<string>): boolean {
-  return card.kind === "prep" ? isPrepSatisfied(card, done) : done.has(card.stepId);
+// How long the "done" sweep takes — kept as one constant so the ghost's
+// removal timeout can never drift out of sync with the CSS animation
+// duration it is standing in for (see rd-steps-slide-* in index.css).
+const SLIDE_MS = 420;
+
+function prefersReducedMotion(): boolean {
+  return (
+    typeof window !== "undefined" &&
+    !!window.matchMedia?.("(prefers-reduced-motion: reduce)").matches
+  );
 }
 
 interface Props {
@@ -74,7 +84,7 @@ interface Props {
 
 export default function StepsMode({ recipe, entry, done, scale, onToggle, onUpdate }: Props) {
   const { cards, totalActions } = useMemo(() => {
-    const cards: Card[] = [];
+    const cards: StepCard[] = [];
     let actionNumber = 0;
     const totalActions = recipe.sections.reduce(
       (n, s) => n + (s.nodes?.length || 0),
@@ -109,23 +119,13 @@ export default function StepsMode({ recipe, entry, done, scale, onToggle, onUpda
           .filter((x): x is string => !!x);
 
         actionNumber++;
-        if (ingredientInputs.length >= 2) {
-          cards.push({
-            kind: "prep",
-            key: `${step.id}__prep`,
-            stepId: step.id,
-            sectionIndex,
-            ingredients: ingredientInputs,
-          });
-        }
         cards.push({
-          kind: "action",
           key: step.id,
           stepId: step.id,
           step,
           sectionIndex,
           sectionName: section.name,
-          inlineIngredient: ingredientInputs.length === 1 ? ingredientInputs[0] : null,
+          ingredients: ingredientInputs,
           fromLabels,
           actionNumber,
         });
@@ -141,7 +141,7 @@ export default function StepsMode({ recipe, entry, done, scale, onToggle, onUpda
   // at the first thing not yet done, matching whatever happened in Diagram
   // mode meanwhile.
   const [cardIndex, setCardIndex] = useState(() => {
-    const first = cards.findIndex((c) => !isCardSatisfied(c, done));
+    const first = cards.findIndex((c) => !done.has(c.stepId));
     return first === -1 ? cards.length : first;
   });
   // Set when a parallel-work suggestion is followed, so "back to timer" is
@@ -152,7 +152,45 @@ export default function StepsMode({ recipe, entry, done, scale, onToggle, onUpda
     setCardIndex(Math.max(0, Math.min(cards.length, i)));
   }, [cards.length]);
 
-  const card: Card | null = cardIndex < cards.length ? cards[cardIndex] : null;
+  const card: StepCard | null = cardIndex < cards.length ? cards[cardIndex] : null;
+
+  // ---- "done" sweep transition --------------------------------------------
+  // Purely presentational: cardIndex (above) is the source of truth and
+  // updates immediately, so done-state and resumption logic never wait on
+  // this. When the index changes we freeze the outgoing card as a `ghost`
+  // that sweeps off to the side while the new card sweeps in from the
+  // opposite side — forward (Done) moves left-to-right through the card
+  // sequence, so it exits left/enters right; Back mirrors it.
+  //
+  // The direction is computed synchronously during render (the "adjust
+  // state while rendering" pattern) rather than in an effect, so the very
+  // first paint of the new card already carries the right entrance class —
+  // an effect-driven update would land one render too late and the first
+  // frame would flash in with no animation.
+  const [prevIndex, setPrevIndex] = useState(cardIndex);
+  const [prevCard, setPrevCard] = useState<StepCard | null>(card);
+  const [dir, setDir] = useState<"fwd" | "back" | null>(null);
+  const [ghostCard, setGhostCard] = useState<StepCard | null>(null);
+  const [ghostVisible, setGhostVisible] = useState(false);
+  const [ghostToken, setGhostToken] = useState(0);
+
+  if (cardIndex !== prevIndex) {
+    const newDir: "fwd" | "back" = cardIndex > prevIndex ? "fwd" : "back";
+    setPrevIndex(cardIndex);
+    setPrevCard(card);
+    if (!prefersReducedMotion()) {
+      setDir(newDir);
+      setGhostCard(prevCard);
+      setGhostVisible(true);
+      setGhostToken((t) => t + 1);
+    }
+  }
+
+  useEffect(() => {
+    if (!ghostVisible) return;
+    const t = window.setTimeout(() => setGhostVisible(false), SLIDE_MS);
+    return () => window.clearTimeout(t);
+  }, [ghostVisible, ghostToken]);
 
   // ---- timer -------------------------------------------------------------
   // `entry.timer` stores {stepId, endsAt}, endsAt an absolute epoch ms. The
@@ -167,9 +205,7 @@ export default function StepsMode({ recipe, entry, done, scale, onToggle, onUpda
   }, []);
 
   const timer: StepTimer | null = entry.timer ?? null;
-  const timerForCurrent = timer && card?.kind === "action" && timer.stepId === card.stepId
-    ? timer
-    : null;
+  const timerForCurrent = timer && card && timer.stepId === card.stepId ? timer : null;
   const remainingMs = timerForCurrent ? timerForCurrent.endsAt - Date.now() : null;
   const elapsed = remainingMs != null && remainingMs <= 0;
 
@@ -184,7 +220,7 @@ export default function StepsMode({ recipe, entry, done, scale, onToggle, onUpda
     if (typeof Notification !== "undefined" && Notification.permission === "granted") {
       try {
         new Notification("Timer done", {
-          body: card?.kind === "action" ? card.step.label : undefined,
+          body: card?.step.label,
         });
       } catch {
         // Notifications are best-effort — the in-page banner still shows.
@@ -208,18 +244,17 @@ export default function StepsMode({ recipe, entry, done, scale, onToggle, onUpda
   );
 
   // ---- parallel work -------------------------------------------------------
-  // Only offered while parked on a waiting (timed) action card, and only
-  // steps from OTHER sections — a different section is always a different
-  // tree, so it can never be downstream of the current step.
+  // Only offered while parked on a waiting (timed) card, and only steps
+  // from OTHER sections — a different section is always a different tree,
+  // so it can never be downstream of the current step.
   const parallelSuggestion = useMemo(() => {
-    if (!card || card.kind !== "action" || !card.step.minutes) return null;
+    if (!card || !card.step.minutes) return null;
     const candidate = cards.find(
       (c) =>
-        c.kind === "action" &&
         c.sectionIndex !== card.sectionIndex &&
         !done.has(c.stepId) &&
         (c.step.inputs || []).every((i) => done.has(i))
-    ) as ActionCard | undefined;
+    );
     if (!candidate) return null;
     return { card: candidate, index: cards.indexOf(candidate) };
   }, [card, cards, done]);
@@ -237,18 +272,8 @@ export default function StepsMode({ recipe, entry, done, scale, onToggle, onUpda
   }, [returnIndex, goTo]);
 
   // ---- card actions --------------------------------------------------------
-  const markPrepReady = useCallback(
-    (c: PrepCard) => {
-      c.ingredients.forEach((i) => {
-        if (!done.has(i.id)) onToggle(i.id);
-      });
-      goTo(cardIndex + 1);
-    },
-    [done, onToggle, cardIndex, goTo]
-  );
-
-  const markActionDone = useCallback(
-    (c: ActionCard) => {
+  const markDone = useCallback(
+    (c: StepCard) => {
       if (!done.has(c.stepId)) onToggle(c.stepId);
       if (returnIndex != null && cardIndex === returnIndex) setReturnIndex(null);
       goTo(cardIndex + 1);
@@ -260,6 +285,58 @@ export default function StepsMode({ recipe, entry, done, scale, onToggle, onUpda
     return <p className="rd-steps-empty">This recipe has no steps to cook through yet.</p>;
   }
 
+  // Shared between the live card and its frozen ghost so the sweeping
+  // outgoing card reads the same as it did a moment ago, not a blank shell.
+  function stepBody(c: StepCard) {
+    return (
+      <>
+        <p className="rd-steps-eyebrow">
+          {c.sectionName} &middot; Step {c.actionNumber} of {totalActions}
+        </p>
+
+        {c.fromLabels.length ? (
+          <p className="rd-steps-builds">Builds on: {c.fromLabels.join(", ")}</p>
+        ) : null}
+
+        {c.ingredients.length ? (
+          <>
+            <p className="rd-steps-lead">{leadFor(c.step.label)}:</p>
+            <ul className="rd-steps-prep-list">
+              {c.ingredients.map((ing) => {
+                const isDone = done.has(ing.id);
+                return (
+                  <li key={ing.id}>
+                    <button
+                      type="button"
+                      className={`rd-steps-prep-row ${isDone ? "is-done" : ""}`}
+                      aria-pressed={isDone}
+                      onClick={() => onToggle(ing.id)}
+                    >
+                      <span className="rd-steps-check" aria-hidden="true" />
+                      <span className="rd-amount">{formatAmount(ing, scale)}</span>
+                      <span className="rd-name">
+                        {ing.name}
+                        {ing.note ? <em className="rd-note">, {ing.note}</em> : null}
+                      </span>
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+            <p className="rd-steps-closing">Then {closingFor(c.step.label)}.</p>
+          </>
+        ) : (
+          <h2 className="rd-steps-label">{c.step.label}</h2>
+        )}
+      </>
+    );
+  }
+
+  const enterClass =
+    dir === "fwd" ? "rd-steps-slide-in-fwd" : dir === "back" ? "rd-steps-slide-in-back" : "";
+  const exitClass =
+    dir === "fwd" ? "rd-steps-slide-out-fwd" : "rd-steps-slide-out-back";
+
   return (
     <div className="rd-steps">
       {returnIndex != null && cardIndex !== returnIndex ? (
@@ -268,100 +345,68 @@ export default function StepsMode({ recipe, entry, done, scale, onToggle, onUpda
         </button>
       ) : null}
 
-      {!card ? (
-        <div className="rd-steps-card rd-steps-finished">
-          <p className="rd-steps-finished-label">Every step is done. Enjoy.</p>
-          <div className="rd-steps-nav">
-            <button className="rd-btn" onClick={() => goTo(cardIndex - 1)}>
-              &larr; Back
-            </button>
+      <div className="rd-steps-stage">
+        {ghostVisible ? (
+          <div className={`rd-steps-card rd-steps-card-ghost ${exitClass}`} aria-hidden="true">
+            {ghostCard ? (
+              stepBody(ghostCard)
+            ) : (
+              <p className="rd-steps-finished-label">Every step is done. Enjoy.</p>
+            )}
           </div>
-        </div>
-      ) : card.kind === "prep" ? (
-        <div className="rd-steps-card">
-          <p className="rd-steps-eyebrow">Prep</p>
-          <ul className="rd-steps-prep-list">
-            {card.ingredients.map((ing) => {
-              const isDone = done.has(ing.id);
-              return (
-                <li key={ing.id}>
-                  <button
-                    type="button"
-                    className={`rd-steps-prep-row ${isDone ? "is-done" : ""}`}
-                    aria-pressed={isDone}
-                    onClick={() => onToggle(ing.id)}
-                  >
-                    <span className="rd-steps-check" aria-hidden="true" />
-                    <span className="rd-amount">{formatAmount(ing, scale)}</span>
-                    <span className="rd-name">
-                      {ing.name}
-                      {ing.note ? <em className="rd-note">, {ing.note}</em> : null}
-                    </span>
-                  </button>
-                </li>
-              );
-            })}
-          </ul>
-          <div className="rd-steps-nav">
-            <button className="rd-btn" onClick={() => goTo(cardIndex - 1)}>
-              &larr; Back
-            </button>
-            <button className="rd-btn rd-steps-primary" onClick={() => markPrepReady(card)}>
-              Ready
-            </button>
-          </div>
-        </div>
-      ) : (
-        <div className="rd-steps-card">
-          <p className="rd-steps-eyebrow">
-            {card.sectionName} &middot; Step {card.actionNumber} of {totalActions}
-          </p>
-          <h2 className="rd-steps-label">{card.step.label}</h2>
-          {card.inlineIngredient ? (
-            <p className="rd-steps-inline-ing">
-              with {formatAmount(card.inlineIngredient, scale)} {card.inlineIngredient.name}
-              {card.inlineIngredient.note ? `, ${card.inlineIngredient.note}` : ""}
-            </p>
-          ) : null}
-          {card.fromLabels.length ? (
-            <p className="rd-steps-builds">Builds on: {card.fromLabels.join(", ")}</p>
-          ) : null}
+        ) : null}
 
-          {card.step.minutes ? (
-            <div className="rd-steps-timer">
-              {timerForCurrent ? (
-                elapsed ? (
-                  <p className="rd-steps-timer-alert" role="status">
-                    Time&rsquo;s up &mdash; {card.step.label}
-                  </p>
+        {!card ? (
+          <div key="__finished" className={`rd-steps-card rd-steps-finished ${enterClass}`}>
+            <p className="rd-steps-finished-label">Every step is done. Enjoy.</p>
+            <div className="rd-steps-nav">
+              <button className="rd-btn" onClick={() => goTo(cardIndex - 1)}>
+                &larr; Back
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div key={card.key} className={`rd-steps-card ${enterClass}`}>
+            {stepBody(card)}
+
+            {card.step.minutes ? (
+              <div className="rd-steps-timer">
+                {timerForCurrent ? (
+                  elapsed ? (
+                    <p className="rd-steps-timer-alert" role="status">
+                      Time&rsquo;s up &mdash; {card.step.label}
+                    </p>
+                  ) : (
+                    <p className="rd-steps-timer-count">{fmtRemaining(remainingMs!)}</p>
+                  )
                 ) : (
-                  <p className="rd-steps-timer-count">{fmtRemaining(remainingMs!)}</p>
-                )
-              ) : (
-                <button className="rd-btn" onClick={() => startTimer(card.step)}>
-                  Start timer ({fmtTime(card.step.minutes)})
-                </button>
-              )}
+                  <button className="rd-btn" onClick={() => startTimer(card.step)}>
+                    Start timer ({fmtTime(card.step.minutes)})
+                  </button>
+                )}
 
-              {parallelSuggestion ? (
-                <button className="rd-steps-parallel" onClick={jumpToSuggestion}>
-                  While that&rsquo;s going &mdash; start {parallelSuggestion.card.sectionName}:{" "}
-                  {parallelSuggestion.card.step.label}
+                {parallelSuggestion ? (
+                  <button className="rd-steps-parallel" onClick={jumpToSuggestion}>
+                    While that&rsquo;s going &mdash; start {parallelSuggestion.card.sectionName}:{" "}
+                    {parallelSuggestion.card.step.label}
+                  </button>
+                ) : null}
+              </div>
+            ) : null}
+
+            <div className="rd-steps-nav">
+              {cardIndex > 0 ? (
+                <button className="rd-btn" onClick={() => goTo(cardIndex - 1)}>
+                  &larr; Back
                 </button>
               ) : null}
+              <button className="rd-btn rd-steps-primary" onClick={() => markDone(card)}>
+                Done
+              </button>
             </div>
-          ) : null}
-
-          <div className="rd-steps-nav">
-            <button className="rd-btn" onClick={() => goTo(cardIndex - 1)}>
-              &larr; Back
-            </button>
-            <button className="rd-btn rd-steps-primary" onClick={() => markActionDone(card)}>
-              Done
-            </button>
           </div>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 }

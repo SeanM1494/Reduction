@@ -648,12 +648,39 @@ body {
 }
 .rd-steps-return:hover { background: var(--warm-hover); }
 
+.rd-steps-stage { position: relative; overflow: hidden; }
 .rd-steps-card {
   background: var(--card); border: 1px solid var(--line); border-radius: 17px;
   padding: 24px 26px 20px; max-width: 560px;
   box-shadow: 0 1px 1px rgba(var(--shadow-rgb), .14),
               0 12px 28px -12px rgba(var(--shadow-rgb), .3);
-  animation: rd-swap-in .28s cubic-bezier(.2,.7,.3,1);
+}
+/* The frozen outgoing card during a "done"/"back" sweep — stacked on top of
+   the incoming card (already in normal flow, so it sets the stage's height)
+   and non-interactive while it slides out. */
+.rd-steps-card-ghost {
+  position: absolute; top: 0; left: 0; right: 0; z-index: 2;
+  pointer-events: none;
+}
+.rd-steps-slide-in-fwd { animation: rd-steps-in-fwd .42s cubic-bezier(.2,.7,.3,1); }
+.rd-steps-slide-in-back { animation: rd-steps-in-back .42s cubic-bezier(.2,.7,.3,1); }
+.rd-steps-slide-out-fwd { animation: rd-steps-out-fwd .42s cubic-bezier(.2,.7,.3,1) forwards; }
+.rd-steps-slide-out-back { animation: rd-steps-out-back .42s cubic-bezier(.2,.7,.3,1) forwards; }
+@keyframes rd-steps-in-fwd {
+  from { transform: translateX(100%); }
+  to   { transform: translateX(0); }
+}
+@keyframes rd-steps-in-back {
+  from { transform: translateX(-100%); }
+  to   { transform: translateX(0); }
+}
+@keyframes rd-steps-out-fwd {
+  from { transform: translateX(0); }
+  to   { transform: translateX(-100%); }
+}
+@keyframes rd-steps-out-back {
+  from { transform: translateX(0); }
+  to   { transform: translateX(100%); }
 }
 .rd-steps-eyebrow {
   margin: 0 0 10px; font-size: 12.5px; font-weight: 600; color: var(--muted);
@@ -663,13 +690,19 @@ body {
   font-weight: 700; font-size: clamp(22px, 3.6vw, 32px);
   line-height: 1.08; letter-spacing: -.02em; margin: 0 0 10px;
 }
-.rd-steps-inline-ing { margin: 0 0 4px; font-size: 15px; color: var(--ink); }
 .rd-steps-builds {
   margin: 0 0 18px; font-size: 12.5px; color: var(--faint);
 }
-.rd-steps-inline-ing + .rd-steps-builds { margin-top: -2px; }
+.rd-steps-lead {
+  margin: 0 0 10px; font-size: 15px; font-weight: 600; color: var(--ink);
+}
+.rd-steps-closing {
+  font-family: "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
+  font-weight: 700; font-size: clamp(20px, 3vw, 26px);
+  line-height: 1.15; letter-spacing: -.01em; margin: 4px 0 10px;
+}
 
-.rd-steps-prep-list { list-style: none; margin: 0 0 20px; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.rd-steps-prep-list { list-style: none; margin: 0 0 16px; padding: 0; display: flex; flex-direction: column; gap: 8px; }
 .rd-steps-prep-row {
   display: flex; align-items: center; gap: 12px; width: 100%; text-align: left;
   font: inherit; cursor: pointer; background: var(--ing-bg);
@@ -787,7 +820,7 @@ body {
  * one-line summary and the strip comes forward.
  * ------------------------------------------------------------------ */
 
-.rd-swap { animation: rd-swap-in .45s cubic-bezier(.2,.7,.3,1); }
+.rd-swap { animation: rd-swap-in 1s cubic-bezier(.2,.7,.3,1); }
 @keyframes rd-swap-in {
   from { opacity: 0; transform: translateY(6px); }
   to   { opacity: 1; transform: none; }
@@ -796,7 +829,7 @@ body {
 /* Same swap as .rd-swap, scoped to individual cells: whichever rows a
    collapse/expand click actually mounts (the tucked chip, or the rows it
    reveals) fade in on their own instead of restarting the whole table. */
-.rd-row-swap { animation: rd-swap-in .45s cubic-bezier(.2,.7,.3,1); }
+.rd-row-swap { animation: rd-swap-in 1s cubic-bezier(.2,.7,.3,1); }
 
 .rd-under {
   display: flex; align-items: baseline; justify-content: space-between;
@@ -910,6 +943,8 @@ body {
 
 @media (prefers-reduced-motion: reduce) {
   .rd-swap, .rd-finish.is-focus, .rd-row-swap { animation: none; }
+  .rd-steps-slide-in-fwd, .rd-steps-slide-in-back,
+  .rd-steps-slide-out-fwd, .rd-steps-slide-out-back { animation: none; }
 }
 
 @media print {
