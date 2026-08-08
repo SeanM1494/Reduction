@@ -423,6 +423,11 @@ body {
   box-shadow: inset 3px 0 0 var(--line-strong), var(--pin);
 }
 .rd-op { text-align: center; min-width: 72px; }
+
+/* A step with more than one step input is where independent branches merge.
+   The first row of each branch gets a heavier top rule so the merge reads
+   as a boundary between groups, not a continuation of the row above. */
+.rd-starts-branch { border-top: 2px solid var(--line-strong); }
 .rd-ing-body { display: flex; flex-direction: column; gap: 3px; }
 .rd-amount {
   font-family: "Space Mono", ui-monospace, monospace;

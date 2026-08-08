@@ -216,7 +216,14 @@ export default function Diagram({
                           return (
                             <td
                               key={c.key}
-                              className="rd-cell rd-ing rd-collapsed"
+                              className={[
+                                "rd-cell",
+                                "rd-ing",
+                                "rd-collapsed",
+                                c.startsBranch ? "rd-starts-branch" : "",
+                              ]
+                                .filter(Boolean)
+                                .join(" ")}
                               rowSpan={c.rowSpan}
                               colSpan={c.colSpan}
                             >
@@ -287,6 +294,7 @@ export default function Diagram({
                               !isDone && ready ? "is-ready" : "",
                               pending ? "is-pending" : "",
                               isPreview ? "is-preview" : "",
+                              c.startsBranch ? "rd-starts-branch" : "",
                             ]
                               .filter(Boolean)
                               .join(" ")}

@@ -71,6 +71,9 @@ export interface Cell {
   text?: string;
   /** "collapsed" cells only: how many ingredients+steps are folded inside. */
   itemCount?: number;
+  /** "ingredient"/"collapsed" cells only: first row of a branch that merges
+   *  with at least one sibling branch — draw a heavier top rule here. */
+  startsBranch?: boolean;
 }
 
 export interface Layout {
@@ -197,6 +200,29 @@ export function computeLayout(section: Section, opts?: LayoutOptions): Layout {
     return c;
   };
 
+  // The pass above is "as early as possible": every step packs against its
+  // inputs, so a short independent branch lands at a low column and reads
+  // as happening *before* a longer parallel branch that finishes at the
+  // same place. Push every step as far right as it can go instead: a
+  // step's column becomes (column of the step consuming it) minus one.
+  // Reuse or fan-out would already have thrown above, so every non-root
+  // step has exactly one consumer — a single top-down walk from the root
+  // assigns every column, no iteration or memo needed. The root has no
+  // consumer to push against, so it keeps its earliest (and only
+  // possible) column. Ingredients and collapsed steps stay at column 0,
+  // same as the early pass.
+  const lateCol = new Map<string, number>();
+  (function place(id: string, col: number) {
+    if (ingById.has(id) || collapsed?.has(id)) return;
+    lateCol.set(id, col);
+    for (const inp of nodeById.get(id)!.inputs || []) place(inp, col - 1);
+  })(section.root, colOf(section.root));
+
+  const lateColOf = (id: string): number => {
+    if (ingById.has(id) || collapsed?.has(id)) return 0;
+    return lateCol.get(id)!;
+  };
+
   const spanMemo = new Map<string, [number, number]>();
   const spanOf = (id: string): [number, number] => {
     if (ingById.has(id) || collapsed?.has(id)) {
@@ -216,6 +242,22 @@ export function computeLayout(section: Section, opts?: LayoutOptions): Layout {
     return span;
   };
 
+  // A step with more than one *step* input (not counting ingredients) is
+  // where independent branches merge. The first leaf row of each such
+  // branch gets flagged so the CSS can draw a heavier rule there. Row 0 is
+  // skipped — the table's own top border already marks that edge.
+  const startsBranch = new Set<string>();
+  for (const node of section.nodes) {
+    if (!visited.has(node.id) || collapsed?.has(node.id)) continue;
+    const stepInputs = (node.inputs || []).filter((inp) => nodeById.has(inp));
+    if (stepInputs.length <= 1) continue;
+    for (const inp of stepInputs) {
+      const [lo] = spanOf(inp);
+      if (lo === 0) continue;
+      startsBranch.add(order[lo]);
+    }
+  }
+
   const cells: Cell[] = [];
 
   order.forEach((id) => {
@@ -228,6 +270,7 @@ export function computeLayout(section: Section, opts?: LayoutOptions): Layout {
         colSpan: 1,
         kind: "ingredient",
         ingredient: ingById.get(id)!,
+        startsBranch: startsBranch.has(id),
       });
       return;
     }
@@ -241,13 +284,14 @@ export function computeLayout(section: Section, opts?: LayoutOptions): Layout {
       kind: "collapsed",
       text: info.label,
       itemCount: info.count,
+      startsBranch: startsBranch.has(id),
     });
   });
 
   for (const node of section.nodes) {
     if (!visited.has(node.id)) continue;
     if (collapsed?.has(node.id)) continue;
-    const c = colOf(node.id);
+    const c = lateColOf(node.id);
     const [lo, hi] = spanOf(node.id);
     cells.push({
       key: node.id,
@@ -283,7 +327,7 @@ export function computeLayout(section: Section, opts?: LayoutOptions): Layout {
     };
 
     for (const inp of node.inputs || []) {
-      const ic = colOf(inp);
+      const ic = lateColOf(inp);
       const [a, b] = spanOf(inp);
       if (ic + 1 > c - 1) {
         flush();
