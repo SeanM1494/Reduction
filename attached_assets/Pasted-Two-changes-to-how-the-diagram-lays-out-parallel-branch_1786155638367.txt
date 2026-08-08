@@ -1,0 +1,45 @@
+Two changes to how the diagram lays out parallel branches.
+Files: shared/layout.ts, client/src/index.css.
+
+PROBLEM
+Columns are assigned as-early-as-possible: column = 1 + max(column of
+inputs). When a recipe has independent branches of different lengths —
+wet ingredients creamed then beaten, dry ingredients mixed once — the
+shorter branch sits far left and looks like it happens BEFORE the longer
+branch's later steps, when in fact they are parallel and independent.
+
+1. shared/layout.ts — as-late-as-possible columns
+   After computing the existing columns, add a second pass that pushes
+   every step as far right as it can go: a step's column becomes
+   (column of the step it feeds) − 1. The root keeps the maximum column.
+   Ingredients stay at column 0.
+   Because the structure is a tree, each step has exactly one consumer,
+   so this is a single walk down from the root — no iteration needed.
+   Leave the gap-filling logic alone; it reads from the column function
+   and will adapt on its own.
+   Do NOT change row ordering, rowspan calculation, validateRecipe, or
+   any thrown error. The server imports this file.
+
+2. client/src/index.css — separate the branch groups
+   Where one branch's rows end and the next begins, the boundary should
+   read. Add a heavier top border on the first ingredient row of each
+   branch group. Expose the group boundary from computeLayout as a flag
+   on the ingredient cell (e.g. startsBranch: true) — set it on the
+   first leaf row of each sub-tree feeding a step that has more than one
+   step input.
+
+CONSTRAINTS
+- No new dependencies.
+- Do not touch RecipeView.tsx, the finish strip, or the sticky column.
+- Called with no options, computeLayout must still produce a valid,
+  renderable table for every existing saved recipe.
+
+ACCEPTANCE — chocolate chip cookies
+- "mix dry ingredients" sits in the SAME column as "beat in eggs and
+  vanilla", both immediately left of "mix in dry ingredients".
+- A visible rule separates the butter/sugar/egg/vanilla rows from the
+  flour/soda/powder/salt rows.
+- Column count is unchanged.
+- npm run check passes.
+
+Show me the diff for shared/layout.ts before applying it.
