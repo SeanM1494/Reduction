@@ -75,4 +75,15 @@ client/src/
 ## Deploying
 
 `.replit` is set up for Autoscale: builds with `npm run build`, runs `npm start`. Add `ANTHROPIC_API_KEY` to the deployment's secrets separately — it doesn't inherit from the workspace.
-# Reduction
+
+## Dependencies
+
+The lockfile resolves against `registry.npmjs.org`, so `npm install` works off Replit
+too — in CI, in a container, on a laptop. If you ever regenerate it from inside a Repl,
+check that `resolved` URLs didn't get rewritten to `package-firewall.replit.local`;
+those pin to a host nothing outside Replit can reach.
+
+`.npmrc` sets `min-release-age=1440`, which blocks packages published less than a day
+ago — a supply-chain buffer, since malicious releases are usually pulled within hours.
+It needs npm >= 11.6; older npm ignores the key silently, which is why `packageManager`
+pins a floor.
