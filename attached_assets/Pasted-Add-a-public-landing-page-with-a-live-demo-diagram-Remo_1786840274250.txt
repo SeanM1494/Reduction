@@ -1,0 +1,73 @@
+Add a public landing page with a live demo diagram. Remove the
+cheesecake seed entirely.
+
+1. REMOVE THE CHEESECAKE
+   Delete client/src/data/seed.ts and the seeding logic in App.tsx that
+   writes it on first load. Also delete any cheesecake rows already in
+   the database — write a one-off script or a guarded startup check, and
+   tell me which you did. An empty library should render the existing
+   empty state, not a seeded recipe.
+
+2. NEW DEMO RECIPE — client/src/data/demo.ts
+   Guacamole. Two independent branches converging, so the diagram shows
+   what it is for:
+     ingredients:
+       ripe avocados        qty 3,    unit null
+       lime, juiced         qty 1,    unit null
+       kosher salt          qty 0.5,  unit "tsp"
+       white onion, finely diced   qty 0.25, unit "cup"
+       roma tomato, seeded and diced   qty 1, unit null
+       jalapeño, minced     qty 1,    unit null
+       fresh cilantro, chopped   qty 0.25, unit "cup"
+     steps:
+       d1 "halve and scoop"   inputs: avocados
+       d2 "mash to desired texture"   inputs: d1, lime, salt
+       d3 "combine"           inputs: onion, tomato, jalapeño, cilantro
+       d4 "fold together"     inputs: d2, d3
+       d5 "rest 10 min"       inputs: d4    minutes: 10
+     root: d5
+   Prep descriptors ("finely diced", "seeded and diced", "juiced") go in
+   the `note` field, not the name — the name stays clean.
+   Follow the existing Recipe type exactly. It must pass validateRecipe
+   unchanged.
+   Title: "Guacamole". servings: 4. No source or sourceUrl — this is
+   our own, not scraped.
+
+3. LANDING PAGE — shown when the user has no account/session
+   Above the fold: the app name, one line on what it does, and the demo
+   diagram already rendered and fully interactive. Someone should be
+   able to click ingredients and watch steps unlock without signing up
+   or typing anything.
+   Below it: a short line prompting them to try their own recipe, which
+   leads to the sign-up flow (stub the destination for now — accounts
+   come next).
+
+4. DEMO STATE IS LOCAL AND EPHEMERAL
+   The demo's done set lives in component state only. It must NOT hit
+   the API, the library, or Postgres, and must not appear in saved
+   recipes. Refreshing resets it.
+   Add a small "Reset" control so a visitor can replay it.
+
+5. FIRST IMPRESSION
+   The demo should look inviting cold, before any interaction — the
+   whole diagram legible, no dimmed cells. Consider pre-checking the
+   first ingredient so one step is already amber and the mechanic is
+   visible without the visitor guessing. If you do that, make it obvious
+   it is a demo state, not saved progress.
+   Check the layout at phone width. Seven ingredients across five steps
+   may be wide; if the convergence at "fold together" cannot be seen
+   without horizontal scrolling, tell me before changing the recipe.
+
+CONSTRAINTS
+- Do not modify layout.ts, Diagram.tsx, or RecipeView.tsx. The landing
+  page composes the existing components; it does not fork them.
+- No new dependencies.
+- Existing saved recipes must be unaffected.
+
+ACCEPTANCE
+- A logged-out visitor sees the guacamole diagram and can check items off.
+- The two branches (mash chain, salsa chain) line up in the same column
+  before "fold together".
+- The demo never appears in the library and creates no database rows.
+- No cheesecake anywhere in dev or prod, including existing rows.
+- npm run check passes.
