@@ -47,6 +47,26 @@ function randomId(): string {
 }
 
 /**
+ * Id for a newly saved recipe.
+ *
+ * These used to be `r${Date.now()}`, which is only unique within one browser
+ * within one millisecond. That was survivable while rows were keyed by
+ * (owner_key, id) and an owner was a single browser — but accounts change
+ * that: merging two anonymous libraries into one user puts ids from different
+ * browsers into the same key space, where two saves that happened to land in
+ * the same millisecond collide, and the collision resolves by dropping
+ * someone's recipe.
+ *
+ * So new saves get a UUID. Existing `r…` ids are left exactly as they are —
+ * they are already unique within their own owner, which is all they ever had
+ * to be, and rewriting live primary keys to fix a future problem is a worse
+ * risk than the one it avoids.
+ */
+export function newEntryId(): string {
+  return randomId();
+}
+
+/**
  * Ownership without accounts: a random id generated once per browser and
  * sent as X-Owner-Key on every request. Not security — just what keeps
  * browsers from seeing each other's recipes (see server/routes/library.ts).

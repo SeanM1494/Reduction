@@ -29,6 +29,35 @@ import type { Section } from "../../../shared/layout";
 /** Steps advance this fast during autoplay. Slow enough to read a label. */
 const WATCH_STEP_MS = 600;
 
+/**
+ * A step that brings a new sentence with it holds longer — 600ms is fine for
+ * watching a cell fill in, and far too fast to read a line of prose. Steps
+ * that only continue the sentence already on screen keep the quick cadence,
+ * so the narration paces the playback without dragging it out.
+ */
+const WATCH_NARRATED_MS = 1400;
+
+/**
+ * The demo, told as someone cooking it. Keyed by ingredient and step id
+ * rather than by position, for the same reason the playback order is walked
+ * from the graph instead of written out: renaming or reordering anything in
+ * demo.ts drops the sentence for that id, it does not silently attach it to
+ * the wrong step. Ids with no entry hold whatever sentence is already up,
+ * which is what lets one line cover the run of ingredients feeding a step.
+ *
+ * Kept here rather than in demo.ts because the brief scoped these changes to
+ * this file and LandingPage.tsx; keying by id is what prevents stranding, and
+ * that holds wherever the map lives.
+ */
+const DEMO_NARRATION: Record<string, string> = {
+  d1: "Olivia halved three avocados and scooped them into a bowl.",
+  lime: "She squeezed in the lime and added a pinch of salt.",
+  d2: "Mashed it until it was chunky, not smooth.",
+  onion: "Onion, tomato, jalapeño and cilantro went in together.",
+  d4: "She folded the two bowls into one.",
+  d5: "Then a ten-minute rest, while the flavors came together.",
+};
+
 function prefersReducedMotion(): boolean {
   return (
     typeof window !== "undefined" &&
@@ -260,14 +289,26 @@ export function useWatchPlayer(
   order: string[],
   prechecked: string[],
   setDone: (next: Set<string>) => void
-): { playing: boolean; play: () => void; stop: () => void } {
+): {
+  playing: boolean;
+  /** The narration sentence currently on screen, or null when not narrating.
+   *  While this is set it stands in for the coach line entirely. */
+  line: string | null;
+  play: () => void;
+  stop: () => void;
+} {
   const [playing, setPlaying] = useState(false);
+  const [line, setLine] = useState<string | null>(null);
   const timers = useRef<number[]>([]);
 
   const stop = useCallback(() => {
     timers.current.forEach((t) => window.clearTimeout(t));
     timers.current = [];
     setPlaying(false);
+    // Dropped immediately and mid-sentence: an interrupted story has no
+    // graceful ending to play out, and the coach line is the thing that
+    // actually describes where the visitor now is.
+    setLine(null);
   }, []);
 
   // A component unmounting mid-play must not leave timers writing into dead
@@ -278,42 +319,67 @@ export function useWatchPlayer(
     stop();
 
     if (prefersReducedMotion()) {
+      // One commit, and no narration: six sentences flashing past in as many
+      // frames is worse than none, and there is no motion left to narrate.
       setDone(new Set([...prechecked, ...order]));
       return;
     }
 
     setPlaying(true);
     setDone(new Set(prechecked));
-    order.forEach((_, i) => {
-      const t = window.setTimeout(
-        () => {
-          setDone(new Set([...prechecked, ...order.slice(0, i + 1)]));
-          if (i === order.length - 1) setPlaying(false);
-        },
-        WATCH_STEP_MS * (i + 1)
-      );
+
+    // Delays accumulate rather than being a multiple of the index, because a
+    // step carrying a new sentence is held longer than one that does not.
+    let at = 0;
+    order.forEach((id, i) => {
+      const sentence = DEMO_NARRATION[id];
+      at += sentence ? WATCH_NARRATED_MS : WATCH_STEP_MS;
+      const t = window.setTimeout(() => {
+        setDone(new Set([...prechecked, ...order.slice(0, i + 1)]));
+        if (sentence) setLine(sentence);
+      }, at);
       timers.current.push(t);
     });
+
+    // The last sentence gets its full reading time before the coach line
+    // takes back over with the completed-state copy.
+    const end = window.setTimeout(() => {
+      setPlaying(false);
+      setLine(null);
+    }, at + WATCH_NARRATED_MS);
+    timers.current.push(end);
   }, [order, prechecked, setDone, stop]);
 
-  return { playing, play, stop };
+  return { playing, line, play, stop };
 }
 
 // --------------------------------------------------------------- pieces ----
 
 /**
- * The coach line. Keyed by stage so React swaps the node and the CSS
- * transition runs on each new sentence rather than cross-fading text in
- * place. This is the app's only polite live region on this page.
+ * The coach line, which during "Watch it" is handed over to the narration
+ * instead — one line, never both. Keyed by the sentence itself so React
+ * swaps the node and the fade runs on every change, whether that is a new
+ * stage or the next line of the story. This is the app's only polite live
+ * region on this page.
  */
-export function CoachLine({ stage, text }: { stage: CoachStage; text: string }) {
+export function CoachLine({ text }: { text: string }) {
   return (
     <p className="rd-coach" aria-live="polite">
-      <span key={stage} className="rd-coach-text">
+      <span key={text} className="rd-coach-text">
         {text}
       </span>
     </p>
   );
+}
+
+/**
+ * Says "this is a sample" without saying it twice. Absolutely positioned onto
+ * the demo card's top edge, so it reads as a label on the card and costs no
+ * vertical space — the diagram below it has about 43px of clearance at
+ * 390x844 and a flow-level marker would spend most of that (see CLAUDE.md).
+ */
+export function DemoTag() {
+  return <span className="rd-demo-tag">Demo</span>;
 }
 
 /** A tip, or the empty slot it occupies. Silent to screen readers — see

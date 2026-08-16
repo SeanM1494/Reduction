@@ -6,7 +6,7 @@ import ThemeToggle from "./components/ThemeToggle";
 import LandingPage from "./components/LandingPage";
 import SignupStub from "./components/SignupStub";
 import { useTheme } from "./hooks/useTheme";
-import { loadLibrary, saveLibrary, type Entry } from "./lib/storage";
+import { loadLibrary, saveLibrary, newEntryId, type Entry } from "./lib/storage";
 import { readPendingUrl, writePendingUrl, clearPendingUrl } from "./lib/pendingUrl";
 import {
   extractFromUrl,
@@ -54,7 +54,7 @@ export default function App() {
   const addRecipe = useCallback(
     (recipe: Recipe) => {
       const entry: Entry = {
-        id: `r${Date.now()}`,
+        id: newEntryId(),
         recipe,
         done: [],
         servings: recipe.servings,

@@ -37,6 +37,7 @@ import {
   CoachLine,
   CoachTip,
   CoachLegend,
+  DemoTag,
 } from "./DemoCoach";
 
 interface Props {
@@ -108,7 +109,11 @@ export default function LandingPage({
     return out;
   }, [section, inputs]);
 
-  const { playing, play, stop } = useWatchPlayer(watchOrder, DEMO_PRECHECKED, setDone);
+  const { playing, line: narration, play, stop } = useWatchPlayer(
+    watchOrder,
+    DEMO_PRECHECKED,
+    setDone
+  );
   const { stage, text: coachText } = useCoachStage(graph, done, DEMO_PRECHECKED, mode);
   // Both tips describe the grid — amber cells, stepping rightwards — so they
   // are held (not spent) while card mode is up, and while autoplay is driving.
@@ -215,6 +220,7 @@ export default function LandingPage({
         </div>
 
         <div className="rd-landing-demo">
+          <DemoTag />
           <div className="rd-landing-demo-head">
             <div className="rd-demo-modes" role="group" aria-label="Demo view">
               <button
@@ -246,7 +252,11 @@ export default function LandingPage({
             </div>
           </div>
 
-          <CoachLine stage={stage} text={coachText} />
+          {/* The narration stands in for the coach line while it is running,
+              never alongside it. Interrupting playback clears it in the same
+              commit that cancels the timers, so the coach line is back before
+              the next frame. */}
+          <CoachLine text={narration ?? coachText} />
           <CoachTip text={tipText} />
 
           {mode === "diagram" ? (
