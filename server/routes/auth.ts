@@ -23,6 +23,7 @@ import {
 } from "../lib/sessions";
 import { buildAuthUrl, exchangeCode, googleConfig, newCodeVerifier } from "../lib/google";
 import { userIdForIdentity } from "../lib/accounts";
+import { claimAnonymousLibrary } from "../lib/claim";
 
 export const authRouter = Router();
 
@@ -208,5 +209,41 @@ authRouter.get("/google/callback", async (req: Request, res: Response) => {
   } catch (e) {
     console.error("[auth:google:callback]", e);
     return res.redirect(appRedirect({ auth_error: "exchange_failed" }));
+  }
+});
+
+// ------------------------------------------------------------------ claim --
+
+/**
+ * Hands the anonymous library under X-Owner-Key to the signed-in account.
+ *
+ * Called by the client on every load where a session exists and the key is
+ * not yet marked claimed — not only just after signing in. That is what makes
+ * a failed claim heal by itself, and what merges a second device's rows on a
+ * later login. It is idempotent: a repeat call moves nothing and says so.
+ *
+ * The client marks the key claimed only when `remaining` is 0, and never
+ * deletes it. See the long comment in server/lib/claim.ts for why that key is
+ * the recovery path rather than litter.
+ */
+authRouter.post("/claim", async (req: Request, res: Response) => {
+  const userId = req.session?.userId;
+  if (!userId) return res.status(401).json({ error: "Not signed in." });
+
+  const ownerKey = req.header("X-Owner-Key");
+  if (!ownerKey || ownerKey.length < 8 || ownerKey.length > 200) {
+    return res.status(400).json({ error: "Missing or invalid X-Owner-Key header." });
+  }
+
+  try {
+    const result = await claimAnonymousLibrary(userId, ownerKey);
+    return res.json(result);
+  } catch (e) {
+    // Nothing moved — the transaction rolled back — so the honest response is
+    // a failure the client will retry, not a partial success.
+    console.error("[auth:claim]", e);
+    return res
+      .status(500)
+      .json({ error: "Could not move your saved recipes into your account." });
   }
 });
