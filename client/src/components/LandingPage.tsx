@@ -2,34 +2,67 @@
  * client/src/components/LandingPage.tsx — public landing page.
  *
  * Shown to a visitor with nothing saved yet (see App.tsx for the exact
- * gate). Composes the existing Diagram component with its own local,
- * ephemeral `done` state — this demo never touches the API, the library,
- * or Postgres. Refreshing the page resets it; the "Reset" button lets a
- * visitor replay it without refreshing.
+ * gate). Composes the existing Diagram and StepsMode components with its
+ * own local, ephemeral `done` state — this demo never touches the API, the
+ * library, or Postgres. Refreshing the page resets it; the "Reset" button
+ * lets a visitor replay it without refreshing.
  *
- * Deliberately does not fork Diagram.tsx/layout.ts — it drives the same
- * completion rules (mark upstream done, undo clears downstream) with its
- * own copy of that small bit of logic, same as RecipeView does for the
- * real library.
+ * Deliberately does not fork Diagram.tsx/StepsMode.tsx/layout.ts — it drives
+ * the same completion rules (mark upstream done, undo clears downstream) with
+ * its own copy of that small bit of logic, same as RecipeView does for the
+ * real library. The teaching layer around it lives in DemoCoach.tsx and is
+ * likewise a wrapper: it reads the same `done` set and never reaches into
+ * either view's DOM.
+ *
+ * The Diagram/Steps toggle here is not RecipeView's chooser. RecipeView is a
+ * page shell around an Entry — back link, delete, clear progress, save as
+ * image — none of which mean anything for a demo with nothing to delete. So
+ * the toggle is local and the reuse happens one level down, at StepsMode,
+ * with a synthetic in-memory entry that never reaches storage.ts.
  */
 
-import React, { useCallback, useMemo, useState } from "react";
+import React, { useCallback, useMemo, useRef, useState } from "react";
 import { computeLayout } from "../../../shared/layout";
 import type { ThemeMode } from "../lib/theme";
+import type { Entry, StepTimer } from "../lib/storage";
 import Diagram from "./Diagram";
+import StepsMode from "./StepsMode";
 import ThemeToggle from "./ThemeToggle";
 import { DEMO_RECIPE, DEMO_PRECHECKED } from "../data/demo";
+import {
+  buildDemoGraph,
+  useCoachStage,
+  useCoachTips,
+  useWatchPlayer,
+  CoachLine,
+  CoachTip,
+  CoachLegend,
+} from "./DemoCoach";
 
 interface Props {
   themeMode: ThemeMode;
   onThemeChange: (mode: ThemeMode) => void;
   onTryOwnRecipe: () => void;
+  /** A URL typed into the completed demo's inline CTA. Carried through
+   *  sign-up so extraction can run as soon as the account exists — see
+   *  lib/pendingUrl.ts. */
+  onSubmitUrl: (url: string) => void;
 }
 
-export default function LandingPage({ themeMode, onThemeChange, onTryOwnRecipe }: Props) {
+type DemoMode = "diagram" | "steps";
+
+export default function LandingPage({
+  themeMode,
+  onThemeChange,
+  onTryOwnRecipe,
+  onSubmitUrl,
+}: Props) {
   const section = DEMO_RECIPE.sections[0];
   const [done, setDone] = useState<Set<string>>(() => new Set(DEMO_PRECHECKED));
   const [hovered, setHovered] = useState<string | null>(null);
+  const [mode, setMode] = useState<DemoMode>("diagram");
+  const [timer, setTimer] = useState<StepTimer | null>(null);
+  const [url, setUrl] = useState("");
 
   const { parents, inputs } = useMemo(() => {
     const parents = new Map<string, string>();
@@ -53,8 +86,39 @@ export default function LandingPage({ themeMode, onThemeChange, onTryOwnRecipe }
     [inputs]
   );
 
+  const graph = useMemo(() => buildDemoGraph(section, DEMO_PRECHECKED), [section]);
+
+  /**
+   * Autoplay order: a post-order walk from the root, so every input is
+   * emitted before the step that consumes it. Derived from the recipe rather
+   * than written out, so editing demo.ts can't leave a stale sequence behind.
+   * Anything already checked at the start is dropped — it is part of the
+   * baseline the player replays from.
+   */
+  const watchOrder = useMemo(() => {
+    const start = new Set(DEMO_PRECHECKED);
+    const out: string[] = [];
+    const seen = new Set<string>();
+    (function walk(id: string) {
+      if (seen.has(id)) return;
+      seen.add(id);
+      (inputs.get(id) || []).forEach(walk);
+      if (!start.has(id)) out.push(id);
+    })(section.root);
+    return out;
+  }, [section, inputs]);
+
+  const { playing, play, stop } = useWatchPlayer(watchOrder, DEMO_PRECHECKED, setDone);
+  const { stage, text: coachText } = useCoachStage(graph, done, DEMO_PRECHECKED, mode);
+  // Both tips describe the grid — amber cells, stepping rightwards — so they
+  // are held (not spent) while card mode is up, and while autoplay is driving.
+  const { text: tipText, resetTips } = useCoachTips(graph, done, {
+    suspended: playing || mode !== "diagram",
+  });
+
   const toggle = useCallback(
     (id: string) => {
+      stop();
       setDone((prev) => {
         const next = new Set(prev);
         if (next.has(id)) {
@@ -69,7 +133,7 @@ export default function LandingPage({ themeMode, onThemeChange, onTryOwnRecipe }
         return next;
       });
     },
-    [parents, upstreamOf]
+    [parents, upstreamOf, stop]
   );
 
   const preview = useMemo(() => {
@@ -79,7 +143,49 @@ export default function LandingPage({ themeMode, onThemeChange, onTryOwnRecipe }
     return up;
   }, [hovered, done, upstreamOf]);
 
-  const reset = useCallback(() => setDone(new Set(DEMO_PRECHECKED)), []);
+  const reset = useCallback(() => {
+    stop();
+    resetTips();
+    setTimer(null);
+    setDone(new Set(DEMO_PRECHECKED));
+  }, [stop, resetTips]);
+
+  const pickMode = useCallback(
+    (m: DemoMode) => {
+      stop();
+      setMode(m);
+    },
+    [stop]
+  );
+
+  /**
+   * StepsMode reads `entry` only for its timer, and writes back through
+   * onUpdate for the same reason. Synthesising one here keeps card mode on a
+   * demo that has no Entry, without touching storage.ts — nothing built here
+   * is ever handed to saveLibrary.
+   */
+  const demoEntry: Entry = useMemo(
+    () => ({
+      id: "demo",
+      recipe: DEMO_RECIPE,
+      done: [...done],
+      servings: DEMO_RECIPE.servings,
+      mode,
+      timer,
+      savedAt: 0,
+    }),
+    [done, mode, timer]
+  );
+
+  const urlRef = useRef<HTMLInputElement>(null);
+  const submitUrl = useCallback(() => {
+    const trimmed = url.trim();
+    if (!trimmed) {
+      urlRef.current?.focus();
+      return;
+    }
+    onSubmitUrl(trimmed);
+  }, [url, onSubmitUrl]);
 
   return (
     <div className="rd-root rd-landing">
@@ -110,30 +216,101 @@ export default function LandingPage({ themeMode, onThemeChange, onTryOwnRecipe }
 
         <div className="rd-landing-demo">
           <div className="rd-landing-demo-head">
-            <span className="rd-landing-demo-badge">
-              Live demo &mdash; click an ingredient or step
-            </span>
-            <button className="rd-btn" onClick={reset}>
-              Reset
-            </button>
+            <div className="rd-demo-modes" role="group" aria-label="Demo view">
+              <button
+                className={`rd-seg ${mode === "diagram" ? "is-on" : ""}`}
+                aria-pressed={mode === "diagram"}
+                onClick={() => pickMode("diagram")}
+              >
+                Diagram
+              </button>
+              <button
+                className={`rd-seg ${mode === "steps" ? "is-on" : ""}`}
+                aria-pressed={mode === "steps"}
+                onClick={() => pickMode("steps")}
+              >
+                Steps
+              </button>
+            </div>
+            <div className="rd-demo-actions">
+              <button
+                className="rd-btn"
+                onClick={playing ? stop : play}
+                aria-live="off"
+              >
+                {playing ? "Stop" : "Watch it"}
+              </button>
+              <button className="rd-btn" onClick={reset}>
+                Reset
+              </button>
+            </div>
           </div>
-          <Diagram
-            section={section}
-            index={0}
-            done={done}
-            preview={preview}
-            scale={1}
-            onToggle={toggle}
-            onHover={setHovered}
-          />
+
+          <CoachLine stage={stage} text={coachText} />
+          <CoachTip text={tipText} />
+
+          {mode === "diagram" ? (
+            <>
+              <Diagram
+                section={section}
+                index={0}
+                done={done}
+                preview={preview}
+                scale={1}
+                onToggle={toggle}
+                onHover={setHovered}
+              />
+              <CoachLegend />
+            </>
+          ) : (
+            <div className="rd-demo-steps">
+              <StepsMode
+                recipe={DEMO_RECIPE}
+                entry={demoEntry}
+                done={done}
+                scale={1}
+                onToggle={toggle}
+                onUpdate={(next) => setTimer(next.timer)}
+              />
+            </div>
+          )}
         </div>
 
-        <div className="rd-landing-cta">
-          <p className="rd-landing-cta-line">Have a recipe of your own to diagram?</p>
-          <button className="rd-go" onClick={onTryOwnRecipe}>
-            Try your own recipe
-          </button>
-        </div>
+        {stage === "complete" ? (
+          <div className="rd-landing-cta rd-cta-done">
+            <p className="rd-landing-cta-line">
+              Now do it with a recipe you actually want to cook.
+            </p>
+            <form
+              className="rd-cta-form"
+              onSubmit={(e) => {
+                e.preventDefault();
+                submitUrl();
+              }}
+            >
+              <input
+                ref={urlRef}
+                className="rd-cta-input"
+                type="url"
+                inputMode="url"
+                placeholder="Paste a recipe link"
+                aria-label="Recipe URL"
+                value={url}
+                onChange={(e) => setUrl(e.target.value)}
+              />
+              <button className="rd-go" type="submit">
+                Diagram it
+              </button>
+            </form>
+          </div>
+        ) : (
+          <div className="rd-landing-cta">
+            <p className="rd-landing-cta-line">Have a recipe of your own to diagram?</p>
+            <button className="rd-go" onClick={onTryOwnRecipe}>
+              Try your own recipe
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

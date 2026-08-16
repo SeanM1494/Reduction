@@ -7,6 +7,7 @@ import LandingPage from "./components/LandingPage";
 import SignupStub from "./components/SignupStub";
 import { useTheme } from "./hooks/useTheme";
 import { loadLibrary, saveLibrary, type Entry } from "./lib/storage";
+import { readPendingUrl, writePendingUrl, clearPendingUrl } from "./lib/pendingUrl";
 import {
   extractFromUrl,
   extractFromText,
@@ -21,7 +22,11 @@ export default function App() {
   const [openId, setOpenId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [showSignup, setShowSignup] = useState(false);
+  // A URL submitted from the finished demo. Seeded from sessionStorage so a
+  // reload mid-sign-up comes back to the sign-up flow still holding the link,
+  // rather than dumping the visitor back on the demo having lost it.
+  const [pendingUrl, setPendingUrl] = useState<string | null>(() => readPendingUrl());
+  const [showSignup, setShowSignup] = useState(() => readPendingUrl() !== null);
 
   useEffect(() => {
     let cancelled = false;
@@ -96,6 +101,46 @@ export default function App() {
     [addRecipe]
   );
 
+  const submitPendingUrl = useCallback((url: string) => {
+    writePendingUrl(url);
+    setPendingUrl(url);
+    setShowSignup(true);
+  }, []);
+
+  const leaveSignup = useCallback(() => {
+    // Going back to the demo abandons the link — leaving it stored would send
+    // the next reload straight back here for a URL they walked away from.
+    clearPendingUrl();
+    setPendingUrl(null);
+    setError(null);
+    setShowSignup(false);
+  }, []);
+
+  /**
+   * What "the account now exists" runs. Extraction happens before the URL is
+   * dropped, so a failure leaves the link intact and the visitor can retry
+   * instead of having to remember what they pasted. On success addRecipe
+   * opens the recipe, which takes the App out of the landing gate entirely.
+   */
+  const completeSignup = useCallback(async () => {
+    if (!pendingUrl) {
+      setShowSignup(false);
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      const { recipe } = await extractFromUrl(pendingUrl);
+      clearPendingUrl();
+      setPendingUrl(null);
+      addRecipe(recipe);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }, [pendingUrl, addRecipe]);
+
   const entry = library.find((e) => e.id === openId) || null;
   const { mode: themeMode, setMode: setThemeMode } = useTheme();
 
@@ -106,12 +151,19 @@ export default function App() {
   // very first /api/library GET is still in flight.
   if (loaded && library.length === 0 && !openId) {
     return showSignup ? (
-      <SignupStub onBack={() => setShowSignup(false)} />
+      <SignupStub
+        onBack={leaveSignup}
+        pendingUrl={pendingUrl}
+        busy={busy}
+        error={error}
+        onContinue={completeSignup}
+      />
     ) : (
       <LandingPage
         themeMode={themeMode}
         onThemeChange={setThemeMode}
         onTryOwnRecipe={() => setShowSignup(true)}
+        onSubmitUrl={submitPendingUrl}
       />
     );
   }
