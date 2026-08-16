@@ -1275,3 +1275,74 @@ body {
   .rd-legend { margin-top: 10px; }
   .rd-cta-form { max-width: none; }
 }
+
+/* ------------------------------------------------------------------
+ * Accounts: sign-in screen, sign-out, and the claim-retry banner.
+ * ------------------------------------------------------------------ */
+
+/* Shown only while the session is being resolved. Deliberately empty — a
+   spinner that flashes for 80ms is worse than a blank beat. */
+.rd-booting { min-height: 100%; }
+
+.rd-signin { max-width: 460px; margin: 40px 2px; }
+.rd-signin .rd-back { display: inline-block; margin-bottom: 18px; }
+.rd-signin .rd-hero-sub { margin-bottom: 24px; }
+
+.rd-signin-pending { margin: 0 0 22px; }
+.rd-signin-pending-label {
+  margin: 0 0 7px; font-size: 12.5px; color: var(--muted);
+}
+
+.rd-signin-providers { display: flex; flex-direction: column; gap: 10px; }
+.rd-provider {
+  display: flex; align-items: center; gap: 10px;
+  font: inherit; font-size: 14.5px; font-weight: 600; text-decoration: none;
+  color: var(--ink); background: var(--card);
+  border: 1px solid var(--line-strong); border-radius: 12px;
+  padding: 12px 16px; cursor: pointer;
+  box-shadow: 0 1px 2px rgba(var(--shadow-rgb), .08);
+}
+.rd-provider:hover { background: var(--hover-cell); }
+.rd-provider:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+.rd-provider.is-soon {
+  color: var(--faint); background: var(--ing-bg);
+  border-color: var(--line); box-shadow: none; cursor: default;
+}
+.rd-provider-soon {
+  margin-left: auto;
+  font-family: "Space Mono", ui-monospace, monospace;
+  font-size: 10.5px; letter-spacing: .06em; text-transform: uppercase;
+}
+
+/* "You're signed out" on the landing page. Only rendered for a browser that
+   has actually had an account — see the `returning` prop in LandingPage. */
+.rd-signed-out-note { margin: 10px 0 0; font-size: 13px; color: var(--muted); }
+.rd-linkish {
+  font: inherit; color: var(--ink); background: none; border: 0; padding: 0;
+  text-decoration: underline; text-underline-offset: 2px; cursor: pointer;
+}
+.rd-linkish:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+
+/* The claim did not complete. Says the rows are safe, because an empty
+   library and a lost library look identical from here. */
+.rd-claim-banner {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px;
+  font-size: 13.5px; color: var(--warm-ink);
+  background: var(--warm-bg); border: 1px solid var(--oven-line);
+  border-radius: 12px; padding: 11px 14px; margin: 0 2px 18px;
+}
+.rd-claim-banner span { flex: 1 1 260px; }
+
+@media (max-width: 520px) {
+  .rd-signin { margin: 24px 2px; }
+}
+
+@media (max-width: 520px) {
+  /* The landing nav has room for the brand and the theme toggle and nothing
+     else: adding a third control wraps it to a second row, which costs 41px
+     of a fold budget that has 43. Measured — see CLAUDE.md. Sign-in is still
+     reachable on a phone from the demo's call to action, and a returning
+     visitor gets the inline link in .rd-signed-out-note, which is the case
+     that actually needs it. */
+  .rd-signin-nav { display: none; }
+}
