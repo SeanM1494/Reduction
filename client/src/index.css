@@ -1130,3 +1130,122 @@ body {
 @media (max-width: 520px) {
   .rd-landing-demo-head { flex-direction: column; align-items: flex-start; }
 }
+
+/* ------------------------------------------------------------------
+ * Demo coaching layer (DemoCoach.tsx). Everything here is built from
+ * the tokens above — no new palette, no tooltip library. The tips are
+ * deliberately in-flow-but-reserved rather than floating: a popover
+ * anchored to a diagram cell would have to know Diagram's markup.
+ * ------------------------------------------------------------------ */
+.rd-sr-only {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+}
+
+/* Segmented Diagram / Step-by-step switch. */
+.rd-demo-modes {
+  display: inline-flex; background: var(--ing-bg);
+  border: 1px solid var(--line); border-radius: 11px; padding: 2px;
+}
+.rd-seg {
+  font: inherit; font-size: 12.5px; color: var(--muted);
+  background: none; border: 0; border-radius: 9px;
+  padding: 6px 12px; cursor: pointer;
+}
+.rd-seg.is-on {
+  background: var(--card); color: var(--ink); font-weight: 600;
+  box-shadow: 0 1px 2px rgba(var(--shadow-rgb), .1);
+}
+.rd-seg:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+.rd-demo-actions { display: flex; gap: 8px; }
+
+/* The coach line. One sentence, swapped by key so each new stage fades in
+   rather than the text changing under the reader. */
+.rd-coach { margin: 0 2px 8px; min-height: 20px; }
+.rd-coach-text {
+  display: inline-block; font-size: 13.5px; color: var(--ink);
+  animation: rd-coach-in .45s cubic-bezier(.2,.7,.3,1) both;
+}
+@keyframes rd-coach-in {
+  from { opacity: 0; transform: translateY(-3px); }
+  to { opacity: 1; transform: none; }
+}
+
+/* Reserved height, so a tip arriving never pushes the diagram down. */
+.rd-tip-slot { min-height: 34px; margin: 0 2px 6px; }
+.rd-tip {
+  margin: 0; font-size: 12.5px; line-height: 1.45;
+  color: var(--warm-ink); background: var(--warm-bg);
+  border: 1px solid var(--oven-line); border-left-width: 3px;
+  border-radius: 9px; padding: 7px 11px;
+  animation: rd-tip-in .3s ease both;
+}
+@keyframes rd-tip-in {
+  from { opacity: 0; transform: translateX(-4px); }
+  to { opacity: 1; transform: none; }
+}
+
+/* Legend: real cells, so it cannot drift from the diagram's own styling. */
+.rd-legend {
+  display: flex; align-items: center; gap: 10px; margin: 12px 2px 0;
+}
+.rd-legend-table { width: auto; }
+.rd-legend-table .rd-cell {
+  padding: 5px 10px; font-size: 11.5px; border-radius: 8px;
+  cursor: default; width: auto;
+  /* Pending cells get their fill from an inline depth tint in Diagram, which
+     a standalone legend cell has no depth to compute — so an outline stands
+     in, or "not yet" reads as an empty gap rather than a state. */
+  border: 1px solid var(--line);
+}
+.rd-legend-table .rd-cell .rd-op-label { font-size: 11.5px; }
+.rd-legend-table .rd-cell.is-ready::after { display: none; }
+
+.rd-demo-steps { margin-top: 4px; }
+
+/* Completed-demo CTA: the button becomes an inline URL field in place. */
+.rd-cta-done { flex-direction: column; align-items: flex-start; gap: 10px; }
+.rd-cta-form { display: flex; gap: 8px; width: 100%; max-width: 460px; }
+.rd-cta-input {
+  flex: 1; min-width: 0; font: inherit; font-size: 14px;
+  background: var(--card); color: var(--ink);
+  border: 1px solid var(--line); border-radius: 11px; padding: 9px 12px;
+}
+.rd-cta-input::placeholder { color: var(--faint); }
+.rd-cta-input:focus-visible { outline: 2px solid var(--ink); outline-offset: 1px; }
+
+.rd-signup-url {
+  font-family: "Space Mono", ui-monospace, monospace;
+  font-size: 12.5px; color: var(--muted); background: var(--ing-bg);
+  border: 1px solid var(--line); border-radius: 9px; padding: 9px 11px;
+  margin: 0 0 16px; overflow-wrap: anywhere;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rd-coach-text, .rd-tip { animation: none; }
+}
+
+@media (max-width: 520px) {
+  /* The whole diagram has to clear the fold on arrival, which on a 390x844
+     phone leaves about 74px to find above it. Three things give it up, in
+     order of what a first-time visitor loses least by:
+       - the tip slot stops reserving space while empty (40px). A tip then
+         nudges the diagram down when it appears, but that is mid-interaction
+         and never on arrival, which is the view that has to be right.
+       - the controls stay on one row rather than stacking (38px) — the
+         pre-coaching rule below stacked them for a badge that is now gone.
+       - the hero tightens up (26px).
+     The legend keeps its place: it sits under the diagram and is already
+     below the fold, which is the intended order of sacrifice. */
+  .rd-tip-slot { min-height: 0; margin-bottom: 4px; }
+  .rd-tip-slot:empty { margin-bottom: 0; }
+  .rd-landing-demo-head {
+    flex-direction: row; align-items: center; flex-wrap: wrap; gap: 8px;
+    margin-bottom: 10px;
+  }
+  .rd-landing-hero { margin-top: 18px; margin-bottom: 16px; }
+  .rd-landing-demo { padding: 14px; }
+  .rd-seg { padding: 6px 10px; }
+  .rd-legend { margin-top: 10px; }
+  .rd-cta-form { max-width: none; }
+}
