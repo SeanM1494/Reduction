@@ -14,7 +14,15 @@ import { eq } from "drizzle-orm";
 import { getDb } from "../db";
 import { users } from "../../shared/schema";
 import { clearCookie, serializeCookie } from "../lib/cookies";
-import { revokeSession, SESSION_COOKIE } from "../lib/sessions";
+import {
+  consumeAuthState,
+  createAuthState,
+  createSession,
+  revokeSession,
+  SESSION_COOKIE,
+} from "../lib/sessions";
+import { buildAuthUrl, exchangeCode, googleConfig, newCodeVerifier } from "../lib/google";
+import { userIdForIdentity } from "../lib/accounts";
 
 export const authRouter = Router();
 
@@ -85,4 +93,120 @@ authRouter.post("/logout", async (req: Request, res: Response) => {
   }
   clearSessionCookie(res);
   return res.json({ ok: true });
+});
+
+// ----------------------------------------------------------------- Google --
+
+/**
+ * Which providers are actually configured. The client asks first so it can
+ * render only the buttons that work — a sign-in button that 503s is worse
+ * than no button at all.
+ */
+authRouter.get("/providers", (_req: Request, res: Response) => {
+  return res.json({ providers: { google: !!googleConfig() } });
+});
+
+/**
+ * Where the SPA is sent when a handshake ends. Always a path on this origin,
+ * never anything derived from the request, so this can't become an open
+ * redirect.
+ */
+function appRedirect(params: Record<string, string | null | undefined>): string {
+  const qs = new URLSearchParams();
+  for (const [k, v] of Object.entries(params)) if (v) qs.set(k, v);
+  const query = qs.toString();
+  return query ? `/?${query}` : "/";
+}
+
+/** A recipe URL is the only thing we will carry through a handshake, and only
+ *  if it plausibly is one. Anything else is dropped rather than rejected —
+ *  a malformed pending URL should not cost someone their sign-in. */
+function safePendingUrl(raw: unknown): string | null {
+  if (typeof raw !== "string" || raw.length > 2000) return null;
+  try {
+    const u = new URL(raw);
+    return u.protocol === "http:" || u.protocol === "https:" ? u.toString() : null;
+  } catch {
+    return null;
+  }
+}
+
+authRouter.get("/google/start", async (req: Request, res: Response) => {
+  const cfg = googleConfig();
+  if (!cfg) {
+    return res
+      .status(503)
+      .json({ error: "Google sign-in is not configured on this server." });
+  }
+
+  try {
+    const codeVerifier = newCodeVerifier();
+    const state = await createAuthState({
+      provider: "google",
+      pkceVerifier: codeVerifier,
+      // Rides in the database rather than the browser, so it survives a
+      // provider that lands in a new tab and a sign-up finished on another
+      // device — see the auth_states comment in shared/schema.ts.
+      pendingUrl: safePendingUrl(req.query.pendingUrl),
+    });
+    return res.redirect(buildAuthUrl(cfg, { state, codeVerifier }));
+  } catch (e) {
+    console.error("[auth:google:start]", e);
+    return res.redirect(appRedirect({ auth_error: "start_failed" }));
+  }
+});
+
+/**
+ * Errors here redirect into the app with a code rather than rendering JSON:
+ * this URL is reached by a top-level browser navigation, so whatever it
+ * returns is what the visitor is left looking at.
+ */
+authRouter.get("/google/callback", async (req: Request, res: Response) => {
+  const cfg = googleConfig();
+  if (!cfg) return res.redirect(appRedirect({ auth_error: "not_configured" }));
+
+  // The visitor declined the consent screen, or Google refused outright.
+  if (typeof req.query.error === "string") {
+    return res.redirect(appRedirect({ auth_error: "declined" }));
+  }
+
+  const code = typeof req.query.code === "string" ? req.query.code : null;
+  const state = typeof req.query.state === "string" ? req.query.state : null;
+  if (!code || !state) return res.redirect(appRedirect({ auth_error: "bad_callback" }));
+
+  try {
+    // Single-use: the read is a DELETE ... RETURNING, so a replayed state
+    // finds nothing and cannot re-trigger the extraction its pending URL
+    // would have started.
+    const pending = await consumeAuthState(state, "google");
+    if (!pending || !pending.pkceVerifier) {
+      return res.redirect(appRedirect({ auth_error: "expired" }));
+    }
+
+    const identity = await exchangeCode(cfg, {
+      code,
+      codeVerifier: pending.pkceVerifier,
+      state,
+    });
+
+    const userId = await userIdForIdentity({
+      provider: "google",
+      subject: identity.subject,
+      email: identity.email,
+      emailVerified: identity.emailVerified,
+      displayName: identity.displayName,
+    });
+
+    const { token } = await createSession(userId);
+    setSessionCookie(res, token);
+
+    // signed_in tells the client to run the claim; see the claim endpoint for
+    // what happens when that call fails.
+    return res.redirect(
+      appRedirect({ signed_in: "1", pending: pending.pendingUrl ?? undefined })
+    );
+  } catch (e) {
+    console.error("[auth:google:callback]", e);
+    return res.redirect(appRedirect({ auth_error: "exchange_failed" }));
+  }
 });
