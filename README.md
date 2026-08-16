@@ -75,3 +75,4 @@ client/src/
 ## Deploying
 
 `.replit` is set up for Autoscale: builds with `npm run build`, runs `npm start`. Add `ANTHROPIC_API_KEY` to the deployment's secrets separately — it doesn't inherit from the workspace.
+# Reduction
