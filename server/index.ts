@@ -11,6 +11,9 @@ import fs from "node:fs";
 import { fileURLToPath } from "node:url";
 import { recipesRouter } from "./routes/recipes";
 import { libraryRouter } from "./routes/library";
+import { authRouter } from "./routes/auth";
+import { attachSession } from "./middleware/session";
+import { startSessionSweep } from "./lib/sessions";
 import { cleanupSeedRecipes } from "./cleanupSeed";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -23,6 +26,12 @@ const app = express();
 app.use(express.json({ limit: "12mb" }));
 
 app.get("/api/health", (_req, res) => res.json({ ok: true }));
+
+// Before the routers: every request gets to know whether it is signed in.
+// Nothing is rejected here — see middleware/session.ts.
+app.use(attachSession);
+
+app.use("/api/auth", authRouter);
 app.use("/api/recipes", recipesRouter);
 app.use("/api/library", libraryRouter);
 
@@ -45,3 +54,4 @@ app.listen(PORT, "0.0.0.0", () => {
 });
 
 cleanupSeedRecipes();
+startSessionSweep();
