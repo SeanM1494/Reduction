@@ -22,11 +22,10 @@ import type { Recipe } from "./layout";
 export const recipes = pgTable(
   "recipes",
   {
-    // Client-generated, e.g. crypto.randomUUID() — but the bootstrap demo
-    // recipe hardcodes the literal id "seed", so id alone is NOT globally
-    // unique: every first-time browser bootstraps its own "seed" row. The
-    // key must be (owner_key, id) together, or the second browser to ever
-    // load the app collides on the first browser's demo recipe.
+    // Client-generated, e.g. crypto.randomUUID(). id alone is NOT globally
+    // unique across owners, so the key is (owner_key, id) together — see
+    // server/cleanupSeed.ts for why a literal id of "seed" is still
+    // special-cased even though nothing creates one anymore.
     id: text("id").notNull(),
     ownerKey: text("owner_key").notNull(),
     recipe: jsonb("recipe").$type<Recipe>().notNull(),

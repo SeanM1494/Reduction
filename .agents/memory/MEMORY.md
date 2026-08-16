@@ -5,3 +5,6 @@
 - [localStorage-to-API migration via diffing adapter](local-to-api-migration-diffing-adapter.md) — keep loadLibrary/saveLibrary's shape, diff against a lastSynced snapshot internally to avoid touching call sites.
 - [Anonymous owner-key seed collision](anonymous-owner-key-seed-collision.md) — a hardcoded demo-record id needs a composite (owner_key, id) PK, or the second-ever browser collides with the first's.
 - [Cooking-mode card sequence](cooking-mode-card-sequence.md) — derive linear order from computeLayout's own rows (sort by row,col) instead of re-deriving DFS; timers as absolute endsAt, not intervals.
+- [No-accounts-yet gating](no-accounts-gating.md) — with no auth system, "logged out" was approximated as "library has 0 saved recipes"; treat as provisional, to be replaced when real accounts ship.
+- [Prod data cleanup without prod DB write access](prod-cleanup-via-startup-check.md) — executeSql is read-only for production, so a data fix that must reach prod has to ship as an idempotent guarded startup check, not a one-off script.
+- [Headless browser unavailable in this sandbox](headless-browser-sandbox-limits.md) — Playwright/Chromium can't launch here (missing system shared libs like libglib); use the Screenshot tool or code-based/CSS reasoning for viewport checks instead.

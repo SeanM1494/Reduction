@@ -1092,3 +1092,41 @@ body {
   .rfx-bar-track { width: 60px; }
   .rfx-content { padding: 18px 16px; }
 }
+
+/* ------------------------------------------------------------------
+ * Public landing page (shown when a visitor has nothing saved yet) and
+ * its sign-up stub. Reuses .rd-hero-title/.rd-hero-sub/.rd-go/.rd-btn
+ * rather than introducing a second type scale.
+ * ------------------------------------------------------------------ */
+.rd-brand-static { cursor: default; }
+.rd-landing-hero { margin: 34px 2px 26px; max-width: 640px; }
+.rd-landing-hero .rd-hero-sub { max-width: 52ch; }
+
+.rd-landing-demo {
+  background: var(--card); border: 1px solid var(--line);
+  border-radius: 17px; padding: 18px; margin-bottom: 30px;
+  box-shadow: 0 1px 3px rgba(var(--shadow-rgb), .08);
+}
+.rd-landing-demo-head {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 12px; margin-bottom: 14px;
+}
+.rd-landing-demo-badge {
+  font-family: "Space Mono", ui-monospace, monospace;
+  font-size: 11px; letter-spacing: .03em; color: var(--warm-ink);
+  background: var(--warm-bg); border: 1px solid var(--oven-line);
+  border-radius: 99px; padding: 5px 12px;
+}
+
+.rd-landing-cta {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 16px;
+  margin: 0 2px 40px;
+}
+.rd-landing-cta-line { margin: 0; font-size: 14.5px; color: var(--muted); }
+
+.rd-signup-stub { max-width: 520px; margin: 40px 2px; }
+.rd-signup-stub .rd-back { display: inline-block; margin-bottom: 18px; }
+
+@media (max-width: 520px) {
+  .rd-landing-demo-head { flex-direction: column; align-items: flex-start; }
+}

@@ -11,6 +11,7 @@ import fs from "node:fs";
 import { fileURLToPath } from "node:url";
 import { recipesRouter } from "./routes/recipes";
 import { libraryRouter } from "./routes/library";
+import { cleanupSeedRecipes } from "./cleanupSeed";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const isProd = process.env.NODE_ENV === "production";
@@ -42,3 +43,5 @@ app.listen(PORT, "0.0.0.0", () => {
       : `API listening on ${PORT} (client runs on 5000)`
   );
 });
+
+cleanupSeedRecipes();

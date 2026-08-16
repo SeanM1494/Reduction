@@ -3,6 +3,8 @@ import Home from "./components/Home";
 import RecipeView from "./components/RecipeView";
 import SearchBar from "./components/SearchBar";
 import ThemeToggle from "./components/ThemeToggle";
+import LandingPage from "./components/LandingPage";
+import SignupStub from "./components/SignupStub";
 import { useTheme } from "./hooks/useTheme";
 import { loadLibrary, saveLibrary, type Entry } from "./lib/storage";
 import {
@@ -11,14 +13,15 @@ import {
   extractFromFile,
   fileToBase64,
 } from "./lib/api";
-import { SEED } from "./data/seed";
 import type { Recipe } from "../../shared/layout";
 
 export default function App() {
   const [library, setLibrary] = useState<Entry[]>([]);
+  const [loaded, setLoaded] = useState(false);
   const [openId, setOpenId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showSignup, setShowSignup] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -26,27 +29,11 @@ export default function App() {
       try {
         const saved = await loadLibrary();
         if (cancelled) return;
-        if (saved.length) {
-          setLibrary(saved);
-          return;
-        }
-        // First run gets the cheesecake so the app is not an empty box.
-        // Delete this branch and the seed file once you have real recipes.
-        const seeded: Entry[] = [
-          {
-            id: "seed",
-            recipe: SEED,
-            done: [],
-            servings: SEED.servings,
-            mode: "diagram",
-            timer: null,
-            savedAt: Date.now(),
-          },
-        ];
-        setLibrary(seeded);
-        saveLibrary(seeded);
+        setLibrary(saved);
       } catch (e) {
         if (!cancelled) setError((e as Error).message);
+      } finally {
+        if (!cancelled) setLoaded(true);
       }
     })();
     return () => {
@@ -111,6 +98,23 @@ export default function App() {
 
   const entry = library.find((e) => e.id === openId) || null;
   const { mode: themeMode, setMode: setThemeMode } = useTheme();
+
+  // No accounts yet, so "logged out" is approximated as "nothing saved" —
+  // the only signal this app currently has. A returning user with at least
+  // one saved recipe always skips straight past this. Gated on `loaded` so
+  // a user who DOES have recipes never flashes the landing page while the
+  // very first /api/library GET is still in flight.
+  if (loaded && library.length === 0 && !openId) {
+    return showSignup ? (
+      <SignupStub onBack={() => setShowSignup(false)} />
+    ) : (
+      <LandingPage
+        themeMode={themeMode}
+        onThemeChange={setThemeMode}
+        onTryOwnRecipe={() => setShowSignup(true)}
+      />
+    );
+  }
 
   return (
     <div className="rd-root">
