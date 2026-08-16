@@ -1103,9 +1103,23 @@ body {
 .rd-landing-hero .rd-hero-sub { max-width: 52ch; }
 
 .rd-landing-demo {
+  position: relative;
   background: var(--card); border: 1px solid var(--line);
   border-radius: 17px; padding: 18px; margin-bottom: 30px;
   box-shadow: 0 1px 3px rgba(var(--shadow-rgb), .08);
+}
+
+/* Sits on the card's top edge, in the gap the hero's bottom margin already
+   leaves — so the demo is labelled as a sample without taking a single pixel
+   of the fold budget the diagram below needs (see CLAUDE.md). Quiet enough
+   not to compete with the grid: it is a label on a showcase, not a warning. */
+.rd-demo-tag {
+  position: absolute; top: -11px; left: 16px; z-index: 2;
+  font-family: "Space Mono", ui-monospace, monospace;
+  font-size: 10.5px; letter-spacing: .09em; text-transform: uppercase;
+  color: var(--warm-ink); background: var(--warm-bg);
+  border: 1px solid var(--oven-line); border-radius: 99px;
+  padding: 2px 9px; line-height: 1.45;
 }
 .rd-landing-demo-head {
   display: flex; align-items: center; justify-content: space-between;
