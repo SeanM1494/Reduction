@@ -1237,8 +1237,20 @@ body {
        - the hero tightens up (26px).
      The legend keeps its place: it sits under the diagram and is already
      below the fold, which is the intended order of sacrifice. */
-  .rd-tip-slot { min-height: 0; margin-bottom: 4px; }
+  /* Measured: in flow, a two-line tip pushed the diagram down 57px and back
+     up again on dismissal — a jump under the reader's finger, and enough to
+     drop the last row below the fold while it was up. So on a phone the tip
+     floats over the top of the diagram instead of displacing it. It is
+     pointer-events: none, so a tap meant for a cell underneath still lands on
+     that cell; dismissal is the next interaction either way. Desktop keeps
+     the in-flow reserved slot, where there is room and nothing shifts. */
+  .rd-tip-slot { min-height: 0; margin-bottom: 4px; position: relative; }
   .rd-tip-slot:empty { margin-bottom: 0; }
+  .rd-tip-slot .rd-tip {
+    position: absolute; top: 0; left: 0; right: 0; z-index: 5;
+    pointer-events: none;
+    box-shadow: 0 6px 16px rgba(var(--shadow-rgb), .17);
+  }
   .rd-landing-demo-head {
     flex-direction: row; align-items: center; flex-wrap: wrap; gap: 8px;
     margin-bottom: 10px;
