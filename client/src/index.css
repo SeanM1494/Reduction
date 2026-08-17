@@ -1406,3 +1406,9 @@ body {
   .rd-json-actions { width: 100%; }
   .rd-json-actions .rd-go, .rd-json-actions .rd-btn { flex: 1; }
 }
+
+/* Recipes saved on this device without an account. Takes the place of the
+   signed-out note rather than stacking with it — the two describe different
+   browsers and never both apply, and the fold has no room for both anyway. */
+.rd-saved-note { margin: 10px 0 0; font-size: 13px; color: var(--muted); }
+.rd-saved-note strong { color: var(--ink); font-weight: 600; }

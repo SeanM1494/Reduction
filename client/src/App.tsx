@@ -96,6 +96,12 @@ export default function App() {
    *  account. The rows are safe and still anonymous; this only means the move
    *  has not happened yet. */
   const [claimFailed, setClaimFailed] = useState(false);
+  /**
+   * A logged-out visitor has asked to see the recipes saved on this device.
+   * Reaching the library without a session is now a deliberate act rather
+   * than something that happens because a row happened to exist.
+   */
+  const [showAnonLibrary, setShowAnonLibrary] = useState(false);
 
   /**
    * Boot order matters: session, then claim, then library.
@@ -298,6 +304,7 @@ export default function App() {
     setOpenId(null);
     setLibrary([]);
     setShowSignup(false);
+    setShowAnonLibrary(false);
   }, []);
 
   const entry = library.find((e) => e.id === openId) || null;
@@ -310,11 +317,15 @@ export default function App() {
     return <div className="rd-root rd-booting" aria-busy="true" />;
   }
 
-  // Signed-in state now comes from the session, not from guessing at library
-  // size. Emptiness still matters, but only for the signed-out case:
-  // anonymous saving survives, so a visitor with anonymous recipes and no
-  // account belongs in the app, not on the landing page.
-  if (!user && library.length === 0 && !openId) {
+  // No session means the landing page. Row count gets no vote: deciding the
+  // view partly on whether the anonymous library happened to have rows made
+  // the same URL in the same browser show the library one load and the demo
+  // the next, depending only on what the server had at that instant.
+  //
+  // `openId` still wins, so a recipe someone just extracted opens directly
+  // rather than bouncing them back to the demo, and showAnonLibrary is the
+  // explicit way in for a logged-out browser that has saved things.
+  if (!user && !openId && !showAnonLibrary) {
     return showSignup ? (
       <SignIn
         pendingUrl={pendingUrl}
@@ -336,6 +347,11 @@ export default function App() {
         // has actually had an account. A first-time visitor has nothing
         // waiting for them and should not be told otherwise.
         returning={ownerKeyClaimedBy() !== null}
+        // Recipes saved on this device without an account. Anonymous saving
+        // is a supported state — it is what the demo's funnel produces — so
+        // it needs a door, or those recipes are unreachable after a reload.
+        savedCount={library.length}
+        onViewLibrary={() => setShowAnonLibrary(true)}
       />
     );
   }

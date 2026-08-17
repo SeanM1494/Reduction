@@ -140,33 +140,67 @@ function readLocalEntries(): Entry[] | null {
   }
 }
 
-function renameLocalKeyToMigrated(): void {
+/**
+ * Has the one-time migration already run in this browser?
+ *
+ * This is the marker, and it is checked before the local key is read at all.
+ * Testing "has the local key gone?" instead — which is what this used to do —
+ * makes the migration re-runnable forever the moment removing that key fails,
+ * and it fails quietly in private browsing and on a full quota.
+ *
+ * That mattered more than it sounds. migrateLocalLibraryIfNeeded only runs
+ * when the server returns an empty library, which is precisely the state left
+ * behind by cleanupSeedRecipes deleting the retired cheesecake seed on boot.
+ * So a browser still carrying the pre-Postgres local library would re-upload
+ * that seed every time the server had just removed it: boot deletes the row,
+ * the next load puts it back, and the landing page and the library took turns
+ * appearing for the same person at the same URL. Once the migration is marked
+ * done, it never reads that key again and the row stays deleted.
+ */
+function migrationAlreadyRan(): boolean {
   try {
-    const raw = localStorage.getItem(LOCAL_KEY);
-    if (raw == null) return;
-    localStorage.setItem(MIGRATED_KEY, raw);
-    localStorage.removeItem(LOCAL_KEY);
+    return localStorage.getItem(MIGRATED_KEY) !== null;
   } catch {
-    // Non-fatal: worst case the migration check runs again next load, and
-    // it is idempotent (see the remoteIds check below), so nothing gets
-    // duplicated.
+    // No storage to consult means no local library to migrate either.
+    return true;
   }
 }
 
-/** Runs before anything else can touch local data. Only migrates when the
- *  server has nothing yet, so a browser that already migrated (or never had
- *  local data) never re-sends anything. */
-async function migrateLocalLibraryIfNeeded(remoteIds: Set<string>): Promise<void> {
-  const local = readLocalEntries();
-  if (!local || local.length === 0) return;
+/** Records the migration as done, keeping the local data under the migrated
+ *  key rather than deleting it. The marker is written *before* the original
+ *  is removed, so a failure to remove can never re-arm the migration. */
+function markMigrated(): void {
+  try {
+    const raw = localStorage.getItem(LOCAL_KEY);
+    localStorage.setItem(MIGRATED_KEY, raw ?? "[]");
+    if (raw != null) localStorage.removeItem(LOCAL_KEY);
+  } catch {
+    // Storage refused the write. The migration still succeeded server-side;
+    // worst case it is attempted once more next load, and every entry now
+    // conflicts, which is treated as already-migrated below.
+  }
+}
 
-  const pending = local.filter((e) => !remoteIds.has(e.id));
-  if (pending.length === 0) {
-    // A previous attempt already got everything onto the server; this run
-    // just finishes the rename.
-    renameLocalKeyToMigrated();
+/**
+ * Moves a pre-Postgres localStorage library onto the server, exactly once.
+ *
+ * Runs only when the server has nothing yet, and only when the marker above
+ * says it has never run. A partial failure leaves everything local untouched
+ * and throws, so the user is told their data is still only in this browser —
+ * that half is deliberate and unchanged.
+ */
+async function migrateLocalLibraryIfNeeded(remoteIds: Set<string>): Promise<void> {
+  if (migrationAlreadyRan()) return;
+
+  const local = readLocalEntries();
+  if (!local || local.length === 0) {
+    // Nothing to move, but record that this browser is done so the question
+    // is never asked again.
+    markMigrated();
     return;
   }
+
+  const pending = local.filter((e) => !remoteIds.has(e.id));
 
   for (const entry of pending) {
     try {
@@ -183,9 +217,15 @@ async function migrateLocalLibraryIfNeeded(remoteIds: Set<string>): Promise<void
         }),
       });
     } catch (e) {
-      // Leave the local key exactly as it was — do not rename or clear it —
-      // and surface the failure so the user knows their data is still only
-      // local, not that it is gone.
+      // A 409 means the server already holds a row with this id, which is
+      // this entry already migrated — the success case, not a failure. Left
+      // as an error it would abort the run, the marker would never be set,
+      // and the whole migration would retry on every empty library forever.
+      if (/already exists/i.test((e as Error).message)) continue;
+
+      // Anything else: leave the local key exactly as it was — do not mark,
+      // do not clear — and surface it so the user knows their data is still
+      // only local, not that it is gone.
       throw new Error(
         `Moving your saved recipes to the database stopped partway, on ` +
           `"${entry.recipe?.title ?? entry.id}" (${(e as Error).message}). ` +
@@ -194,7 +234,7 @@ async function migrateLocalLibraryIfNeeded(remoteIds: Set<string>): Promise<void
       );
     }
   }
-  renameLocalKeyToMigrated();
+  markMigrated();
 }
 
 // Snapshot of what the server last confirmed, so saveLibrary() can send only

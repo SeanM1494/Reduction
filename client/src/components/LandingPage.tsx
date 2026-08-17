@@ -49,6 +49,12 @@ interface Props {
    *  lib/pendingUrl.ts. */
   onSubmitUrl: (url: string) => void;
   onSignIn: () => void;
+  /** Recipes saved on this device with no account. Anonymous saving is a
+   *  supported state, not an edge case — it is what the demo's funnel
+   *  produces — so it needs a visible door or those recipes become
+   *  unreachable after a reload. */
+  savedCount: number;
+  onViewLibrary: () => void;
   /** This browser has had an account before — so it is signed out, not new,
    *  and its saved recipes are behind sign-in rather than gone. Someone
    *  arriving for the first time is told no such thing. */
@@ -63,6 +69,8 @@ export default function LandingPage({
   onTryOwnRecipe,
   onSubmitUrl,
   onSignIn,
+  savedCount,
+  onViewLibrary,
   returning,
 }: Props) {
   const section = DEMO_RECIPE.sections[0];
@@ -227,7 +235,21 @@ export default function LandingPage({
             &mdash; and what you can do right now. Try it below, no account
             needed.
           </p>
-          {returning ? (
+          {savedCount > 0 ? (
+            /* Kept to one line at 390px on purpose: two lines left the
+               diagram 3px above the fold, which is not a margin. The
+               "sign in to keep them" pitch lives in the call to action
+               below the demo rather than being paid for twice. */
+            <p className="rd-saved-note">
+              <strong>
+                {savedCount} recipe{savedCount === 1 ? "" : "s"} saved on this
+                device.
+              </strong>{" "}
+              <button className="rd-linkish" onClick={onViewLibrary}>
+                View {savedCount === 1 ? "it" : "them"}
+              </button>
+            </p>
+          ) : returning ? (
             <p className="rd-signed-out-note">
               You&rsquo;re signed out &mdash;{" "}
               <button className="rd-linkish" onClick={onSignIn}>

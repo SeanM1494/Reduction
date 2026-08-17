@@ -35,10 +35,35 @@ async function authApi(path: string, init?: RequestInit): Promise<any> {
   return body;
 }
 
-/** Who is signed in, or null. The replacement for guessing from library size. */
+/**
+ * Who is signed in, or null. The replacement for guessing from library size.
+ *
+ * Retried once on failure, with a short pause. /api/auth/me resolves the
+ * session against the database, and the first query after a sleeping Repl
+ * wakes can fail — while the library request a moment later succeeds against
+ * a warm pool. Failing open to "logged out" then costs a signed-in user their
+ * whole app shell, because no session now means the landing page rather than
+ * merely a missing name in the nav. One retry converts the common transient
+ * case into a slightly slower load instead.
+ *
+ * A second failure still resolves to logged out. That direction is the safe
+ * one: it shows less than the user is entitled to, never more.
+ */
 export async function fetchSession(): Promise<SessionUser | null> {
-  const body = await authApi("/me", { method: "GET" });
-  return body.user ?? null;
+  try {
+    const body = await authApi("/me", { method: "GET" });
+    return body.user ?? null;
+  } catch (first) {
+    await new Promise((resolve) => setTimeout(resolve, 400));
+    try {
+      const body = await authApi("/me", { method: "GET" });
+      return body.user ?? null;
+    } catch {
+      // Rethrow the original: it is the one that describes what actually
+      // started going wrong.
+      throw first;
+    }
+  }
 }
 
 /** Which sign-in buttons are worth rendering. */
