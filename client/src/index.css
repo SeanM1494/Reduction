@@ -27,8 +27,8 @@ body {
   --ink-hover: #141009;
   --muted: #6b6154;
   --faint: #948b7d;
-  --page: #ecdcbb;
-  --card: #fffcf3;
+  --page: #e8d5b2;
+  --card: #fffdf6;
   --ing-bg: #f7f0df;
   --line: #e4d6b8;
   --line-strong: #c9b48a;
@@ -38,15 +38,15 @@ body {
   --oven-line: #efc0b8;
   --shadow-rgb: 60, 38, 16;
 
-  --warm-bg: #f7dad5;
-  --warm-line: #c8362b;
-  --warm-ink: #7a2118;
-  --warm-hover: #f0beb5;
+  --warm-bg: #f9d6cf;
+  --warm-line: #b93326;
+  --warm-ink: #6e1c14;
+  --warm-hover: #f2bcb2;
 
-  --cool-bg: #e7ecd5;
-  --cool-line: #7c9b54;
-  --cool-ink: #445a2e;
-  --cool-hover: #d7e0be;
+  --cool-bg: #eaeedd;
+  --cool-line: #8ba668;
+  --cool-ink: #5b6d47;
+  --cool-hover: #dde4c8;
 
   --preview-bg: #fbe4df;
   --preview-hover: #f8dad3;
@@ -70,8 +70,8 @@ body {
   --ink-hover: #ffffff;
   --muted: #a89f8f;
   --faint: #786f60;
-  --page: #151210;
-  --card: #252220;
+  --page: #131110;
+  --card: #2a2622;
   --ing-bg: #2b2723;
   --line: #3b352c;
   --line-strong: #4e463a;
@@ -81,15 +81,15 @@ body {
   --oven-line: rgba(226, 98, 79, .45);
   --shadow-rgb: 10, 5, 2;
 
-  --warm-bg: rgba(224, 96, 78, .22);
-  --warm-line: #e2624f;
-  --warm-ink: #ffb4a3;
-  --warm-hover: rgba(224, 96, 78, .34);
+  --warm-bg: rgba(228, 92, 70, .26);
+  --warm-line: #ef6a53;
+  --warm-ink: #ffc0b1;
+  --warm-hover: rgba(228, 92, 70, .38);
 
-  --cool-bg: rgba(133, 168, 92, .2);
-  --cool-line: #9ac264;
-  --cool-ink: #cfe3ab;
-  --cool-hover: rgba(133, 168, 92, .32);
+  --cool-bg: rgba(133, 168, 92, .16);
+  --cool-line: #8aac5b;
+  --cool-ink: #b3c795;
+  --cool-hover: rgba(133, 168, 92, .26);
 
   --preview-bg: rgba(224, 96, 78, .16);
   --preview-hover: rgba(224, 96, 78, .26);
@@ -104,14 +104,14 @@ body {
 /* Colorblind-safe accents (an Okabe-Ito style blue/orange pair) replace the
    red/green warm-cool pair, on whichever base (light or dark) is active. */
 :root[data-colorblind="true"] {
-  --warm-bg: #fbe6c8;
-  --warm-line: #b5680a;
+  --warm-bg: #fce3bd;
+  --warm-line: #a35c05;
   --warm-ink: #6b3d05;
   --warm-hover: #f3d29c;
 
-  --cool-bg: #d8e8f5;
-  --cool-line: #0072b2;
-  --cool-ink: #0a3d5c;
+  --cool-bg: #dfebf6;
+  --cool-line: #3d8fc4;
+  --cool-ink: #2b5f7e;
   --cool-hover: #b9d9ee;
 
   --preview-bg: #fbe6c8;
@@ -348,14 +348,14 @@ body {
   text-align: left; font: inherit; cursor: pointer;
   background: var(--card); border: 1px solid var(--line);
   border-radius: 15px; padding: 15px 16px 14px;
-  box-shadow: 0 1px 1px rgba(var(--shadow-rgb), .14),
-              0 6px 16px -9px rgba(var(--shadow-rgb), .32);
+  box-shadow: 0 1px 2px rgba(var(--shadow-rgb), .18),
+              0 9px 22px -11px rgba(var(--shadow-rgb), .34);
   transition: border-color .15s ease, box-shadow .15s ease;
 }
 .rd-card:hover {
   border-color: var(--line-strong);
-  box-shadow: 0 1px 1px rgba(var(--shadow-rgb), .16),
-              0 10px 24px -8px rgba(var(--shadow-rgb), .38);
+  box-shadow: 0 1px 2px rgba(var(--shadow-rgb), .20),
+              0 14px 28px -10px rgba(var(--shadow-rgb), .40);
 }
 .rd-card-title {
   font-family: "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
@@ -393,8 +393,8 @@ body {
 .rd-head {
   background: var(--card); border: 1px solid var(--line); border-radius: 17px;
   padding: 22px 22px 18px; margin-bottom: 26px;
-  box-shadow: 0 1px 1px rgba(var(--shadow-rgb), .14),
-              0 12px 28px -12px rgba(var(--shadow-rgb), .3);
+  box-shadow: 0 1px 2px rgba(var(--shadow-rgb), .18),
+              0 16px 34px -14px rgba(var(--shadow-rgb), .32);
 }
 .rd-head-top {
   display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap;
@@ -479,8 +479,8 @@ body {
   overflow-x: auto; overflow-y: hidden;
   border: 1px solid var(--line-strong); border-radius: 14px;
   background: var(--card);
-  box-shadow: 0 1px 1px rgba(var(--shadow-rgb), .16),
-              0 10px 24px -10px rgba(var(--shadow-rgb), .32);
+  box-shadow: 0 1px 2px rgba(var(--shadow-rgb), .22),
+              0 14px 30px -12px rgba(var(--shadow-rgb), .34);
   -webkit-overflow-scrolling: touch;
 }
 /* Separate borders, not collapse: collapsed borders belong to the table, so a
@@ -519,7 +519,7 @@ body {
 .rd-ing-body { display: flex; flex-direction: column; gap: 3px; }
 .rd-amount {
   font-family: "Space Mono", ui-monospace, monospace;
-  font-size: 11px; color: color-mix(in srgb, var(--muted) 45%, var(--ink) 55%);
+  font-size: 11px; color: color-mix(in srgb, var(--muted) 26%, var(--ink) 74%);
   letter-spacing: -.01em;
 }
 .rd-name { font-size: 14px; line-height: 1.25; }
@@ -539,8 +539,9 @@ body {
 /* Ready is steps only, so the accent always means "next action". */
 .rd-op.is-ready {
   background: var(--warm-bg);
-  box-shadow: inset 0 0 0 1.5px var(--warm-line),
-              0 0 0 3px color-mix(in srgb, var(--warm-line) 16%, transparent);
+  box-shadow: inset 0 0 0 2px var(--warm-line),
+              0 0 0 3px color-mix(in srgb, var(--warm-line) 20%, transparent),
+              0 0 16px -2px color-mix(in srgb, var(--warm-line) 42%, transparent);
 }
 .rd-op.is-ready .rd-op-label { color: var(--warm-ink); font-weight: 600; }
 .rd-op.is-ready::after {
@@ -553,7 +554,7 @@ body {
 @keyframes rd-pulse { 0%, 100% { opacity: .55; } 50% { opacity: .10; } }
 
 .rd-cell.is-done {
-  background: color-mix(in srgb, var(--cool-bg) 62%, var(--card));
+  background: color-mix(in srgb, var(--cool-bg) 52%, var(--card));
   color: var(--cool-ink);
 }
 .rd-ing.is-done {
@@ -562,7 +563,7 @@ body {
 .rd-cell.is-done .rd-amount { color: var(--cool-ink); }
 .rd-cell.is-done .rd-op-label { color: var(--cool-ink); }
 .rd-cell.is-done .rd-name,
-.rd-cell.is-done .rd-op-label { text-decoration: line-through; opacity: .66; }
+.rd-cell.is-done .rd-op-label { text-decoration: line-through; opacity: .58; }
 .rd-cell.is-done .rd-mark {
   position: absolute; top: 6px; right: 7px; width: 12px; height: 12px;
   background: var(--cool-ink);
@@ -657,8 +658,8 @@ body {
 .rd-steps-card {
   background: var(--card); border: 1px solid var(--line); border-radius: 17px;
   padding: 24px 26px 20px; max-width: 560px;
-  box-shadow: 0 1px 1px rgba(var(--shadow-rgb), .14),
-              0 12px 28px -12px rgba(var(--shadow-rgb), .3);
+  box-shadow: 0 1px 2px rgba(var(--shadow-rgb), .18),
+              0 16px 34px -14px rgba(var(--shadow-rgb), .32);
 }
 /* The frozen outgoing card during a "done"/"back" sweep — stacked on top of
    the incoming card (already in normal flow, so it sets the stage's height)
