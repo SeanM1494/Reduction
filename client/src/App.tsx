@@ -97,11 +97,16 @@ export default function App() {
    *  has not happened yet. */
   const [claimFailed, setClaimFailed] = useState(false);
   /**
-   * A logged-out visitor has asked to see the recipes saved on this device.
-   * Reaching the library without a session is now a deliberate act rather
-   * than something that happens because a row happened to exist.
+   * The one recipe a signed-out visitor has extracted, held in memory.
+   *
+   * It is also stored server-side against the browser's trial so it survives
+   * sign-up — see server/lib/trial.ts. That is one recipe pending an account,
+   * not an anonymous library, and the distinction is the whole design: "no
+   * anonymous library" means many recipes indefinitely, not that a visitor
+   * loses the diagram they are looking at the moment they decide to keep it.
    */
-  const [showAnonLibrary, setShowAnonLibrary] = useState(false);
+  const [trialEntry, setTrialEntry] = useState<Entry | null>(null);
+  const [trialSpent, setTrialSpent] = useState(false);
 
   /**
    * Boot order matters: session, then claim, then library.
@@ -140,15 +145,18 @@ export default function App() {
         }
       }
 
-      try {
-        const saved = await loadLibrary();
-        if (cancelled) return;
-        setLibrary(saved);
-      } catch (e) {
-        if (!cancelled) setError((e as Error).message);
-      } finally {
-        if (!cancelled) setLoaded(true);
+      // Only a signed-in visitor has a library. A signed-out one has at most
+      // the single trial recipe, which lives in memory and on its own row.
+      if (signedIn) {
+        try {
+          const saved = await loadLibrary();
+          if (cancelled) return;
+          setLibrary(saved);
+        } catch (e) {
+          if (!cancelled) setError((e as Error).message);
+        }
       }
+      if (!cancelled) setLoaded(true);
     })();
     return () => {
       cancelled = true;
@@ -195,19 +203,41 @@ export default function App() {
   );
 
   const run = useCallback(
-    async (fn: () => Promise<{ recipe: Recipe }>) => {
+    async (fn: () => Promise<{ recipe: Recipe; trialRecipeId?: string }>) => {
       setBusy(true);
       setError(null);
       try {
-        const { recipe } = await fn();
-        addRecipe(recipe);
+        const { recipe, trialRecipeId } = await fn();
+        if (user) {
+          addRecipe(recipe);
+          return;
+        }
+        // Signed out: the server has already parked this against the trial,
+        // so nothing is POSTed here. It is shown from memory and claimed into
+        // the account at sign-up.
+        const entry: Entry = {
+          id: trialRecipeId ?? newEntryId(),
+          recipe,
+          done: [],
+          servings: recipe.servings,
+          mode: "diagram",
+          timer: null,
+          savedAt: Date.now(),
+        };
+        setTrialEntry(entry);
+        setTrialSpent(true);
+        setOpenId(entry.id);
       } catch (e) {
-        setError((e as Error).message);
+        const message = (e as Error).message;
+        // The server refused because the free extraction is gone. Say so and
+        // let the paste box become the sign-up path.
+        if (/free recipe/i.test(message)) setTrialSpent(true);
+        setError(message);
       } finally {
         setBusy(false);
       }
     },
-    [addRecipe]
+    [addRecipe, user]
   );
 
   // Same extraction call and the same addRecipe/setOpenId success path as
@@ -304,10 +334,13 @@ export default function App() {
     setOpenId(null);
     setLibrary([]);
     setShowSignup(false);
-    setShowAnonLibrary(false);
+    setTrialEntry(null);
   }, []);
 
-  const entry = library.find((e) => e.id === openId) || null;
+  const entry =
+    library.find((e) => e.id === openId) ||
+    (trialEntry && trialEntry.id === openId ? trialEntry : null);
+  const viewingTrial = !!entry && entry === trialEntry;
   const { mode: themeMode, setMode: setThemeMode } = useTheme();
 
   // Nothing renders until the session is known. Without this a signed-in
@@ -323,9 +356,9 @@ export default function App() {
   // the next, depending only on what the server had at that instant.
   //
   // `openId` still wins, so a recipe someone just extracted opens directly
-  // rather than bouncing them back to the demo, and showAnonLibrary is the
-  // explicit way in for a logged-out browser that has saved things.
-  if (!user && !openId && !showAnonLibrary) {
+  // rather than bouncing them back to the demo — which is what the free
+  // trial extraction relies on.
+  if (!user && !openId) {
     return showSignup ? (
       <SignIn
         pendingUrl={pendingUrl}
@@ -347,11 +380,9 @@ export default function App() {
         // has actually had an account. A first-time visitor has nothing
         // waiting for them and should not be told otherwise.
         returning={ownerKeyClaimedBy() !== null}
-        // Recipes saved on this device without an account. Anonymous saving
-        // is a supported state — it is what the demo's funnel produces — so
-        // it needs a door, or those recipes are unreachable after a reload.
-        savedCount={library.length}
-        onViewLibrary={() => setShowAnonLibrary(true)}
+        onExtractUrl={(url) => run(() => extractFromUrl(url))}
+        trialSpent={trialSpent}
+        busy={busy}
       />
     );
   }
@@ -403,18 +434,43 @@ export default function App() {
           </div>
         ) : null}
         {entry ? (
-          <RecipeView
-            key={entry.id}
-            entry={entry}
-            onBack={() => setOpenId(null)}
-            onUpdate={(updated) =>
-              persist(library.map((e) => (e.id === updated.id ? updated : e)))
-            }
-            onDelete={() => {
-              persist(library.filter((e) => e.id !== entry.id));
-              setOpenId(null);
-            }}
-          />
+          <>
+            {/* The strongest moment to ask, and the worst to lose their work.
+                Persistent rather than modal: they are reading a diagram, and
+                a dialog over it would be the wrong trade. The recipe is
+                already stored against the trial, so signing up moves it into
+                the account rather than re-extracting it. */}
+            {viewingTrial ? (
+              <div className="rd-trial-bar" role="status">
+                <span>
+                  <strong>This is your free recipe.</strong> Create an account
+                  and it stays in your library.
+                </span>
+                <button className="rd-go" onClick={() => setShowSignup(true)}>
+                  Save it
+                </button>
+              </div>
+            ) : null}
+            <RecipeView
+              key={entry.id}
+              entry={entry}
+              onBack={() => setOpenId(null)}
+              onUpdate={(updated) => {
+                // A trial recipe has no account to be saved against yet, so
+                // progress stays in memory until sign-up claims the row.
+                if (viewingTrial) setTrialEntry(updated);
+                else persist(library.map((e) => (e.id === updated.id ? updated : e)));
+              }}
+              onDelete={() => {
+                if (viewingTrial) {
+                  setTrialEntry(null);
+                } else {
+                  persist(library.filter((e) => e.id !== entry.id));
+                }
+                setOpenId(null);
+              }}
+            />
+          </>
         ) : (
           <Home
             library={library}

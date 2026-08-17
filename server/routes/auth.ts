@@ -24,6 +24,7 @@ import {
 import { buildAuthUrl, exchangeCode, googleConfig, newCodeVerifier } from "../lib/google";
 import { userIdForIdentity } from "../lib/accounts";
 import { claimAnonymousLibrary } from "../lib/claim";
+import { claimTrialRecipe, readTrialId } from "../lib/trial";
 
 export const authRouter = Router();
 
@@ -149,6 +150,9 @@ authRouter.get("/google/start", async (req: Request, res: Response) => {
       // provider that lands in a new tab and a sign-up finished on another
       // device — see the auth_states comment in shared/schema.ts.
       pendingUrl: safePendingUrl(req.query.pendingUrl),
+      // Whatever this browser already extracted for free follows it into the
+      // account it is about to make.
+      trialId: readTrialId(req),
     });
     return res.redirect(buildAuthUrl(cfg, { state, codeVerifier }));
   } catch (e) {
@@ -200,6 +204,22 @@ authRouter.get("/google/callback", async (req: Request, res: Response) => {
 
     const { token } = await createSession(userId);
     setSessionCookie(res, token);
+
+    /**
+     * The trial recipe becomes theirs here, before they land. Someone who
+     * extracted a recipe, looked at its diagram and signed up to keep it must
+     * find it waiting — that is the whole promise of the free extraction.
+     * A failure is logged and left: the trial row is untouched, so the
+     * client's claim call retries it on the next load.
+     */
+    const trialId = pending.trialId ?? readTrialId(req);
+    if (trialId) {
+      try {
+        await claimTrialRecipe(userId, trialId);
+      } catch (e) {
+        console.error("[auth:trial-claim]", e);
+      }
+    }
 
     // signed_in tells the client to run the claim; see the claim endpoint for
     // what happens when that call fails.

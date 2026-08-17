@@ -179,6 +179,61 @@ unblocks anyone stuck with a bad parse today and costs almost nothing.
 
 ---
 
+## 7. An account to save, with one free extraction
+
+**Status:** built. The rule: a visitor gets **one free extraction per
+browser** and sees the full diagram, interactive. Saving it — and extracting
+anything else — needs an account. The demo is untouched: it writes nothing
+and costs nothing.
+
+**The distinction that keeps this honest.** The rule is *no anonymous
+library* — many recipes, indefinitely, for a browser that never signed in. It
+is **not** *no anonymous persistence*: one recipe, pending signup, is the
+mechanism that makes the funnel humane. Someone looking at a diagram of a
+recipe they chose is at the best possible moment to be asked for an account
+and the worst possible moment to lose their work. The trial row is that one
+recipe. It is not a library, and deleting it to satisfy a rule it does not
+violate would strand exactly the work the rule exists to protect. The same
+paragraph is in `server/lib/trial.ts` and `shared/schema.ts`, because that is
+where someone will be standing when they consider "fixing" it.
+
+**Where the counter lives:** an httpOnly cookie plus a `trials` row. Not
+localStorage, which the page can edit; not IP, which punishes flatmates,
+offices and cafés — one person on a shared network would spend everyone's
+trial. A private window still resets it, and that is accepted: this is a
+nudge for someone who would otherwise never sign up, not a paywall. What
+matters is that the check is **server-side in the extract route**, so a
+modified client still gets a 402.
+
+**The allowance is taken before the work and refunded on failure.** Spending
+first is what stops two simultaneous requests both coming back free; refunding
+is what stops a dead link costing someone their one try.
+
+**What happens after it is spent:** the paste box stays and still accepts a
+URL — it routes to sign-up carrying it, through the pending-URL funnel that
+already existed. A visitor who has typed a link is never met with a dead end.
+
+**Per browser, forever.** No reset. A resetting trial teaches people to wait
+rather than sign up, and makes "why can't I extract?" depend on a date they
+cannot see.
+
+**Retired:** the anonymous library, and the "N recipes saved on this device ·
+View them" line.
+
+**Not retired: `claimAnonymousLibrary`.** Existing anonymous rows still need
+claiming, and dropping the only path that can claim them would strand real
+data. It is marked for removal in `server/lib/claim.ts` and comes out only
+after a query confirms zero unclaimed anonymous rows:
+
+```sql
+select count(*) from recipes where user_id is null and owner_key not like 'trial:%';
+```
+
+**Untouched:** the demo, and the pending-URL funnel, which rides in
+`auth_states` rather than the anonymous library.
+
+---
+
 ## Suggested order
 
 1. **OAuth** — everything else assumes accounts.

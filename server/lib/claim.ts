@@ -5,6 +5,17 @@
  * the signature below, so they describe what the merge owes rather than what
  * it happens to do.
  *
+ * VESTIGIAL, BUT NOT YET REMOVABLE. Anonymous saving is retired (ROADMAP #7):
+ * a signed-out browser no longer builds a library, so nothing new will ever
+ * need claiming. Rows saved before that change still do, and deleting the
+ * only path that can claim them would strand real data. Remove this only
+ * after confirming there is nothing left to strand:
+ *
+ *   select count(*) from recipes
+ *   where user_id is null and owner_key not like 'trial:%';
+ *
+ * Zero, twice, a month apart — then this and claimIfNeeded can go.
+ *
  * This is the one function in the codebase where a bug loses someone's data
  * instead of rendering something wrong. A recipe that silently fails to
  * arrive is indistinguishable, to the person who saved it, from one that was

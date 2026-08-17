@@ -104,6 +104,10 @@ export async function createAuthState(input: {
   provider: string;
   pkceVerifier?: string | null;
   pendingUrl?: string | null;
+  /** The browser's free-extraction trial, so the recipe it already produced
+   *  lands in the account being created — and survives finishing sign-up in
+   *  another tab, which a cookie alone would not. */
+  trialId?: string | null;
 }): Promise<string> {
   const db = getDb();
   const state = newToken();
@@ -112,6 +116,7 @@ export async function createAuthState(input: {
     provider: input.provider,
     pkceVerifier: input.pkceVerifier ?? null,
     pendingUrl: input.pendingUrl ?? null,
+    trialId: input.trialId ?? null,
     expiresAt: new Date(Date.now() + AUTH_STATE_TTL_MS),
   });
   return state;
@@ -128,7 +133,11 @@ export async function createAuthState(input: {
 export async function consumeAuthState(
   state: string,
   provider: string
-): Promise<{ pkceVerifier: string | null; pendingUrl: string | null } | null> {
+): Promise<{
+  pkceVerifier: string | null;
+  pendingUrl: string | null;
+  trialId: string | null;
+} | null> {
   const db = getDb();
   const [row] = await db
     .delete(authStates)
@@ -136,7 +145,11 @@ export async function consumeAuthState(
     .returning();
   if (!row) return null;
   if (new Date(row.expiresAt).getTime() <= Date.now()) return null;
-  return { pkceVerifier: row.pkceVerifier, pendingUrl: row.pendingUrl };
+  return {
+    pkceVerifier: row.pkceVerifier,
+    pendingUrl: row.pendingUrl,
+    trialId: row.trialId,
+  };
 }
 
 // ------------------------------------------------------------------ sweep --

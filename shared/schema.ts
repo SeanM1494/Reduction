@@ -160,6 +160,35 @@ export const sessions = pgTable(
 );
 
 /**
+ * One browser's free extraction.
+ *
+ * THE RULE THIS DOES NOT BREAK. "No anonymous library" means many recipes,
+ * indefinitely, for a browser that never signed in. It does not mean no
+ * anonymous persistence: one recipe, pending signup, is the mechanism that
+ * makes the funnel humane — a visitor looking at a diagram of a recipe they
+ * chose is at the best possible moment to be asked for an account and the
+ * worst possible moment to lose their work. This row is that one recipe. It
+ * is not a library, and removing it to satisfy a rule it does not violate
+ * would strand exactly the work the rule exists to protect.
+ *
+ * The recipe itself lives in `recipes` under owner_key `trial:<id>` with a
+ * null user_id, so signing up is the same UPDATE the library claim performs
+ * rather than a second way of owning a row.
+ */
+export const trials = pgTable("trials", {
+  /** Random token, also the value of the httpOnly rd_trial cookie. */
+  id: text("id").primaryKey(),
+  /** The recipes row this trial produced, once it has been spent. */
+  recipeId: text("recipe_id"),
+  /** Null until the extraction is spent. Set atomically, so two requests
+   *  racing the same cookie cannot both get a free extraction. */
+  usedAt: timestamp("used_at", { withTimezone: true }),
+  claimedByUserId: text("claimed_by_user_id"),
+  claimedAt: timestamp("claimed_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
+});
+
+/**
  * One in-flight OAuth handshake. Holds the CSRF `state`, the PKCE verifier,
  * and the pending recipe URL a visitor submitted before signing up.
  *
@@ -176,6 +205,11 @@ export const authStates = pgTable(
     provider: text("provider").notNull(),
     pkceVerifier: text("pkce_verifier"),
     pendingUrl: text("pending_url"),
+    /** The browser's trial, carried through the handshake so the recipe it
+     *  already extracted lands in the account it is about to create — and
+     *  survives finishing sign-up in another tab or on another device, which
+     *  a cookie alone would not. */
+    trialId: text("trial_id"),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
     expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
   },

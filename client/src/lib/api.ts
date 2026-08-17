@@ -15,6 +15,15 @@ interface ExtractResponse {
   };
 }
 
+/** The extract response. `trialRecipeId` is present only for a signed-out
+ *  visitor spending their free extraction — it is the id the server parked
+ *  the recipe under, and the id the account will find it at after sign-up. */
+export interface ExtractResult {
+  recipe: Recipe;
+  meta?: unknown;
+  trialRecipeId?: string;
+}
+
 async function post(body: unknown): Promise<ExtractResponse> {
   const res = await fetch("/api/recipes/extract", {
     method: "POST",

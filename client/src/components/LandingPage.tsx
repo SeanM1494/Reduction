@@ -49,12 +49,13 @@ interface Props {
    *  lib/pendingUrl.ts. */
   onSubmitUrl: (url: string) => void;
   onSignIn: () => void;
-  /** Recipes saved on this device with no account. Anonymous saving is a
-   *  supported state, not an edge case — it is what the demo's funnel
-   *  produces — so it needs a visible door or those recipes become
-   *  unreachable after a reload. */
-  savedCount: number;
-  onViewLibrary: () => void;
+  /** Runs this browser's one free extraction. */
+  onExtractUrl: (url: string) => void;
+  /** The free extraction has been used. The box stays — it just routes to
+   *  sign-up instead, so a visitor who has typed a URL is never met with a
+   *  dead end. */
+  trialSpent: boolean;
+  busy: boolean;
   /** This browser has had an account before — so it is signed out, not new,
    *  and its saved recipes are behind sign-in rather than gone. Someone
    *  arriving for the first time is told no such thing. */
@@ -69,8 +70,9 @@ export default function LandingPage({
   onTryOwnRecipe,
   onSubmitUrl,
   onSignIn,
-  savedCount,
-  onViewLibrary,
+  onExtractUrl,
+  trialSpent,
+  busy,
   returning,
 }: Props) {
   const section = DEMO_RECIPE.sections[0];
@@ -238,8 +240,13 @@ export default function LandingPage({
       urlRef.current?.focus();
       return;
     }
-    onSubmitUrl(trimmed);
-  }, [url, onSubmitUrl]);
+    // Spent, and the visitor has typed a URL anyway: carry it into sign-up
+    // rather than refusing it. The pending-URL funnel already exists for
+    // exactly this, and a dead end here would waste the strongest intent
+    // signal the page ever gets.
+    if (trialSpent) onSubmitUrl(trimmed);
+    else onExtractUrl(trimmed);
+  }, [url, onSubmitUrl, onExtractUrl, trialSpent]);
 
   return (
     <div className="rd-root rd-landing">
@@ -264,27 +271,15 @@ export default function LandingPage({
       <div className="rd-shell rd-landing-flow">
         {/* State, not pitch. Only rendered for a returning or already-saving
             visitor, so a first arrival pays nothing for it. */}
-        {savedCount > 0 || returning ? (
+        {returning ? (
           <div className="rd-landing-notes">
-            {savedCount > 0 ? (
-              <p className="rd-saved-note">
-                <strong>
-                  {savedCount} recipe{savedCount === 1 ? "" : "s"} saved on this
-                  device.
-                </strong>{" "}
-                <button className="rd-linkish" onClick={onViewLibrary}>
-                  View {savedCount === 1 ? "it" : "them"}
-                </button>
-              </p>
-            ) : (
-              <p className="rd-signed-out-note">
-                You&rsquo;re signed out &mdash;{" "}
-                <button className="rd-linkish" onClick={onSignIn}>
-                  sign in to see your saved recipes
-                </button>
-                .
-              </p>
-            )}
+            <p className="rd-signed-out-note">
+              You&rsquo;re signed out &mdash;{" "}
+              <button className="rd-linkish" onClick={onSignIn}>
+                sign in to see your saved recipes
+              </button>
+              .
+            </p>
           </div>
         ) : null}
 
@@ -401,38 +396,34 @@ export default function LandingPage({
         </section>
 
         <div className="rd-landing-cta">
-          {stage === "complete" ? (
-            <>
-              <p className="rd-landing-cta-line">
-                Now do it with a recipe you actually want to cook.
-              </p>
-              <form
-                className="rd-cta-form"
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  submitUrl();
-                }}
-              >
-                <input
-                  ref={urlRef}
-                  className="rd-cta-input"
-                  type="url"
-                  inputMode="url"
-                  placeholder="Paste a recipe link"
-                  aria-label="Recipe URL"
-                  value={url}
-                  onChange={(e) => setUrl(e.target.value)}
-                />
-                <button className="rd-go" type="submit">
-                  Diagram it
-                </button>
-              </form>
-            </>
-          ) : (
-            <p className="rd-landing-cta-line">
-              Paste any recipe link and get a diagram you can cook from.
-            </p>
-          )}
+          <p className="rd-landing-cta-line">
+            {stage === "complete"
+              ? "Now do it with a recipe you actually want to cook."
+              : trialSpent
+                ? "You\u2019ve used your free recipe. An account keeps them all."
+                : "Paste any recipe link and get a diagram you can cook from \u2014 one free, no account."}
+          </p>
+          <form
+            className="rd-cta-form"
+            onSubmit={(e) => {
+              e.preventDefault();
+              submitUrl();
+            }}
+          >
+            <input
+              ref={urlRef}
+              className="rd-cta-input"
+              type="url"
+              inputMode="url"
+              placeholder="Paste a recipe link"
+              aria-label="Recipe URL"
+              value={url}
+              onChange={(e) => setUrl(e.target.value)}
+            />
+            <button className="rd-go" type="submit" disabled={busy}>
+              {busy ? "Reading\u2026" : trialSpent ? "Sign up to diagram it" : "Diagram it"}
+            </button>
+          </form>
           <button className="rd-go rd-cta-account" onClick={onTryOwnRecipe}>
             Create an account or log in
           </button>

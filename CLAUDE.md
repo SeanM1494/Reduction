@@ -114,19 +114,28 @@ On top of `npm run check` and `npm test`:
 ## The landing page: the demo is opt-in
 
 The page is a welcome line, an invitation, and the account path. The demo
-sits behind **"See guacamole as a reduction →"** and is collapsed by default.
+sits behind **"See guacamole as a reduction (demo) →"** and is collapsed by
+default. The account path is now a working paste box plus a sign-up button,
+because the free extraction is taken from there (ROADMAP #7).
 
 **This retired the fold budget rather than trimming it.** Collapsed, the page
-ends at 369px on every phone 390px and up and 484px on a 320px phone —
-clearing even an iPhone SE by 84px. Earlier versions fought for 30px.
+clears the fold on every profile — but the trial's paste box and account
+button cost the smallest phone about 56px, so an iPhone SE is back to a thin
+margin and is the one to watch.
 
 | device | viewport | collapsed page ends | spare |
 |---|---|---|---|
-| iPhone 13 Pro Max | 428×746 | 369 | +377 |
-| Pixel 5 | 393×727 | 369 | +358 |
-| iPhone 13 | 390×664 | 369 | +295 |
-| Galaxy S9+ | 320×658 | 484 | +174 |
-| iPhone SE | 320×568 | 484 | +84 |
+| iPhone 13 Pro Max | 428×746 | 409 | +337 |
+| Pixel 5 | 393×727 | 421 | +306 |
+| iPhone 13 | 390×664 | 421 | +243 |
+| Galaxy S9+ | 320×658 | 540 | +118 |
+| iPhone SE | 320×568 | 540 | +28 |
+
+**Where the SE's next 52px is, if it is ever needed.** `.rd-nav` is 72px tall
+at 390px and **124px at 320px** — the brand (44px) and `.rd-nav-right`
+(252px) do not fit on one row, so it wraps. That wrap costs the SE more than
+its entire remaining margin, and it is the cheapest reclaim available. Trim
+the landing copy only after that, not before.
 
 Expanding scrolls the invitation to the top of the viewport and the demo
 unfolds beneath it. The diagram then ends at roughly the fold (666 against

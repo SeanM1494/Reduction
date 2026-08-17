@@ -10,7 +10,7 @@
  * validateRecipe, which means the client renderer can draw it.
  */
 
-import { Router, type Request, type Response } from "express";
+import { Router, type Request, type Response, type NextFunction } from "express";
 import crypto from "node:crypto";
 import { eq, lt } from "drizzle-orm";
 import { getDb } from "../db";
@@ -20,6 +20,8 @@ import { structureRecipe } from "../lib/structureRecipe";
 import { structureRecipeFromUrl } from "../lib/fetchViaClaude";
 import { searchRecipes, type SearchResult } from "../lib/searchRecipes";
 import type { Recipe } from "../../shared/layout";
+import { userIdOf } from "../middleware/session";
+import { ensureTrialId, refundTrial, spendTrial, storeTrialRecipe } from "../lib/trial";
 
 export const recipesRouter = Router();
 
@@ -89,7 +91,75 @@ function overLimit(ip: string): boolean {
   return hits.length > RATE_LIMIT;
 }
 
-recipesRouter.post("/extract", async (req: Request, res: Response) => {
+/**
+ * One free extraction per browser, enforced here rather than in the client.
+ *
+ * Signed-in requests pass straight through — existing behaviour is unchanged.
+ * For everyone else the allowance is taken *before* the work, atomically, so
+ * two requests fired at once cannot both come back free; a failure refunds it
+ * in sendRecipe below, because a broken URL should not cost someone their one
+ * try.
+ *
+ * The count lives in an httpOnly cookie plus a row, not in localStorage. That
+ * is not unbypassable — clearing cookies or a private window resets it — but
+ * the check being server-side is what matters: a modified client still gets a
+ * 402 here.
+ */
+async function requireExtractionAllowance(
+  req: Request,
+  res: Response,
+  next: NextFunction
+) {
+  if (userIdOf(req)) return next();
+
+  try {
+    const trialId = ensureTrialId(req, res);
+    const spent = await spendTrial(trialId);
+    if (!spent) {
+      return res.status(402).json({
+        error: "You have used your free recipe. Create an account to keep going.",
+        code: "trial_spent",
+      });
+    }
+    (req as Request & { trialId?: string }).trialId = trialId;
+    return next();
+  } catch (e) {
+    console.error("[trial:gate]", e);
+    return res.status(500).json({ error: "Could not start that extraction." });
+  }
+}
+
+/**
+ * Sends a successful extraction, parking the recipe against the trial first
+ * when the visitor has no account. That parked row is the one recipe a
+ * signed-out browser persists — see the long note in server/lib/trial.ts for
+ * why that does not contradict "no anonymous library".
+ */
+async function sendRecipe(
+  req: Request,
+  res: Response,
+  body: { recipe: unknown; meta: unknown }
+) {
+  const trialId = (req as Request & { trialId?: string }).trialId;
+  if (!trialId) return res.json(body);
+  try {
+    const servings =
+      typeof (body.recipe as { servings?: unknown })?.servings === "number"
+        ? ((body.recipe as { servings: number }).servings)
+        : null;
+    const trialRecipeId = await storeTrialRecipe(trialId, body.recipe, servings);
+    return res.json({ ...body, trialRecipeId });
+  } catch (e) {
+    // The extraction worked; only the parking failed. Send it anyway — the
+    // visitor still sees their diagram — and refund so they are not charged
+    // for a recipe we could not keep for them.
+    console.error("[trial:store]", e);
+    await refundTrial(trialId).catch(() => {});
+    return res.json(body);
+  }
+}
+
+recipesRouter.post("/extract", requireExtractionAllowance, async (req: Request, res: Response) => {
   const ip = req.ip ?? "unknown";
   if (overLimit(ip))
     return res
@@ -110,7 +180,7 @@ recipesRouter.post("/extract", async (req: Request, res: Response) => {
       const key = hash(`url:${url}`);
       const cached = await cacheGet(key);
       if (cached)
-        return res.json({ recipe: cached, meta: { cached: true, source: "url" } });
+        return sendRecipe(req, res, { recipe: cached, meta: { cached: true, source: "url" } });
 
       let recipe;
       let attempts = 1;
@@ -146,7 +216,7 @@ recipesRouter.post("/extract", async (req: Request, res: Response) => {
       }
 
       await cacheSet(key, recipe);
-      return res.json({
+      return sendRecipe(req, res, {
         recipe,
         meta: {
           cached: false,
@@ -172,11 +242,11 @@ recipesRouter.post("/extract", async (req: Request, res: Response) => {
       const key = hash(`text:${clipped}`);
       const cached = await cacheGet(key);
       if (cached)
-        return res.json({ recipe: cached, meta: { cached: true, source: "text" } });
+        return sendRecipe(req, res, { recipe: cached, meta: { cached: true, source: "text" } });
 
       const { recipe, attempts, repaired } = await structureRecipe({ text: clipped });
       await cacheSet(key, recipe);
-      return res.json({
+      return sendRecipe(req, res, {
         recipe,
         meta: { cached: false, source: "text", attempts, repaired },
       });
@@ -198,17 +268,23 @@ recipesRouter.post("/extract", async (req: Request, res: Response) => {
     const key = hash(`file:${clean.slice(0, 4096)}:${clean.length}`);
     const cached = await cacheGet(key);
     if (cached)
-      return res.json({ recipe: cached, meta: { cached: true, source: "file" } });
+      return sendRecipe(req, res, { recipe: cached, meta: { cached: true, source: "file" } });
 
     const { recipe, attempts, repaired } = await structureRecipe({
       file: { data: clean, mediaType },
     });
     await cacheSet(key, recipe);
-    return res.json({
+    return sendRecipe(req, res, {
       recipe,
       meta: { cached: false, source: "file", attempts, repaired },
     });
   } catch (e) {
+    // The allowance was taken before the work started, so a failure here has
+    // to give it back — a dead link or a model timeout must not cost someone
+    // their one free extraction.
+    const trialId = (req as Request & { trialId?: string }).trialId;
+    if (trialId) await refundTrial(trialId).catch(() => {});
+
     const err = e as Error & { details?: string[] };
     const isUserFacing =
       /URL|host|page|refused|too large|too short|recipe from that page|valid diagram/i.test(
