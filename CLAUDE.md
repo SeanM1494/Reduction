@@ -4,6 +4,12 @@ Architecture, scripts and deployment are in `README.md` — this file is for
 constraints that are easy to break without noticing, because nothing in the
 build fails when you do.
 
+**Read `ROADMAP.md` alongside this file.** It is the feature queue: what is
+being built next, in what order, and what each item actually requires — the
+constraints and open decisions, not just the titles. This file says how to
+work in the repo; that one says what the work is for, and several entries
+carry decisions that are cheap to make now and expensive to retrofit.
+
 ## How work gets committed
 
 **Commit directly to `main` and push.** Do not create a branch, and do not
