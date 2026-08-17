@@ -306,7 +306,7 @@ export default function LandingPage({
             aria-controls="rd-demo-panel"
             onClick={() => setDemoOpen((o) => !o)}
           >
-            <span>See guacamole as a reduction</span>
+            <span>See guacamole as a reduction (demo)</span>
             <span className="rd-invite-arrow" aria-hidden="true">
               &rarr;
             </span>
