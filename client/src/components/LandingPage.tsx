@@ -48,6 +48,11 @@ interface Props {
    *  sign-up so extraction can run as soon as the account exists — see
    *  lib/pendingUrl.ts. */
   onSubmitUrl: (url: string) => void;
+  onSignIn: () => void;
+  /** This browser has had an account before — so it is signed out, not new,
+   *  and its saved recipes are behind sign-in rather than gone. Someone
+   *  arriving for the first time is told no such thing. */
+  returning: boolean;
 }
 
 type DemoMode = "diagram" | "steps";
@@ -57,6 +62,8 @@ export default function LandingPage({
   onThemeChange,
   onTryOwnRecipe,
   onSubmitUrl,
+  onSignIn,
+  returning,
 }: Props) {
   const section = DEMO_RECIPE.sections[0];
   const [done, setDone] = useState<Set<string>>(() => new Set(DEMO_PRECHECKED));
@@ -205,6 +212,9 @@ export default function LandingPage({
           Reduction
         </span>
         <div className="rd-nav-right">
+          <button className="rd-btn rd-signin-nav" onClick={onSignIn}>
+            Sign in
+          </button>
           <ThemeToggle mode={themeMode} onChange={onThemeChange} />
         </div>
       </nav>
@@ -217,6 +227,15 @@ export default function LandingPage({
             &mdash; and what you can do right now. Try it below, no account
             needed.
           </p>
+          {returning ? (
+            <p className="rd-signed-out-note">
+              You&rsquo;re signed out &mdash;{" "}
+              <button className="rd-linkish" onClick={onSignIn}>
+                sign in to see your saved recipes
+              </button>
+              .
+            </p>
+          ) : null}
         </div>
 
         <div className="rd-landing-demo">
