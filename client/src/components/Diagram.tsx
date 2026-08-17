@@ -93,15 +93,31 @@ export default function Diagram({
         void el.getBoundingClientRect();
         el.style.transition = "height 1s cubic-bezier(.2,.7,.3,1)";
         el.style.height = `${newHeight}px`;
+        const clear = () => {
+          el.style.transition = el.style.height = el.style.overflow = "";
+        };
         const onEnd = (ev: TransitionEvent) => {
           if (ev.propertyName !== "height") return;
-          el.style.transition = el.style.height = el.style.overflow = "";
+          clear();
           el.removeEventListener("transitionend", onEnd);
+          window.clearTimeout(timeout);
           heightCleanupRef.current = null;
         };
-        el.addEventListener("transitionend", onEnd);
-        heightCleanupRef.current = () =>
+        // transitionend is not guaranteed: a hidden or backgrounded element
+        // never fires it, and neither does a transition the engine declines to
+        // run. Without a fallback the inline height and overflow:hidden stay
+        // on forever, which reads as the card clipping its own diagram — the
+        // bug this belt-and-braces timer exists to prevent, not to mask.
+        const timeout = window.setTimeout(() => {
+          clear();
           el.removeEventListener("transitionend", onEnd);
+          heightCleanupRef.current = null;
+        }, 1400);
+        el.addEventListener("transitionend", onEnd);
+        heightCleanupRef.current = () => {
+          el.removeEventListener("transitionend", onEnd);
+          window.clearTimeout(timeout);
+        };
       }
     }
     prevHeightRef.current = newHeight;

@@ -21,7 +21,7 @@
  * with a synthetic in-memory entry that never reaches storage.ts.
  */
 
-import React, { useCallback, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { computeLayout } from "../../../shared/layout";
 import type { ThemeMode } from "../lib/theme";
 import type { Entry, StepTimer } from "../lib/storage";
@@ -79,6 +79,18 @@ export default function LandingPage({
   const [mode, setMode] = useState<DemoMode>("diagram");
   const [timer, setTimer] = useState<StepTimer | null>(null);
   const [url, setUrl] = useState("");
+  /**
+   * The demo is opt-in. Collapsed, the page is a welcome line, an invitation
+   * and the account path — which fits any phone with room to spare, and
+   * retires the fold pressure that shaped every previous version of this page.
+   *
+   * The demo stays mounted while collapsed rather than unmounting, so
+   * `done` and the diagram's own collapse state survive a close and reopen:
+   * someone who checked off four ingredients, hid the demo and opened it
+   * again finds it where they left it.
+   */
+  const [demoOpen, setDemoOpen] = useState(false);
+  const inviteRef = useRef<HTMLElement>(null);
 
   const { parents, inputs } = useMemo(() => {
     const parents = new Map<string, string>();
@@ -197,6 +209,28 @@ export default function LandingPage({
     [done, mode, timer]
   );
 
+  /**
+   * Bring the demo into view on expand, so tapping does not leave someone
+   * looking at a heading while something grows off-screen below them. Scrolls
+   * to the invitation rather than the demo, keeping the control they just
+   * pressed on screen with the demo unfolding beneath it.
+   */
+  useEffect(() => {
+    if (!demoOpen) return;
+    const el = inviteRef.current;
+    if (!el) return;
+    const reduce =
+      typeof window !== "undefined" &&
+      !!window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    // After the frame that applies is-open, so the grid has started growing
+    // and the browser scrolls toward where things are heading.
+    const t = window.setTimeout(
+      () => el.scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "start" }),
+      reduce ? 0 : 60
+    );
+    return () => window.clearTimeout(t);
+  }, [demoOpen]);
+
   const urlRef = useRef<HTMLInputElement>(null);
   const submitUrl = useCallback(() => {
     const trimmed = url.trim();
@@ -227,15 +261,9 @@ export default function LandingPage({
         </div>
       </nav>
 
-      {/* One flex column whose two reading orders are each set deliberately
-          (see .rd-landing-flow in index.css). On a phone the diagram comes
-          first and the pitch after it: a 664px viewport cannot hold copy and
-          a legible diagram both, and the demo argues better than the copy
-          does. On desktop the copy leads, as it should when there is room. */}
       <div className="rd-shell rd-landing-flow">
-        {/* State, not pitch — so it stays above the diagram in both orders.
-            It only renders for a returning or already-saving visitor, so a
-            first-time arrival (and a shared link) pays nothing for it. */}
+        {/* State, not pitch. Only rendered for a returning or already-saving
+            visitor, so a first arrival pays nothing for it. */}
         {savedCount > 0 || returning ? (
           <div className="rd-landing-notes">
             {savedCount > 0 ? (
@@ -260,117 +288,155 @@ export default function LandingPage({
           </div>
         ) : null}
 
-        <div className="rd-landing-hero">
-          <h1 className="rd-hero-title">Every recipe, as one diagram.</h1>
-          <p className="rd-hero-sub">
-            Paste a link and get a table that shows what mixes into what
-            &mdash; and what you can do right now. Try it below, no account
-            needed.
+        <div className="rd-welcome">
+          <h1 className="rd-welcome-title">Welcome to Reduction</h1>
+          <p className="rd-welcome-line">
+            The difficulty of recipes, simmered down.
           </p>
         </div>
 
-        <div className="rd-landing-demo">
-          <DemoTag />
-          <div className="rd-landing-demo-head">
-            <div className="rd-demo-modes" role="group" aria-label="Demo view">
-              <button
-                className={`rd-seg ${mode === "diagram" ? "is-on" : ""}`}
-                aria-pressed={mode === "diagram"}
-                onClick={() => pickMode("diagram")}
-              >
-                Diagram
-              </button>
-              <button
-                className={`rd-seg ${mode === "steps" ? "is-on" : ""}`}
-                aria-pressed={mode === "steps"}
-                onClick={() => pickMode("steps")}
-              >
-                Steps
-              </button>
-            </div>
-            <div className="rd-demo-actions">
-              <button
-                className="rd-btn"
-                onClick={playing ? stop : play}
-                aria-live="off"
-              >
-                {playing ? "Stop" : "Watch it"}
-              </button>
-              <button className="rd-btn" onClick={reset}>
-                Reset
+        <section className="rd-invite" ref={inviteRef}>
+          {/* An invitation, not a disclosure triangle. Most people will never
+              open a collapsed demo, so this has to be worth a tap on its own —
+              and "reduction" is doing double duty as the culinary verb and the
+              product name, which is the whole line. */}
+          <button
+            className={`rd-invite-btn ${demoOpen ? "is-open" : ""}`}
+            aria-expanded={demoOpen}
+            aria-controls="rd-demo-panel"
+            onClick={() => setDemoOpen((o) => !o)}
+          >
+            <span>See guacamole as a reduction</span>
+            <span className="rd-invite-arrow" aria-hidden="true">
+              &rarr;
+            </span>
+          </button>
+          {!demoOpen ? (
+            <p className="rd-invite-sub">
+              Tap an ingredient. The next step lights up.
+            </p>
+          ) : null}
+
+          <div
+            id="rd-demo-panel"
+            className={`rd-demo-panel ${demoOpen ? "is-open" : ""}`}
+          >
+            {/* The animated row. Height is interpolated by the grid rather
+                than by JavaScript measuring and writing inline styles — that
+                approach leaves a stale height behind whenever transitionend
+                does not fire, which is exactly how the diagram ended up
+                clipped inside its own card. */}
+            <div className="rd-demo-panel-inner">
+              <div className="rd-landing-demo">
+                <DemoTag />
+                <div className="rd-landing-demo-head">
+                  <div className="rd-demo-modes" role="group" aria-label="Demo view">
+                    <button
+                      className={`rd-seg ${mode === "diagram" ? "is-on" : ""}`}
+                      aria-pressed={mode === "diagram"}
+                      onClick={() => pickMode("diagram")}
+                    >
+                      Diagram
+                    </button>
+                    <button
+                      className={`rd-seg ${mode === "steps" ? "is-on" : ""}`}
+                      aria-pressed={mode === "steps"}
+                      onClick={() => pickMode("steps")}
+                    >
+                      Steps
+                    </button>
+                  </div>
+                  <div className="rd-demo-actions">
+                    <button
+                      className="rd-btn"
+                      onClick={playing ? stop : play}
+                      aria-live="off"
+                    >
+                      {playing ? "Stop" : "Watch it"}
+                    </button>
+                    <button className="rd-btn" onClick={reset}>
+                      Reset
+                    </button>
+                  </div>
+                </div>
+
+                {/* The narration stands in for the coach line while it is
+                    running, never alongside it. */}
+                <CoachLine text={narration ?? coachText} />
+                <CoachTip text={tipText} />
+
+                {mode === "diagram" ? (
+                  <>
+                    <Diagram
+                      section={section}
+                      index={0}
+                      done={done}
+                      preview={preview}
+                      scale={1}
+                      onToggle={toggle}
+                      onHover={setHovered}
+                    />
+                    <CoachLegend />
+                  </>
+                ) : (
+                  <div className="rd-demo-steps">
+                    <StepsMode
+                      recipe={DEMO_RECIPE}
+                      entry={demoEntry}
+                      done={done}
+                      scale={1}
+                      onToggle={toggle}
+                      onUpdate={(next) => setTimer(next.timer)}
+                    />
+                  </div>
+                )}
+              </div>
+
+              {/* Available, not prominent. */}
+              <button className="rd-demo-hide" onClick={() => setDemoOpen(false)}>
+                Hide the demo
               </button>
             </div>
           </div>
+        </section>
 
-          {/* The narration stands in for the coach line while it is running,
-              never alongside it. Interrupting playback clears it in the same
-              commit that cancels the timers, so the coach line is back before
-              the next frame. */}
-          <CoachLine text={narration ?? coachText} />
-          <CoachTip text={tipText} />
-
-          {mode === "diagram" ? (
+        <div className="rd-landing-cta">
+          {stage === "complete" ? (
             <>
-              <Diagram
-                section={section}
-                index={0}
-                done={done}
-                preview={preview}
-                scale={1}
-                onToggle={toggle}
-                onHover={setHovered}
-              />
-              <CoachLegend />
+              <p className="rd-landing-cta-line">
+                Now do it with a recipe you actually want to cook.
+              </p>
+              <form
+                className="rd-cta-form"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  submitUrl();
+                }}
+              >
+                <input
+                  ref={urlRef}
+                  className="rd-cta-input"
+                  type="url"
+                  inputMode="url"
+                  placeholder="Paste a recipe link"
+                  aria-label="Recipe URL"
+                  value={url}
+                  onChange={(e) => setUrl(e.target.value)}
+                />
+                <button className="rd-go" type="submit">
+                  Diagram it
+                </button>
+              </form>
             </>
           ) : (
-            <div className="rd-demo-steps">
-              <StepsMode
-                recipe={DEMO_RECIPE}
-                entry={demoEntry}
-                done={done}
-                scale={1}
-                onToggle={toggle}
-                onUpdate={(next) => setTimer(next.timer)}
-              />
-            </div>
-          )}
-        </div>
-
-        {stage === "complete" ? (
-          <div className="rd-landing-cta rd-cta-done">
             <p className="rd-landing-cta-line">
-              Now do it with a recipe you actually want to cook.
+              Paste any recipe link and get a diagram you can cook from.
             </p>
-            <form
-              className="rd-cta-form"
-              onSubmit={(e) => {
-                e.preventDefault();
-                submitUrl();
-              }}
-            >
-              <input
-                ref={urlRef}
-                className="rd-cta-input"
-                type="url"
-                inputMode="url"
-                placeholder="Paste a recipe link"
-                aria-label="Recipe URL"
-                value={url}
-                onChange={(e) => setUrl(e.target.value)}
-              />
-              <button className="rd-go" type="submit">
-                Diagram it
-              </button>
-            </form>
-          </div>
-        ) : (
-          <div className="rd-landing-cta">
-            <p className="rd-landing-cta-line">Have a recipe of your own to diagram?</p>
-            <button className="rd-go" onClick={onTryOwnRecipe}>
-              Try your own recipe
-            </button>
-          </div>
-        )}
+          )}
+          <button className="rd-go rd-cta-account" onClick={onTryOwnRecipe}>
+            Create an account or log in
+          </button>
+        </div>
       </div>
     </div>
   );

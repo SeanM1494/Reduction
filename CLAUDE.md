@@ -48,7 +48,7 @@ accommodate afterwards.
   that happens to be on a phone.
 - Legibility at arm's length across a counter, and reach for one thumb, beat
   desktop density every time they conflict.
-- The fold budget below is part of this rule, not a separate concern.
+- The landing page section below is part of this rule, not a separate concern.
 
 ### Verify on a real phone viewport, and on production
 
@@ -108,87 +108,86 @@ On top of `npm run check` and `npm test`:
 3. Confirm every control you touched is at least 44px tall and actually
    reachable — `page.tap()`, not `page.click()`, so a `:hover`-only
    affordance is caught.
-4. Re-measure the fold (below).
+4. Re-measure the landing page collapsed (see below).
 5. Check the same screens on the deployed site once it ships.
 
-## The landing page fold budget
+## The landing page: the demo is opt-in
 
-Measured against the **browser viewport**, which on a phone is not the screen.
-An iPhone 13 is a 390×844 device and a **390×664** viewport once Safari's URL
-bar and toolbar are showing. Every number here is a viewport number.
+The page is a welcome line, an invitation, and the account path. The demo
+sits behind **"See guacamole as a reduction →"** and is collapsed by default.
 
-The requirement: **the whole demo diagram visible without scrolling.** A
-first-time visitor who has to scroll to see the thing the page demonstrates
-has already been failed by it.
+**This retired the fold budget rather than trimming it.** Collapsed, the page
+ends at 369px on every phone 390px and up and 484px on a 320px phone —
+clearing even an iPhone SE by 84px. Earlier versions fought for 30px.
 
-### The page has two reading orders, and both are deliberate
+| device | viewport | collapsed page ends | spare |
+|---|---|---|---|
+| iPhone 13 Pro Max | 428×746 | 369 | +377 |
+| Pixel 5 | 393×727 | 369 | +358 |
+| iPhone 13 | 390×664 | 369 | +295 |
+| Galaxy S9+ | 320×658 | 484 | +174 |
+| iPhone SE | 320×568 | 484 | +84 |
 
-`.rd-landing-flow` is a flex column with explicit `order` on each block:
+Expanding scrolls the invitation to the top of the viewport and the demo
+unfolds beneath it. The diagram then ends at roughly the fold (666 against
+664 on an iPhone 13) — a page someone has explicitly asked to see is allowed
+to scroll, which is the freedom the collapsed default buys.
 
-| | desktop | phone (≤520px) |
-|---|---|---|
-| notes (saved-on-this-device / signed-out) | 2 | 1 |
-| hero (title + subheading) | 1 | 3 |
-| demo | 3 | 2 |
-| call to action | 4 | 4 |
+**There is no order fork any more.** One reading order serves phone and
+desktop, because the diagram no longer has to be first to be seen. If you
+find yourself adding `order` back to `.rd-landing-flow`, the fold pressure
+has returned and something above the invitation has grown.
 
-On a phone **the diagram is the hero**. A 664px viewport cannot hold copy and
-a legible diagram both, and the demo makes the argument the copy was only
-describing — so the pitch moves below it, where scrolling is expected and
-height is free. Neither order is inherited from the other; changing one does
-not silently change the other.
+### How the collapse works, and why not with JavaScript
 
-Two consequences to keep in mind when editing:
+`.rd-demo-panel` is a grid that interpolates `grid-template-rows` from `0fr`
+to `1fr`. No JavaScript measures a height or writes an inline style.
 
-- **The coach line is the headline on a phone.** Its empty state is the first
-  sentence anyone reads, which is why it names the dish ("Guacamole, as a
-  diagram. Tap any ingredient to check it off.") rather than being a bare
-  instruction. Keep it to two lines at 390px.
-- **The section head is hidden on the landing page** at ≤520px. "01 Guacamole"
-  is desktop chrome above a diagram that is now the first thing on the page.
-  `Diagram.tsx` renders it and is off limits, so it is hidden in CSS, scoped
-  to `.rd-landing` where there is one section and nothing to enumerate.
+That is deliberate. The pattern of measuring `scrollHeight`, writing
+`height` + `overflow: hidden`, and clearing both on `transitionend` breaks
+whenever the event does not arrive — a hidden or backgrounded element never
+fires it — and leaves a stale height behind that reads as a card clipping its
+own content. `Diagram.tsx` uses that pattern for its own height swap and now
+carries a timeout fallback for exactly this reason. Do not add a second one.
 
-### Where it stands
+The panel stays mounted while collapsed, so demo progress survives a close
+and reopen; `visibility: hidden` applies after the collapse finishes so
+nothing inside is tabbable or announced while it is shut.
 
-Diagram bottom vs viewport. "With note" is a returning visitor, who also gets
-the saved-recipes line above the demo:
+### Viewport units: svh, not dvh
 
-| device | viewport | ends | with note | result |
-|---|---|---|---|---|
-| iPhone 13 Pro Max | 428×746 | 616 | 647 | fits, +130 / +99 |
-| Pixel 5 | 393×727 | 616 | 647 | fits, +111 / +80 |
-| **iPhone 13** | **390×664** | **616** | **647** | **fits, +48 / +17** |
-| 360 wide | — | 667 | 698 | needs more height than 360px phones have |
-| Galaxy S9+ | 320×658 | 758 | 789 | short by 100 / 131 |
-| iPhone SE | 320×568 | 758 | 789 | short by 190 / 221 |
+`svh` is the **small** viewport — the one with Safari's toolbars showing. It
+is both the honest worst case and stable, where `dvh` changes as the toolbar
+hides and drags the layout with it mid-scroll. `.rfx-page` uses `100svh`.
 
-The inversion took the requirement at 390px from **695px to 616px**. Before
-it, the most common iPhone was 30px short even with a compressed hero.
+A Chromium device descriptor models a fixed height that approximates `svh`,
+which is why a measurement here can still read a little optimistic against a
+real iPhone. Prefer a layout that responds to the unit over one fitted to a
+number.
 
-### The floor is 385px wide, not 360
+### The floor
 
-Two cliffs, both measured by sweeping widths at a fixed height:
+**385×616 was the floor while the demo was always open.** With it collapsed
+the page fits every device tested, including 320px ones, so there is no
+width floor for the landing page itself.
+
+Two cliffs still exist and matter for the *expanded* demo and for any other
+screen:
 
 - **Below 385px** the `≤380px` block narrows the ingredient column
-  (`.rd-ing { min-width: 84px; max-width: 104px }`). Names wrap more, rows
-  grow, and the table gets **51px taller** — the rule trades horizontal width
-  for vertical height, which is backwards now that the constraint is vertical.
-  Requirement jumps 616 → 667.
-- **Below ~355px** the demo header row wraps to two lines: 667 → 706.
-
-So **385×616 is the supported floor**, and every common phone at 390px and up
-clears it. 320–380px devices are explicitly **not a target**: they need their
-own layout, and the `≤380px` rules above are the first thing to revisit when
-that happens. Do not let them constrain this layout.
+  (`.rd-ing { min-width: 84px; max-width: 104px }`). Names wrap, rows grow,
+  and the table gets 51px taller — that rule trades horizontal width for
+  vertical height, which is backwards when the constraint is vertical. It is
+  the first thing to revisit when small phones get their own layout.
+- **Below ~355px** the demo header row wraps to two lines.
 
 ### Re-measuring
 
 ```js
 // in a device-profile context, on the landing page
-const r = document.querySelector('.rd-table').getBoundingClientRect();
-({ bottom: Math.round(r.bottom), viewport: window.innerHeight })
-// bottom must be <= viewport, at every device profile above
+const cta = document.querySelector('.rd-landing-cta').getBoundingClientRect();
+({ collapsedEnd: Math.round(cta.bottom), viewport: window.innerHeight })
+// collapsed, this must fit with room to spare on every profile
 ```
 
 ## The demo teaches through a wrapper, not a fork

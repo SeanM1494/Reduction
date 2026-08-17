@@ -972,7 +972,10 @@ body {
  * ------------------------------------------------------------------ */
 
 .rfx-choose-page {
-  min-height: calc(100dvh - 64px); display: flex; flex-direction: column;
+  /* svh, not dvh: the small viewport is the one with Safari's toolbars
+     showing, which is the honest worst case and — unlike dvh — does not
+     change as the toolbar hides, so the layout cannot jitter mid-scroll. */
+  min-height: calc(100svh - 64px); display: flex; flex-direction: column;
 }
 .rfx-choose-main {
   flex: 1; min-height: 0; display: flex; flex-direction: column;
@@ -1023,7 +1026,10 @@ body {
 
 /* ---- focused single-view chrome ---- */
 .rfx-page {
-  min-height: calc(100dvh - 64px); display: flex; flex-direction: column;
+  /* svh, not dvh: the small viewport is the one with Safari's toolbars
+     showing, which is the honest worst case and — unlike dvh — does not
+     change as the toolbar hides, so the layout cannot jitter mid-scroll. */
+  min-height: calc(100svh - 64px); display: flex; flex-direction: column;
   /* Edge to edge: cancel exactly the shell's padding, no more. Hardcoded
      numbers here drifted out of sync with it twice — -24px against a 16px
      desktop padding and -16px against a 10px mobile one — and the surplus
@@ -1113,18 +1119,67 @@ body {
  * rather than introducing a second type scale.
  * ------------------------------------------------------------------ */
 .rd-brand-static { cursor: default; }
-/* Two reading orders, each written out rather than one falling out of the
-   other. Desktop leads with the pitch because there is room for it; a phone
-   leads with the diagram because a 664px viewport cannot hold both, and the
-   demo makes the argument the copy was only describing. */
+/* One reading order, phone and desktop alike. The order fork this used to
+   carry existed because the diagram could not fit above the fold on a phone
+   unless it came first; an opt-in demo removes that pressure entirely, and a
+   single order is one fewer thing to keep in sync. */
 .rd-landing-flow { display: flex; flex-direction: column; }
-.rd-landing-flow > .rd-landing-hero  { order: 1; }
-.rd-landing-flow > .rd-landing-notes { order: 2; }
-.rd-landing-flow > .rd-landing-demo  { order: 3; }
-.rd-landing-flow > .rd-landing-cta   { order: 4; }
-.rd-landing-notes { margin: -14px 2px 20px; }
+.rd-landing-notes { margin: 16px 2px 0; }
 
-.rd-landing-hero { margin: 34px 2px 26px; max-width: 640px; }
+.rd-welcome { margin: 30px 2px 26px; max-width: 640px; }
+.rd-welcome-title {
+  font-family: "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
+  font-weight: 700; font-size: clamp(27px, 6.4vw, 42px);
+  line-height: 1.05; letter-spacing: -.03em; margin: 0 0 8px;
+}
+.rd-welcome-line { margin: 0; font-size: 16px; line-height: 1.45; color: var(--muted); }
+
+/* ---- the invitation ---- */
+.rd-invite { margin: 0 2px 30px; }
+.rd-invite-btn {
+  display: flex; align-items: center; justify-content: space-between; gap: 14px;
+  width: 100%; max-width: 460px; text-align: left; cursor: pointer;
+  font: inherit; font-size: 16px; font-weight: 600; color: var(--ink);
+  background: var(--card); border: 1px solid var(--line-strong);
+  border-radius: 14px; padding: 15px 17px; min-height: 56px;
+  box-shadow: 0 1px 2px rgba(var(--shadow-rgb), .18),
+              0 9px 22px -11px rgba(var(--shadow-rgb), .34);
+  transition: border-color .15s ease, background .15s ease;
+}
+.rd-invite-btn:hover { border-color: var(--warm-line); background: var(--hover-cell); }
+.rd-invite-btn:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+.rd-invite-arrow {
+  color: var(--warm-line); font-size: 18px; transition: transform .25s ease;
+}
+.rd-invite-btn.is-open .rd-invite-arrow { transform: rotate(90deg); }
+
+/* The collapse itself: the grid interpolates the row from 0fr to 1fr, so no
+   JavaScript measures a height or writes an inline style that could be left
+   behind when a transitionend never arrives. Older engines that cannot
+   interpolate fr units simply snap open, which is a fine failure. */
+.rd-demo-panel {
+  display: grid; grid-template-rows: 0fr;
+  transition: grid-template-rows .38s cubic-bezier(.2,.7,.3,1);
+}
+.rd-demo-panel.is-open { grid-template-rows: 1fr; }
+.rd-demo-panel-inner {
+  overflow: hidden; min-height: 0;
+  /* Hidden only once collapsed, so nothing inside is tabbable or announced
+     while it is closed — and visible immediately on the way open. */
+  visibility: hidden; transition: visibility 0s .38s;
+}
+.rd-demo-panel.is-open > .rd-demo-panel-inner {
+  visibility: visible; transition: visibility 0s 0s;
+}
+.rd-demo-panel .rd-landing-demo { margin: 14px 0 0; }
+.rd-demo-hide {
+  font: inherit; font-size: 13px; color: var(--muted); background: none;
+  border: 0; padding: 10px 2px 0; cursor: pointer; text-decoration: underline;
+  text-underline-offset: 2px; min-height: 44px;
+}
+.rd-demo-hide:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+
+.rd-cta-account { margin-top: 4px; }
 .rd-landing-hero .rd-hero-sub { max-width: 52ch; }
 
 .rd-landing-demo {
@@ -1268,6 +1323,7 @@ body {
 
 @media (prefers-reduced-motion: reduce) {
   .rd-coach-text, .rd-tip { animation: none; }
+  .rd-demo-panel, .rd-invite-arrow { transition: none; }
 }
 
 @media (max-width: 520px) {
@@ -1300,28 +1356,14 @@ body {
     flex-direction: row; align-items: center; flex-wrap: wrap; gap: 8px;
     margin-bottom: 10px;
   }
-  /* Phone order: the diagram is the hero. Notes stay above it because they
-     are state a returning visitor needs, not pitch — and they only render at
-     all for someone who has saved something or had an account. */
-  .rd-landing-flow > .rd-landing-notes { order: 1; }
-  .rd-landing-flow > .rd-landing-demo  { order: 2; }
-  .rd-landing-flow > .rd-landing-hero  { order: 3; }
-  .rd-landing-flow > .rd-landing-cta   { order: 4; }
+  .rd-landing-notes { margin: 10px 2px 0; }
+  .rd-welcome { margin: 20px 2px 20px; }
+  .rd-invite { margin-bottom: 24px; }
+  .rd-invite-btn { max-width: none; font-size: 15.5px; }
 
-  .rd-landing-notes { margin: 0 2px 6px; }
-  .rd-landing-demo { margin-top: 0; }
-
-  /* Below the diagram now, where scrolling is expected and height is free —
-     so it gets the full pitch back rather than the compressed one it wore
-     while it was above the fold. */
-  .rd-landing-hero { margin: 26px 2px 4px; }
-  .rd-landing-hero .rd-hero-title { font-size: clamp(24px, 7vw, 30px); }
-
-  /* "01 Guacamole" is desktop chrome: a numbered section label above a
-     diagram that is now the first thing on the page, naming a dish the coach
-     line names better. Diagram.tsx renders it and is off limits, so it is
-     hidden here rather than removed there — and only on the landing page,
-     where there is exactly one section and nothing to enumerate. */
+  /* "01 Guacamole" is chrome the invitation already said better. Diagram.tsx
+     renders it and is off limits, so it is hidden here, scoped to the landing
+     page where there is one section and nothing to enumerate. */
   .rd-landing .rd-section-head { display: none; }
   .rd-landing-demo { padding: 14px; }
   .rd-seg { padding: 6px 10px; }
@@ -1456,3 +1498,5 @@ body {
    browsers and never both apply, and the fold has no room for both anyway. */
 .rd-saved-note { margin: 10px 0 0; font-size: 13px; color: var(--muted); }
 .rd-saved-note strong { color: var(--ink); font-weight: 600; }
+
+.rd-invite-sub { margin: 9px 2px 0; font-size: 13.5px; color: var(--muted); }
