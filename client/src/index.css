@@ -56,6 +56,11 @@ body {
   --danger-line: #eec9b4;
 
   --pin: 9px 0 10px -9px rgba(120, 40, 25, .3);
+
+  /* The shell's horizontal padding, as a value rather than a number repeated
+     in the places that have to cancel it. Anything wanting to sit edge to
+     edge negates this instead of hardcoding a guess — see .rfx-page. */
+  --shell-pad: 16px;
 }
 
 :root[data-theme="dark"] {
@@ -138,7 +143,7 @@ body {
   transition: background-color .18s ease, color .18s ease;
 }
 
-.rd-shell { max-width: 1120px; margin: 0 auto; padding: 0 16px; }
+.rd-shell { max-width: 1120px; margin: 0 auto; padding: 0 var(--shell-pad); }
 
 /* ---------- nav ---------- */
 .rd-nav {
@@ -767,7 +772,7 @@ body {
 
 /* ---------- mobile ---------- */
 @media (max-width: 700px) {
-  .rd-shell { padding: 0 10px; }
+  :root { --shell-pad: 10px; }
   .rd-nav { padding: 12px 12px 14px; }
   .rd-head { padding: 16px 15px 14px; border-radius: 15px; }
   .rd-swipe { display: block; }
@@ -1014,7 +1019,12 @@ body {
 /* ---- focused single-view chrome ---- */
 .rfx-page {
   min-height: calc(100dvh - 64px); display: flex; flex-direction: column;
-  margin: 0 -24px; width: calc(100% + 48px);
+  /* Edge to edge: cancel exactly the shell's padding, no more. Hardcoded
+     numbers here drifted out of sync with it twice — -24px against a 16px
+     desktop padding and -16px against a 10px mobile one — and the surplus
+     scrolled the whole page sideways on every recipe screen. */
+  margin: 0 calc(var(--shell-pad) * -1);
+  width: calc(100% + var(--shell-pad) * 2);
 }
 .rfx-bar {
   flex: none; display: flex; align-items: center; gap: 14px;
@@ -1086,7 +1096,6 @@ body {
 @media (max-width: 700px) {
   .rfx-choose-cards { flex-direction: column; align-items: stretch; }
   .rfx-choose-card { width: 100%; }
-  .rfx-page { margin: 0 -16px; width: calc(100% + 32px); }
   .rfx-bar { padding: 10px 16px; }
   .rfx-bar-title { font-size: 14px; }
   .rfx-bar-track { width: 60px; }
@@ -1203,7 +1212,13 @@ body {
 .rd-legend {
   display: flex; align-items: center; gap: 10px; margin: 12px 2px 0;
 }
-.rd-legend-table { width: auto; }
+/* width AND min-width. Reusing .rd-table is what keeps the legend's cells
+   from drifting away from the diagram's, but it also inherits the min-width
+   the diagram needs to stay legible while it scrolls inside .rd-frame —
+   360-480px depending on viewport. The legend has no frame to scroll inside,
+   so that min-width pushed a 400px table into a 390px page and scrolled the
+   whole document sideways. It sizes to its three cells instead. */
+.rd-legend-table { width: auto; min-width: 0; }
 .rd-legend-table .rd-cell {
   padding: 5px 10px; font-size: 11.5px; border-radius: 8px;
   cursor: default; width: auto;
