@@ -40,6 +40,8 @@ export interface Entry {
 const LOCAL_KEY = "logic-cooking:library:v1";
 const MIGRATED_KEY = `${LOCAL_KEY}.migrated`;
 const OWNER_KEY_STORAGE = "logic-cooking:owner-key";
+/** Which user id this browser's anonymous key has been handed to, if any. */
+const OWNER_KEY_CLAIMED = `${OWNER_KEY_STORAGE}.claimed`;
 
 function randomId(): string {
   if (typeof crypto !== "undefined" && "randomUUID" in crypto) return crypto.randomUUID();
@@ -83,6 +85,35 @@ function ownerKey(): string {
     // Private browsing or a full quota — the session still works, it just
     // won't persist across reloads.
     return `session-${randomId()}`;
+  }
+}
+
+/** This browser's anonymous key, for the claim call. */
+export function currentOwnerKey(): string {
+  return ownerKey();
+}
+
+/**
+ * The user id this browser's key has already been handed to, or null.
+ *
+ * Marked, never deleted. The key stays put permanently: it is what a failed
+ * claim is retried from, what keeps anonymous rows visible until a claim
+ * actually succeeds, and what a second device presents on a later login. See
+ * the long comment in server/lib/claim.ts before "tidying" it away.
+ */
+export function ownerKeyClaimedBy(): string | null {
+  try {
+    return localStorage.getItem(OWNER_KEY_CLAIMED);
+  } catch {
+    return null;
+  }
+}
+
+export function markOwnerKeyClaimed(userId: string): void {
+  try {
+    localStorage.setItem(OWNER_KEY_CLAIMED, userId);
+  } catch {
+    // Worst case the claim runs again next load and reports nothing to move.
   }
 }
 

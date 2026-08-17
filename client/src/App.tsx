@@ -8,6 +8,7 @@ import SignupStub from "./components/SignupStub";
 import { useTheme } from "./hooks/useTheme";
 import { loadLibrary, saveLibrary, newEntryId, type Entry } from "./lib/storage";
 import { readPendingUrl, writePendingUrl, clearPendingUrl } from "./lib/pendingUrl";
+import { claimIfNeeded, fetchSession, type SessionUser } from "./lib/session";
 import {
   extractFromUrl,
   extractFromText,
@@ -27,10 +28,49 @@ export default function App() {
   // rather than dumping the visitor back on the demo having lost it.
   const [pendingUrl, setPendingUrl] = useState<string | null>(() => readPendingUrl());
   const [showSignup, setShowSignup] = useState(() => readPendingUrl() !== null);
+  const [user, setUser] = useState<SessionUser | null>(null);
+  /** True when an anonymous library exists but could not be moved into the
+   *  account. The rows are safe and still anonymous; this only means the move
+   *  has not happened yet. */
+  const [claimFailed, setClaimFailed] = useState(false);
 
+  /**
+   * Boot order matters: session, then claim, then library.
+   *
+   * The library is scoped by user_id once a session exists, so loading it
+   * before the anonymous rows have been moved would show a signed-in user an
+   * empty library — indistinguishable, to them, from having lost everything.
+   * The claim goes first so that by the time anything renders, the rows are
+   * where the query will look for them.
+   */
   useEffect(() => {
     let cancelled = false;
     (async () => {
+      let signedIn: SessionUser | null = null;
+      try {
+        signedIn = await fetchSession();
+        if (cancelled) return;
+        setUser(signedIn);
+      } catch (e) {
+        // An unanswerable /me is treated as signed out: the library still
+        // loads anonymously, which is the state that shows the most rather
+        // than the least.
+        console.error("[session]", e);
+      }
+
+      if (signedIn) {
+        try {
+          await claimIfNeeded(signedIn.id);
+          if (!cancelled) setClaimFailed(false);
+        } catch (e) {
+          // Nothing was moved — the transaction rolled back — and the owner
+          // key is untouched, so the next load retries. Surfaced rather than
+          // swallowed so the UI can offer that retry now.
+          if (!cancelled) setClaimFailed(true);
+          console.error("[claim]", e);
+        }
+      }
+
       try {
         const saved = await loadLibrary();
         if (cancelled) return;
@@ -45,6 +85,19 @@ export default function App() {
       cancelled = true;
     };
   }, []);
+
+  /** Retry a claim that failed, and pick up whatever it moved. */
+  const retryClaim = useCallback(async () => {
+    if (!user) return;
+    try {
+      await claimIfNeeded(user.id);
+      setClaimFailed(false);
+      setLibrary(await loadLibrary());
+    } catch (e) {
+      setClaimFailed(true);
+      console.error("[claim:retry]", e);
+    }
+  }, [user]);
 
   const persist = useCallback((next: Entry[]) => {
     setLibrary(next);
