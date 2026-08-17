@@ -792,18 +792,62 @@ body {
   .rd-amount { font-size: 10px; }
   .rd-op { min-width: 64px; }
   .rd-op-label { font-size: 12.5px; }
-  .rd-urlbar { flex-direction: column; }
+  /* Every row that pairs a text input with .rd-go stacks on a phone, because
+     of the rule directly below: .rd-go goes full-width here, so a row that
+     keeps them side by side gives the button the whole line and starves the
+     input down to a sliver (26px, measured, at every phone width). Both of
+     these rows must be listed — .rd-cta-form is the landing page's trial
+     paste box, and it inherited the bug the moment it was added. If you add
+     a third input+button row, it belongs here too. */
+  .rd-urlbar, .rd-cta-form { flex-direction: column; }
   .rd-go { width: 100%; }
+
+  /* The 44px floor for the app's secondary controls, on the viewports where
+     the input is a thumb. .rd-btn is 31px from its padding alone and .rd-seg
+     27px, which is how the demo's "Watch it", "Reset" and Diagram/Steps
+     switch were all under target — .rd-nav-right already carried a local
+     min-height patch for exactly this, on exactly this class, which is the
+     tell that the floor belonged on the class rather than on each place it
+     is used. Height only: widths and padding are untouched, so nothing
+     reflows horizontally. */
+  .rd-btn, .rd-seg {
+    display: inline-flex; align-items: center; justify-content: center;
+    min-height: 44px;
+  }
   .rd-grid { grid-template-columns: 1fr; }
   .rd-searchbar { flex-basis: 100%; max-width: none; order: 4; }
 }
 
 @media (max-width: 380px) {
   .rd-table { min-width: 360px; }
-  /* At 320px the nav wraps again: logo 44 + theme toggle 162 + sign-in 72
-     exceeds the 296 available. The toggle's padding is the cheapest 20px. */
-  .rd-theme-btn { padding: 5px 6px; font-size: 11px; }
-  .rd-nav { gap: 8px 10px; }
+
+  /* KEEPING THE NAV ON ONE ROW AT 320px. This was attempted before with
+     `padding: 5px 6px; font-size: 11px` and did not land — measured on an
+     iPhone SE the row was still 124px, i.e. still wrapped, because the
+     numbers were never checked against the real widths. They are now:
+
+       available   320 - 16 nav padding            = 304
+       brand       44 (logo; .rd-brand-word is already hidden ≤520px)
+       gap         8
+       nav-right   "Sign in" 76 + gap + toggle 162 = 252  ← 44+8+252 = 304+
+
+     It fitted exactly, which is to say it did not fit. The toggle is the
+     dominant term and "Colorblind" is why, so its horizontal padding and
+     type come down together; nav-right's own 14px gap is the other easy 6px.
+     That takes the row to ~284 and the nav from 124px back to 72px.
+
+     Those 52px are not cosmetic. The trial paste box stacks at ≤700px (the
+     input was starving to 26px beside the button), and stacking costs the
+     collapsed landing page 52px — which an iPhone SE, at 568px tall, does
+     not have spare. This is where that comes from.
+
+     Note the font-size was going UP on the narrower screen: 10.5px at
+     ≤520px, 11px here. That was backwards and is part of why the earlier
+     attempt missed. */
+  .rd-nav { gap: 8px 8px; padding: 12px 8px 14px; }
+  .rd-nav-right { gap: 8px; }
+  .rd-theme-btn { padding: 5px 5px; font-size: 10px; }
+
   .rd-ing { min-width: 84px; max-width: 104px; }
 }
 
@@ -1457,7 +1501,11 @@ body {
   /* 44px minimum touch target. A 31px button is a desktop button that
      happens to be on a phone. */
   .rd-nav-right .rd-btn { min-height: 44px; padding: 7px 15px; }
-  .rd-theme-btn { min-height: 40px; }
+  /* 44, not the 40 this used to carry. The sign-in button beside it got the
+     full target and the theme buttons were left 4px short — same nav, same
+     thumb. It costs the nav 4px of height, which the 52px reclaimed by
+     unwrapping the row at ≤380px more than covers. */
+  .rd-theme-btn { min-height: 44px; }
 }
 
 /* ------------------------------------------------------------------

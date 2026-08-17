@@ -24,6 +24,7 @@ import { and, eq } from "drizzle-orm";
 import { getDb } from "../db";
 import { recipes } from "../../shared/schema";
 import { claimAnonymousLibrary } from "./claim";
+import { needsDatabase as gate } from "./testdb";
 import type { Recipe } from "../../shared/layout";
 
 /** Shape is irrelevant here — nothing in the claim path reads the recipe. */
@@ -40,25 +41,9 @@ const STUB_RECIPE = {
   ],
 } as unknown as Recipe;
 
-let reachable: boolean | null = null;
-
-async function hasDatabase(): Promise<boolean> {
-  if (reachable !== null) return reachable;
-  if (!process.env.DATABASE_URL) return (reachable = false);
-  try {
-    await getDb().select({ id: recipes.id }).from(recipes).limit(1);
-    return (reachable = true);
-  } catch {
-    return (reachable = false);
-  }
-}
-
-/** Returns false and marks the test skipped when there is nothing to talk to. */
-async function needsDatabase(t: TestContext): Promise<boolean> {
-  if (await hasDatabase()) return true;
-  t.skip("no reachable DATABASE_URL");
-  return false;
-}
+/** Skips only when there is genuinely no database; a reachable database
+ *  missing `recipes` throws instead. See server/lib/testdb.ts. */
+const needsDatabase = (t: TestContext) => gate(t, "recipes");
 
 async function seed(ownerKey: string, rows: Array<{ id: string; userId?: string }>) {
   const db = getDb();

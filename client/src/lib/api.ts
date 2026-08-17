@@ -31,7 +31,18 @@ async function post(body: unknown): Promise<ExtractResponse> {
     body: JSON.stringify(body),
   });
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.error || "Could not read that recipe.");
+  if (!res.ok) {
+    // The server sends a machine-readable `code` alongside the prose so the
+    // caller never has to read the prose. Carrying it here is the point: the
+    // spent-trial branch used to be found by matching /free recipe/i against
+    // this message, which meant rewording a sentence would silently stop the
+    // paste box becoming the sign-up path — a funnel that fails open into a
+    // dead end, with nothing failing to say so.
+    throw Object.assign(new Error(data.error || "Could not read that recipe."), {
+      code: typeof data.code === "string" ? data.code : undefined,
+      status: res.status,
+    });
+  }
   return data as ExtractResponse;
 }
 

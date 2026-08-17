@@ -21,6 +21,7 @@ import { and, eq } from "drizzle-orm";
 import { getDb } from "../db";
 import { recipes, trials } from "../../shared/schema";
 import { claimTrialRecipe, spendTrial, storeTrialRecipe, trialOwnerKey } from "./trial";
+import { needsDatabase as gate } from "./testdb";
 import type { Recipe } from "../../shared/layout";
 
 const STUB_RECIPE = {
@@ -36,24 +37,12 @@ const STUB_RECIPE = {
   ],
 } as unknown as Recipe;
 
-let reachable: boolean | null = null;
-
-async function hasDatabase(): Promise<boolean> {
-  if (reachable !== null) return reachable;
-  if (!process.env.DATABASE_URL) return (reachable = false);
-  try {
-    await getDb().select({ id: trials.id }).from(trials).limit(1);
-    return (reachable = true);
-  } catch {
-    return (reachable = false);
-  }
-}
-
-async function needsDatabase(t: TestContext): Promise<boolean> {
-  if (await hasDatabase()) return true;
-  t.skip("no reachable DATABASE_URL");
-  return false;
-}
+/** Skips only when there is genuinely no database. A reachable database
+ *  missing `trials` THROWS rather than skipping — that exact confusion is
+ *  what reported these nine tests as "no reachable DATABASE_URL" while the
+ *  library claim's tests passed against the same database in the same
+ *  process. See server/lib/testdb.ts. */
+const needsDatabase = (t: TestContext) => gate(t, "trials", "recipes");
 
 const newTrialId = () => `test-trial-${crypto.randomUUID()}`;
 const newUser = () => `test-user-${crypto.randomUUID()}`;

@@ -21,17 +21,43 @@ merged at that same commit while later work sat unnoticed on the branch.
 **Run `npm run check` and `npm test` before every commit.** Both must pass
 first. Not after, not "it typechecked earlier" — before.
 
-`npm test` reports **13 passing and 7 skipped without a database**. The seven
-are the claim's transactional guarantees in `server/lib/claim.db.test.ts` —
-all-or-nothing rollback, idempotent repeat claims, never taking another
-user's rows — and they skip when `DATABASE_URL` is unset or unreachable so
-the suite stays green on a machine without Postgres.
+### What the test counts mean
 
-**They have been run against a real database and all seven pass: 20 passing,
-0 skipped.** So a skipped count of 7 means "no database here", not "unproven"
-— no need to flag it as an outstanding risk again. Do re-run them with
-`DATABASE_URL` set after changing anything in `claim.ts`, since a skipped
-rollback test proves nothing about a change made after it last ran.
+`npm test` has exactly three legitimate outcomes, and the difference between
+them is the whole point:
+
+| result | meaning |
+|---|---|
+| **23 pass, 16 skipped** | no `DATABASE_URL`, or nothing listening. Fine. |
+| **39 pass, 0 skipped** | a database with a current schema. This is the real gate. |
+| ***n* failures naming a missing table** | a reachable database whose schema is behind `shared/schema.ts`. Run `npm run db:push`. |
+
+The 16 are the two claim suites — `claim.db.test.ts` (the anonymous library)
+and `trial.db.test.ts` (the free extraction). Both are transactional
+guarantees: all-or-nothing rollback, idempotent repeats, never taking another
+user's rows. **All 39 have been run against a real Postgres and pass.**
+
+**A skip must only ever mean "there is no database".** It used to be able to
+mean "there is a database but it is missing the table I was about to test",
+because each suite probed by selecting from its own table and reported the
+failure as "no reachable DATABASE_URL". That shipped: `trials` existed in
+`shared/schema.ts` and not in the database, so all nine trial-claim tests
+reported themselves skipped **in the same run where the library claim's
+tests passed against the same database in the same process** — a green suite
+over a completely untested claim path, on the second of the two places in
+this codebase where a bug loses someone's data.
+
+`server/lib/testdb.ts` is now the single gate for both suites and asks the
+two questions separately: `select 1` for "is there a database" (schema-
+independent, so no migration can make it lie), and `information_schema` for
+"is its schema current" — where a missing table **throws** and never skips.
+If you add a database-backed suite, use that gate and name the tables it
+needs.
+
+**A stale schema is the first thing to suspect when something works locally
+and 500s in production.** It is what broke Google sign-in: `createAuthState`
+began writing `auth_states.trial_id`, the column was never pushed, and the
+insert failed into the `start_failed` branch.
 
 **Report the commit hash after every push**, so it can be verified against
 what actually landed rather than trusted.
@@ -125,17 +151,23 @@ margin and is the one to watch.
 
 | device | viewport | collapsed page ends | spare |
 |---|---|---|---|
-| iPhone 13 Pro Max | 428×746 | 409 | +337 |
-| Pixel 5 | 393×727 | 421 | +306 |
-| iPhone 13 | 390×664 | 421 | +243 |
-| Galaxy S9+ | 320×658 | 540 | +118 |
-| iPhone SE | 320×568 | 540 | +28 |
+| iPhone 13 Pro Max | 428×746 | 465 | +281 |
+| Pixel 5 | 393×727 | 477 | +250 |
+| iPhone 13 | 390×664 | 477 | +187 |
+| Galaxy S9+ | 320×658 | 544 | +114 |
+| iPhone SE | 320×568 | 544 | +24 |
 
-**Where the SE's next 52px is, if it is ever needed.** `.rd-nav` is 72px tall
-at 390px and **124px at 320px** — the brand (44px) and `.rd-nav-right`
-(252px) do not fit on one row, so it wraps. That wrap costs the SE more than
-its entire remaining margin, and it is the cheapest reclaim available. Trim
-the landing copy only after that, not before.
+**The SE's 52px of nav headroom has now been spent, so it is gone.** The
+trial's paste box stacks (input on its own line, button beneath) because
+side by side the input starved to 26px; stacking costs 52px, and the SE did
+not have it. It was paid for by unwrapping `.rd-nav` at ≤380px — the brand
+(44px) plus `.rd-nav-right` (252px) plus padding came to more than 320px, so
+the row wrapped and cost 52px. Tightening the theme toggle's padding and
+type took nav-right to 230px and the nav from 124px back to 72px.
+
+**So the SE is at +24 with no cheap reclaim left.** The next one is real
+design work, not a trim: the landing copy, or a small-phone layout. Measure
+before adding anything above the call to action.
 
 Expanding scrolls the invitation to the top of the viewport and the demo
 unfolds beneath it. The diagram then ends at roughly the fold (666 against

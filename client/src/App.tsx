@@ -228,11 +228,15 @@ export default function App() {
         setTrialSpent(true);
         setOpenId(entry.id);
       } catch (e) {
-        const message = (e as Error).message;
+        const err = e as Error & { code?: string };
         // The server refused because the free extraction is gone. Say so and
-        // let the paste box become the sign-up path.
-        if (/free recipe/i.test(message)) setTrialSpent(true);
-        setError(message);
+        // let the paste box become the sign-up path. Keyed on the code the
+        // server sends for exactly this; the message match is kept only as a
+        // fallback for a response that predates it.
+        if (err.code === "trial_spent" || /free recipe/i.test(err.message)) {
+          setTrialSpent(true);
+        }
+        setError(err.message);
       } finally {
         setBusy(false);
       }
