@@ -1289,7 +1289,18 @@ body {
     flex-direction: row; align-items: center; flex-wrap: wrap; gap: 8px;
     margin-bottom: 10px;
   }
-  .rd-landing-hero { margin-top: 18px; margin-bottom: 16px; }
+  /* Hero-lite. The page's job on a phone is to show the diagram, and the
+     subheading only restates what the demo demonstrates the moment you look
+     at it — so on a phone the demo says it instead. The title drops to a size
+     that fits one line at 320px, which is where the two-line wrap was costing
+     another 30px. Together this is ~120px back; see CLAUDE.md for what that
+     does and does not solve. */
+  .rd-landing-hero { margin-top: 14px; margin-bottom: 12px; }
+  .rd-landing-hero .rd-hero-title {
+    font-size: clamp(19px, 5.6vw, 23px); line-height: 1.15;
+    max-width: none; margin-bottom: 0;
+  }
+  .rd-landing-hero .rd-hero-sub { display: none; }
   .rd-landing-demo { padding: 14px; }
   .rd-seg { padding: 6px 10px; }
   .rd-legend { margin-top: 10px; }

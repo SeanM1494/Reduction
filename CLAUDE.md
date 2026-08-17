@@ -77,8 +77,23 @@ so this needs no dependency in `package.json`. **WebKit is not installed**, so
 a Safari-only bug cannot be reproduced in this container at all — that is a
 gap to close on the deployed site, not to assume away.
 
-Local passing is necessary and not sufficient: verify the deployed URL too,
-because the last three mobile bugs all passed locally.
+Local passing is necessary and not sufficient: the last three mobile bugs all
+passed locally and reached production anyway.
+
+**Two verification gaps exist in this container, and neither should be assumed
+away:**
+
+- **WebKit is not installed** — only Chromium. An "iPhone 13" here is a
+  Chromium engine at an iPhone's viewport, touch and pixel ratio. It catches
+  layout and interaction bugs; it cannot catch a Safari-only rendering or JS
+  bug, which is the engine most of this app's users will actually run.
+- **The deployed site is unreachable from here.** The agent proxy answers
+  403 to CONNECT for `recipe-reduction.replit.app` — a blanket outbound
+  policy denial, the same answer it gives `www.google.com`. So "verify on
+  production" cannot be done from this container and has to be done by hand,
+  or the proxy policy has to allow the host.
+
+State which of these applied when reporting that something is verified.
 
 ### Pre-commit, for any visual or interaction change
 
@@ -96,43 +111,68 @@ On top of `npm run check` and `npm test`:
 4. Re-measure the fold (below).
 5. Check the same screens on the deployed site once it ships.
 
-## The landing page has a fold budget
+## The landing page fold budget
 
-`LandingPage.tsx` has one hard layout requirement: **the whole demo diagram
-must be visible without scrolling on a phone**. A first-time visitor who has
-to scroll to see the thing the page is demonstrating has already been failed
-by it.
+Measured against the **browser viewport**, which on a phone is not the screen.
+An iPhone 13 is a 390×844 device and a **390×664** viewport once Safari's URL
+bar and toolbar are showing. Every number here is a viewport number.
 
-**This is currently NOT met, and the reason is worth knowing.** The budget was
-measured for a long time against 390×844 — the iPhone 13's *screen*. The real
-Safari viewport is 390×664. Against the correct number the diagram ends at
-812px, which is **148px below the fold**; on an iPhone SE (320×568) it is over
-400px below. It passed every check because every check used the wrong height.
+The requirement: **the whole demo diagram visible without scrolling.** A
+first-time visitor who has to scroll to see the thing the page demonstrates
+has already been failed by it.
 
-What sits above the diagram, on a phone, and what each costs:
+### Where it stands
+
+Measured with Playwright device descriptors, hero-lite in place:
+
+| device | viewport | diagram ends | result |
+|---|---|---|---|
+| iPhone 13 Pro Max | 428×746 | 696 | fits, 50px spare |
+| Pixel 5 | 393×727 | 695 | fits, 32px spare |
+| **iPhone 13** | **390×664** | **694** | **short by 30px** |
+| Galaxy S9+ | 320×658 | 871 | short by 213px |
+| iPhone SE | 320×568 | 871 | short by 303px |
+
+So at 390–430px wide the page needs about **695px of viewport height**. The
+most common iPhone gives 664. Hero-lite took the gap from 148px to 30px, and
+30px is the last of what tuning can do.
+
+### The 320px cliff
+
+320px is not "a bit narrower", it is a different layout. Three things wrap at
+once — the nav to two rows (124px), the demo header to two rows (72px), the
+coach line to three lines (48px) — and the table grows taller as its columns
+narrow. The requirement jumps from 695px to 871px, which no 320px phone has.
+
+**320px is not a target.** Treat ~360px as the floor for this layout and
+design the small-phone experience separately rather than pretending one
+layout serves both.
+
+### What sits above the diagram, and what it costs
+
+At 390px, hero-lite:
 
 | | |
 |---|---|
-| nav | ~72px |
-| hero title + subheading + margins | ~169px |
-| demo header row (mode toggle, Watch it, Reset) | ~43px |
-| coach line | ~33px |
-| section head ("01 Guacamole") | ~27px |
+| nav | 72px |
+| hero (one line, subheading hidden) | 25px |
+| demo header row (mode toggle, Watch it, Reset) | 33px |
+| coach line | 32px |
+| section head ("01 Guacamole") | 15px + 12px margin |
+| the diagram itself | 445px |
 
-Anything that adds height above the diagram spends budget that is already
-overdrawn: copy that wraps to another line, the coach line growing past one
-line, another control in the demo header, padding changes on
-`.rd-landing-hero` / `.rd-landing-demo`.
+The `≤520px` block in `index.css` has already spent the obvious savings: the
+tip slot reserves no space, tips overlay rather than displace (measured: in
+flow a two-line tip pushed the diagram down 57px and back up on dismissal),
+the controls stay on one row, the brand wordmark is dropped so sign-in fits
+in the nav, and the hero is one line with no subheading.
 
-The `≤520px` block in `index.css` already spent the obvious savings: the tip
-slot does not reserve space, the controls stay on one row, the hero is
-tightened, tips overlay the diagram rather than displacing it (measured: in
-flow, a two-line tip pushed the diagram down 57px and back up on dismissal),
-and the brand wordmark is dropped so sign-in fits in the nav. There is no easy
-padding left — closing a 148px gap means giving something up, and that is a
-design decision rather than a tuning one.
+There is nothing cheap left. Closing the last 30px means removing an element,
+not tightening one — which is a design decision, and the reason a phone-first
+reordering (diagram first, copy below it) is worth considering over further
+compression.
 
-If something has to go below the fold, the legend goes first and the diagram
+If something must go below the fold, the legend goes first and the diagram
 never does.
 
 ### Re-measuring
