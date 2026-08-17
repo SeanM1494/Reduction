@@ -227,7 +227,39 @@ export default function LandingPage({
         </div>
       </nav>
 
-      <div className="rd-shell">
+      {/* One flex column whose two reading orders are each set deliberately
+          (see .rd-landing-flow in index.css). On a phone the diagram comes
+          first and the pitch after it: a 664px viewport cannot hold copy and
+          a legible diagram both, and the demo argues better than the copy
+          does. On desktop the copy leads, as it should when there is room. */}
+      <div className="rd-shell rd-landing-flow">
+        {/* State, not pitch — so it stays above the diagram in both orders.
+            It only renders for a returning or already-saving visitor, so a
+            first-time arrival (and a shared link) pays nothing for it. */}
+        {savedCount > 0 || returning ? (
+          <div className="rd-landing-notes">
+            {savedCount > 0 ? (
+              <p className="rd-saved-note">
+                <strong>
+                  {savedCount} recipe{savedCount === 1 ? "" : "s"} saved on this
+                  device.
+                </strong>{" "}
+                <button className="rd-linkish" onClick={onViewLibrary}>
+                  View {savedCount === 1 ? "it" : "them"}
+                </button>
+              </p>
+            ) : (
+              <p className="rd-signed-out-note">
+                You&rsquo;re signed out &mdash;{" "}
+                <button className="rd-linkish" onClick={onSignIn}>
+                  sign in to see your saved recipes
+                </button>
+                .
+              </p>
+            )}
+          </div>
+        ) : null}
+
         <div className="rd-landing-hero">
           <h1 className="rd-hero-title">Every recipe, as one diagram.</h1>
           <p className="rd-hero-sub">
@@ -235,29 +267,6 @@ export default function LandingPage({
             &mdash; and what you can do right now. Try it below, no account
             needed.
           </p>
-          {savedCount > 0 ? (
-            /* Kept to one line at 390px on purpose: two lines left the
-               diagram 3px above the fold, which is not a margin. The
-               "sign in to keep them" pitch lives in the call to action
-               below the demo rather than being paid for twice. */
-            <p className="rd-saved-note">
-              <strong>
-                {savedCount} recipe{savedCount === 1 ? "" : "s"} saved on this
-                device.
-              </strong>{" "}
-              <button className="rd-linkish" onClick={onViewLibrary}>
-                View {savedCount === 1 ? "it" : "them"}
-              </button>
-            </p>
-          ) : returning ? (
-            <p className="rd-signed-out-note">
-              You&rsquo;re signed out &mdash;{" "}
-              <button className="rd-linkish" onClick={onSignIn}>
-                sign in to see your saved recipes
-              </button>
-              .
-            </p>
-          ) : null}
         </div>
 
         <div className="rd-landing-demo">

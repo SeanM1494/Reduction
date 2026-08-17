@@ -130,7 +130,11 @@ export type CoachStage =
   | "complete";
 
 const STAGE_TEXT: Record<CoachStage, string> = {
-  empty: "Tap any ingredient to check it off — the diagram works out what you can do next.",
+  // On a phone this is the first sentence anyone reads — the hero now sits
+  // below the diagram — so it has to say what the thing IS before it says
+  // what to do with it. An instruction alone ("Tap any ingredient…") assumes
+  // a context the phone layout no longer provides above it.
+  empty: "Guacamole, as a diagram. Tap any ingredient to check it off.",
   firstIngredient:
     "Each box to the right lights up as soon as everything feeding into it is checked.",
   stepReady: "That step turned amber because everything it needs is now done.",
@@ -144,7 +148,7 @@ const STAGE_TEXT: Record<CoachStage, string> = {
  * either view and are not repeated here.
  */
 const STEPS_STAGE_TEXT: Partial<Record<CoachStage, string>> = {
-  empty: "Work down the cards — checking one off brings up the next thing you can do.",
+  empty: "Guacamole, step by step. Check one off to bring up the next.",
   firstIngredient: "A card only comes up once everything it needs is checked off.",
   stepReady: "That step unlocked because everything it needs is now done.",
 };

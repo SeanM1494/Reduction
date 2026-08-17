@@ -121,59 +121,66 @@ The requirement: **the whole demo diagram visible without scrolling.** A
 first-time visitor who has to scroll to see the thing the page demonstrates
 has already been failed by it.
 
+### The page has two reading orders, and both are deliberate
+
+`.rd-landing-flow` is a flex column with explicit `order` on each block:
+
+| | desktop | phone (≤520px) |
+|---|---|---|
+| notes (saved-on-this-device / signed-out) | 2 | 1 |
+| hero (title + subheading) | 1 | 3 |
+| demo | 3 | 2 |
+| call to action | 4 | 4 |
+
+On a phone **the diagram is the hero**. A 664px viewport cannot hold copy and
+a legible diagram both, and the demo makes the argument the copy was only
+describing — so the pitch moves below it, where scrolling is expected and
+height is free. Neither order is inherited from the other; changing one does
+not silently change the other.
+
+Two consequences to keep in mind when editing:
+
+- **The coach line is the headline on a phone.** Its empty state is the first
+  sentence anyone reads, which is why it names the dish ("Guacamole, as a
+  diagram. Tap any ingredient to check it off.") rather than being a bare
+  instruction. Keep it to two lines at 390px.
+- **The section head is hidden on the landing page** at ≤520px. "01 Guacamole"
+  is desktop chrome above a diagram that is now the first thing on the page.
+  `Diagram.tsx` renders it and is off limits, so it is hidden in CSS, scoped
+  to `.rd-landing` where there is one section and nothing to enumerate.
+
 ### Where it stands
 
-Measured with Playwright device descriptors, hero-lite in place:
+Diagram bottom vs viewport. "With note" is a returning visitor, who also gets
+the saved-recipes line above the demo:
 
-| device | viewport | diagram ends | result |
-|---|---|---|---|
-| iPhone 13 Pro Max | 428×746 | 696 | fits, 50px spare |
-| Pixel 5 | 393×727 | 695 | fits, 32px spare |
-| **iPhone 13** | **390×664** | **694** | **short by 30px** |
-| Galaxy S9+ | 320×658 | 871 | short by 213px |
-| iPhone SE | 320×568 | 871 | short by 303px |
+| device | viewport | ends | with note | result |
+|---|---|---|---|---|
+| iPhone 13 Pro Max | 428×746 | 616 | 647 | fits, +130 / +99 |
+| Pixel 5 | 393×727 | 616 | 647 | fits, +111 / +80 |
+| **iPhone 13** | **390×664** | **616** | **647** | **fits, +48 / +17** |
+| 360 wide | — | 667 | 698 | needs more height than 360px phones have |
+| Galaxy S9+ | 320×658 | 758 | 789 | short by 100 / 131 |
+| iPhone SE | 320×568 | 758 | 789 | short by 190 / 221 |
 
-So at 390–430px wide the page needs about **695px of viewport height**. The
-most common iPhone gives 664. Hero-lite took the gap from 148px to 30px, and
-30px is the last of what tuning can do.
+The inversion took the requirement at 390px from **695px to 616px**. Before
+it, the most common iPhone was 30px short even with a compressed hero.
 
-### The 320px cliff
+### The floor is 385px wide, not 360
 
-320px is not "a bit narrower", it is a different layout. Three things wrap at
-once — the nav to two rows (124px), the demo header to two rows (72px), the
-coach line to three lines (48px) — and the table grows taller as its columns
-narrow. The requirement jumps from 695px to 871px, which no 320px phone has.
+Two cliffs, both measured by sweeping widths at a fixed height:
 
-**320px is not a target.** Treat ~360px as the floor for this layout and
-design the small-phone experience separately rather than pretending one
-layout serves both.
+- **Below 385px** the `≤380px` block narrows the ingredient column
+  (`.rd-ing { min-width: 84px; max-width: 104px }`). Names wrap more, rows
+  grow, and the table gets **51px taller** — the rule trades horizontal width
+  for vertical height, which is backwards now that the constraint is vertical.
+  Requirement jumps 616 → 667.
+- **Below ~355px** the demo header row wraps to two lines: 667 → 706.
 
-### What sits above the diagram, and what it costs
-
-At 390px, hero-lite:
-
-| | |
-|---|---|
-| nav | 72px |
-| hero (one line, subheading hidden) | 25px |
-| demo header row (mode toggle, Watch it, Reset) | 33px |
-| coach line | 32px |
-| section head ("01 Guacamole") | 15px + 12px margin |
-| the diagram itself | 445px |
-
-The `≤520px` block in `index.css` has already spent the obvious savings: the
-tip slot reserves no space, tips overlay rather than displace (measured: in
-flow a two-line tip pushed the diagram down 57px and back up on dismissal),
-the controls stay on one row, the brand wordmark is dropped so sign-in fits
-in the nav, and the hero is one line with no subheading.
-
-There is nothing cheap left. Closing the last 30px means removing an element,
-not tightening one — which is a design decision, and the reason a phone-first
-reordering (diagram first, copy below it) is worth considering over further
-compression.
-
-If something must go below the fold, the legend goes first and the diagram
-never does.
+So **385×616 is the supported floor**, and every common phone at 390px and up
+clears it. 320–380px devices are explicitly **not a target**: they need their
+own layout, and the `≤380px` rules above are the first thing to revisit when
+that happens. Do not let them constrain this layout.
 
 ### Re-measuring
 

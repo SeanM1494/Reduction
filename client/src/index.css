@@ -1113,6 +1113,17 @@ body {
  * rather than introducing a second type scale.
  * ------------------------------------------------------------------ */
 .rd-brand-static { cursor: default; }
+/* Two reading orders, each written out rather than one falling out of the
+   other. Desktop leads with the pitch because there is room for it; a phone
+   leads with the diagram because a 664px viewport cannot hold both, and the
+   demo makes the argument the copy was only describing. */
+.rd-landing-flow { display: flex; flex-direction: column; }
+.rd-landing-flow > .rd-landing-hero  { order: 1; }
+.rd-landing-flow > .rd-landing-notes { order: 2; }
+.rd-landing-flow > .rd-landing-demo  { order: 3; }
+.rd-landing-flow > .rd-landing-cta   { order: 4; }
+.rd-landing-notes { margin: -14px 2px 20px; }
+
 .rd-landing-hero { margin: 34px 2px 26px; max-width: 640px; }
 .rd-landing-hero .rd-hero-sub { max-width: 52ch; }
 
@@ -1289,18 +1300,29 @@ body {
     flex-direction: row; align-items: center; flex-wrap: wrap; gap: 8px;
     margin-bottom: 10px;
   }
-  /* Hero-lite. The page's job on a phone is to show the diagram, and the
-     subheading only restates what the demo demonstrates the moment you look
-     at it — so on a phone the demo says it instead. The title drops to a size
-     that fits one line at 320px, which is where the two-line wrap was costing
-     another 30px. Together this is ~120px back; see CLAUDE.md for what that
-     does and does not solve. */
-  .rd-landing-hero { margin-top: 14px; margin-bottom: 12px; }
-  .rd-landing-hero .rd-hero-title {
-    font-size: clamp(19px, 5.6vw, 23px); line-height: 1.15;
-    max-width: none; margin-bottom: 0;
-  }
-  .rd-landing-hero .rd-hero-sub { display: none; }
+  /* Phone order: the diagram is the hero. Notes stay above it because they
+     are state a returning visitor needs, not pitch — and they only render at
+     all for someone who has saved something or had an account. */
+  .rd-landing-flow > .rd-landing-notes { order: 1; }
+  .rd-landing-flow > .rd-landing-demo  { order: 2; }
+  .rd-landing-flow > .rd-landing-hero  { order: 3; }
+  .rd-landing-flow > .rd-landing-cta   { order: 4; }
+
+  .rd-landing-notes { margin: 0 2px 6px; }
+  .rd-landing-demo { margin-top: 0; }
+
+  /* Below the diagram now, where scrolling is expected and height is free —
+     so it gets the full pitch back rather than the compressed one it wore
+     while it was above the fold. */
+  .rd-landing-hero { margin: 26px 2px 4px; }
+  .rd-landing-hero .rd-hero-title { font-size: clamp(24px, 7vw, 30px); }
+
+  /* "01 Guacamole" is desktop chrome: a numbered section label above a
+     diagram that is now the first thing on the page, naming a dish the coach
+     line names better. Diagram.tsx renders it and is off limits, so it is
+     hidden here rather than removed there — and only on the landing page,
+     where there is exactly one section and nothing to enumerate. */
+  .rd-landing .rd-section-head { display: none; }
   .rd-landing-demo { padding: 14px; }
   .rd-seg { padding: 6px 10px; }
   .rd-legend { margin-top: 10px; }
