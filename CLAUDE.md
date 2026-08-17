@@ -191,6 +191,31 @@ fires it — and leaves a stale height behind that reads as a card clipping its
 own content. `Diagram.tsx` uses that pattern for its own height swap and now
 carries a timeout fallback for exactly this reason. Do not add a second one.
 
+**The second way that pattern bites: it measures its own animation.** While a
+run is in flight the element carries an inline `height`, so `scrollHeight`
+reports the animation's current value rather than the content's. Diagram's
+effect has no dependency array — it runs on every commit, and a hover is a
+commit — so any commit landing inside the animation window fed the animation
+back in as the next target. Measured on the guacamole demo at 390px: the
+handoff tap read a 474px target for a 60px chip, skipped the transition
+because target equalled start, left the stale height on, and then teleported
+the finish strip **414px** when the fallback timer wiped it; the next two taps
+re-inflated the container to 474px around that 60px chip and held it 1.4s.
+Both taps had to be made twice.
+
+So if you touch that effect, keep its two rules: **clear the inline styles
+before measuring**, and **animate from the previous commit's content height,
+or from the pinned height if a run is already going** — never from a fresh
+`getBoundingClientRect()`, which in a layout effect has already relaid out to
+the target and would animate from the target to itself.
+
+**Nothing may resize under a fingertip.** `.rd-finish.is-focus` used to grow
+every chip's padding and label on the same commit as the tap that completed
+the tree — 34ms after the tap, with two steps still left to tap on the chips
+that moved. Keep `is-focus`, and anything like it, non-geometric: no padding,
+margin, font-size or transform change while a sequence is still in progress.
+A layout shift between taps is fine if it is smooth; one during a tap is not.
+
 The panel stays mounted while collapsed, so demo progress survives a close
 and reopen; `visibility: hidden` applies after the collapse finishes so
 nothing inside is tabbable or announced while it is shut.

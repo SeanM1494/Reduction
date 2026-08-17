@@ -27,6 +27,26 @@ const depthTint = (d: number) => {
   return `color-mix(in srgb, var(--card) ${100 - pct}%, var(--ink) ${pct}%)`;
 };
 
+/**
+ * How long this section's height takes to settle after a tap.
+ *
+ * Picked from a measured tap cadence, not taste. The handoff tap collapses
+ * 406px on the guacamole demo at 390px, and the next thing the visitor reaches
+ * for — the finish strip — sits directly under the table, so it travels the
+ * whole distance. At the old 1s the strip still had 200px to go when a normal
+ * next tap landed on it. At 380ms it is fully settled by 384ms, which is
+ * shorter than any realistic re-target.
+ *
+ * A deliberate delay before starting was tried here and measured worse, not
+ * better: holding the tuck back by 200ms split the movement into two chained
+ * animations — the rows collapsing, then the table swapping for its chip —
+ * and pushed the settle from 384ms out to 522ms, leaving 44px still moving at
+ * 300ms against 19px without it. It also bought nothing it was supposed to:
+ * React's onClick fires on pointerup, so the finger is already leaving the
+ * glass before the first pixel moves. One uninterrupted ease beats two.
+ */
+const SWAP_MS = 380;
+
 function fmtTime(min: number): string {
   if (min < 60) return `${min} min`;
   const h = Math.floor(min / 60);
@@ -60,67 +80,117 @@ export default function Diagram({
   // parent chain (the collapsed step itself) gets un-done by the same click.
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
 
-  // Smooths the two things that change this section's rendered height — a
-  // branch folding into its collapsed chip, and the whole table tucking
-  // away once the tree is done — into one height transition instead of a
-  // jump. Runs after every commit and only acts when the measured height
-  // actually moved, so ordinary re-renders (hover in/out, etc.) are no-ops.
-  // No dependency array is needed: it reads only the DOM via the ref, never
-  // render-scoped variables, so it stays safe to call unconditionally ahead
-  // of the early return below.
+  /**
+   * Smooths the two things that change this section's rendered height — a
+   * branch folding into its collapsed chip, and the whole table tucking away
+   * once the tree is done — into one height transition instead of a jump.
+   *
+   * MEASURE THE CONTENT, NEVER THE ANIMATION. This used to read
+   * `el.scrollHeight` while a previous run's inline `height` and
+   * `overflow: hidden` were still on the element, so it measured its own
+   * animation mid-flight instead of the content underneath it. The effect has
+   * no dependency array — it runs on every commit, including hovers — so any
+   * commit landing inside the ~1s window fed the animation's current height
+   * back in as the new target.
+   *
+   * On the guacamole demo that produced, measured at 390px: the tuck tap read
+   * a target of 474px for a 60px chip, skipped the transition entirely because
+   * target === start, left the stale inline height on, and then teleported the
+   * finish strip 414px when the 1400ms fallback timer wiped it. The two taps
+   * after it inflated the container back to 474px around that same 60px chip,
+   * held it for 1.4s, and snapped back — the "expand and contract while you
+   * are pressing the buttons" this is here to prevent.
+   *
+   * So: clear the inline styles *before* measuring, and animate from wherever
+   * the element visually is right now rather than from a remembered number.
+   * Interrupting a run mid-flight is then seamless — the new animation simply
+   * starts from the current position — and no stale height can survive into
+   * the next measurement.
+   */
   const swapRef = useRef<HTMLDivElement>(null);
-  const prevHeightRef = useRef<number | null>(null);
   const heightCleanupRef = useRef<(() => void) | null>(null);
+  const hasMeasuredRef = useRef(false);
+  /** Last commit's *content* height — the start of the next animation
+   *  whenever one is not already in flight. Only ever assigned the value of
+   *  scrollHeight read with the inline styles cleared, so an animation can
+   *  never be fed back into it. */
+  const prevHeightRef = useRef<number | null>(null);
   useLayoutEffect(() => {
     const el = swapRef.current;
     if (!el) return;
-    const newHeight = el.scrollHeight;
-    const prevHeight = prevHeightRef.current;
-    if (prevHeight != null && prevHeight !== newHeight) {
-      heightCleanupRef.current?.();
-      heightCleanupRef.current = null;
-      const reduceMotion =
-        typeof window !== "undefined" &&
-        window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
-      if (reduceMotion) {
-        el.style.transition = el.style.height = el.style.overflow = "";
-      } else {
-        el.style.transition = "";
-        el.style.height = `${prevHeight}px`;
-        el.style.overflow = "hidden";
-        // Force layout so the browser registers the start height before the
-        // target height is applied, or there is nothing to transition from.
-        void el.getBoundingClientRect();
-        el.style.transition = "height 1s cubic-bezier(.2,.7,.3,1)";
-        el.style.height = `${newHeight}px`;
-        const clear = () => {
-          el.style.transition = el.style.height = el.style.overflow = "";
-        };
-        const onEnd = (ev: TransitionEvent) => {
-          if (ev.propertyName !== "height") return;
-          clear();
-          el.removeEventListener("transitionend", onEnd);
-          window.clearTimeout(timeout);
-          heightCleanupRef.current = null;
-        };
-        // transitionend is not guaranteed: a hidden or backgrounded element
-        // never fires it, and neither does a transition the engine declines to
-        // run. Without a fallback the inline height and overflow:hidden stay
-        // on forever, which reads as the card clipping its own diagram — the
-        // bug this belt-and-braces timer exists to prevent, not to mask.
-        const timeout = window.setTimeout(() => {
-          clear();
-          el.removeEventListener("transitionend", onEnd);
-          heightCleanupRef.current = null;
-        }, 1400);
-        el.addEventListener("transitionend", onEnd);
-        heightCleanupRef.current = () => {
-          el.removeEventListener("transitionend", onEnd);
-          window.clearTimeout(timeout);
-        };
-      }
+
+    // Where to animate from depends on whether a run is already going.
+    //
+    // This effect is a layout effect, so by the time it runs React has already
+    // committed the new DOM and the browser has already laid it out. If
+    // nothing is pinning the element, its measured height is therefore the
+    // height we are trying to animate *to* — reading it here and calling it
+    // the start would animate from the target to the target, i.e. not at all.
+    // So the start is the previous commit's content height, remembered.
+    //
+    // If a run *is* in flight the element is pinned by an inline height, and
+    // that pinned value is exactly where it is on screen right now — which
+    // makes it the honest start, and lets an interrupted run continue from
+    // where it visually got to instead of snapping.
+    const wasAnimating = el.style.height !== "";
+    const pinnedHeight = wasAnimating ? el.getBoundingClientRect().height : null;
+
+    // Drop any in-flight run and its inline styles before measuring, so
+    // scrollHeight reports the content rather than the animation.
+    heightCleanupRef.current?.();
+    heightCleanupRef.current = null;
+    el.style.transition = el.style.height = el.style.overflow = "";
+    const targetHeight = el.scrollHeight;
+
+    const startHeight = pinnedHeight ?? prevHeightRef.current;
+    prevHeightRef.current = targetHeight;
+
+    // First commit has nothing to animate from.
+    if (!hasMeasuredRef.current) {
+      hasMeasuredRef.current = true;
+      return;
     }
-    prevHeightRef.current = newHeight;
+    if (startHeight == null || Math.abs(startHeight - targetHeight) < 0.5) return;
+
+    const reduceMotion =
+      typeof window !== "undefined" &&
+      window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    if (reduceMotion) return;
+
+    el.style.height = `${startHeight}px`;
+    el.style.overflow = "hidden";
+    // Force layout so the browser registers the start height before the
+    // target height is applied, or there is nothing to transition from.
+    void el.getBoundingClientRect();
+    el.style.transition = `height ${SWAP_MS}ms cubic-bezier(.2,.7,.3,1)`;
+    el.style.height = `${targetHeight}px`;
+
+    const clear = () => {
+      el.style.transition = el.style.height = el.style.overflow = "";
+    };
+    const onEnd = (ev: TransitionEvent) => {
+      if (ev.propertyName !== "height") return;
+      clear();
+      el.removeEventListener("transitionend", onEnd);
+      window.clearTimeout(timeout);
+      heightCleanupRef.current = null;
+    };
+    // transitionend is not guaranteed: a hidden or backgrounded element never
+    // fires it, and neither does a transition the engine declines to run.
+    // Without a fallback the inline height and overflow:hidden stay on
+    // forever, which reads as the card clipping its own diagram — the bug this
+    // belt-and-braces timer exists to prevent, not to mask.
+    const timeout = window.setTimeout(clearAndDetach, SWAP_MS + 400);
+    function clearAndDetach() {
+      clear();
+      el!.removeEventListener("transitionend", onEnd);
+      heightCleanupRef.current = null;
+    }
+    el.addEventListener("transitionend", onEnd);
+    heightCleanupRef.current = () => {
+      el.removeEventListener("transitionend", onEnd);
+      window.clearTimeout(timeout);
+    };
   });
 
   let baseLayout;

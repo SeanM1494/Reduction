@@ -984,13 +984,25 @@ body {
   border-bottom: 9px solid var(--warm-line);
 }
 
-/* once the tree is complete the strip is the whole show */
-.rd-finish.is-focus { margin-top: 14px; animation: rd-focus-in .45s cubic-bezier(.2,.7,.3,1); }
-.rd-finish.is-focus .rd-fin { padding: 15px 18px; }
-.rd-finish.is-focus .rd-fin-label { font-size: 15.5px; }
+/* Once the tree is complete the strip is the whole show.
+
+   IT MUST NOT RESIZE TO SAY SO. This used to add 2px of margin, grow every
+   chip's padding 11px -> 15px and its label 14px -> 15.5px, and slide in from
+   translateY(10px). All of that applied on the same commit as the tap that
+   completed the tree — measured at 34ms after the tap, inside the ~80-150ms a
+   finger is still down — so the strip grew 6px per chip and shifted 12px down
+   while being pressed, and the two steps left to tap were the chips that
+   moved.
+
+   The emphasis is now carried entirely by what has already happened: the
+   table above has tucked away, which is a far louder cue than 4px of padding.
+   The fade is opacity-only — no transform — because a transform moves the
+   chip on screen even though it costs no layout, and the finger cannot tell
+   the difference. Keep any future is-focus styling non-geometric. */
+.rd-finish.is-focus { animation: rd-focus-in .45s ease-out; }
 @keyframes rd-focus-in {
-  from { opacity: 0; transform: translateY(10px); }
-  to   { opacity: 1; transform: none; }
+  from { opacity: .55; }
+  to   { opacity: 1; }
 }
 
 @media (max-width: 700px) {
