@@ -36,49 +36,113 @@ rollback test proves nothing about a change made after it last ran.
 **Report the commit hash after every push**, so it can be verified against
 what actually landed rather than trusted.
 
+## This app is mobile-first
+
+It will ship as an App Store app, and most real use is a phone propped on a
+counter in a kitchen. That is the primary target, not a narrow case to
+accommodate afterwards.
+
+- **A feature that works on desktop and not on mobile is not done.** Not
+  "done with a known issue" — not done.
+- **Touch targets are at least 44px.** A 31px control is a desktop button
+  that happens to be on a phone.
+- Legibility at arm's length across a counter, and reach for one thumb, beat
+  desktop density every time they conflict.
+- The fold budget below is part of this rule, not a separate concern.
+
+### Verify on a real phone viewport, and on production
+
+Three mobile-only bugs have reached production, and every one of them was
+invisible in a resized desktop window. A narrow desktop window fires the same
+media queries but gets none of the rest: no touch, no mobile user agent, no
+device pixel ratio, and — the one that actually bit — **no browser chrome
+eating the viewport**.
+
+**A phone's screen height is not its viewport height.** An iPhone 13 is
+390×844 as a device and **390×664** as a browser viewport once Safari's URL
+bar and toolbar are showing. Measuring against 844 measures a viewport no
+phone user ever has. Playwright's device descriptors already carry the right
+numbers, so use those rather than a hand-typed viewport:
+
+```js
+import { chromium, devices } from 'playwright';
+const b = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium' });
+const ctx = await b.newContext({ ...devices['iPhone 13'] }); // 390x664, touch, dpr 3
+```
+
+Check at minimum **iPhone 13** (390×664), **Pixel 5** (393×727) and
+**iPhone SE** (320×568) — the SE is the one that exposes wrapping. Chromium
+and Playwright are preinstalled (`PLAYWRIGHT_BROWSERS_PATH=/opt/pw-browsers`)
+so this needs no dependency in `package.json`. **WebKit is not installed**, so
+a Safari-only bug cannot be reproduced in this container at all — that is a
+gap to close on the deployed site, not to assume away.
+
+Local passing is necessary and not sufficient: verify the deployed URL too,
+because the last three mobile bugs all passed locally.
+
+### Pre-commit, for any visual or interaction change
+
+On top of `npm run check` and `npm test`:
+
+1. Load the changed screen at **iPhone 13, Pixel 5 and iPhone SE** device
+   profiles, not a resized window.
+2. Confirm no page-level horizontal scroll:
+   `document.documentElement.scrollWidth <= document.documentElement.clientWidth`.
+   Ignore elements inside an `overflow-x` ancestor — the diagram scrolls
+   inside `.rd-frame` on purpose.
+3. Confirm every control you touched is at least 44px tall and actually
+   reachable — `page.tap()`, not `page.click()`, so a `:hover`-only
+   affordance is caught.
+4. Re-measure the fold (below).
+5. Check the same screens on the deployed site once it ships.
+
 ## The landing page has a fold budget
 
 `LandingPage.tsx` has one hard layout requirement: **the whole demo diagram
-must be visible without scrolling on a 390×844 phone** (iPhone 12/13/14
-class, the narrowest common size). A first-time visitor who has to scroll to
-see the thing the page is demonstrating has already been failed by it.
+must be visible without scrolling on a phone**. A first-time visitor who has
+to scroll to see the thing the page is demonstrating has already been failed
+by it.
 
-As of the coaching layer this passes with roughly **43px to spare** — the
-diagram ends at 801px of 844. That is not much. Anything that adds height
-above the diagram spends it:
+**This is currently NOT met, and the reason is worth knowing.** The budget was
+measured for a long time against 390×844 — the iPhone 13's *screen*. The real
+Safari viewport is 390×664. Against the correct number the diagram ends at
+812px, which is **148px below the fold**; on an iPhone SE (320×568) it is over
+400px below. It passed every check because every check used the wrong height.
 
-- hero title or subheading copy that wraps to another line
-- the coach line in `DemoCoach.tsx` growing past one line
-- another control in the demo header, or a longer label that wraps the row
-- padding or margin changes on `.rd-landing-hero` / `.rd-landing-demo`
+What sits above the diagram, on a phone, and what each costs:
 
-**So: re-measure at 390×844 after changing any landing page copy or spacing.**
-Wrapping is the usual culprit, and it is invisible on a desktop browser — the
-same sentence that fits on one line at 1100px takes three at 390px.
+| | |
+|---|---|
+| nav | ~72px |
+| hero title + subheading + margins | ~169px |
+| demo header row (mode toggle, Watch it, Reset) | ~43px |
+| coach line | ~33px |
+| section head ("01 Guacamole") | ~27px |
+
+Anything that adds height above the diagram spends budget that is already
+overdrawn: copy that wraps to another line, the coach line growing past one
+line, another control in the demo header, padding changes on
+`.rd-landing-hero` / `.rd-landing-demo`.
 
 The `≤520px` block in `index.css` already spent the obvious savings: the tip
 slot does not reserve space, the controls stay on one row, the hero is
-tightened, and tips overlay the diagram rather than displacing it (measured:
-in flow, a two-line tip pushed the diagram down 57px and back up on
-dismissal). There is no easy padding left to reclaim. If something has to go
-below the fold, the legend goes first and the diagram never does.
+tightened, tips overlay the diagram rather than displacing it (measured: in
+flow, a two-line tip pushed the diagram down 57px and back up on dismissal),
+and the brand wordmark is dropped so sign-in fits in the nav. There is no easy
+padding left — closing a 148px gap means giving something up, and that is a
+design decision rather than a tuning one.
+
+If something has to go below the fold, the legend goes first and the diagram
+never does.
 
 ### Re-measuring
 
-Build, serve, and read the diagram's bottom edge against the viewport:
-
 ```js
-// with the app served, in a 390x844 browser at the landing page
+// in a device-profile context, on the landing page
 const r = document.querySelector('.rd-table').getBoundingClientRect();
 ({ bottom: Math.round(r.bottom), viewport: window.innerHeight })
-// bottom must be <= viewport
+// bottom must be <= viewport, at every device profile above
 ```
-
-Chromium and Playwright are preinstalled in Claude Code web sessions
-(`PLAYWRIGHT_BROWSERS_PATH=/opt/pw-browsers`), so this can be scripted with
-`npx playwright` without adding a dependency to `package.json` — the app
-itself must stay dependency-free here. In a normal browser, devtools device
-emulation at 390×844 is equivalent.
 
 ## The demo teaches through a wrapper, not a fork
 

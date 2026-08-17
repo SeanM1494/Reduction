@@ -794,6 +794,10 @@ body {
 
 @media (max-width: 380px) {
   .rd-table { min-width: 360px; }
+  /* At 320px the nav wraps again: logo 44 + theme toggle 162 + sign-in 72
+     exceeds the 296 available. The toggle's padding is the cheapest 20px. */
+  .rd-theme-btn { padding: 5px 6px; font-size: 11px; }
+  .rd-nav { gap: 8px 10px; }
   .rd-ing { min-width: 84px; max-width: 104px; }
 }
 
@@ -1354,13 +1358,20 @@ body {
 }
 
 @media (max-width: 520px) {
-  /* The landing nav has room for the brand and the theme toggle and nothing
-     else: adding a third control wraps it to a second row, which costs 41px
-     of a fold budget that has 43. Measured — see CLAUDE.md. Sign-in is still
-     reachable on a phone from the demo's call to action, and a returning
-     visitor gets the inline link in .rd-signed-out-note, which is the case
-     that actually needs it. */
-  .rd-signin-nav { display: none; }
+  /* Sign-in has to be visible on a phone — it is the only conventional place
+     a person looks for it, and the demo's call to action sits below the fold.
+     The nav could not fit it before because the brand costs 146px of the 366
+     available (logo 44 + wordmark ~100) and the theme toggle another 162,
+     leaving 42 for a 76px button — so it wrapped to a second row and spent
+     41px of a 43px fold budget.
+     Dropping the wordmark frees ~100px, which is more than enough. The logo
+     stays and still identifies the app; the word is the part a phone can
+     afford to lose. Measured — see CLAUDE.md. */
+  .rd-brand-word { display: none; }
+  /* 44px minimum touch target. A 31px button is a desktop button that
+     happens to be on a phone. */
+  .rd-nav-right .rd-btn { min-height: 44px; padding: 7px 15px; }
+  .rd-theme-btn { min-height: 40px; }
 }
 
 /* ------------------------------------------------------------------

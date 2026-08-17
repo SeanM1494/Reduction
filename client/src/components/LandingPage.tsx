@@ -217,7 +217,7 @@ export default function LandingPage({
             alt=""
             aria-hidden="true"
           />
-          Reduction
+          <span className="rd-brand-word">Reduction</span>
         </span>
         <div className="rd-nav-right">
           <button className="rd-btn rd-signin-nav" onClick={onSignIn}>
