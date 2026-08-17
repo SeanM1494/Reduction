@@ -4,6 +4,20 @@ Architecture, scripts and deployment are in `README.md` — this file is for
 constraints that are easy to break without noticing, because nothing in the
 build fails when you do.
 
+## How work gets committed
+
+**Commit directly to `main` and push.** Do not create a branch, and do not
+open a pull request, unless explicitly asked for one. The stacked-branch
+workflow this repo used earlier is retired: it cost a round trip per change
+and, twice, merged a stale head — a pull request opened at one commit and
+merged at that same commit while later work sat unnoticed on the branch.
+
+**Run `npm run check` and `npm test` before every commit.** Both must pass
+first. Not after, not "it typechecked earlier" — before.
+
+**Report the commit hash after every push**, so it can be verified against
+what actually landed rather than trusted.
+
 ## The landing page has a fold budget
 
 `LandingPage.tsx` has one hard layout requirement: **the whole demo diagram
