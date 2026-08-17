@@ -15,6 +15,18 @@ merged at that same commit while later work sat unnoticed on the branch.
 **Run `npm run check` and `npm test` before every commit.** Both must pass
 first. Not after, not "it typechecked earlier" — before.
 
+`npm test` reports **13 passing and 7 skipped without a database**. The seven
+are the claim's transactional guarantees in `server/lib/claim.db.test.ts` —
+all-or-nothing rollback, idempotent repeat claims, never taking another
+user's rows — and they skip when `DATABASE_URL` is unset or unreachable so
+the suite stays green on a machine without Postgres.
+
+**They have been run against a real database and all seven pass: 20 passing,
+0 skipped.** So a skipped count of 7 means "no database here", not "unproven"
+— no need to flag it as an outstanding risk again. Do re-run them with
+`DATABASE_URL` set after changing anything in `claim.ts`, since a skipped
+rollback test proves nothing about a change made after it last ran.
+
 **Report the commit hash after every push**, so it can be verified against
 what actually landed rather than trusted.
 
