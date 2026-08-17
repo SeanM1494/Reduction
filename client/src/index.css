@@ -1362,3 +1362,47 @@ body {
      that actually needs it. */
   .rd-signin-nav { display: none; }
 }
+
+/* ------------------------------------------------------------------
+ * Raw JSON repair editor (RecipeJsonEditor.tsx). Deliberately plain —
+ * this is the stopgap until structured editing exists, and looking
+ * unfinished is honest about that.
+ * ------------------------------------------------------------------ */
+.rd-json { display: flex; flex-direction: column; gap: 14px; max-width: 900px; margin: 0 auto; }
+.rd-json-head {
+  display: flex; align-items: flex-start; justify-content: space-between;
+  gap: 16px; flex-wrap: wrap;
+}
+.rd-json-title {
+  font-family: "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
+  font-size: 19px; margin: 0 0 4px; color: var(--ink);
+}
+.rd-json-sub { margin: 0; font-size: 13px; color: var(--muted); max-width: 58ch; }
+.rd-json-actions { display: flex; gap: 8px; align-items: center; }
+
+.rd-json-area {
+  width: 100%; min-height: 46vh; resize: vertical;
+  font-family: "Space Mono", ui-monospace, monospace;
+  font-size: 12.5px; line-height: 1.55; tab-size: 2;
+  color: var(--ink); background: var(--card);
+  border: 1px solid var(--line-strong); border-radius: 13px; padding: 14px 15px;
+  box-shadow: inset 0 1px 2px rgba(var(--shadow-rgb), .10);
+}
+.rd-json-area:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+.rd-json-area.is-invalid { border-color: var(--danger-line); }
+
+.rd-json-status { min-height: 42px; }
+.rd-json-errors { margin: 8px 0 0; padding-left: 20px; }
+.rd-json-errors li { margin-bottom: 3px; }
+.rd-json-ok {
+  margin: 0; font-size: 13px; color: var(--cool-ink);
+  background: color-mix(in srgb, var(--cool-bg) 60%, var(--card));
+  border: 1px solid color-mix(in srgb, var(--cool-line) 40%, var(--card));
+  border-radius: 9px; padding: 9px 12px;
+}
+
+@media (max-width: 520px) {
+  .rd-json-area { min-height: 40vh; font-size: 12px; }
+  .rd-json-actions { width: 100%; }
+  .rd-json-actions .rd-go, .rd-json-actions .rd-btn { flex: 1; }
+}

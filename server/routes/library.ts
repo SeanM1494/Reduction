@@ -16,6 +16,7 @@ import { eq, and, desc, isNull, type SQL } from "drizzle-orm";
 import { getDb } from "../db";
 import { recipes } from "../../shared/schema";
 import { validateRecipe } from "../../shared/layout";
+import { reconcileDone } from "../../shared/progress";
 import { userIdOf } from "../middleware/session";
 
 export const libraryRouter = Router();
@@ -160,8 +161,23 @@ libraryRouter.post("/", async (req: Request, res: Response) => {
 
 libraryRouter.patch("/:id", async (req: Request, res: Response) => {
   const id = String(req.params.id);
-  const { done, servings, mode, timer } = req.body ?? {};
+  const { recipe, done, servings, mode, timer } = req.body ?? {};
   const patch: Partial<typeof recipes.$inferInsert> = { updatedAt: new Date() };
+
+  /**
+   * A replacement tree, from the JSON editor. Validated here and not merely
+   * on the client: validateRecipe is what guarantees anything stored can be
+   * rendered, and a client that skipped it — or a request that never came
+   * from our client — must not be able to put an unrenderable recipe in the
+   * database. Same gate the POST route uses.
+   */
+  if (recipe !== undefined) {
+    const errors = validateRecipe(recipe);
+    if (errors.length) {
+      return res.status(422).json({ error: "That recipe is not valid.", details: errors });
+    }
+    patch.recipe = recipe;
+  }
 
   if (done !== undefined) {
     if (!Array.isArray(done)) return res.status(400).json({ error: "done must be an array of ids." });
@@ -185,11 +201,40 @@ libraryRouter.patch("/:id", async (req: Request, res: Response) => {
 
   try {
     const db = getDb();
-    const [row] = await db
-      .update(recipes)
-      .set(patch)
-      .where(and(eq(recipes.id, id), scopeOf(req)))
-      .returning();
+
+    /**
+     * A new tree can delete the ids `done` is a list of, so progress is
+     * reconciled against whatever the row ends up holding — here, not only
+     * in the client. The client computes the same thing to warn the user
+     * before they save, but the stored value has to be correct even when the
+     * request did not come from that client. Read and write in one
+     * transaction so a concurrent update cannot land between them.
+     */
+    const row = patch.recipe
+      ? await db.transaction(async (tx) => {
+          const [current] = await tx
+            .select()
+            .from(recipes)
+            .where(and(eq(recipes.id, id), scopeOf(req)));
+          if (!current) return null;
+
+          const nextDone = patch.done !== undefined ? patch.done : current.done;
+          patch.done = reconcileDone(patch.recipe, nextDone).done;
+
+          const [updated] = await tx
+            .update(recipes)
+            .set(patch)
+            .where(and(eq(recipes.id, id), scopeOf(req)))
+            .returning();
+          return updated ?? null;
+        })
+      : (
+          await db
+            .update(recipes)
+            .set(patch)
+            .where(and(eq(recipes.id, id), scopeOf(req)))
+            .returning()
+        )[0];
 
     if (!row) return res.status(404).json({ error: "No saved recipe with that id." });
 

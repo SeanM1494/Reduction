@@ -251,14 +251,19 @@ export function saveLibrary(entries: Entry[]): void {
       }).catch((e) => console.error("[storage] could not save a new recipe:", e));
       continue;
     }
+    // The JSON editor is the only thing that changes a stored tree, so this
+    // is normally false and the recipe is not re-sent on every tick of a
+    // timer or checkbox.
+    const recipeChanged = JSON.stringify(before.recipe) !== JSON.stringify(entry.recipe);
     const doneChanged = JSON.stringify(before.done) !== JSON.stringify(entry.done);
     const servingsChanged = before.servings !== entry.servings;
     const modeChanged = before.mode !== entry.mode;
     const timerChanged = JSON.stringify(before.timer) !== JSON.stringify(entry.timer);
-    if (doneChanged || servingsChanged || modeChanged || timerChanged) {
+    if (recipeChanged || doneChanged || servingsChanged || modeChanged || timerChanged) {
       api(`/${encodeURIComponent(id)}`, {
         method: "PATCH",
         body: JSON.stringify({
+          ...(recipeChanged ? { recipe: entry.recipe } : {}),
           done: entry.done,
           servings: entry.servings,
           mode: entry.mode,

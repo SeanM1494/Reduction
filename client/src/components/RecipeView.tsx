@@ -21,6 +21,7 @@ import { computeLayout } from "../../../shared/layout";
 import type { Entry } from "../lib/storage";
 import Diagram from "./Diagram";
 import StepsMode from "./StepsMode";
+import RecipeJsonEditor from "./RecipeJsonEditor";
 import { saveRecipeAsImage, slugForFile } from "../lib/exportImage";
 
 interface Props {
@@ -30,7 +31,7 @@ interface Props {
   onDelete: () => void;
 }
 
-type Phase = "choose" | "diagram" | "steps";
+type Phase = "choose" | "diagram" | "steps" | "json";
 
 const DiagramGlyph = () => (
   <svg width="34" height="34" viewBox="0 0 34 34" fill="none" aria-hidden="true">
@@ -272,6 +273,19 @@ export default function RecipeView({ entry, onBack, onUpdate, onDelete }: Props)
               >
                 Clear progress
               </button>
+              {/* The repair hatch for a bad parse. Kept in the overflow menu
+                  rather than on the toolbar: most recipes never need it, and
+                  the ones that do need it badly. */}
+              <button
+                className="rfx-menu-item"
+                role="menuitem"
+                onClick={() => {
+                  setMenuOpen(false);
+                  setPhase("json");
+                }}
+              >
+                Edit recipe data
+              </button>
               <button
                 className="rfx-menu-item rfx-menu-item-danger"
                 role="menuitem"
@@ -288,7 +302,20 @@ export default function RecipeView({ entry, onBack, onUpdate, onDelete }: Props)
       </div>
 
       <div className={`rfx-content ${phase === "steps" ? "rfx-content-center" : ""}`}>
-        {phase === "steps" ? (
+        {phase === "json" ? (
+          <RecipeJsonEditor
+            recipe={recipe}
+            done={entry.done ?? []}
+            onCancel={() => setPhase(entry.mode === "steps" ? "steps" : "diagram")}
+            onSave={(nextRecipe, nextDone) => {
+              // done comes back already reconciled against the new tree, so
+              // the diagram can never be handed an id the tree lost. The
+              // server recomputes it too — see shared/progress.ts.
+              onUpdate({ ...entry, recipe: nextRecipe, done: nextDone });
+              setPhase(entry.mode === "steps" ? "steps" : "diagram");
+            }}
+          />
+        ) : phase === "steps" ? (
           <div className="rfx-steps-wrap">
             <StepsMode
               key={entry.id}
