@@ -2,10 +2,13 @@
  * client/src/components/StepsMode.tsx — step-by-step cooking mode.
  *
  * Same data, same `done` set as the diagram — this just walks it as a card
- * sequence instead of a table. Card order is derived from computeLayout's
- * own cell columns/rows, never from a separate traversal, so it always
- * agrees with the diagram: left to right by column (depth in the recipe),
- * top to bottom within a column.
+ * sequence instead of a table. The order comes from shared/sequence.ts, which
+ * derives it from computeLayout's own cell columns and rows rather than from
+ * a separate traversal, so it always agrees with the diagram: left to right
+ * by column (depth in the recipe), top to bottom within a column — and then
+ * orders the sections so a component is made before the section that consumes
+ * it. That last part is not cosmetic: a queue that hands you "bake" before
+ * "mix the dry ingredients" is wrong in a kitchen, and it shipped.
  *
  * Every step is one card: ingredients (if any) live on the same card as the
  * step's action, framed as a short instruction — "In a bowl, add: ... Then
@@ -16,7 +19,8 @@
  */
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { computeLayout, type Ingredient, type Recipe, type Step } from "../../../shared/layout";
+import { type Ingredient, type Recipe, type Step } from "../../../shared/layout";
+import { cardSequence } from "../../../shared/sequence";
 import { formatAmount } from "../../../shared/amounts";
 import type { Entry, StepTimer } from "../lib/storage";
 
@@ -92,50 +96,58 @@ export default function StepsMode({ recipe, entry, done, scale, onToggle, onUpda
       0
     );
 
-    recipe.sections.forEach((section, sectionIndex) => {
-      let layout;
-      try {
-        layout = computeLayout(section);
-      } catch {
-        return; // The diagram already shows this section's error.
-      }
+    /**
+     * The order comes from shared/sequence.ts, not from walking the sections
+     * in array order.
+     *
+     * Two things were wrong with doing it here. The within-section sort was
+     * justified by a comment claiming computeLayout assigns "column = 1 + max
+     * (column of inputs)" — true of an earlier pass, and not since layout
+     * began packing steps as late as possible. The conclusion survived (late
+     * packing puts every input at exactly its consumer's column minus one, so
+     * ascending column order is still producer-first) but the reasoning did
+     * not, and a stale justification is how the next change to layout breaks
+     * this silently.
+     *
+     * The second was a real bug: sections were emitted in array order, and a
+     * component section can arrive *after* the section that consumes it. A
+     * cookie recipe came back as "Dough" then "Dry ingredients", with Dough
+     * consuming an ingredient named "Dry ingredients" — the link prompt.ts
+     * asks for — and step-by-step said bake first, mix the dry ingredients
+     * last. See shared/sequence.ts.
+     */
+    const byId = new Map<string, { step: Step; section: (typeof recipe.sections)[number] }>();
+    recipe.sections.forEach((section) => {
+      for (const n of section.nodes) byId.set(n.id, { step: n, section });
+    });
+
+    for (const { sectionIndex, stepId } of cardSequence(recipe)) {
+      const found = byId.get(stepId);
+      if (!found) continue;
+      const { step } = found;
+      const section = recipe.sections[sectionIndex];
       const ingById = new Map(section.ingredients.map((i) => [i.id, i]));
       const nodeById = new Map(section.nodes.map((n) => [n.id, n]));
 
-      // Same cells computeLayout hands the diagram — flattened and sorted
-      // (col, row) walks it left to right: every cell in a column is
-      // finished (top to bottom) before moving to the column to its right.
-      // This is always dependency-safe because computeLayout assigns column
-      // = 1 + max(column of inputs), so nothing in a column can depend on
-      // another cell in that same column.
-      const opCells = layout.rows
-        .flat()
-        .filter((c) => c.kind === "op")
-        .sort((a, b) => a.col - b.col || a.row - b.row);
+      const ingredientInputs = (step.inputs || [])
+        .map((id) => ingById.get(id))
+        .filter((x): x is Ingredient => !!x);
+      const fromLabels = (step.inputs || [])
+        .map((id) => nodeById.get(id)?.label)
+        .filter((x): x is string => !!x);
 
-      for (const cell of opCells) {
-        const step = nodeById.get(cell.key);
-        if (!step) continue;
-        const ingredientInputs = (step.inputs || [])
-          .map((id) => ingById.get(id))
-          .filter((x): x is Ingredient => !!x);
-        const fromLabels = (step.inputs || [])
-          .map((id) => nodeById.get(id)?.label)
-          .filter((x): x is string => !!x);
-
-        actionNumber++;
-        cards.push({
-          key: step.id,
-          stepId: step.id,
-          step,
-          sectionIndex,
-          sectionName: section.name,
-          ingredients: ingredientInputs,
-          fromLabels,
-          actionNumber,
-        });
-      }
-    });
+      actionNumber++;
+      cards.push({
+        key: step.id,
+        stepId: step.id,
+        step,
+        sectionIndex,
+        sectionName: section.name,
+        ingredients: ingredientInputs,
+        fromLabels,
+        actionNumber,
+      });
+    }
 
     return { cards, totalActions };
   }, [recipe]);

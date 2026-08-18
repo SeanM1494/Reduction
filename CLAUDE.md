@@ -256,6 +256,49 @@ const cta = document.querySelector('.rd-landing-cta').getBoundingClientRect();
 // collapsed, this must fit with room to spare on every profile
 ```
 
+## Cooking order is not section order
+
+**A step never appears in the card sequence after a step that consumes its
+output.** `shared/sequence.ts` owns that, and `sequence.test.ts` asserts it
+against fixtures and 100+ randomly generated valid trees.
+
+There are **two** kinds of dependency and only one of them is an edge:
+
+- Inside a section, `inputs` names them. Sorting `computeLayout`'s cells by
+  (column, row) respects them — but not for the reason StepsMode used to
+  claim. Its comment said columns were "1 + max(column of inputs)", which was
+  true of an earlier pass and stopped being true when layout began packing
+  steps **as late as possible**. The conclusion survived by luck: late packing
+  puts every input at exactly its consumer's column minus one, so ascending
+  column order is still producer-first. If you change the column passes,
+  re-check this — the tests will catch it, the old comment would not have.
+- **Between sections there is no edge at all**, because ids never cross a
+  section boundary. The link is by *name*: `prompt.ts` tells the model that a
+  separately-made component becomes its own section and then appears as an
+  ingredient in the consuming section "with a name matching the earlier
+  section". Nothing used to order by that.
+
+That second one shipped. A cookie recipe came back as `Dough` then `Dry
+ingredients`, with Dough consuming an ingredient named "Dry ingredients".
+`validateRecipe` returned no errors and the diagram drew two correct tables —
+so it looked fine everywhere except the one place it mattered, where
+step-by-step said bake first and mix the dry ingredients last. **A valid tree
+and a correct diagram are not evidence that the order is right.**
+
+`sectionOrder` is a stable topological sort over those name links: a recipe
+with no components comes out untouched, and a cycle (which a bad parse can
+produce) falls back to the original order rather than hanging or dropping a
+section.
+
+## The URL cache has no normalisation
+
+`extraction_cache` is keyed on `sha256("url:" + the raw string)`. A trailing
+slash, a `utm_` parameter, `http` vs `https` or a `#fragment` is a different
+key and pays for a fresh extraction — which is also why the same link can come
+back as two different trees. Deciding to normalise is a trade, not a tidy-up:
+more hits also means a bad parse is stickier, since the first parse of a URL
+is what everyone gets for the 30-day TTL.
+
 ## The visual editor
 
 `shared/edits.ts` is the whole model: `applyEdit(recipe, op)` is pure, and one
