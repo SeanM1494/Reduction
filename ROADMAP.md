@@ -177,6 +177,45 @@ Two consequences worth designing for:
 early prototype, exposed behind an "advanced" affordance. Ugly, but it
 unblocks anyone stuck with a bad parse today and costs almost nothing.
 
+### Status: the visual editor's first version is built
+
+An **Edit** toggle on a saved recipe's diagram. It does three things — change
+an ingredient's amount, unit, name and note; change a step's label; move an
+ingredient from one step to another. Tapping still means *mark done*
+everywhere else, and edit mode says so loudly, because that is the core
+interaction and it must not quietly change meaning.
+
+**The drop rule is the validator, not a copy of it.** `validMoveTargets` in
+`shared/edits.ts` builds the candidate tree for every step and runs the real
+`validateRecipe` on each, so what lights up during a drag *is* what will be
+accepted on drop. A re-derived predicate would have started correct and
+drifted the first time `computeLayout` gained a rule.
+
+**Press and hold to pick up**, because the diagram scrolls horizontally and a
+plain drag is indistinguishable from a scroll. 350ms, abandoned if the finger
+moves more than 10px first. A mouse skips the hold entirely.
+
+**Moving the last input out of a step is refused**, with the reason shown
+before anything moves — deleting the emptied step would be a destructive
+reading of a drag, and deleting steps is not in this version.
+
+**Edits apply immediately, with 50 levels of undo.** A server rejection rolls
+back to the last accepted version and says why.
+
+**Still only reachable through the raw JSON editor**, which is why it stays,
+now labelled *Advanced: edit raw data*: adding, deleting, splitting and
+merging steps, and fixing a bad root. Those are the repairs that make a
+recipe unusable rather than merely wrong. They are the next op types in
+`shared/edits.ts`, against the same `applyEdit(recipe, op)` signature.
+
+**Not available on the free trial recipe.** It has no library row to write
+to — App's trial branch deliberately does not POST or PATCH, because the
+server already parked the recipe under the trial id. Editing it would change
+the screen and nothing else, and signing up would claim the parked copy,
+discarding every edit at the moment the user was promised their work was
+safe. Making the trial row patchable is the fix; hiding the button is the
+honest stopgap.
+
 ---
 
 ## 7. An account to save, with one free extraction
@@ -252,6 +291,14 @@ select count(*) from recipes where user_id is null and owner_key not like 'trial
 
 ## Still open from earlier work
 
+- **`Unit` and `UNITS` are two hand-maintained lists that must agree.**
+  `shared/layout.ts` declares the union type at the top and the runtime set
+  near `validateRecipe`, and nothing enforces that they match — a unit added
+  to one and not the other either fails to typecheck at the call site or is
+  silently rejected by the validator. Deriving one from the other (a `const`
+  array, `typeof UNITS[number]` for the type) is a small change now and an
+  annoying one once a third list appears. Surfaced when the editor's unit
+  picker needed the set at runtime.
 - Pass 3 visual polish: shadows and contrast, pending sign-off on the
   corner treatment.
 - Phase B timers: service worker + Web Push for notifications when the

@@ -127,7 +127,15 @@ async function api(path: string, init?: RequestInit): Promise<any> {
     },
   });
   const body = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(body.error || `Library request failed (${res.status}).`);
+  if (!res.ok) {
+    // `details` is validateRecipe's own list of problems, written to be read
+    // by a person. Dropping it here would leave the editor able to say only
+    // "that failed", which is the least useful true thing it could say.
+    throw Object.assign(new Error(body.error || `Library request failed (${res.status}).`), {
+      status: res.status,
+      details: Array.isArray(body.details) ? (body.details as string[]) : undefined,
+    });
+  }
   return body;
 }
 
@@ -271,9 +279,96 @@ export async function loadLibrary(): Promise<Entry[]> {
   return entries;
 }
 
+/**
+ * A write that the server refused or never received.
+ *
+ * These used to go to console.error and nowhere else, while `lastSynced` was
+ * advanced regardless — so a rejected edit was both invisible and never
+ * retried. That was survivable while the JSON editor was the only thing that
+ * could change a stored tree, because it validated before saving and a 422
+ * was close to unreachable. The visual editor writes on every change, so the
+ * failure is reachable, and an edit that silently disappears is the worst
+ * outcome this file can produce.
+ */
+export interface SyncFailure {
+  id: string;
+  kind: "create" | "update" | "delete";
+  message: string;
+  /** validateRecipe's problems, when the server rejected a tree. */
+  details?: string[];
+  /** The last version the server actually accepted, for the caller to roll
+   *  back to. Null when the entry has never been stored. */
+  accepted: Entry | null;
+}
+
+type SyncFailureHandler = (failure: SyncFailure) => void;
+const syncFailureHandlers = new Set<SyncFailureHandler>();
+
+/** Subscribe to write failures. Returns an unsubscribe. */
+export function onSyncFailure(handler: SyncFailureHandler): () => void {
+  syncFailureHandlers.add(handler);
+  return () => syncFailureHandlers.delete(handler);
+}
+
+function reportSyncFailure(failure: SyncFailure): void {
+  console.error(`[storage] ${failure.kind} failed for ${failure.id}:`, failure.message);
+  for (const handler of syncFailureHandlers) {
+    try {
+      handler(failure);
+    } catch (e) {
+      console.error("[storage] a sync-failure handler threw:", e);
+    }
+  }
+}
+
+/** The last version of an entry the server confirmed it stored. This is what
+ *  a failed edit rolls back to, so it is never a guess. */
+export function lastAcceptedEntry(id: string): Entry | null {
+  return lastSynced?.get(id) ?? null;
+}
+
+/**
+ * Pushes local changes to the server.
+ *
+ * `lastSynced` is the record of what the server has actually accepted, so it
+ * advances per entry only when that entry's write resolves. A failure puts
+ * the previous value back, which means the next save sees the difference
+ * again and retries rather than assuming the write landed.
+ */
 export function saveLibrary(entries: Entry[]): void {
   const prev = lastSynced ?? new Map<string, Entry>();
   const next = new Map(entries.map((e) => [e.id, e]));
+  // Optimistic: assume each write lands, and undo that entry on failure.
+  lastSynced = new Map(next);
+
+  /**
+   * `attempted` is the exact value this request optimistically recorded. The
+   * revert only happens if that value is still what `lastSynced` holds — if a
+   * later save has already written something newer for this id, that request
+   * owns the entry now and this stale failure must not clobber it. Without
+   * the check, a slow rejected write could undo a fast successful one.
+   */
+  const failed = (
+    id: string,
+    kind: SyncFailure["kind"],
+    attempted: Entry | null,
+    before: Entry | null,
+    e: unknown
+  ) => {
+    const err = e as Error & { details?: string[] };
+    const current = lastSynced?.get(id) ?? null;
+    if (lastSynced && current === attempted) {
+      if (before) lastSynced.set(id, before);
+      else lastSynced.delete(id);
+    }
+    reportSyncFailure({
+      id,
+      kind,
+      message: err.message,
+      details: err.details,
+      accepted: before,
+    });
+  };
 
   for (const [id, entry] of next) {
     const before = prev.get(id);
@@ -288,12 +383,13 @@ export function saveLibrary(entries: Entry[]): void {
           mode: entry.mode,
           timer: entry.timer,
         }),
-      }).catch((e) => console.error("[storage] could not save a new recipe:", e));
+      }).catch((e) => failed(id, "create", entry, null, e));
       continue;
     }
-    // The JSON editor is the only thing that changes a stored tree, so this
-    // is normally false and the recipe is not re-sent on every tick of a
-    // timer or checkbox.
+    // Before the visual editor this was normally false, and the comment here
+    // said so. It is now true on every keystroke-committed edit, which is why
+    // RecipeView debounces before calling this rather than calling it per
+    // character.
     const recipeChanged = JSON.stringify(before.recipe) !== JSON.stringify(entry.recipe);
     const doneChanged = JSON.stringify(before.done) !== JSON.stringify(entry.done);
     const servingsChanged = before.servings !== entry.servings;
@@ -309,17 +405,18 @@ export function saveLibrary(entries: Entry[]): void {
           mode: entry.mode,
           timer: entry.timer,
         }),
-      }).catch((e) => console.error("[storage] could not update a recipe:", e));
+      }).catch((e) => failed(id, "update", entry, before, e));
     }
   }
 
   for (const id of prev.keys()) {
     if (!next.has(id)) {
+      const before = prev.get(id) ?? null;
       api(`/${encodeURIComponent(id)}`, { method: "DELETE" }).catch((e) =>
-        console.error("[storage] could not delete a recipe:", e)
+        // A failed delete optimistically recorded "absent", so that is what
+        // must still be true for the revert to be the right move.
+        failed(id, "delete", null, before, e)
       );
     }
   }
-
-  lastSynced = next;
 }

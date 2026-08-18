@@ -357,7 +357,7 @@ export function computeLayout(section: Section, opts?: LayoutOptions): Layout {
   return { rows, totalCols, totalRows: order.length, parentOf };
 }
 
-const UNITS = new Set<string>([
+export const UNITS = new Set<string>([
   "g", "kg", "oz", "lb", "ml", "l", "tsp", "tbsp", "cup", "fl_oz", "pinch",
 ]);
 

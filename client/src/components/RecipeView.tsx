@@ -17,11 +17,16 @@
  */
 
 import React, { useEffect, useMemo, useCallback, useRef, useState } from "react";
-import { computeLayout } from "../../../shared/layout";
+import { computeLayout, validateRecipe, type Recipe } from "../../../shared/layout";
 import type { Entry } from "../lib/storage";
 import Diagram from "./Diagram";
 import StepsMode from "./StepsMode";
 import RecipeJsonEditor from "./RecipeJsonEditor";
+import EditSheet from "./EditSheet";
+import { applyEdit, type EditOp } from "../../../shared/edits";
+import { reconcileDone } from "../../../shared/progress";
+import { lastAcceptedEntry, onSyncFailure } from "../lib/storage";
+import { useIngredientDrag } from "../lib/useIngredientDrag";
 import { saveRecipeAsImage, slugForFile } from "../lib/exportImage";
 
 interface Props {
@@ -29,9 +34,23 @@ interface Props {
   onBack: () => void;
   onUpdate: (entry: Entry) => void;
   onDelete: () => void;
+  /**
+   * False for the free trial recipe, which is shown from memory and has no
+   * library row to write to: App's trial branch deliberately does not POST or
+   * PATCH, because the server already parked the recipe under the trial id.
+   * Editing it would therefore change what is on screen and nothing else, and
+   * signing up would claim the *parked* copy — silently discarding every edit
+   * at the exact moment the user was promised their work was safe. Until the
+   * trial row can be patched, the honest answer is not to offer the button.
+   */
+  canEdit?: boolean;
 }
 
 type Phase = "choose" | "diagram" | "steps" | "json";
+
+/** Deep enough that undo is a real safety net rather than a token gesture,
+ *  bounded so a long editing session cannot grow without limit. */
+const UNDO_LIMIT = 50;
 
 const DiagramGlyph = () => (
   <svg width="34" height="34" viewBox="0 0 34 34" fill="none" aria-hidden="true">
@@ -52,12 +71,33 @@ const StepsGlyph = () => (
   </svg>
 );
 
-export default function RecipeView({ entry, onBack, onUpdate, onDelete }: Props) {
+export default function RecipeView({
+  entry,
+  onBack,
+  onUpdate,
+  onDelete,
+  canEdit = true,
+}: Props) {
   const { recipe } = entry;
   const [phase, setPhase] = useState<Phase>("choose");
   const [menuOpen, setMenuOpen] = useState(false);
   const [hovered, setHovered] = useState<string | null>(null);
   const [savingImage, setSavingImage] = useState(false);
+
+  /**
+   * Edit mode. Ephemeral like `phase`: App keys this component by entry id, so
+   * opening another recipe lands back in cooking mode, which is the mode
+   * someone opening a recipe is nearly always in.
+   */
+  const [editing, setEditing] = useState(false);
+  const [sheetFor, setSheetFor] = useState<string | null>(null);
+  /**
+   * Undo is multi-level because it costs almost nothing to make it so: every
+   * edit already produces a whole new Recipe, so the stack is just the
+   * previous ones. Bounded so a long session cannot grow without limit.
+   */
+  const [undoStack, setUndoStack] = useState<Array<{ recipe: Recipe; done: string[] }>>([]);
+  const [syncError, setSyncError] = useState<string | null>(null);
   const captureRef = useRef<HTMLDivElement | null>(null);
   const menuRef = useRef<HTMLDivElement | null>(null);
   const done = useMemo(() => new Set(entry.done || []), [entry.done]);
@@ -104,6 +144,104 @@ export default function RecipeView({ entry, onBack, onUpdate, onDelete }: Props)
     done.forEach((d) => up.delete(d));
     return up;
   }, [hovered, done, upstreamOf]);
+
+  /**
+   * Applies one edit, immediately.
+   *
+   * No Save button: the change is the save. What makes that safe rather than
+   * reckless is that the candidate is validated before it is kept, the
+   * previous tree is pushed onto the undo stack, and a server rejection rolls
+   * back to the last version the server actually accepted (see the sync
+   * failure effect below).
+   *
+   * `done` is reconciled through shared/progress.ts rather than through a
+   * second answer invented here. None of these three operations changes an
+   * id, so nothing is ever dropped today — but routing through it now is what
+   * stops that being quietly untrue the first time an op deletes something.
+   */
+  const applyOp = useCallback(
+    (op: EditOp) => {
+      let next: Recipe;
+      try {
+        next = applyEdit(recipe, op);
+      } catch (e) {
+        setSyncError((e as Error).message);
+        return;
+      }
+      const problems = validateRecipe(next);
+      if (problems.length) {
+        // The sheet checks before calling, and the drag only offers targets
+        // that validate, so reaching here means something upstream is wrong
+        // rather than that the user typed something odd. Refuse loudly.
+        setSyncError(problems[0]);
+        return;
+      }
+      const reconciled = reconcileDone(next, entry.done ?? []);
+      setUndoStack((prev) =>
+        [...prev, { recipe, done: entry.done ?? [] }].slice(-UNDO_LIMIT)
+      );
+      onUpdate({ ...entry, recipe: next, done: reconciled.done });
+    },
+    [recipe, entry, onUpdate]
+  );
+
+  const undo = useCallback(() => {
+    setUndoStack((prev) => {
+      const last = prev[prev.length - 1];
+      if (!last) return prev;
+      onUpdate({ ...entry, recipe: last.recipe, done: last.done });
+      return prev.slice(0, -1);
+    });
+  }, [entry, onUpdate]);
+
+  useEffect(() => {
+    if (!canEdit && editing) setEditing(false);
+  }, [canEdit, editing]);
+
+  const drag = useIngredientDrag({
+    recipe,
+    enabled: editing && canEdit,
+    onMove: (ingredientId, toStepId) =>
+      applyOp({ type: "moveIngredient", ingredientId, toStepId }),
+  });
+
+  /**
+   * A write the server refused or never received.
+   *
+   * Rolling back is not optional here. "Edits apply immediately" is a promise
+   * that what is on screen is what is stored, and a failed write breaks it
+   * silently — the user would keep editing a tree the server does not have.
+   * So the entry goes back to the last accepted version and says so; a failed
+   * edit that reverts without a word is nearly as bad as one that vanishes.
+   */
+  useEffect(
+    () =>
+      onSyncFailure((failure) => {
+        if (failure.id !== entry.id) return;
+        const accepted = failure.accepted ?? lastAcceptedEntry(entry.id);
+        setSyncError(
+          failure.details?.length
+            ? `That change was rejected: ${failure.details[0]}`
+            : `That change could not be saved (${failure.message}). It has been undone.`
+        );
+        if (accepted) onUpdate(accepted);
+      }),
+    [entry.id, onUpdate]
+  );
+
+  // Undo with the keyboard, for the mouse-and-keyboard case where the edit bar
+  // is not where the hand already is.
+  useEffect(() => {
+    if (!editing) return;
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "z" && !e.shiftKey) {
+        e.preventDefault();
+        undo();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [editing, undo]);
 
   const toggle = useCallback(
     (id: string) => {
@@ -240,6 +378,21 @@ export default function RecipeView({ entry, onBack, onUpdate, onDelete }: Props)
           </span>
         </div>
 
+        {phase === "diagram" && canEdit ? (
+          <button
+            className={`rd-btn rfx-edit-toggle no-print ${editing ? "is-on" : ""}`}
+            aria-pressed={editing}
+            onClick={() => {
+              setEditing((v) => !v);
+              setSheetFor(null);
+              drag.cancel();
+            }}
+            title={editing ? "Stop editing and go back to cooking" : "Edit this recipe"}
+          >
+            {editing ? "Done" : "Edit"}
+          </button>
+        ) : null}
+
         <div className="rfx-menu no-print" ref={menuRef}>
           <button
             className="rfx-menu-btn"
@@ -273,18 +426,21 @@ export default function RecipeView({ entry, onBack, onUpdate, onDelete }: Props)
               >
                 Clear progress
               </button>
-              {/* The repair hatch for a bad parse. Kept in the overflow menu
-                  rather than on the toolbar: most recipes never need it, and
-                  the ones that do need it badly. */}
+              {/* The escape hatch for everything the visual editor cannot
+                  express yet — adding, deleting, splitting or merging steps,
+                  or a root that came out wrong. Those are the repairs that
+                  make a recipe unusable rather than merely wrong, so this
+                  stays until the editor covers them. */}
               <button
                 className="rfx-menu-item"
                 role="menuitem"
                 onClick={() => {
                   setMenuOpen(false);
+                  setEditing(false);
                   setPhase("json");
                 }}
               >
-                Edit recipe data
+                Advanced: edit raw data
               </button>
               <button
                 className="rfx-menu-item rfx-menu-item-danger"
@@ -328,7 +484,45 @@ export default function RecipeView({ entry, onBack, onUpdate, onDelete }: Props)
             />
           </div>
         ) : (
-          <div className="rfx-diagram-wrap">
+          <div className={`rfx-diagram-wrap ${editing ? "is-editing" : ""}`}>
+            {/* The mode has to announce itself. Someone who wanders into edit
+                mode and taps around must not be left wondering why nothing
+                checks off — so the bar is persistent, not a toast. */}
+            {editing ? (
+              <div className="rd-editbar" role="status">
+                <span className="rd-editbar-dot" aria-hidden="true" />
+                <span className="rd-editbar-text">
+                  <strong>Editing.</strong> Tap to change a cell; press and hold an
+                  ingredient to move it. Nothing is being checked off.
+                </span>
+                <button
+                  className="rd-btn"
+                  onClick={undo}
+                  disabled={undoStack.length === 0}
+                  title={
+                    undoStack.length ? `Undo (${undoStack.length})` : "Nothing to undo yet"
+                  }
+                >
+                  Undo
+                </button>
+              </div>
+            ) : null}
+
+            {drag.blockedReason ? (
+              <p className="rd-editbar-blocked" role="alert">
+                {drag.blockedReason}
+              </p>
+            ) : null}
+
+            {syncError ? (
+              <div className="rd-alert" role="alert">
+                <span>{syncError}</span>
+                <button className="rd-btn" onClick={() => setSyncError(null)}>
+                  Dismiss
+                </button>
+              </div>
+            ) : null}
+
             {recipe.sections.map((s, i) => (
               <Diagram
                 key={i}
@@ -339,15 +533,63 @@ export default function RecipeView({ entry, onBack, onUpdate, onDelete }: Props)
                 scale={scale}
                 onToggle={toggle}
                 onHover={setHovered}
+                edit={
+                  editing
+                    ? {
+                        active: true,
+                        onTapCell: setSheetFor,
+                        onPointerDown: drag.onPointerDown,
+                        pressing: drag.pressing,
+                        dragging: drag.dragging,
+                        validTargets: drag.validTargets,
+                        hoverTarget: drag.hoverTarget,
+                      }
+                    : undefined
+                }
               />
             ))}
             <p className="rd-hint">
-              Amber means you can do it now. Click any step further right to
-              jump ahead &mdash; everything it depends on gets marked done
-              with it.
+              {editing
+                ? "Changes save as you make them. Undo reverses the last one."
+                : "Amber means you can do it now. Click any step further right to jump ahead — everything it depends on gets marked done with it."}
             </p>
           </div>
         )}
+
+        {/* The dragged cell is drawn here, fixed to the pointer, while the
+            real one stays exactly where it is. Moving the actual <td> would
+            relayout a rowspan table under a fingertip, which is the failure
+            mode the handoff work just removed. pointer-events:none so
+            elementFromPoint finds the drop target and not the ghost. */}
+        {drag.ghost ? (
+          <div
+            className="rd-drag-ghost"
+            aria-hidden="true"
+            style={{
+              transform: `translate3d(${drag.ghost.x}px, ${drag.ghost.y}px, 0)`,
+              width: drag.ghost.width,
+            }}
+          >
+            {drag.ghost.label}
+          </div>
+        ) : null}
+
+        <div className="rd-sr-live" role="status" aria-live="polite">
+          {drag.dragging
+            ? drag.hoverTarget
+              ? "Release to move here."
+              : "Picked up. Drag to a highlighted step."
+            : ""}
+        </div>
+
+        {editing && sheetFor ? (
+          <EditSheet
+            recipe={recipe}
+            targetId={sheetFor}
+            onApply={applyOp}
+            onClose={() => setSheetFor(null)}
+          />
+        ) : null}
 
         {recipe.sourceUrl ? (
           <p className="rd-source">

@@ -54,6 +54,25 @@ function fmtTime(min: number): string {
   return m ? `${h} hr ${m} min` : `${h} hr`;
 }
 
+/**
+ * Edit mode, supplied by RecipeView and absent everywhere else.
+ *
+ * Optional on purpose: the landing demo drives this component directly and
+ * must never gain an editor, so "no edit prop" has to mean "behaves exactly as
+ * it always did" rather than "editing defaults to off". Nothing in DemoCoach
+ * or LandingPage changes because of this.
+ */
+export interface DiagramEdit {
+  active: boolean;
+  /** A tap in edit mode opens fields instead of marking anything done. */
+  onTapCell: (id: string) => void;
+  onPointerDown: (e: React.PointerEvent, ingredientId: string) => void;
+  pressing: string | null;
+  dragging: string | null;
+  validTargets: Set<string>;
+  hoverTarget: string | null;
+}
+
 interface Props {
   section: Section;
   index: number;
@@ -62,6 +81,7 @@ interface Props {
   scale: number;
   onToggle: (id: string) => void;
   onHover: (id: string | null) => void;
+  edit?: DiagramEdit;
 }
 
 export default function Diagram({
@@ -72,6 +92,7 @@ export default function Diagram({
   scale,
   onToggle,
   onHover,
+  edit,
 }: Props) {
   const [override, setOverride] = useState(false);
   // Ids the user has manually reopened after they qualified for collapse.
@@ -292,32 +313,69 @@ export default function Diagram({
   // brings the diagram straight back with no stale state to reset.
   const showTable = treeDone ? override : true;
 
+  /**
+   * The one place a cell's behaviour is decided, which is why edit mode hooks
+   * in here rather than anywhere else. In edit mode a tap opens fields and
+   * never toggles `done` — someone who wanders in and taps around must not
+   * quietly complete their recipe, and `aria-pressed` goes with it, because
+   * the control is no longer a toggle.
+   */
   const interaction = (
     key: string,
     label: string,
     ready: boolean,
-    isDone: boolean
-  ) => ({
-    role: "button" as const,
-    tabIndex: 0,
-    "aria-pressed": isDone,
-    title: isDone
-      ? `Undo ${label} and everything after it`
-      : ready
-        ? `Mark ${label} done`
-        : `Mark ${label} done, along with every step before it`,
-    onClick: () => onToggle(key),
-    onMouseEnter: () => onHover(key),
-    onMouseLeave: () => onHover(null),
-    onFocus: () => onHover(key),
-    onBlur: () => onHover(null),
-    onKeyDown: (e: React.KeyboardEvent) => {
-      if (e.key === "Enter" || e.key === " ") {
-        e.preventDefault();
-        onToggle(key);
-      }
-    },
-  });
+    isDone: boolean,
+    kind: "ingredient" | "op"
+  ) => {
+    const hover = {
+      onMouseEnter: () => onHover(key),
+      onMouseLeave: () => onHover(null),
+      onFocus: () => onHover(key),
+      onBlur: () => onHover(null),
+    };
+
+    if (edit?.active) {
+      return {
+        role: "button" as const,
+        tabIndex: 0,
+        title:
+          kind === "ingredient"
+            ? `Edit ${label}, or press and hold to move it`
+            : `Edit “${label}”`,
+        onClick: () => edit.onTapCell(key),
+        onPointerDown:
+          kind === "ingredient"
+            ? (e: React.PointerEvent) => edit.onPointerDown(e, key)
+            : undefined,
+        onKeyDown: (e: React.KeyboardEvent) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            edit.onTapCell(key);
+          }
+        },
+        ...hover,
+      };
+    }
+
+    return {
+      role: "button" as const,
+      tabIndex: 0,
+      "aria-pressed": isDone,
+      title: isDone
+        ? `Undo ${label} and everything after it`
+        : ready
+          ? `Mark ${label} done`
+          : `Mark ${label} done, along with every step before it`,
+      onClick: () => onToggle(key),
+      onKeyDown: (e: React.KeyboardEvent) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onToggle(key);
+        }
+      },
+      ...hover,
+    };
+  };
 
   return (
     <section className="rd-section">
@@ -413,9 +471,16 @@ export default function Diagram({
                         const label =
                           c.kind === "ingredient" ? c.ingredient!.name : c.text!;
 
+                        const editing = !!edit?.active;
+                        const isStep = c.kind === "op";
+                        // `data-step-id` is what the drag hit-tests against
+                        // via elementFromPoint, so it has to be on the cell
+                        // itself rather than an inner span.
                         return (
                           <td
                             key={c.key}
+                            data-step-id={editing && isStep ? c.key : undefined}
+                            data-ing-id={editing && !isStep ? c.key : undefined}
                             className={[
                               "rd-cell",
                               "rd-row-swap",
@@ -425,6 +490,16 @@ export default function Diagram({
                               pending ? "is-pending" : "",
                               isPreview ? "is-preview" : "",
                               c.startsBranch ? "rd-starts-branch" : "",
+                              editing ? "is-editable" : "",
+                              editing && edit!.pressing === c.key ? "is-pressing" : "",
+                              editing && edit!.dragging === c.key ? "is-lifted" : "",
+                              editing && isStep && edit!.dragging && edit!.validTargets.has(c.key)
+                                ? "is-drop-ok"
+                                : "",
+                              editing && isStep && edit!.hoverTarget === c.key ? "is-drop-over" : "",
+                              editing && edit!.dragging && isStep && !edit!.validTargets.has(c.key)
+                                ? "is-drop-no"
+                                : "",
                             ]
                               .filter(Boolean)
                               .join(" ")}
@@ -435,7 +510,7 @@ export default function Diagram({
                             }
                             rowSpan={c.rowSpan}
                             colSpan={c.colSpan}
-                            {...interaction(c.key, label, ready, isDone)}
+                            {...interaction(c.key, label, ready, isDone, c.kind as "ingredient" | "op")}
                           >
                             <span className="rd-mark" aria-hidden="true" />
                             {c.kind === "ingredient" ? (
@@ -497,16 +572,24 @@ export default function Diagram({
             const isPreview = !isDone && preview.has(n.id);
             return (
               <li key={n.id} className="rd-fin-item">
+                {/* The tail is steps like any other, so it edits and accepts
+                    drops like any other. Leaving it out would make "bake" the
+                    one step in the recipe you cannot fix. */}
                 <div
+                  data-step-id={edit?.active ? n.id : undefined}
                   className={[
                     "rd-fin",
                     isDone ? "is-done" : "",
                     !isDone && ready ? "is-ready" : "",
                     isPreview ? "is-preview" : "",
+                    edit?.active ? "is-editable" : "",
+                    edit?.active && edit.dragging && edit.validTargets.has(n.id) ? "is-drop-ok" : "",
+                    edit?.active && edit.hoverTarget === n.id ? "is-drop-over" : "",
+                    edit?.active && edit.dragging && !edit.validTargets.has(n.id) ? "is-drop-no" : "",
                   ]
                     .filter(Boolean)
                     .join(" ")}
-                  {...interaction(n.id, n.label, ready, isDone)}
+                  {...interaction(n.id, n.label, ready, isDone, "op")}
                 >
                   <span className="rd-fin-mark" aria-hidden="true" />
                   <span className="rd-fin-num">{i + 1}</span>

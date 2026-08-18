@@ -465,6 +465,9 @@ export default function App() {
                 if (viewingTrial) setTrialEntry(updated);
                 else persist(library.map((e) => (e.id === updated.id ? updated : e)));
               }}
+              // The trial recipe has no library row to write to yet — see the
+              // canEdit comment in RecipeView.
+              canEdit={!viewingTrial}
               onDelete={() => {
                 if (viewingTrial) {
                   setTrialEntry(null);

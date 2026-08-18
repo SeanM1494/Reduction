@@ -1175,6 +1175,22 @@ body {
   .rfx-content { padding: 18px 16px; }
 }
 
+/* The Edit toggle is a sixth thing on a bar that already carried five, and at
+   320px the row came to 383px against 320 available — it pushed the overflow
+   menu off the screen and made the whole page scroll sideways, which in turn
+   zooms the layout viewport out. Two cuts pay for it: the DIAGRAM/STEPS badge
+   is the most redundant thing on the bar (the view it names is on screen, and
+   the chooser is one tap away), and the 14px gaps are generous for a phone.
+   That takes the row to roughly 293px, which fits with the title able to
+   breathe rather than being ellipsed to nothing. */
+@media (max-width: 520px) {
+  .rfx-bar { gap: 8px; }
+  .rfx-bar-mode { display: none; }
+  /* "Edit" and "Done" are different widths; pinning the wider one stops the
+     bar reshuffling every time the mode is toggled. */
+  .rfx-edit-toggle { min-width: 62px; padding: 7px 10px; }
+}
+
 /* ------------------------------------------------------------------
  * Public landing page (shown when a visitor has nothing saved yet) and
  * its sign-up stub. Reuses .rd-hero-title/.rd-hero-sub/.rd-go/.rd-btn
@@ -1576,3 +1592,167 @@ body {
   border-radius: 12px; padding: 11px 14px; margin: 0 2px 16px;
 }
 .rd-trial-bar span { flex: 1 1 240px; }
+
+/* ------------------------------------------------------------------
+ * The visual editor (ROADMAP #6)
+ * ------------------------------------------------------------------
+ * Edit mode has to be unmistakable. Tapping a cell means "mark done"
+ * everywhere else in the app, and that is the core interaction — so when it
+ * temporarily means something else, the screen has to say so loudly enough
+ * that nobody taps twice wondering why nothing happened.
+ * ------------------------------------------------------------------ */
+
+.rfx-edit-toggle { margin-left: 6px; }
+.rfx-edit-toggle.is-on {
+  background: var(--ink); color: var(--ink-contrast); border-color: var(--ink);
+}
+
+.rfx-diagram-wrap.is-editing .rd-frame {
+  outline: 2px dashed var(--line-strong); outline-offset: 3px;
+}
+
+.rd-editbar {
+  display: flex; align-items: center; gap: 10px 12px; flex-wrap: wrap;
+  background: var(--cool-bg); border: 1px solid var(--cool-line);
+  color: var(--cool-ink); border-radius: 12px;
+  padding: 10px 12px; margin: 0 2px 14px;
+  font-size: 13.5px; line-height: 1.4;
+}
+.rd-editbar-text { flex: 1 1 240px; }
+.rd-editbar-dot {
+  flex: none; width: 9px; height: 9px; border-radius: 50%;
+  background: var(--cool-ink);
+}
+.rd-editbar-blocked {
+  margin: -6px 2px 12px; padding: 9px 12px;
+  font-size: 13px; line-height: 1.4;
+  color: var(--danger-ink); background: var(--danger-bg);
+  border: 1px solid var(--danger-line); border-radius: 10px;
+}
+
+/* ---------- cells in edit mode ---------- */
+
+/* The affordance swap: a pencil where the completion mark would be. */
+.rd-cell.is-editable { cursor: text; }
+.rd-cell.is-editable .rd-mark { opacity: .25; }
+
+/* The hold, made visible. The ring fills over HOLD_MS so the gesture is
+   discoverable rather than folklore, and so the pickup has a moment the user
+   can see arriving. Scale and shadow only — nothing here may change layout,
+   because it animates while a finger is on the cell. */
+.rd-cell.is-pressing::after,
+.rd-cell.is-lifted::after {
+  content: ""; position: absolute; inset: 2px;
+  border-radius: 9px; pointer-events: none;
+  border: 2px solid var(--warm-line);
+  clip-path: inset(0 100% 0 0);
+  animation: rd-hold-fill 350ms linear forwards;
+}
+@keyframes rd-hold-fill {
+  to { clip-path: inset(0 0 0 0); }
+}
+
+.rd-cell.is-lifted {
+  opacity: .45;
+}
+
+/* Drop targets, lit at pickup from the validator's own answer. */
+.rd-cell.is-drop-ok, .rd-fin.is-drop-ok {
+  box-shadow: inset 0 0 0 2px var(--cool-line);
+}
+.rd-cell.is-drop-over, .rd-fin.is-drop-over {
+  background: var(--cool-hover) !important;
+  box-shadow: inset 0 0 0 3px var(--cool-ink);
+}
+.rd-cell.is-drop-no, .rd-fin.is-drop-no { opacity: .35; }
+
+/* While a drag is live nothing else may select or scroll under it. */
+body.rd-dragging-body {
+  user-select: none; -webkit-user-select: none;
+}
+
+.rd-drag-ghost {
+  position: fixed; top: 0; left: 0; z-index: 60;
+  margin: -18px 0 0 -22px;      /* sits under the fingertip, not on it */
+  pointer-events: none;
+  padding: 9px 12px; border-radius: 11px;
+  background: var(--card); color: var(--ink);
+  border: 1px solid var(--warm-line);
+  box-shadow: 0 10px 24px rgba(var(--shadow-rgb), .28);
+  font-size: 13.5px; font-weight: 600;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+
+.rd-sr-live {
+  position: absolute; width: 1px; height: 1px; overflow: hidden;
+  clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap;
+}
+
+/* ---------- the edit sheet ---------- */
+
+.rd-sheet-scrim {
+  position: fixed; inset: 0; z-index: 70;
+  background: rgba(0, 0, 0, .34);
+  display: flex; align-items: flex-end; justify-content: center;
+}
+.rd-sheet {
+  width: 100%; max-width: 520px; max-height: 86svh; overflow-y: auto;
+  background: var(--card); color: var(--ink);
+  border: 1px solid var(--line); border-bottom: 0;
+  border-radius: 18px 18px 0 0;
+  padding: 8px 16px calc(18px + env(safe-area-inset-bottom));
+  box-shadow: 0 -8px 28px rgba(var(--shadow-rgb), .22);
+  animation: rd-sheet-in .22s ease-out;
+}
+@keyframes rd-sheet-in {
+  from { transform: translateY(14px); opacity: 0; }
+  to   { transform: none; opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .rd-sheet { animation: none; }
+  .rd-cell.is-pressing::after, .rd-cell.is-lifted::after { animation: none; clip-path: none; }
+}
+
+.rd-sheet-grab {
+  width: 38px; height: 4px; border-radius: 2px;
+  background: var(--line-strong); margin: 4px auto 12px;
+}
+.rd-sheet-head {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 12px; margin-bottom: 12px;
+}
+.rd-sheet-title { margin: 0; font-size: 17px; font-weight: 600; }
+.rd-sheet-note { margin: 14px 0 0; font-size: 12.5px; color: var(--muted); line-height: 1.45; }
+.rd-sheet-blocked {
+  margin: 0; font-size: 13px; line-height: 1.45;
+  color: var(--danger-ink); background: var(--danger-bg);
+  border: 1px solid var(--danger-line); border-radius: 10px; padding: 9px 11px;
+}
+
+.rd-field { display: block; margin-bottom: 14px; }
+.rd-field-label {
+  display: block; margin-bottom: 5px;
+  font-size: 12.5px; font-weight: 600; color: var(--muted);
+}
+.rd-field-hint { font-weight: 400; color: var(--faint); }
+.rd-field-input {
+  width: 100%; min-height: 44px; font: inherit; font-size: 15px;
+  padding: 10px 12px; border-radius: 11px;
+  border: 1px solid var(--line); background: var(--page); color: var(--ink);
+}
+.rd-field-input:focus-visible {
+  outline: 2px solid var(--warm-line); outline-offset: 1px; border-color: var(--warm-line);
+}
+
+.rd-move-list { display: flex; flex-wrap: wrap; gap: 8px; }
+.rd-move-opt {
+  min-height: 44px; font: inherit; font-size: 13.5px;
+  padding: 8px 13px; border-radius: 11px; cursor: pointer;
+  background: var(--card); color: var(--ink); border: 1px solid var(--line);
+}
+.rd-move-opt.is-current {
+  background: var(--cool-bg); border-color: var(--cool-line); color: var(--cool-ink);
+  font-weight: 600;
+}
+.rd-move-opt:disabled { opacity: .38; cursor: default; }
+.rd-move-opt:not(:disabled):not(.is-current):hover { border-color: var(--line-strong); }

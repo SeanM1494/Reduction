@@ -256,6 +256,57 @@ const cta = document.querySelector('.rd-landing-cta').getBoundingClientRect();
 // collapsed, this must fit with room to spare on every profile
 ```
 
+## The visual editor
+
+`shared/edits.ts` is the whole model: `applyEdit(recipe, op)` is pure, and one
+op type per operation. Adding, deleting, splitting and merging steps are new
+op types against that same signature, not a rewrite.
+
+**Never re-derive what is a legal edit.** `validMoveTargets` builds the
+candidate tree for every step and runs the real `validateRecipe` on each. That
+is deliberately more work than checking the two or three invariants by hand,
+and it is the point: what lights up during a drag is what will be accepted on
+drop, because it is the same call. A hand-written predicate would start
+correct and drift the first time `computeLayout` gains a rule, and the symptom
+would be a highlighted target that refuses the drop.
+
+**The drag must not reflow anything.** The source cell stays where it is and a
+fixed-position ghost follows the pointer. Moving the real `<td>` would relayout
+a rowspan table under a fingertip — see the handoff section above for what that
+costs. Measured: 68 frames of drag, one distinct table layout.
+
+**`touch-action` cannot solve the scroll conflict, so do not reach for it.**
+Set up front it kills frame scrolling in edit mode; set at pickup it does
+nothing, because the browser latches `touch-action` when the gesture starts.
+The working lever is a non-passive `touchmove` listener on `document` calling
+`preventDefault`, attached at pickup — which only works because pickup requires
+the finger to have stayed within 10px, inside the browser's own pan slop, so no
+native scroll has begun yet. Suppressing native scroll for the whole drag is
+also why the drag has to scroll the page itself near the viewport edges: on an
+iPhone SE the next step down is already off screen when an ingredient is
+centred.
+
+**Edit mode must never be quiet.** Tapping a cell means *mark done* everywhere
+else in the app. When it temporarily means something else, the bar, the frame
+outline and the hint all say so — someone who wanders in and taps around must
+not be left wondering why nothing checks off.
+
+**Editing is off for the trial recipe** (`canEdit={!viewingTrial}`). It has no
+library row: App's trial branch deliberately does not POST or PATCH, so edits
+would change the screen and nothing else, and sign-up would claim the parked
+server copy and discard them.
+
+### Writes are confirmed, not assumed
+
+`saveLibrary` advances `lastSynced` per entry only when that entry's write
+resolves, and `onSyncFailure` reports the rest. Before the editor this barely
+mattered — the JSON editor validated before saving, so a 422 was close to
+unreachable, and failures went to `console.error` while `lastSynced` recorded
+them as synced, meaning they were never retried. A live editor makes that path
+reachable, and an edit that silently vanishes is the worst thing this file can
+produce. If you add a writer, make sure a rejection rolls the entry back to
+`lastAcceptedEntry(id)` and tells the user.
+
 ## The demo teaches through a wrapper, not a fork
 
 `DemoCoach.tsx` is a layer *around* `Diagram.tsx` and `StepsMode.tsx`. It
