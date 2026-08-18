@@ -4,7 +4,6 @@
 
 import React, { useState, useRef } from "react";
 import type { Entry } from "../lib/storage";
-import { countAll, countSteps } from "../../../shared/amounts";
 
 type Mode = "link" | "paste" | "photo";
 
@@ -145,48 +144,6 @@ export default function Home({
         ) : null}
       </div>
 
-      <div className="rd-lib-head">
-        <h2 className="rd-lib-title">Saved</h2>
-        <span className="rd-lib-count">
-          {library.length} {library.length === 1 ? "recipe" : "recipes"}
-        </span>
-      </div>
-
-      {library.length === 0 ? (
-        <div className="rd-empty">
-          Nothing saved yet. Anything you diagram lands here, with your progress
-          kept.
-        </div>
-      ) : (
-        <div className="rd-grid">
-          {library.map((entry) => {
-            const total = countAll(entry.recipe);
-            const doneN = (entry.done || []).length;
-            const pct = total ? Math.round((doneN / total) * 100) : 0;
-            return (
-              <button
-                key={entry.id}
-                className="rd-card"
-                onClick={() => onOpen(entry.id)}
-              >
-                <span className="rd-card-title">{entry.recipe.title}</span>
-                <span className="rd-card-meta">
-                  {entry.recipe.sections.length}{" "}
-                  {entry.recipe.sections.length === 1 ? "part" : "parts"} &middot;{" "}
-                  {countSteps(entry.recipe)} steps
-                  {entry.recipe.source ? ` \u00b7 ${entry.recipe.source}` : ""}
-                </span>
-                <span className="rd-card-bar">
-                  <span className="rd-card-fill" style={{ width: `${pct}%` }} />
-                </span>
-                <span className="rd-card-pct">
-                  {pct === 0 ? "Not started" : pct === 100 ? "Done" : `${pct}%`}
-                </span>
-              </button>
-            );
-          })}
-        </div>
-      )}
     </>
   );
 }

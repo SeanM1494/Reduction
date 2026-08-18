@@ -49,6 +49,16 @@ export interface Section {
 export interface Recipe {
   title: string;
   servings: number | null;
+  /**
+   * Meal types from shared/mealTypes.ts, FIRST ELEMENT IS THE PRIMARY.
+   * Optional and type-only here (approved exception to "layout.ts stays
+   * untouched"): the list, labels and sanitiser live in shared/mealTypes.ts,
+   * and validateRecipe deliberately ignores this field — a wrong meal type
+   * is metadata, not a broken tree, so the server sanitises rather than
+   * rejects. Living inside the recipe JSON is what carries inference through
+   * the extraction cache, the trial claim and the editor for free.
+   */
+  mealTypes?: string[];
   yieldText?: string | null;
   source?: string | null;
   sourceUrl?: string | null;

@@ -23,6 +23,7 @@ import Diagram from "./Diagram";
 import StepsMode from "./StepsMode";
 import RecipeJsonEditor from "./RecipeJsonEditor";
 import EditSheet from "./EditSheet";
+import MealTypeSheet from "./MealTypeSheet";
 import { applyEdit, type EditOp } from "../../../shared/edits";
 import { reconcileDone } from "../../../shared/progress";
 import { lastAcceptedEntry, onSyncFailure } from "../lib/storage";
@@ -91,6 +92,7 @@ export default function RecipeView({
    */
   const [editing, setEditing] = useState(false);
   const [sheetFor, setSheetFor] = useState<string | null>(null);
+  const [mealSheetOpen, setMealSheetOpen] = useState(false);
   /**
    * Undo is multi-level because it costs almost nothing to make it so: every
    * edit already produces a whole new Recipe, so the stack is just the
@@ -255,9 +257,25 @@ export default function RecipeView({
       } else {
         upstreamOf(id).forEach((u) => next.add(u));
       }
-      onUpdate({ ...entry, done: [...next] });
+
+      /**
+       * "Cooked it" is observed, not reported: the moment done reaches the
+       * full count is a completed cook-through, recorded as a timestamp
+       * (ROADMAP #8 — the reliable half of a future rating). Deduped within
+       * six hours so un-checking and re-checking the last step counts one
+       * dinner, not two; the same window is what mergeCooked uses, so two
+       * devices logging the same meal also collapse to one.
+       */
+      let cooked = entry.cooked ?? [];
+      if (total > 0 && next.size === total && done.size < total) {
+        const now = Date.now();
+        const last = cooked.length ? cooked[cooked.length - 1] : 0;
+        if (now - last > 6 * 60 * 60 * 1000) cooked = [...cooked, now];
+      }
+
+      onUpdate({ ...entry, done: [...next], cooked });
     },
-    [done, parents, upstreamOf, entry, onUpdate]
+    [done, parents, upstreamOf, entry, onUpdate, total]
   );
 
   const pct = total ? Math.round((done.size / total) * 100) : 0;
@@ -416,6 +434,21 @@ export default function RecipeView({
               >
                 {savingImage ? "Saving…" : "Save as Image"}
               </button>
+              {/* Gated with canEdit for the same reason editing is: a trial
+                  recipe's changes would be discarded when sign-up claims the
+                  parked server copy. */}
+              {canEdit ? (
+                <button
+                  className="rfx-menu-item"
+                  role="menuitem"
+                  onClick={() => {
+                    setMenuOpen(false);
+                    setMealSheetOpen(true);
+                  }}
+                >
+                  Meal types
+                </button>
+              ) : null}
               <button
                 className="rfx-menu-item"
                 role="menuitem"
@@ -581,6 +614,18 @@ export default function RecipeView({
               : "Picked up. Drag to a highlighted step."
             : ""}
         </div>
+
+        {mealSheetOpen ? (
+          <MealTypeSheet
+            mealTypes={recipe.mealTypes}
+            onChange={(next) =>
+              // Recipe-level metadata: a direct update, not an applyEdit op.
+              // The server sanitises the same list on write.
+              onUpdate({ ...entry, recipe: { ...recipe, mealTypes: next } })
+            }
+            onClose={() => setMealSheetOpen(false)}
+          />
+        ) : null}
 
         {editing && sheetFor ? (
           <EditSheet

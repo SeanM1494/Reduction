@@ -16,6 +16,7 @@ import { eq, and, desc, isNull, sql, type SQL } from "drizzle-orm";
 import { getDb } from "../db";
 import { recipes } from "../../shared/schema";
 import { validateRecipe } from "../../shared/layout";
+import { sanitizeMealTypes } from "../../shared/mealTypes";
 import { reconcileDone } from "../../shared/progress";
 import { userIdOf } from "../middleware/session";
 
@@ -120,6 +121,10 @@ libraryRouter.post("/", async (req: Request, res: Response) => {
   const errors = validateRecipe(recipe);
   if (errors.length)
     return res.status(422).json({ error: "That recipe is not valid.", details: errors });
+  // Meal types are metadata: sanitised, never a reason to reject a tree.
+  (recipe as { mealTypes?: string[] }).mealTypes = sanitizeMealTypes(
+    (recipe as { mealTypes?: unknown }).mealTypes
+  );
 
   if (done !== undefined && !Array.isArray(done))
     return res.status(400).json({ error: "done must be an array of ids." });
@@ -200,6 +205,9 @@ libraryRouter.patch("/:id", async (req: Request, res: Response) => {
     if (errors.length) {
       return res.status(422).json({ error: "That recipe is not valid.", details: errors });
     }
+    (recipe as { mealTypes?: string[] }).mealTypes = sanitizeMealTypes(
+      (recipe as { mealTypes?: unknown }).mealTypes
+    );
     patch.recipe = recipe;
   }
 

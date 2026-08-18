@@ -346,6 +346,20 @@ select count(*) from recipes where user_id is null and owner_key not like 'trial
 
 ## 8. A real recipe library, and a bottom nav
 
+**Status: phase 1 built.** Bottom nav (Find / My Recipes / Settings, hidden
+while a recipe is open — cooking gets the full viewport), the library as a
+destination with meal-type filter chips and sorting (recently added,
+recently cooked, total time, source, meal type), the eight types inferred at
+extraction and carried INSIDE the recipe JSON — which is what hands them to
+the next user through the extraction cache and through the trial claim for
+free — a two-row Primary/Also edit sheet in the recipe's overflow menu, an
+untagged bucket for pre-existing recipes, and observed "cooked it" capture:
+a timestamp when `done` reaches the full count, deduped within six hours,
+merged across devices by `mergeCooked`. Ratings UI deferred by decision
+until there is cooked data to look at. Filter chips render only for types
+the library actually contains — a chip that filters to nothing is a dead
+end.
+
 **The idea:** "My Recipes" as a destination rather than a list under the
 paste box — browsable, sortable, filterable, with the app's top-level
 sections reachable from a persistent bottom bar.
@@ -470,8 +484,9 @@ actually left, cheapest and most blocking first.
    Verified with two real browser contexts against a real Postgres: the
    clobber scenario, branch-union, and uncheck-resurrection all pass. See
    `shared/sync.ts` and CLAUDE.md's sync section.
-2. **The library and bottom nav** (#8) — the active build item, now landing
-   on a hardened write path. Its `cooked` column shares the sync migration.
+2. ~~**The library and bottom nav** (#8)~~ **Done, phase 1** — see the
+   entry. Remaining in #8: the ratings UI, deferred until cooked data
+   exists to design against.
 3. **Finish editing** (#6) — adding, deleting, splitting and merging steps.
    These are the repairs that make a recipe *unusable* rather than merely
    wrong, and they are the only reason the raw JSON hatch still exists. New

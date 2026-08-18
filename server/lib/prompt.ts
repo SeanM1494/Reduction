@@ -16,6 +16,7 @@ SHAPE
   "title": string,
   "servings": number | null,
   "yieldText": string | null,
+  "mealTypes": string[],
   "sections": [
     {
       "name": string,
@@ -53,6 +54,10 @@ Terse. Verb plus the minimum object, lowercase, five words at most: "mix", "melt
 Put temperature and time in the label for any heating or waiting step, and also fill "minutes" and "tempF".
 Never put ingredient quantities in a label — quantities live only on ingredients, so the app can scale servings.
 Standing oven instructions go in the section "header", not in a step.
+
+MEAL TYPES
+
+"mealTypes" is 1 to 3 values from exactly this list: breakfast, lunch, dinner, dessert, snack, side, drink, baking. The most natural one comes FIRST — it is the primary. A recipe can genuinely be several (chili is dinner and lunch; muffins are breakfast and snack); do not pad to 3 when one is honest. Appetizers count as snack; soups and salads as dinner or side by their role; anything oven-baked that is not dessert leans baking.
 
 AMOUNTS
 

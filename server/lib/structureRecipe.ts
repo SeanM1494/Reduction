@@ -9,6 +9,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { SYSTEM_PROMPT, buildUserText, buildRepairText } from "./prompt";
 import { validateRecipe, type Recipe } from "../../shared/layout";
+import { sanitizeMealTypes } from "../../shared/mealTypes";
 
 let _client: Anthropic | null = null;
 function getClient(): Anthropic {
@@ -122,6 +123,9 @@ export async function structureRecipe(
     if (errors.length === 0) {
       const recipe = parsed as Recipe;
       if (input.sourceUrl) recipe.sourceUrl = input.sourceUrl;
+      // Metadata, not structure: unknowns drop rather than costing a retry
+      // round trip, and an empty result renders as "untagged".
+      recipe.mealTypes = sanitizeMealTypes(recipe.mealTypes);
       return { recipe, attempts: attempt, repaired };
     }
 

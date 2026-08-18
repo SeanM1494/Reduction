@@ -17,6 +17,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { SYSTEM_PROMPT, buildRepairText } from "./prompt";
 import { validateRecipe, type Recipe } from "../../shared/layout";
+import { sanitizeMealTypes } from "../../shared/mealTypes";
 
 let _client: Anthropic | null = null;
 function getClient(): Anthropic {
@@ -130,6 +131,7 @@ export async function structureRecipeFromUrl(
     const errors = validateRecipe(parsed);
     if (errors.length === 0) {
       const recipe = parsed as Recipe;
+      recipe.mealTypes = sanitizeMealTypes(recipe.mealTypes);
       recipe.sourceUrl = url;
       try {
         recipe.source = new URL(url).hostname.replace(/^www\./, "");

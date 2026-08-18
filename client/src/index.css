@@ -1787,3 +1787,103 @@ body.rd-dragging-body {
 }
 .rd-move-opt:disabled { opacity: .38; cursor: default; }
 .rd-move-opt:not(:disabled):not(.is-current):hover { border-color: var(--line-strong); }
+
+/* ------------------------------------------------------------------
+ * ROADMAP #8: bottom nav, the library as a destination, Settings.
+ * ------------------------------------------------------------------ */
+
+.rd-tabbar {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 40;
+  display: flex; align-items: stretch;
+  background: var(--card); border-top: 1px solid var(--line);
+  box-shadow: 0 -1px 3px rgba(var(--shadow-rgb), .08);
+  padding-bottom: env(safe-area-inset-bottom);
+}
+.rd-tabbar-btn {
+  flex: 1; min-height: 54px;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 3px; font: inherit; font-size: 11px; font-weight: 500;
+  background: none; border: 0; cursor: pointer; color: var(--muted);
+}
+.rd-tabbar-btn.is-on { color: var(--warm-line); }
+.rd-tabbar-btn.is-on .rd-tabbar-label { font-weight: 600; }
+.rd-tabbar-btn:focus-visible { outline: 2px solid var(--ink); outline-offset: -3px; }
+
+/* The bar is fixed, so the page has to end above it — including the iOS
+   home-indicator inset the bar itself absorbs. Without this the last card
+   hides behind the bar and the page "cannot scroll to the bottom". */
+.rd-shell-tabbed { padding-bottom: calc(70px + env(safe-area-inset-bottom)); }
+
+.rd-find-search { margin: 14px 2px 0; }
+.rd-find-search .rd-searchbar { order: 0; max-width: none; }
+
+/* ---------- meal-type filter chips ---------- */
+
+/* One row, scrolling horizontally rather than wrapping: two rows of chips
+   push the actual recipes below the fold on a phone. The negative margin
+   lets the row bleed to the screen edge so a half-visible chip signals
+   "there is more", which is the affordance a scrollbar-less scroller has. */
+.rd-chip-row {
+  display: flex; gap: 8px; overflow-x: auto;
+  margin: 0 calc(-1 * var(--shell-pad)); padding: 2px var(--shell-pad) 8px;
+  -ms-overflow-style: none; scrollbar-width: none;
+}
+.rd-chip-row::-webkit-scrollbar { display: none; }
+.rd-chip {
+  flex: none; min-height: 44px; font: inherit; font-size: 13.5px;
+  padding: 8px 15px; border-radius: 99px; cursor: pointer;
+  background: var(--card); color: var(--muted); border: 1px solid var(--line);
+}
+.rd-chip.is-on {
+  background: var(--ink); color: var(--ink-contrast); border-color: var(--ink);
+  font-weight: 600;
+}
+.rd-chip:not(.is-on):hover { border-color: var(--line-strong); color: var(--ink); }
+
+.rd-sort-row {
+  display: flex; align-items: center; gap: 9px; margin: 2px 2px 14px;
+}
+.rd-sort-label { font-size: 12.5px; font-weight: 600; color: var(--muted); }
+.rd-sort-select {
+  font: inherit; font-size: 13.5px; min-height: 44px;
+  padding: 8px 12px; border-radius: 11px;
+  border: 1px solid var(--line); background: var(--card); color: var(--ink);
+}
+
+/* ---------- card badges ---------- */
+
+.rd-card-top {
+  display: flex; align-items: center; gap: 6px; margin-bottom: 6px;
+}
+.rd-card-type {
+  font-family: "Space Mono", ui-monospace, monospace;
+  font-size: 10px; letter-spacing: .05em; text-transform: uppercase;
+  color: var(--warm-ink); background: var(--warm-bg);
+  border: 1px solid var(--oven-line); border-radius: 99px; padding: 3px 9px;
+}
+.rd-card-type.is-untagged {
+  color: var(--muted); background: var(--ing-bg); border-color: var(--line);
+}
+.rd-card-type-more { font-size: 11px; color: var(--faint); }
+.rd-card-time {
+  margin-left: auto; font-family: "Space Mono", ui-monospace, monospace;
+  font-size: 10.5px; color: var(--muted); white-space: nowrap;
+}
+
+.rd-empty-cta { margin-left: 10px; }
+
+/* ---------- settings ---------- */
+
+.rd-settings { display: flex; flex-direction: column; gap: 14px; margin-top: 16px; }
+.rd-settings-card {
+  background: var(--card); border: 1px solid var(--line); border-radius: 15px;
+  padding: 16px 18px;
+  box-shadow: 0 1px 3px rgba(var(--shadow-rgb), .08);
+}
+.rd-settings-heading {
+  margin: 0 0 10px; font-size: 13px; font-weight: 600;
+  letter-spacing: .04em; text-transform: uppercase; color: var(--muted);
+}
+.rd-settings-line { margin: 0 0 6px; font-size: 15px; }
+.rd-settings-sub { color: var(--muted); font-size: 13.5px; }
+.rd-settings-signout { margin-top: 10px; }

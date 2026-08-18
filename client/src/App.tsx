@@ -1,8 +1,10 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import Home from "./components/Home";
+import MyRecipes from "./components/MyRecipes";
+import SettingsTab from "./components/SettingsTab";
+import BottomNav, { type Tab } from "./components/BottomNav";
 import RecipeView from "./components/RecipeView";
 import SearchBar from "./components/SearchBar";
-import ThemeToggle from "./components/ThemeToggle";
 import LandingPage from "./components/LandingPage";
 import SignIn from "./components/SignIn";
 import { useTheme } from "./hooks/useTheme";
@@ -117,6 +119,16 @@ export default function App() {
   const [trialSpent, setTrialSpent] = useState(false);
 
   /**
+   * Which bottom-nav tab is showing. Chosen once, after the library loads:
+   * a returning cook lands on their collection, a new account on Find,
+   * because each is the screen that person came for. Ephemeral by design —
+   * remembering the tab across sessions would mean sometimes opening on
+   * Settings, which nobody comes back for.
+   */
+  const [tab, setTab] = useState<Tab>("find");
+  const tabChosen = useRef(false);
+
+  /**
    * Boot order matters: session, then claim, then library.
    *
    * The library is scoped by user_id once a session exists, so loading it
@@ -160,6 +172,10 @@ export default function App() {
           const saved = await loadLibrary();
           if (cancelled) return;
           setLibrary(saved);
+          if (!tabChosen.current) {
+            tabChosen.current = true;
+            setTab(saved.length ? "recipes" : "find");
+          }
         } catch (e) {
           if (!cancelled) setError((e as Error).message);
         }
@@ -469,29 +485,12 @@ export default function App() {
           />
           Reduction
         </button>
-        <SearchBar
-          library={library}
-          onOpen={setOpenId}
-          onPickWebResult={(url) => runSilently(() => extractFromUrl(url))}
-        />
-        <div className="rd-nav-right">
-          {entry ? null : (
-            <span className="rd-nav-meta">{library.length} saved</span>
-          )}
-          {user ? (
-            <button className="rd-btn rd-signout" onClick={signOut}>
-              Sign out
-            </button>
-          ) : (
-            <button className="rd-btn" onClick={() => setShowSignup(true)}>
-              Sign in
-            </button>
-          )}
-          <ThemeToggle mode={themeMode} onChange={setThemeMode} />
-        </div>
+        {/* Sign out and the theme toggle moved to the Settings tab; the
+            search bar into Find. The nav is a brand line, which is all a
+            phone has room to spend on it. */}
       </nav>
 
-      <div className="rd-shell">
+      <div className={`rd-shell ${entry ? "" : "rd-shell-tabbed"}`}>
         {syncNotice ? (
           <div className="rd-claim-banner" role="status">
             <span>{syncNotice}</span>
@@ -552,24 +551,47 @@ export default function App() {
               }}
             />
           </>
-        ) : (
-          <Home
-            library={library}
-            busy={busy}
-            error={error}
-            onDismissError={() => setError(null)}
-            onOpen={setOpenId}
-            onImportUrl={(url) => run(() => extractFromUrl(url))}
-            onImportText={(text) => run(() => extractFromText(text))}
-            onImportFile={(file) =>
-              run(async () => {
-                const data = await fileToBase64(file);
-                return extractFromFile(data, file.type);
-              })
-            }
+        ) : tab === "find" ? (
+          <>
+            <div className="rd-find-search">
+              <SearchBar
+                library={library}
+                onOpen={setOpenId}
+                onPickWebResult={(url) => runSilently(() => extractFromUrl(url))}
+              />
+            </div>
+            <Home
+              library={library}
+              busy={busy}
+              error={error}
+              onDismissError={() => setError(null)}
+              onOpen={setOpenId}
+              onImportUrl={(url) => run(() => extractFromUrl(url))}
+              onImportText={(text) => run(() => extractFromText(text))}
+              onImportFile={(file) =>
+                run(async () => {
+                  const data = await fileToBase64(file);
+                  return extractFromFile(data, file.type);
+                })
+              }
+            />
+          </>
+        ) : tab === "recipes" ? (
+          <MyRecipes library={library} onOpen={setOpenId} onFind={() => setTab("find")} />
+        ) : user ? (
+          <SettingsTab
+            user={user}
+            themeMode={themeMode}
+            onThemeChange={setThemeMode}
+            onSignOut={signOut}
+            recipeCount={library.length}
           />
-        )}
+        ) : null}
       </div>
+
+      {/* Hidden while a recipe is open: cooking gets the full viewport, and
+          RecipeView is already built as a 100svh page with its own bar. */}
+      {entry ? null : <BottomNav tab={tab} onPick={setTab} />}
     </div>
   );
 }
