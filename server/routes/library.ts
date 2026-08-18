@@ -12,7 +12,7 @@
  */
 
 import { Router, type Request, type Response, type NextFunction } from "express";
-import { eq, and, desc, isNull, type SQL } from "drizzle-orm";
+import { eq, and, desc, isNull, sql, type SQL } from "drizzle-orm";
 import { getDb } from "../db";
 import { recipes } from "../../shared/schema";
 import { validateRecipe } from "../../shared/layout";
@@ -78,6 +78,25 @@ function scopeOf(req: Request): SQL {
   return and(eq(recipes.ownerKey, ownerKeyOf(req)), isNull(recipes.userId)) as SQL;
 }
 
+/** The wire shape of one entry. `version` is the concurrency token the
+ *  client hands back as `ifVersion`; see shared/sync.ts for the model. */
+function wireEntry(row: typeof recipes.$inferSelect) {
+  return {
+    id: row.id,
+    recipe: row.recipe,
+    done: row.done,
+    servings: row.servings,
+    mode: row.mode,
+    timer: row.timer,
+    cooked: row.cooked ?? [],
+    version: row.version ?? 1,
+    savedAt: row.createdAt ? new Date(row.createdAt).getTime() : Date.now(),
+  };
+}
+
+const isValidCooked = (v: unknown): v is number[] =>
+  Array.isArray(v) && v.every((x) => typeof x === "number" && Number.isFinite(x));
+
 libraryRouter.get("/", async (req: Request, res: Response) => {
   try {
     const db = getDb();
@@ -86,17 +105,7 @@ libraryRouter.get("/", async (req: Request, res: Response) => {
       .from(recipes)
       .where(scopeOf(req))
       .orderBy(desc(recipes.updatedAt));
-    return res.json({
-      entries: rows.map((r) => ({
-        id: r.id,
-        recipe: r.recipe,
-        done: r.done,
-        servings: r.servings,
-        mode: r.mode,
-        timer: r.timer,
-        savedAt: r.createdAt ? new Date(r.createdAt).getTime() : Date.now(),
-      })),
-    });
+    return res.json({ entries: rows.map(wireEntry) });
   } catch (e) {
     console.error("[library:list]", e);
     return res.status(500).json({ error: "Could not load your library." });
@@ -137,22 +146,29 @@ libraryRouter.post("/", async (req: Request, res: Response) => {
         mode: mode ?? "diagram",
         timer: timer ?? null,
       })
-      .onConflictDoNothing({ target: [recipes.ownerKey, recipes.id] })
+      /**
+       * Upsert, not insert-or-409. A create whose RESPONSE was lost leaves
+       * the client re-POSTing while its local progress moves on; a do-nothing
+       * conflict would strand that progress behind a row it can never update
+       * through this path. The conflict target is the primary key
+       * (owner_key, id), so a retry can only ever land on the caller's own
+       * row — a different owner's identical id is a different key.
+       */
+      .onConflictDoUpdate({
+        target: [recipes.ownerKey, recipes.id],
+        set: {
+          recipe,
+          done: Array.isArray(done) ? done : [],
+          servings: servings ?? null,
+          mode: mode ?? "diagram",
+          timer: timer ?? null,
+          updatedAt: new Date(),
+          version: sql`${recipes.version} + 1`,
+        },
+      })
       .returning();
 
-    if (!row) return res.status(409).json({ error: "A recipe with that id already exists." });
-
-    return res.status(201).json({
-      entry: {
-        id: row.id,
-        recipe: row.recipe,
-        done: row.done,
-        servings: row.servings,
-        mode: row.mode,
-        timer: row.timer,
-        savedAt: row.createdAt ? new Date(row.createdAt).getTime() : Date.now(),
-      },
-    });
+    return res.status(201).json({ entry: wireEntry(row) });
   } catch (e) {
     console.error("[library:create]", e);
     return res.status(500).json({ error: "Could not save that recipe." });
@@ -161,8 +177,16 @@ libraryRouter.post("/", async (req: Request, res: Response) => {
 
 libraryRouter.patch("/:id", async (req: Request, res: Response) => {
   const id = String(req.params.id);
-  const { recipe, done, servings, mode, timer } = req.body ?? {};
-  const patch: Partial<typeof recipes.$inferInsert> = { updatedAt: new Date() };
+  const { recipe, done, servings, mode, timer, cooked, ifVersion } = req.body ?? {};
+  if (ifVersion !== undefined && typeof ifVersion !== "number")
+    return res.status(400).json({ error: "ifVersion must be a number." });
+  if (cooked !== undefined && !isValidCooked(cooked))
+    return res.status(400).json({ error: "cooked must be an array of timestamps." });
+  const patch: Partial<typeof recipes.$inferInsert> = {
+    updatedAt: new Date(),
+    version: sql`${recipes.version} + 1` as unknown as number,
+  };
+  if (cooked !== undefined) patch.cooked = cooked;
 
   /**
    * A replacement tree, from the JSON editor. Validated here and not merely
@@ -210,45 +234,47 @@ libraryRouter.patch("/:id", async (req: Request, res: Response) => {
      * request did not come from that client. Read and write in one
      * transaction so a concurrent update cannot land between them.
      */
-    const row = patch.recipe
-      ? await db.transaction(async (tx) => {
-          const [current] = await tx
-            .select()
-            .from(recipes)
-            .where(and(eq(recipes.id, id), scopeOf(req)));
-          if (!current) return null;
+    /**
+     * Everything runs in one transaction so the version check, the done
+     * reconciliation and the write see the same row. A stale ifVersion gets
+     * a 409 WITH the current row — detection and the state needed to resolve
+     * it in one round trip. The server never merges; shared/sync.ts explains
+     * whose job that is and why.
+     */
+    const result = await db.transaction(async (tx) => {
+      const [current] = await tx
+        .select()
+        .from(recipes)
+        .where(and(eq(recipes.id, id), scopeOf(req)));
+      if (!current) return { kind: "missing" as const };
 
-          const nextDone = patch.done !== undefined ? patch.done : current.done;
-          patch.done = reconcileDone(patch.recipe, nextDone).done;
+      if (ifVersion !== undefined && (current.version ?? 1) !== ifVersion) {
+        return { kind: "stale" as const, current };
+      }
 
-          const [updated] = await tx
-            .update(recipes)
-            .set(patch)
-            .where(and(eq(recipes.id, id), scopeOf(req)))
-            .returning();
-          return updated ?? null;
-        })
-      : (
-          await db
-            .update(recipes)
-            .set(patch)
-            .where(and(eq(recipes.id, id), scopeOf(req)))
-            .returning()
-        )[0];
+      if (patch.recipe) {
+        const nextDone = patch.done !== undefined ? patch.done : current.done;
+        patch.done = reconcileDone(patch.recipe, nextDone).done;
+      }
 
-    if (!row) return res.status(404).json({ error: "No saved recipe with that id." });
-
-    return res.json({
-      entry: {
-        id: row.id,
-        recipe: row.recipe,
-        done: row.done,
-        servings: row.servings,
-        mode: row.mode,
-        timer: row.timer,
-        savedAt: row.createdAt ? new Date(row.createdAt).getTime() : Date.now(),
-      },
+      const [updated] = await tx
+        .update(recipes)
+        .set(patch)
+        .where(and(eq(recipes.id, id), scopeOf(req)))
+        .returning();
+      return updated ? { kind: "ok" as const, row: updated } : { kind: "missing" as const };
     });
+
+    if (result.kind === "missing")
+      return res.status(404).json({ error: "No saved recipe with that id." });
+    if (result.kind === "stale")
+      return res.status(409).json({
+        error: "This recipe was changed elsewhere.",
+        code: "version_conflict",
+        entry: wireEntry(result.current),
+      });
+
+    return res.json({ entry: wireEntry(result.row) });
   } catch (e) {
     console.error("[library:update]", e);
     return res.status(500).json({ error: "Could not update that recipe." });

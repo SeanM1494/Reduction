@@ -464,25 +464,32 @@ is a second cause still out there.
 OAuth and the visual editor's first version are built, so this is what is
 actually left, cheapest and most blocking first.
 
-1. **The library and bottom nav** (#8) — the active build item.
-2. **Finish editing** (#6) — adding, deleting, splitting and merging steps.
+1. ~~**The storage/sync design pass**~~ **Done** — versioned writes with
+   409-and-merge, field-level patches, per-entry write serialization, the
+   focus refetch, and an element-wise `done` merge with closure repair.
+   Verified with two real browser contexts against a real Postgres: the
+   clobber scenario, branch-union, and uncheck-resurrection all pass. See
+   `shared/sync.ts` and CLAUDE.md's sync section.
+2. **The library and bottom nav** (#8) — the active build item, now landing
+   on a hardened write path. Its `cooked` column shares the sync migration.
+3. **Finish editing** (#6) — adding, deleting, splitting and merging steps.
    These are the repairs that make a recipe *unusable* rather than merely
    wrong, and they are the only reason the raw JSON hatch still exists. New
    op types against the existing `applyEdit(recipe, op)` signature.
-3. **Make the trial row patchable**, so the one free recipe can be edited.
+4. **Make the trial row patchable**, so the one free recipe can be edited.
    Small, and it is precisely the recipe someone would want to correct.
-4. **Public/private decision** — still just a decision, and it blocks both
+5. **Public/private decision** — still just a decision, and it blocks both
    #2 and #3. The columns are already there.
-5. **Corrections replace the cached tree, then URL normalisation** (#3, in
+6. **Corrections replace the cached tree, then URL normalisation** (#3, in
    that order — see the reasoning there).
-6. **Cross-user search + cache reuse** (#2 and #3 together) — the same
+7. **Cross-user search + cache reuse** (#2 and #3 together) — the same
    feature seen from two sides, and it needs the correction path from step 5
    to be safe.
-7. **Apple sign-in** (#1) — no rush until the App Store build is real, and it
+8. **Apple sign-in** (#1) — no rush until the App Store build is real, and it
    needs an https callback on a verified domain, so it cannot be done here.
-8. **Variations at the prompt level** (#5, cheap version).
-9. **Recipe builder** (#4) — mostly falls out of #6 once editing is complete.
-10. **Structural variation comparison** (#5, real version) — needs the corpus
+9. **Variations at the prompt level** (#5, cheap version).
+10. **Recipe builder** (#4) — mostly falls out of #6 once editing is complete.
+11. **Structural variation comparison** (#5, real version) — needs the corpus
     #3 produces.
 
 ---

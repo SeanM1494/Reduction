@@ -16,6 +16,7 @@
  */
 
 import type { Recipe } from "../../../shared/layout";
+import { mergeEntry, type SyncableEntry } from "../../../shared/sync";
 
 /** Absolute end time (epoch ms), never a countdown — see StepsMode.tsx. */
 export interface StepTimer {
@@ -34,6 +35,9 @@ export interface Entry {
   mode: "diagram" | "steps";
   /** The one active cooking-mode timer for this recipe, if any. */
   timer: StepTimer | null;
+  /** Epoch-ms timestamps of completed cook-throughs. Server-merged by union;
+   *  see shared/sync.ts. */
+  cooked?: number[];
   savedAt: number;
 }
 
@@ -133,7 +137,13 @@ async function api(path: string, init?: RequestInit): Promise<any> {
     // "that failed", which is the least useful true thing it could say.
     throw Object.assign(new Error(body.error || `Library request failed (${res.status}).`), {
       status: res.status,
+      code: typeof body.code === "string" ? body.code : undefined,
       details: Array.isArray(body.details) ? (body.details as string[]) : undefined,
+      // A 409 carries the server's current row so conflict resolution costs
+      // one round trip, not two. Without this the merge path cannot engage
+      // and every conflict degrades to a sync failure — which is exactly what
+      // the first two-device test run demonstrated.
+      entry: body.entry,
     });
   }
   return body;
@@ -250,7 +260,33 @@ async function migrateLocalLibraryIfNeeded(remoteIds: Set<string>): Promise<void
 // replacing the whole library on every save.
 let lastSynced: Map<string, Entry> | null = null;
 
+/**
+ * The server's version token per entry, handed back as `ifVersion` on every
+ * PATCH so a write from stale state is detected (409) instead of clobbering.
+ * Server-owned: only ever set from a response.
+ */
+const versions = new Map<string, number>();
+
+/**
+ * Ids this device explicitly un-checked since its last successful sync.
+ * They exist to answer one question during a 409 merge: "does the other
+ * side's set contain this id because they did it, or because they are stale
+ * from before I un-did it?" Session-local on purpose — the window they must
+ * survive is uncheck-to-next-sync, not forever.
+ */
+const recentUnclears = new Map<string, Set<string>>();
+
+/**
+ * One in-flight write per entry, latest state queued behind it. Without
+ * this, cooking taps would race their own writes: tap 2's PATCH carries
+ * tap 1's ifVersion, 409s against tap 1's own committed write, and every
+ * fast sequence pays a pointless conflict round trip.
+ */
+const inFlight = new Map<string, Promise<void>>();
+const pendingEntry = new Map<string, Entry>();
+
 function toEntry(row: any): Entry {
+  if (typeof row.version === "number") versions.set(row.id, row.version);
   return {
     id: row.id,
     recipe: row.recipe,
@@ -258,6 +294,7 @@ function toEntry(row: any): Entry {
     servings: row.servings ?? null,
     mode: row.mode === "steps" ? "steps" : "diagram",
     timer: row.timer ?? null,
+    cooked: Array.isArray(row.cooked) ? row.cooked : [],
     savedAt: row.savedAt ?? Date.now(),
   };
 }
@@ -328,39 +365,187 @@ export function lastAcceptedEntry(id: string): Entry | null {
 }
 
 /**
+ * Something worth telling the user that is not a failure: a conflict was
+ * resolved and the resolution has a loser. The one that matters is
+ * `tree_conflict` — my edit replaced someone else's — because it is the only
+ * merge rule that can discard real work rather than override a preference.
+ * `remote_update` fires when a refetch adopts changes made on another device
+ * while this one was clean, so the person whose edit lost also finds out.
+ */
+export interface SyncNotice {
+  id: string;
+  kind: "tree_conflict" | "remote_update";
+  message: string;
+  entry: Entry;
+}
+
+type SyncNoticeHandler = (notice: SyncNotice) => void;
+const syncNoticeHandlers = new Set<SyncNoticeHandler>();
+
+export function onSyncNotice(handler: SyncNoticeHandler): () => void {
+  syncNoticeHandlers.add(handler);
+  return () => syncNoticeHandlers.delete(handler);
+}
+
+function reportSyncNotice(notice: SyncNotice): void {
+  for (const handler of syncNoticeHandlers) {
+    try {
+      handler(notice);
+    } catch (e) {
+      console.error("[storage] a sync-notice handler threw:", e);
+    }
+  }
+}
+
+const toSyncable = (e: Entry): SyncableEntry => ({
+  recipe: e.recipe,
+  done: e.done,
+  servings: e.servings,
+  mode: e.mode,
+  timer: e.timer,
+  cooked: e.cooked ?? [],
+});
+
+/** What actually goes on the wire for an update: only the fields that
+ *  changed against `base`, plus the version this write was computed from.
+ *  Sending unchanged fields is how a stale device used to clobber a fresh
+ *  one — a mode tap carried yesterday's `done` with it. */
+function buildPatch(base: Entry | null, entry: Entry): Record<string, unknown> | null {
+  const body: Record<string, unknown> = {};
+  const changed = (k: keyof Entry) =>
+    !base || JSON.stringify(base[k]) !== JSON.stringify(entry[k]);
+  if (changed("recipe")) body.recipe = entry.recipe;
+  if (changed("done")) body.done = entry.done;
+  if (changed("servings")) body.servings = entry.servings;
+  if (changed("mode")) body.mode = entry.mode;
+  if (changed("timer")) body.timer = entry.timer;
+  if (changed("cooked")) body.cooked = entry.cooked ?? [];
+  if (Object.keys(body).length === 0) return null;
+  const v = versions.get(entry.id);
+  if (v !== undefined) body.ifVersion = v;
+  return body;
+}
+
+/** Record ids the user just un-checked, so a 409 merge can tell "they did
+ *  it" apart from "they are stale from before I un-did it". */
+function trackUnclears(id: string, base: Entry | null, entry: Entry): void {
+  if (!base) return;
+  const now = new Set(entry.done);
+  let set = recentUnclears.get(id);
+  for (const doneId of base.done) {
+    if (now.has(doneId)) continue;
+    if (!set) recentUnclears.set(id, (set = new Set()));
+    set.add(doneId);
+  }
+  // Re-checked ids come off the tombstone list — the user changed their mind.
+  if (set) for (const t of [...set]) if (now.has(t)) set.delete(t);
+}
+
+/** How many times one logical write will follow a 409 with a merge before
+ *  giving up. Each retry starts from fresher server state, so two devices
+ *  converge in one hop; three covers a third device landing mid-merge. */
+const MAX_CONFLICT_RETRIES = 3;
+
+async function pushUpdate(id: string, first: Entry): Promise<void> {
+  let entry = first;
+  let attempt = 0;
+
+  while (true) {
+    const base = lastAcceptedEntry(id);
+    trackUnclears(id, base, entry);
+    const body = buildPatch(base, entry);
+    if (body === null) return;
+
+    try {
+      const res = await api(`/${encodeURIComponent(id)}`, {
+        method: "PATCH",
+        body: JSON.stringify(body),
+      });
+      const acked = toEntry(res.entry);
+      lastSynced?.set(id, acked);
+      // The server now knows about the unchecks; the tombstones have done
+      // their job for everything the ack covers.
+      recentUnclears.delete(id);
+      return;
+    } catch (e) {
+      const err = e as Error & { status?: number; code?: string; entry?: unknown };
+      if (err.status === 409 && err.entry && attempt < MAX_CONFLICT_RETRIES) {
+        attempt++;
+        const theirs = toEntry(err.entry);
+        const { merged, treeConflict } = mergeEntry(
+          base ? toSyncable(base) : null,
+          toSyncable(entry),
+          toSyncable(theirs),
+          recentUnclears.get(id) ?? new Set()
+        );
+        entry = { ...entry, ...merged };
+        // The merge is now this device's local truth too, or the next save
+        // would immediately try to un-merge it.
+        lastSynced?.set(id, theirs);
+        applyMergedLocally?.(entry);
+        if (treeConflict) {
+          reportSyncNotice({
+            id,
+            kind: "tree_conflict",
+            message:
+              "This recipe was edited on another device at the same time. Your edit was kept.",
+            entry,
+          });
+        }
+        continue;
+      }
+      throw e;
+    }
+  }
+}
+
+/**
+ * App's hook for adopting state that changed underneath it — a 409 merge or
+ * a focus refetch. Storage cannot reach React state on its own, and leaving
+ * the merge only in lastSynced would make the screen disagree with what the
+ * next save pushes.
+ */
+let applyMergedLocally: ((entry: Entry) => void) | null = null;
+export function onEntryReplaced(handler: (entry: Entry) => void): () => void {
+  applyMergedLocally = handler;
+  return () => {
+    if (applyMergedLocally === handler) applyMergedLocally = null;
+  };
+}
+
+/** Serialize writes per entry: one in flight, the newest state queued. */
+function enqueueUpdate(id: string, entry: Entry, onError: (e: unknown) => void): void {
+  pendingEntry.set(id, entry);
+  if (inFlight.has(id)) return;
+  const run = async (): Promise<void> => {
+    while (pendingEntry.has(id)) {
+      const nextUp = pendingEntry.get(id)!;
+      pendingEntry.delete(id);
+      try {
+        await pushUpdate(id, nextUp);
+      } catch (e) {
+        onError(e);
+      }
+    }
+    inFlight.delete(id);
+  };
+  inFlight.set(id, run());
+}
+
+/**
  * Pushes local changes to the server.
  *
  * `lastSynced` is the record of what the server has actually accepted, so it
- * advances per entry only when that entry's write resolves. A failure puts
- * the previous value back, which means the next save sees the difference
- * again and retries rather than assuming the write landed.
+ * advances per entry only when that entry's write resolves — inside
+ * pushUpdate for updates, in the POST handler for creates. A failure reports
+ * through onSyncFailure with the last accepted state to roll back to.
  */
 export function saveLibrary(entries: Entry[]): void {
   const prev = lastSynced ?? new Map<string, Entry>();
   const next = new Map(entries.map((e) => [e.id, e]));
-  // Optimistic: assume each write lands, and undo that entry on failure.
-  lastSynced = new Map(next);
 
-  /**
-   * `attempted` is the exact value this request optimistically recorded. The
-   * revert only happens if that value is still what `lastSynced` holds — if a
-   * later save has already written something newer for this id, that request
-   * owns the entry now and this stale failure must not clobber it. Without
-   * the check, a slow rejected write could undo a fast successful one.
-   */
-  const failed = (
-    id: string,
-    kind: SyncFailure["kind"],
-    attempted: Entry | null,
-    before: Entry | null,
-    e: unknown
-  ) => {
+  const failed = (id: string, kind: SyncFailure["kind"], before: Entry | null, e: unknown) => {
     const err = e as Error & { details?: string[] };
-    const current = lastSynced?.get(id) ?? null;
-    if (lastSynced && current === attempted) {
-      if (before) lastSynced.set(id, before);
-      else lastSynced.delete(id);
-    }
     reportSyncFailure({
       id,
       kind,
@@ -372,7 +557,11 @@ export function saveLibrary(entries: Entry[]): void {
 
   for (const [id, entry] of next) {
     const before = prev.get(id);
-    if (!before) {
+    if (!before && !versions.has(id)) {
+      // Optimistically acked so a fast follow-up diffs against this create;
+      // reverted on failure so the next save retries the POST.
+      lastSynced = lastSynced ?? new Map();
+      lastSynced.set(id, entry);
       api("", {
         method: "POST",
         body: JSON.stringify({
@@ -383,40 +572,99 @@ export function saveLibrary(entries: Entry[]): void {
           mode: entry.mode,
           timer: entry.timer,
         }),
-      }).catch((e) => failed(id, "create", entry, null, e));
+      })
+        .then((res) => {
+          if (res?.entry) lastSynced?.set(id, toEntry(res.entry));
+        })
+        .catch((e) => {
+          if (lastSynced?.get(id) === entry) lastSynced.delete(id);
+          failed(id, "create", null, e);
+        });
       continue;
     }
-    // Before the visual editor this was normally false, and the comment here
-    // said so. It is now true on every keystroke-committed edit, which is why
-    // RecipeView debounces before calling this rather than calling it per
-    // character.
-    const recipeChanged = JSON.stringify(before.recipe) !== JSON.stringify(entry.recipe);
-    const doneChanged = JSON.stringify(before.done) !== JSON.stringify(entry.done);
-    const servingsChanged = before.servings !== entry.servings;
-    const modeChanged = before.mode !== entry.mode;
-    const timerChanged = JSON.stringify(before.timer) !== JSON.stringify(entry.timer);
-    if (recipeChanged || doneChanged || servingsChanged || modeChanged || timerChanged) {
-      api(`/${encodeURIComponent(id)}`, {
-        method: "PATCH",
-        body: JSON.stringify({
-          ...(recipeChanged ? { recipe: entry.recipe } : {}),
-          done: entry.done,
-          servings: entry.servings,
-          mode: entry.mode,
-          timer: entry.timer,
-        }),
-      }).catch((e) => failed(id, "update", entry, before, e));
-    }
+    enqueueUpdate(id, entry, (e) => failed(id, "update", lastAcceptedEntry(id), e));
   }
 
   for (const id of prev.keys()) {
     if (!next.has(id)) {
       const before = prev.get(id) ?? null;
-      api(`/${encodeURIComponent(id)}`, { method: "DELETE" }).catch((e) =>
-        // A failed delete optimistically recorded "absent", so that is what
-        // must still be true for the revert to be the right move.
-        failed(id, "delete", null, before, e)
-      );
+      lastSynced?.delete(id);
+      versions.delete(id);
+      recentUnclears.delete(id);
+      api(`/${encodeURIComponent(id)}`, { method: "DELETE" }).catch((e) => {
+        if (before && lastSynced && !lastSynced.has(id)) lastSynced.set(id, before);
+        failed(id, "delete", before, e);
+      });
     }
   }
 }
+
+/**
+ * Re-reads the library and reconciles it with local state — the cheap move
+ * that makes most conflicts never exist. Called on window focus: the laptop
+ * that comes back to the foreground learns about tonight's phone cooking
+ * BEFORE its next write, instead of colliding with it.
+ *
+ * Clean entries (local == acked) adopt the server state outright; dirty ones
+ * run the same three-way merge a 409 would. Either way `lastSynced` becomes
+ * the server state, so the next save pushes exactly the local delta.
+ */
+export async function refreshLibrary(current: Entry[]): Promise<Entry[]> {
+  const res = await api("", { method: "GET" });
+  const server = new Map<string, Entry>((res.entries ?? []).map((r: any) => {
+    const e = toEntry(r);
+    return [e.id, e] as [string, Entry];
+  }));
+
+  const out: Entry[] = [];
+  for (const local of current) {
+    const theirs = server.get(local.id);
+    if (!theirs) {
+      // Deleted on another device, or created here and not yet landed. If we
+      // have no acked version it is the latter — keep it, the POST is on its
+      // way. Otherwise the deletion wins.
+      if (!versions.has(local.id)) out.push(local);
+      continue;
+    }
+    server.delete(local.id);
+    const base = lastAcceptedEntry(local.id);
+    const clean = base && JSON.stringify(toSyncable(local)) === JSON.stringify(toSyncable(base));
+    if (clean) {
+      const treeChanged =
+        JSON.stringify(base!.recipe) !== JSON.stringify(theirs.recipe);
+      lastSynced?.set(local.id, theirs);
+      out.push({ ...local, ...toSyncable(theirs) });
+      if (treeChanged) {
+        reportSyncNotice({
+          id: local.id,
+          kind: "remote_update",
+          message: "This recipe was changed on another device.",
+          entry: { ...local, ...toSyncable(theirs) },
+        });
+      }
+      continue;
+    }
+    const { merged, treeConflict } = mergeEntry(
+      base ? toSyncable(base) : null,
+      toSyncable(local),
+      toSyncable(theirs),
+      recentUnclears.get(local.id) ?? new Set()
+    );
+    lastSynced?.set(local.id, theirs);
+    const adopted = { ...local, ...merged };
+    out.push(adopted);
+    if (treeConflict) {
+      reportSyncNotice({
+        id: local.id,
+        kind: "tree_conflict",
+        message:
+          "This recipe was edited on another device at the same time. Your edit was kept.",
+        entry: adopted,
+      });
+    }
+  }
+  // Rows that exist on the server and not locally: created on another device.
+  for (const theirs of server.values()) out.push(theirs);
+  return out;
+}
+

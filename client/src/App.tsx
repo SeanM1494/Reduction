@@ -6,7 +6,15 @@ import ThemeToggle from "./components/ThemeToggle";
 import LandingPage from "./components/LandingPage";
 import SignIn from "./components/SignIn";
 import { useTheme } from "./hooks/useTheme";
-import { loadLibrary, saveLibrary, newEntryId, type Entry } from "./lib/storage";
+import {
+  loadLibrary,
+  saveLibrary,
+  refreshLibrary,
+  onEntryReplaced,
+  onSyncNotice,
+  newEntryId,
+  type Entry,
+} from "./lib/storage";
 import { readPendingUrl, writePendingUrl, clearPendingUrl } from "./lib/pendingUrl";
 import {
   claimIfNeeded,
@@ -179,6 +187,64 @@ export default function App() {
   const persist = useCallback((next: Entry[]) => {
     setLibrary(next);
     saveLibrary(next);
+  }, []);
+
+  /** A conflict was resolved with a loser, or another device changed
+   *  something this one was looking at. Shown, not swallowed — the one
+   *  forbidden outcome of the sync design is a quiet loss. */
+  const [syncNotice, setSyncNotice] = useState<string | null>(null);
+
+  /**
+   * The sync layer's two ways of changing state underneath the UI:
+   * a 409 merge replaces one entry, and both channels report notices.
+   * Registered once; storage keeps at most one replacement handler.
+   */
+  useEffect(() => {
+    const offReplace = onEntryReplaced((entry) => {
+      setLibrary((prev) => prev.map((e) => (e.id === entry.id ? entry : e)));
+    });
+    const offNotice = onSyncNotice((n) => setSyncNotice(n.message));
+    return () => {
+      offReplace();
+      offNotice();
+    };
+  }, []);
+
+  /**
+   * Refetch on focus — the cheapest and highest-value piece of the sync
+   * design. The laptop that comes back to the foreground learns about
+   * tonight's phone cooking BEFORE its next write, so most conflicts stop
+   * existing rather than needing the 409 path at all. Signed-in only: a
+   * signed-out browser has no server library to drift from.
+   */
+  const userRef = useRef(user);
+  userRef.current = user;
+  const libraryRef = useRef(library);
+  libraryRef.current = library;
+  useEffect(() => {
+    let running = false;
+    const refresh = async () => {
+      if (!userRef.current || running || document.visibilityState !== "visible") return;
+      running = true;
+      try {
+        const next = await refreshLibrary(libraryRef.current);
+        setLibrary(next);
+      } catch (e) {
+        // A failed refresh is a non-event: local state stands, and the next
+        // write still has the 409 path to protect it.
+        console.warn("[sync:refresh]", e);
+      } finally {
+        running = false;
+      }
+    };
+    window.addEventListener("visibilitychange", refresh);
+    window.addEventListener("focus", refresh);
+    window.addEventListener("online", refresh);
+    return () => {
+      window.removeEventListener("visibilitychange", refresh);
+      window.removeEventListener("focus", refresh);
+      window.removeEventListener("online", refresh);
+    };
   }, []);
 
   const addRecipe = useCallback(
@@ -426,6 +492,14 @@ export default function App() {
       </nav>
 
       <div className="rd-shell">
+        {syncNotice ? (
+          <div className="rd-claim-banner" role="status">
+            <span>{syncNotice}</span>
+            <button className="rd-btn" onClick={() => setSyncNotice(null)}>
+              OK
+            </button>
+          </div>
+        ) : null}
         {claimFailed ? (
           <div className="rd-claim-banner" role="status">
             <span>

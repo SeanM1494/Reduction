@@ -363,6 +363,33 @@ what everyone gets for the 30-day TTL. So a correction has to be able to
 replace the cached tree *first*; normalising only after that turns it from a
 trade into a tidy-up. Do not normalise as a drive-by improvement.
 
+## Sync: the server detects, the client resolves
+
+Two devices on one account are a real scenario, and the write path is built
+for it — see `shared/sync.ts` for the model and `sync.test.ts` for the
+proofs. The rules that must survive any refactor:
+
+- **Every PATCH sends only the fields that changed, plus `ifVersion`.**
+  Sending unchanged fields is how a stale device used to clobber a fresh one:
+  a mode tap carried yesterday's `done` with it. A stale `ifVersion` gets a
+  409 *with the current row*, and the client three-way-merges (base =
+  `lastSynced`, which is exactly the base a three-way merge needs) and
+  retries. The server never merges — resolution needs the tree and the
+  user's intent, which only the client has.
+- **`done` merges element-wise against the base, then closure-repairs.**
+  Additions from both sides survive (union); a removal by one side beats the
+  other's unchanged copy (that is an explicit un-check, honoured in both
+  directions); and `enforceClosure` then retracts any completion built on a
+  retracted input — the app's own uncheck cascade, applied to the merge.
+  Plain union was tried first and resurrection of un-checks is why it lost.
+- **Writes are serialized per entry** (one in flight, newest queued), or
+  cooking taps race their own `ifVersion` and pay a pointless 409 each.
+- **A tree conflict is never quiet.** Mine-wins is the rule, but it is the
+  one rule that can discard real work, so both devices are told: the winner
+  at merge time, the loser at its next focus refetch (`onSyncNotice`).
+- **The focus refetch is load-bearing.** It is what makes most conflicts
+  never exist; do not remove it as a "redundant" fetch.
+
 ## The visual editor
 
 `shared/edits.ts` is the whole model: `applyEdit(recipe, op)` is pure, and one

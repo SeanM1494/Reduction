@@ -61,6 +61,22 @@ export const recipes = pgTable(
     /** Active cooking-mode timer, if any: an absolute end time (epoch ms),
      *  never a countdown — see client/src/components/StepsMode.tsx. */
     timer: jsonb("timer").$type<{ stepId: string; endsAt: number } | null>(),
+    /**
+     * Optimistic-concurrency token, incremented by the server on every write.
+     * A PATCH carrying `ifVersion` that no longer matches gets a 409 with the
+     * current row, and the CLIENT merges — see shared/sync.ts for the model
+     * and for why `done` merges by union. The server never merges: resolution
+     * needs the recipe tree and knowledge of what the user just did, both of
+     * which only the client has.
+     */
+    version: integer("version").notNull().default(1),
+    /**
+     * Epoch-ms timestamps of completed cook-throughs, appended when `done`
+     * reaches the full count (ROADMAP #8). Observed rather than reported,
+     * which is what makes it the reliable half of a future rating. Merged by
+     * union with an hours-scale dedupe window.
+     */
+    cooked: jsonb("cooked").$type<number[]>().notNull().default([]),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),
   },
