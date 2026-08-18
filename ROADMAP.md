@@ -1,25 +1,52 @@
 # Reduction — Roadmap
 
-Ideas captured, roughly in build order. Notes are about what each one
-actually requires, not just what it is.
+Notes are about what each entry actually requires, not just what it is.
+
+**The numbers are names, not an order.** They were a build order once and
+several are now built; **Suggested order** near the bottom is the live one.
+Each entry carries its own status, so a stale "next up" line is a bug in this
+file — fix the entry rather than appending a correction to the end, which is
+what the retired "Where this has got to" appendix was.
 
 ---
 
 ## 1. User login with OAuth
 
-**Status:** next up. The `owner_key` scheme was built as a placeholder for
-exactly this — a random id in localStorage scoping every database query.
+**Status: built, except Apple.**
 
-**What changes:** add a `users` table, and `recipes.owner_key` becomes
-`recipes.user_id`. That is a column swap, not a migration of logic, which
-is why the placeholder was worth building.
+- Schema and session plumbing — `users`, `identities`, `sessions`,
+  `auth_states`, server-side sessions behind an httpOnly cookie (`aafc59a`).
+- Google, end to end, **verified working in production**: signed in, session
+  created, rows in `users` and `identities` (`9c57573`).
+  `docs/google-oauth.md` is the console setup.
+- The claim that moves rows into a new account — tests written first, then the
+  implementation; all-or-nothing transaction, id collisions re-keyed rather
+  than dropped, verified against a real database (`c00bbc6`).
+- The sign-in flow replacing the stub (`b540bde`). **The signed-in shell —
+  sign-out, the claim-retry banner, post-sign-in extraction — has not been
+  exercised against a live session yet.**
 
-**Provider:** Google and Apple cover almost everyone. Apple is required if
-this ever ships to the iOS App Store alongside another provider.
+**Apple has not been started.** It needs an https callback on a verified
+domain, so it cannot be tested locally. Required if this ships to the iOS App
+Store alongside another provider, which is the plan.
 
-**The one thing to get right:** on first login, migrate the anonymous
-`owner_key` library into the new account rather than orphaning it.
-Someone who saved five recipes before signing up should not lose them.
+**`owner_key` did not become `user_id`; it was added alongside.** The original
+plan was a column swap. What actually happened is that `user_id` was added
+nullable next to `owner_key`, and the two now mean different things:
+
+- `user_id` is ownership. A signed-in query scopes by it and nothing else.
+- `owner_key` is provenance, plus one live use: the free trial recipe is
+  parked under `trial:<trialId>` with a null `user_id` until sign-up claims it
+  (#7).
+
+**Anonymous saving is retired — #7 retired it.** An earlier version of this
+section said anonymous ownership was a permanent second-class identity because
+the sign-up funnel depended on it. That stopped being true when the trial
+landed: a signed-out browser no longer builds a library at all, and the funnel
+runs on the single trial row plus the pending URL in `auth_states`. The
+signed-out query branch (`owner_key AND user_id IS NULL`) now finds only rows
+saved before that change, which is exactly what `claimAnonymousLibrary` exists
+to migrate — and why it is marked for removal rather than deleted (#7).
 
 ---
 
@@ -35,6 +62,13 @@ search is enough at this scale, and needs no new dependency.
 **Design question worth settling early:** are saved recipes public by
 default, private by default, or is there a "share" toggle? This decides
 whether idea #3 is even possible, so decide it before building either.
+
+**Half-made already, deliberately.** `visibility` (default `private`) and
+`share_slug` columns exist so that sharing is not a migration against a live
+user base later — but nothing reads them, there is no UI, and the actual
+decision is still open. Worth noting the non-technical half: these rows hold
+recipe text derived from other people's sites, so "public" is a different
+question from "private", and not one the schema answers.
 
 ---
 
@@ -209,9 +243,10 @@ Two consequences worth designing for:
   a corpus of ones people actually cook. Better data than anything
   synthesized, and not copyable without this data model.
 
-**Cheap first version worth considering:** the JSON tree editor from the
-early prototype, exposed behind an "advanced" affordance. Ugly, but it
-unblocks anyone stuck with a bad parse today and costs almost nothing.
+**Cheap first version — built, and still there:** the JSON tree editor from
+the early prototype, behind an "advanced" affordance. Ugly, but it means
+nobody has to abandon a recipe, and it stays until the visual editor below
+covers adding, deleting, splitting and merging steps.
 
 ### Status: the visual editor's first version is built
 
@@ -356,17 +391,30 @@ recurs outside a drag there is a second cause still out there.
 
 ## Suggested order
 
-1. **OAuth** — everything else assumes accounts.
-2. **Public/private decision** — blocks #2 and #3.
-3. **Editing** (#6) — the sooner a bad parse stops being fatal, the
-   better, and it lays the groundwork for the builder.
-4. **Cross-user search + cache reuse** (#2, #3 together) — they are the
-   same feature seen from two sides. Settle the canonical-version
-   question from #6 first.
-5. **Variations at the prompt level** (#5, cheap version).
-6. **Recipe builder** (#4) — mostly falls out of #6 once editing exists.
-7. **Structural variation comparison** (#5, real version) — needs the
-   corpus that #3 produces.
+OAuth and the visual editor's first version are built, so this is what is
+actually left, cheapest and most blocking first.
+
+1. **Confirm the two iPhone fixes** on a real device. Cheap, and until it is
+   done the editor is unproven on the platform this app is primarily for.
+2. **Finish editing** (#6) — adding, deleting, splitting and merging steps.
+   These are the repairs that make a recipe *unusable* rather than merely
+   wrong, and they are the only reason the raw JSON hatch still exists. New
+   op types against the existing `applyEdit(recipe, op)` signature.
+3. **Make the trial row patchable**, so the one free recipe can be edited.
+   Small, and it is precisely the recipe someone would want to correct.
+4. **Public/private decision** — still just a decision, and it blocks both
+   #2 and #3. The columns are already there.
+5. **Corrections replace the cached tree, then URL normalisation** (#3, in
+   that order — see the reasoning there).
+6. **Cross-user search + cache reuse** (#2 and #3 together) — the same
+   feature seen from two sides, and it needs the correction path from step 5
+   to be safe.
+7. **Apple sign-in** (#1) — no rush until the App Store build is real, and it
+   needs an https callback on a verified domain, so it cannot be done here.
+8. **Variations at the prompt level** (#5, cheap version).
+9. **Recipe builder** (#4) — mostly falls out of #6 once editing is complete.
+10. **Structural variation comparison** (#5, real version) — needs the corpus
+    #3 produces.
 
 ---
 
@@ -383,12 +431,6 @@ recurs outside a drag there is a second cause still out there.
   so a drag can only reorder branches that are genuinely interchangeable
   (the salsa chain vs. the mash chain). Anything else would be a change to
   the tree, which is what the diagram editor already does.
-- ~~**Card-order invariant.**~~ **Done** — and it was not extraction
-  variance. The walk was sound; the bug was that sections were emitted in
-  array order, so a component section ("Dry ingredients") could be cooked
-  after the section consuming it. `shared/sequence.ts` now orders sections
-  by the name link `prompt.ts` asks for, and `sequence.test.ts` fixes the
-  invariant against fixtures and 100+ generated trees.
 - **`Unit` and `UNITS` are two hand-maintained lists that must agree.**
   `shared/layout.ts` declares the union type at the top and the runtime set
   near `validateRecipe`, and nothing enforces that they match — a unit added
@@ -397,55 +439,19 @@ recurs outside a drag there is a second cause still out there.
   array, `typeof UNITS[number]` for the type) is a small change now and an
   annoying one once a third list appears. Surfaced when the editor's unit
   picker needed the set at runtime.
-- Pass 3 visual polish: shadows and contrast, pending sign-off on the
-  corner treatment.
 - Phase B timers: service worker + Web Push for notifications when the
   app is closed. Needs a Reserved VM or external cron, because a
   sleeping Repl cannot fire a scheduled push.
 
----
+### Closed, kept for the record
 
-## Where this has got to
+- **Pass 3 visual polish** shipped (`9dd9221`): two-layer warm shadows, more
+  surface contrast, a stronger ready state, done receding further, louder
+  ingredient amounts. The corner treatment it was waiting on was signed off.
+- **The card-order invariant** is guaranteed and tested, and it was not
+  extraction variance. The walk was sound; the bug was that sections were
+  emitted in array order, so a component section ("Dry ingredients") could be
+  cooked after the section consuming it. `shared/sequence.ts` now orders
+  sections by the name link `prompt.ts` asks for, and `sequence.test.ts`
+  fixes the invariant against fixtures and 100+ generated trees.
 
-*Appended when the roadmap was committed, because several status lines
-above were written before the work below landed and now read as stale.
-The prose above is untouched — this section is the correction, and can be
-folded into it whenever that is worth doing.*
-
-**#1 OAuth is largely built, not "next up".**
-
-- Schema and session plumbing — `users`, `identities`, `sessions`,
-  `auth_states`, server-side sessions behind an httpOnly cookie
-  (`aafc59a`).
-- Google, end to end, **verified working in production** — signed in,
-  session created, rows in `users` and `identities` (`9c57573`).
-  `docs/google-oauth.md` is the console setup.
-- The anonymous-library claim — the "one thing to get right" above. Tests
-  written first, then the implementation; all-or-nothing transaction,
-  collisions re-keyed rather than dropped, verified against a real
-  database (`c00bbc6`).
-- The sign-in flow replacing the stub (`b540bde`). **The signed-in shell
-  — sign-out, the claim-retry banner, post-sign-in extraction — has not
-  been exercised against a live session yet.**
-- **Apple has not been started.** It needs an https callback on a
-  verified domain, so it cannot be tested locally.
-
-**One deliberate divergence from the plan above.** `owner_key` did *not*
-become `user_id`. `user_id` was added *alongside* it, nullable, because
-anonymous saving survives — it is what makes the landing demo's sign-up
-funnel work, so anonymous ownership is a permanent second-class identity
-rather than a stage to migrate off. Rows keep the `owner_key` that first
-saved them as provenance. Queries scope by `user_id` when there is a
-session and by `owner_key AND user_id IS NULL` when there is not.
-
-**#2's public/private decision is half-made.** `visibility` (default
-`private`) and `share_slug` columns exist so sharing is not a migration
-against a live user base later — but nothing reads them, there is no UI,
-and the actual decision is still open. Worth noting the non-technical
-half: these rows hold recipe text derived from other people's sites, so
-"public" is a different question from "private".
-
-**Pass 3 visual polish has shipped** (`9dd9221`) — two-layer warm
-shadows, more surface contrast, a stronger ready state, done receding
-further, and louder ingredient amounts. The corner treatment it was
-waiting on was signed off. Phase B timers remain open as described.
