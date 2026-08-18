@@ -169,8 +169,18 @@ body {
   position: relative; order: 3;
   flex: 1 1 320px; min-width: 160px; max-width: 460px;
 }
+/* iOS Safari zooms the page toward any focused input whose font-size is
+   below 16px, and the user has to pinch back out. So 16px is the FLOOR for
+   every input, select and textarea — including future ones, which is what
+   this element rule is for. It is not sufficient on its own: most input
+   classes here use `font: inherit`, and the shorthand resets font-size, so
+   each class also declares 16px explicitly. If you add an input class, keep
+   it at 16px or Safari will zoom. (Do not "fix" this with maximum-scale on
+   the viewport meta — that disables pinch zoom for people who need it.) */
+input, select, textarea { font-size: 16px; }
+
 .rd-search-input {
-  width: 100%; font: inherit; font-size: 13.5px;
+  width: 100%; font: inherit; font-size: 16px;
   padding: 9px 14px; border: 1px solid var(--line); border-radius: 99px;
   background: var(--ing-bg); color: var(--ink);
 }
@@ -274,7 +284,7 @@ body {
 }
 .rd-urlbar { display: flex; gap: 8px; }
 .rd-url {
-  flex: 1; min-width: 0; font: inherit; font-size: 15px;
+  flex: 1; min-width: 0; font: inherit; font-size: 16px;
   padding: 12px 13px; border: 1px solid var(--line); border-radius: 9px;
   background: var(--card); color: var(--ink);
 }
@@ -284,7 +294,7 @@ body {
 }
 .rd-paste {
   width: 100%; min-height: 160px; resize: vertical;
-  font: inherit; font-size: 14px; line-height: 1.5;
+  font: inherit; font-size: 16px; line-height: 1.5;
   padding: 12px 13px; border: 1px solid var(--line); border-radius: 9px;
   background: var(--card); color: var(--ink);
 }
@@ -293,7 +303,7 @@ body {
   border-color: var(--warm-line);
 }
 .rd-photo-note { margin: 0; font-size: 13px; color: var(--muted); }
-.rd-file { font: inherit; font-size: 13px; color: var(--muted); }
+.rd-file { font: inherit; font-size: 16px; color: var(--muted); }
 /* The app's primary action button. min-height rather than more padding: at
    14px/600 the padding alone lands it on 40px, which is a desktop button that
    happens to be on a phone. Every place .rd-go appears is a place someone taps
@@ -1416,7 +1426,7 @@ body {
 .rd-cta-done { flex-direction: column; align-items: flex-start; gap: 10px; }
 .rd-cta-form { display: flex; gap: 8px; width: 100%; max-width: 460px; }
 .rd-cta-input {
-  flex: 1; min-width: 0; min-height: 44px; font: inherit; font-size: 14px;
+  flex: 1; min-width: 0; min-height: 44px; font: inherit; font-size: 16px;
   background: var(--card); color: var(--ink);
   border: 1px solid var(--line); border-radius: 11px; padding: 9px 12px;
 }
@@ -1587,7 +1597,7 @@ body {
 .rd-json-area {
   width: 100%; min-height: 46vh; resize: vertical;
   font-family: "Space Mono", ui-monospace, monospace;
-  font-size: 12.5px; line-height: 1.55; tab-size: 2;
+  font-size: 16px; line-height: 1.5; tab-size: 2;
   color: var(--ink); background: var(--card);
   border: 1px solid var(--line-strong); border-radius: 13px; padding: 14px 15px;
   box-shadow: inset 0 1px 2px rgba(var(--shadow-rgb), .10);
@@ -1606,7 +1616,7 @@ body {
 }
 
 @media (max-width: 520px) {
-  .rd-json-area { min-height: 40vh; font-size: 12px; }
+  .rd-json-area { min-height: 40vh; }
   .rd-json-actions { width: 100%; }
   .rd-json-actions .rd-go, .rd-json-actions .rd-btn { flex: 1; }
 }
@@ -1767,7 +1777,7 @@ body.rd-dragging-body {
 }
 .rd-field-hint { font-weight: 400; color: var(--faint); }
 .rd-field-input {
-  width: 100%; min-height: 44px; font: inherit; font-size: 15px;
+  width: 100%; min-height: 44px; font: inherit; font-size: 16px;
   padding: 10px 12px; border-radius: 11px;
   border: 1px solid var(--line); background: var(--page); color: var(--ink);
 }
@@ -1845,7 +1855,7 @@ body.rd-dragging-body {
 }
 .rd-sort-label { font-size: 12.5px; font-weight: 600; color: var(--muted); }
 .rd-sort-select {
-  font: inherit; font-size: 13.5px; min-height: 44px;
+  font: inherit; font-size: 16px; min-height: 44px;
   padding: 8px 12px; border-radius: 11px;
   border: 1px solid var(--line); background: var(--card); color: var(--ink);
 }
@@ -1887,3 +1897,19 @@ body.rd-dragging-body {
 .rd-settings-line { margin: 0 0 6px; font-size: 15px; }
 .rd-settings-sub { color: var(--muted); font-size: 13.5px; }
 .rd-settings-signout { margin-top: 10px; }
+
+/* The open recipe's meal-type badge — same fact as the card badge, tappable.
+   Discoverability is the point: the overflow menu entry still exists, but
+   the visible badge is how someone learns tagging exists at all. */
+.rfx-tag-badge {
+  display: inline-flex; align-items: center; gap: 6px;
+  min-height: 44px; margin: 0 2px 10px;
+  font-family: "Space Mono", ui-monospace, monospace;
+  font-size: 11px; letter-spacing: .05em; text-transform: uppercase;
+  color: var(--warm-ink); background: var(--warm-bg);
+  border: 1px solid var(--oven-line); border-radius: 99px;
+  padding: 6px 14px; cursor: pointer;
+}
+.rfx-tag-badge:hover { background: var(--warm-hover); }
+.rfx-tag-badge:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+.rfx-tag-more { color: var(--muted); }

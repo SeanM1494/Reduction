@@ -24,6 +24,7 @@ import StepsMode from "./StepsMode";
 import RecipeJsonEditor from "./RecipeJsonEditor";
 import EditSheet from "./EditSheet";
 import MealTypeSheet from "./MealTypeSheet";
+import { MEAL_TYPE_LABELS, sanitizeMealTypes } from "../../../shared/mealTypes";
 import { applyEdit, type EditOp } from "../../../shared/edits";
 import { reconcileDone } from "../../../shared/progress";
 import { lastAcceptedEntry, onSyncFailure } from "../lib/storage";
@@ -518,6 +519,31 @@ export default function RecipeView({
           </div>
         ) : (
           <div className={`rfx-diagram-wrap ${editing ? "is-editing" : ""}`}>
+            {/* The meal-type badge, tappable: the overflow menu entry works
+                but nobody wanders an overflow menu to discover tagging. The
+                badge is the same fact My Recipes' cards show, so tapping the
+                thing itself is the obvious edit path. Hidden for the trial
+                recipe along with every other write. */}
+            {canEdit ? (
+              <button
+                className="rfx-tag-badge no-print"
+                onClick={() => setMealSheetOpen(true)}
+                title="Edit meal types"
+              >
+                {(() => {
+                  const types = sanitizeMealTypes(recipe.mealTypes);
+                  if (!types.length) return <>Tag meal type</>;
+                  return (
+                    <>
+                      {MEAL_TYPE_LABELS[types[0]]}
+                      {types.length > 1 ? (
+                        <span className="rfx-tag-more">+{types.length - 1}</span>
+                      ) : null}
+                    </>
+                  );
+                })()}
+              </button>
+            ) : null}
             {/* The mode has to announce itself. Someone who wanders into edit
                 mode and taps around must not be left wondering why nothing
                 checks off — so the bar is persistent, not a toast. */}

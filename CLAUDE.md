@@ -76,6 +76,12 @@ accommodate afterwards.
   "done with a known issue" — not done.
 - **Touch targets are at least 44px.** A 31px control is a desktop button
   that happens to be on a phone.
+- **Inputs are at least 16px font-size.** iOS Safari zooms the page toward
+  any focused input below that, and the user has to pinch back. There is a
+  floor rule (`input, select, textarea { font-size: 16px }`) in index.css,
+  but `font: inherit` in a class resets it — so any new input class must
+  declare 16px itself. Never "fix" this with `maximum-scale` on the viewport
+  meta; that disables pinch zoom for people who need it.
 - Legibility at arm's length across a counter, and reach for one thumb, beat
   desktop density every time they conflict.
 - The landing page section below is part of this rule, not a separate concern.
