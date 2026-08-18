@@ -155,16 +155,34 @@ On top of `npm run check` and `npm test`:
 Both were found by cooking on a real iPhone, and neither reproduces on
 desktop or in this container.
 
-**Nothing that is — or contains — the sticky ingredient column may animate a
-`transform`.** `.rd-ing` is `position: sticky`, and a transform on a sticky
-element or an ancestor of one makes that element a containing block and forces
-a new compositing layer. WebKit drops the sticky constraint while that
-animation runs. The symptom is a bar across the left edge cutting off the
-ingredient names for exactly the animation's duration and then healing —
-one second, which is what `rd-swap-in` was set to. `.rd-op` cells and the
-collapsed chip still get the 6px lift; the sticky column and `.rd-swap` fade
-with `rd-fade-in` instead. If you add a cell animation, check which side of
-that line it falls on.
+**The bars flashing at both edges when a step completes were the entrance
+fade itself.** Completing a step that finishes a branch re-keys rows, and
+every re-mounted cell ran `rd-swap-in`: 1s, from opacity 0, with a 6px
+translateY. The collapsed chip mounts against the left edge over the
+ingredient column and the consuming op cell reaches the right edge — measured
+mid-animation at opacity 0.28, chip at left=6, op cell at right=384 on a
+390px viewport. Two near-invisible regions, one per edge, healing after
+exactly a second. The same collapse also changes the frame's real
+`scrollWidth` (419 → 400, measured, on any recipe wider than the table's
+400px min-width), and iOS flashes scroll indicators when a scroller's content
+size changes — stacked on the fade, that is the "bar" report. The fade now
+runs 450ms, from 0.35, and moves nothing.
+
+Two lessons that outlive the bug. **First: this was misdiagnosed once**, as
+WebKit unpinning the sticky column under an animated transform. That story
+explained a left-edge artifact and could not explain a symmetric pair —
+and the "verification" that blessed it measured sticky offsets at
+`scrollLeft: 0`, where a sticky column and a static one are identical.
+Measure sticky integrity with the frame actually scrolled. **Second: keep
+transforms out of the scroller anyway.** The sticky unpin never reproduced in
+Chromium (offsets held at 0 throughout, measured scrolled), but transform on
+sticky is a real WebKit bug class and the entrance fade never needed to move.
+That ban is prevention, not the diagnosis.
+
+**A collapse also yanks `scrollLeft`** when the narrower table cannot contain
+the old scroll position (41 → 22 in one frame, measured). Inherent to content
+shrinking; noted so a future "table jerks sideways on completion" report
+starts here rather than from zero.
 
 **A `position: fixed` element painting past the right edge zooms the page.**
 The drag ghost followed the pointer unclamped and reached `right=462` on a

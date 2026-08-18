@@ -359,9 +359,15 @@ across the ingredient column for about a second, cutting off the names,
 then fades. Looks like a scrollbar or an overlay. Candidates were: the
 sticky column's pin shadow, a momentum-scroll indicator triggered by an
 auto-scroll, or the tuck/collapse animation painting outside its bounds.
-**Found:** the third, near enough. `.rd-row-swap` animated a `transform` on
-`.rd-ing`, which is `position: sticky`, for one second — matching the
-reported duration. Sticky cells now fade without transforming.
+**Found — on the second attempt, after the report that the bars are
+symmetric killed the first diagnosis:** the entrance fade itself. Re-mounted
+rows faded in from opacity 0 for 1s at both edges of the diagram, and the
+collapse that triggers the re-mount also changes the frame's real
+scrollWidth, which is what makes iOS flash its scroll indicators. The fade is
+now 450ms, from 0.35, with no transform. The first fix (sticky cells fading
+instead of transforming) addressed a WebKit bug class that never reproduced
+in Chromium — kept in spirit (nothing in the scroller transforms at all now)
+but it was not the mechanism.
 
 **The layout viewport occasionally zooms out.** The diagram fills the
 full screen width with no margin, and it takes a pinch to recover. This

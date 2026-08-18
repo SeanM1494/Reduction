@@ -881,35 +881,37 @@ body {
  * one-line summary and the strip comes forward.
  * ------------------------------------------------------------------ */
 
-/* NOTHING THAT CONTAINS OR IS THE STICKY INGREDIENT COLUMN MAY ANIMATE A
-   TRANSFORM.
+/* THE ENTRANCE FADE MUST NOT LOOK LIKE A BAR, AND MUST NOT TRANSFORM.
 
-   `.rd-ing` is `position: sticky`, and a transform on a sticky element — or
-   on an ancestor of one — makes that element a containing block and forces a
-   fresh compositing layer. WebKit responds by dropping the sticky constraint
-   for the duration of the animation, which is a bar appearing across the left
-   edge for exactly as long as the animation runs, cutting off the ingredient
-   names, and then healing. One second, which is this animation's duration.
+   This ran for 1s, from opacity 0, with a 6px translateY lift. Completing a
+   step that finishes a branch re-keys rows: the collapsed chip mounts hard
+   against the LEFT edge over the ingredient column, and the consuming op
+   cell reaches the RIGHT edge — measured mid-animation at opacity 0.28 with
+   the chip at left=6 and the op cell at right=384 on a 390px viewport. Two
+   near-invisible regions, one at each edge, healing after exactly a second:
+   on an iPhone that reads as a pair of bars flashing over the diagram every
+   time a step completes. iOS stacks its scroll indicators on top, because
+   the same collapse changes the frame's real scrollWidth (419 -> 400,
+   measured) — content-size changes are what flash indicators.
 
-   So the lift is for things that are neither: `.rd-op` cells and the
-   collapsed chip. Everything sticky, and everything wrapping the sticky
-   column, fades without moving. */
-.rd-swap { animation: rd-fade-in 1s cubic-bezier(.2,.7,.3,1); }
+   So the fade starts at .35 — dimmed reads as "arriving", invisible reads as
+   "a bar" — runs 450ms rather than a second, and moves nothing. The
+   transform is gone on purpose and should not come back: it is what forces
+   compositing churn inside the scroller, and `.rd-ing` is position:sticky,
+   which WebKit is known to unpin under an animated transform. Chromium never
+   reproduced the unpin (sticky offsets held at 0 throughout, measured while
+   scrolled), so that ban is prevention rather than a confirmed diagnosis —
+   but opacity is all this effect ever needed. */
+.rd-swap { animation: rd-swap-in .45s ease-out; }
 @keyframes rd-swap-in {
-  from { opacity: 0; transform: translateY(6px); }
-  to   { opacity: 1; transform: none; }
-}
-@keyframes rd-fade-in {
-  from { opacity: 0; }
+  from { opacity: .35; }
   to   { opacity: 1; }
 }
 
 /* Same swap as .rd-swap, scoped to individual cells: whichever rows a
    collapse/expand click actually mounts (the tucked chip, or the rows it
    reveals) fade in on their own instead of restarting the whole table. */
-.rd-row-swap { animation: rd-swap-in 1s cubic-bezier(.2,.7,.3,1); }
-/* The sticky column: same fade, no transform. See the block above. */
-.rd-ing.rd-row-swap { animation-name: rd-fade-in; }
+.rd-row-swap { animation: rd-swap-in .45s ease-out; }
 
 .rd-under {
   display: flex; align-items: baseline; justify-content: space-between;
@@ -1034,7 +1036,7 @@ body {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .rd-swap, .rd-finish.is-focus, .rd-row-swap, .rd-ing.rd-row-swap { animation: none; }
+  .rd-swap, .rd-finish.is-focus, .rd-row-swap { animation: none; }
   .rd-steps-slide-in-fwd, .rd-steps-slide-in-back,
   .rd-steps-slide-out-fwd, .rd-steps-slide-out-back { animation: none; }
 }
