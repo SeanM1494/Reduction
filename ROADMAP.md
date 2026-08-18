@@ -64,6 +64,42 @@ pastes a link.
   data rather than the source's prose, and every recipe links back to its
   source — worth keeping that invariant as this scales.
 
+### Two pieces of cache work, and the order is the point
+
+Both were surfaced by a real bug: a cookie recipe parsed badly, and
+re-submitting the same link produced a *different, correct* tree instead of
+the cached one. Neither is built. **The order below is the decision, not an
+accident** — doing them the other way round makes the product worse.
+
+**First: a correction replaces the cached tree.**
+
+Today the cached tree and the user's library row are separate copies.
+`extraction_cache` is written once by `cacheSet` in `server/routes/recipes.ts`
+and never touched again; fixing a recipe in the visual editor (#6) updates
+only `recipes.recipe` for that one user. So the next person to paste the same
+link still gets the original bad parse, for the rest of the 30-day TTL.
+
+This is newly worth building because the editor now exists — before it, there
+were no corrections to propagate. The open questions come from #6 and should
+be settled there first: only a *correction* propagates, never a *fork*; and a
+correction should need several independent people making the same fix rather
+than one report, which costs nothing to require and stops one confident cook
+rewriting a recipe for everyone.
+
+**Then: URL normalisation.**
+
+There is none at all. The key is `sha256("url:" + the raw string)`, so a
+trailing slash, a `utm_`/`fbclid` parameter, `http` vs `https`, `www.` or a
+`#fragment` each pay for a fresh extraction — and are also why the same link
+can come back as two different trees on two submissions.
+
+**Why it waits.** Normalising multiplies cache hits, and until corrections
+propagate it multiplies the blast radius of a bad parse along with them: a
+fresh extraction costs pennies, while a wrong tree that everyone inherits for
+30 days is a bad experience for every future user of that URL. Once a
+correction can replace the cached version, more hits are straightforwardly
+good and this becomes a tidy-up rather than a trade.
+
 ---
 
 ## 4. Recipe design tool (premium)
@@ -273,6 +309,34 @@ select count(*) from recipes where user_id is null and owner_key not like 'trial
 
 ---
 
+## Open bugs — found while cooking, on a real iPhone
+
+Both are WebKit-only as far as anyone can tell; neither reproduces on
+desktop, and the container has no WebKit.
+
+**A bar flashes on the left edge when a step completes.** Appears over or
+across the ingredient column for about a second, cutting off the names,
+then fades. Looks like a scrollbar or an overlay. Candidates: the sticky
+column's pin shadow, a momentum-scroll indicator triggered by an
+auto-scroll, or the tuck/collapse animation painting outside its bounds.
+
+**The layout viewport occasionally zooms out.** The diagram fills the
+full screen width with no margin, and it takes a pinch to recover. This
+is the same signature as the SE toolbar overflow: something overflows
+horizontally and Safari scales to fit, and `innerHeight` then reports a
+larger number than the real viewport. The standing h-scroll sweep passes,
+so it's a state the sweep doesn't reach — mid-drag, mid-animation, edit
+mode on a long recipe, an expanded finish strip, or an unusually long
+label or ingredient name.
+
+The cheap detector: check `innerWidth`/`innerHeight` after every
+interaction in the sweep rather than only at rest. A zoomed layout
+viewport reports differently, which is exactly how the SE overflow was
+caught. Fix the overflow rather than reaching for a viewport meta
+workaround.
+
+---
+
 ## Suggested order
 
 1. **OAuth** — everything else assumes accounts.
@@ -291,6 +355,23 @@ select count(*) from recipes where user_id is null and owner_key not like 'trial
 
 ## Still open from earlier work
 
+- **The trial recipe cannot be edited.** Disabled deliberately: the trial
+  recipe has no library row, so an edit would change the screen only, and
+  signup would then claim the parked server copy and discard it — at
+  exactly the moment the app promises the work is safe. The fix is making
+  the trial row patchable. Worth doing: someone's one free recipe is
+  precisely the one they would want to correct.
+- **Reordering the step-by-step sequence.** A list view of collapsed
+  steps, drag to reorder. Note that card order is *derived*, not stored —
+  so a drag can only reorder branches that are genuinely interchangeable
+  (the salsa chain vs. the mash chain). Anything else would be a change to
+  the tree, which is what the diagram editor already does.
+- ~~**Card-order invariant.**~~ **Done** — and it was not extraction
+  variance. The walk was sound; the bug was that sections were emitted in
+  array order, so a component section ("Dry ingredients") could be cooked
+  after the section consuming it. `shared/sequence.ts` now orders sections
+  by the name link `prompt.ts` asks for, and `sequence.test.ts` fixes the
+  invariant against fixtures and 100+ generated trees.
 - **`Unit` and `UNITS` are two hand-maintained lists that must agree.**
   `shared/layout.ts` declares the union type at the top and the runtime set
   near `validateRecipe`, and nothing enforces that they match — a unit added

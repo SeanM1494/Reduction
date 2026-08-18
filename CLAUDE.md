@@ -295,9 +295,13 @@ section.
 `extraction_cache` is keyed on `sha256("url:" + the raw string)`. A trailing
 slash, a `utm_` parameter, `http` vs `https` or a `#fragment` is a different
 key and pays for a fresh extraction — which is also why the same link can come
-back as two different trees. Deciding to normalise is a trade, not a tidy-up:
-more hits also means a bad parse is stickier, since the first parse of a URL
-is what everyone gets for the 30-day TTL.
+back as two different trees.
+
+**This is deliberate and the sequencing is decided — see ROADMAP #3.** More
+cache hits also make a bad parse stickier, since the first parse of a URL is
+what everyone gets for the 30-day TTL. So a correction has to be able to
+replace the cached tree *first*; normalising only after that turns it from a
+trade into a tidy-up. Do not normalise as a drive-by improvement.
 
 ## The visual editor
 
