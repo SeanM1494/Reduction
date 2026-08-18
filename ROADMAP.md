@@ -359,15 +359,23 @@ across the ingredient column for about a second, cutting off the names,
 then fades. Looks like a scrollbar or an overlay. Candidates were: the
 sticky column's pin shadow, a momentum-scroll indicator triggered by an
 auto-scroll, or the tuck/collapse animation painting outside its bounds.
-**Found — on the second attempt, after the report that the bars are
-symmetric killed the first diagnosis:** the entrance fade itself. Re-mounted
-rows faded in from opacity 0 for 1s at both edges of the diagram, and the
-collapse that triggers the re-mount also changes the frame's real
-scrollWidth, which is what makes iOS flash its scroll indicators. The fade is
-now 450ms, from 0.35, with no transform. The first fix (sticky cells fading
-instead of transforming) addressed a WebKit bug class that never reproduced
-in Chromium — kept in spirit (nothing in the scroller transforms at all now)
-but it was not the mechanism.
+**Diagnosis has moved three times, and the discriminating fact each time
+came from the phone, not the container.** First the sticky column
+(killed by the bars being symmetric), then the entrance fade — re-mounted
+rows really did fade from opacity 0 for 1s at both edges, and that fix (450ms,
+from 0.35, no transform) is real and kept — killed as *the* mechanism by the
+bars being **page-coloured**: the frame's own background is opaque card, so
+any DOM-level gap (a fading cell, a width mismatch) would flash card colour.
+Page colour means the frame's own paint was missing, which only the
+compositor can do. That implicates `-webkit-overflow-scrolling: touch` on
+`.rd-frame` — the legacy composited-scroller opt-in whose documented failure
+mode is unpainted tiles during content changes (the collapse resizes the
+table 419 → 400 and back). Removed; momentum scrolling is the iOS default
+since iOS 13, so it cost nothing.
+
+**Note when re-testing:** the 450ms fade fix (`ad437fd`) was NOT in the
+`a5123b6` deploy — production was still running the 1s-from-0 fade during the
+last round of phone testing. Redeploy before judging either fix.
 
 **The layout viewport occasionally zooms out.** The diagram fills the
 full screen width with no margin, and it takes a pinch to recover. This

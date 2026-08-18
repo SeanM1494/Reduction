@@ -487,7 +487,17 @@ body {
   background: var(--card);
   box-shadow: 0 1px 2px rgba(var(--shadow-rgb), .22),
               0 14px 30px -12px rgba(var(--shadow-rgb), .34);
-  -webkit-overflow-scrolling: touch;
+  /* No -webkit-overflow-scrolling: touch. It used to be here, and it is the
+     prime suspect for the page-coloured bars flashing at both edges of the
+     diagram on iOS when a step completes. The property opts the scroller
+     into the legacy composited path whose documented failure mode is exactly
+     that: unpainted tiles during content changes, showing whatever is behind
+     the scroller — the page — until the compositor catches up. The frame's
+     own background is opaque card, so any DOM-level gap (a fading cell, a
+     momentary width mismatch) would flash CARD-coloured; bars in PAGE colour
+     mean the frame's own paint was missing, which only the compositor can do.
+     Momentum scrolling has been the default for all overflow scrollers since
+     iOS 13, so removing it costs nothing there. */
 }
 /* Separate borders, not collapse: collapsed borders belong to the table, so a
    sticky column scrolls out from under its own edges. */
