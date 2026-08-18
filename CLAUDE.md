@@ -130,12 +130,50 @@ On top of `npm run check` and `npm test`:
 2. Confirm no page-level horizontal scroll:
    `document.documentElement.scrollWidth <= document.documentElement.clientWidth`.
    Ignore elements inside an `overflow-x` ancestor — the diagram scrolls
-   inside `.rd-frame` on purpose.
+   inside `.rd-frame` on purpose. **A `position: fixed` element is not one of
+   those**: it is not clipped by any ancestor's overflow, and it grows neither
+   `scrollWidth` nor a scrollbar in Chromium, so this check calls it clean
+   while Safari zooms the whole layout viewport out to fit it. That is exactly
+   how the drag ghost reached production — see below. Only treat an ancestor
+   as clipping when the element is not fixed, or when that ancestor has a
+   `transform`/`filter`/`perspective` (which makes it the containing block).
 3. Confirm every control you touched is at least 44px tall and actually
    reachable — `page.tap()`, not `page.click()`, so a `:hover`-only
    affordance is caught.
+3b. **Sample after every interaction and during animations, not only at
+   rest.** Record `innerWidth`/`innerHeight` once at load and compare on every
+   sample: a zoomed layout viewport reports larger numbers than the device
+   profile, which is the cheapest detector there is (it is how the SE toolbar
+   overflow was caught — `innerHeight` read 682 instead of 568). The states a
+   rest-only sweep never reaches are the ones that shipped: mid-drag,
+   mid-animation, edit mode, and an expanded finish strip.
 4. Re-measure the landing page collapsed (see below).
 5. Check the same screens on the deployed site once it ships.
+
+## Two things WebKit punishes that Chromium forgives
+
+Both were found by cooking on a real iPhone, and neither reproduces on
+desktop or in this container.
+
+**Nothing that is — or contains — the sticky ingredient column may animate a
+`transform`.** `.rd-ing` is `position: sticky`, and a transform on a sticky
+element or an ancestor of one makes that element a containing block and forces
+a new compositing layer. WebKit drops the sticky constraint while that
+animation runs. The symptom is a bar across the left edge cutting off the
+ingredient names for exactly the animation's duration and then healing —
+one second, which is what `rd-swap-in` was set to. `.rd-op` cells and the
+collapsed chip still get the 6px lift; the sticky column and `.rd-swap` fade
+with `rd-fade-in` instead. If you add a cell animation, check which side of
+that line it falls on.
+
+**A `position: fixed` element painting past the right edge zooms the page.**
+The drag ghost followed the pointer unclamped and reached `right=462` on a
+390px viewport. Chromium neither scrolls nor grows `scrollWidth` for a fixed
+element, so every h-scroll check passed; Safari scales the layout viewport
+down to fit, and the diagram suddenly spans the screen with no margin until
+the user pinches back. `useIngredientDrag` clamps the ghost to the viewport,
+and the offsets it clamps against are the same ones `.rd-drag-ghost` carries
+in CSS — change one and change the other.
 
 ## The landing page: the demo is opt-in
 

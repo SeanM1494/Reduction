@@ -311,14 +311,22 @@ select count(*) from recipes where user_id is null and owner_key not like 'trial
 
 ## Open bugs — found while cooking, on a real iPhone
 
+**Status: a cause was found for each and fixed, in Chromium. Neither fix is
+confirmed on WebKit yet** — the container has none, so the confirmation has
+to happen on a real iPhone. What to look for is in CLAUDE.md under "Two
+things WebKit punishes that Chromium forgives".
+
 Both are WebKit-only as far as anyone can tell; neither reproduces on
 desktop, and the container has no WebKit.
 
 **A bar flashes on the left edge when a step completes.** Appears over or
 across the ingredient column for about a second, cutting off the names,
-then fades. Looks like a scrollbar or an overlay. Candidates: the sticky
-column's pin shadow, a momentum-scroll indicator triggered by an
+then fades. Looks like a scrollbar or an overlay. Candidates were: the
+sticky column's pin shadow, a momentum-scroll indicator triggered by an
 auto-scroll, or the tuck/collapse animation painting outside its bounds.
+**Found:** the third, near enough. `.rd-row-swap` animated a `transform` on
+`.rd-ing`, which is `position: sticky`, for one second — matching the
+reported duration. Sticky cells now fade without transforming.
 
 **The layout viewport occasionally zooms out.** The diagram fills the
 full screen width with no margin, and it takes a pinch to recover. This
@@ -334,6 +342,15 @@ interaction in the sweep rather than only at rest. A zoomed layout
 viewport reports differently, which is exactly how the SE overflow was
 caught. Fix the overflow rather than reaching for a viewport meta
 workaround.
+
+**Found:** the drag ghost. It is `position: fixed` and followed the pointer
+unclamped, reaching `right=462` against a 390px viewport. A fixed element is
+clipped by nothing and grows neither `scrollWidth` nor a scrollbar in
+Chromium, which is why every h-scroll sweep called it clean. Now clamped to
+the viewport. Every other state tested — completing steps through the whole
+1s cell animation, steps mode, an expanded finish strip, deliberately long
+labels and ingredient names, at 390 and 320 — was clean, so if the zoom
+recurs outside a drag there is a second cause still out there.
 
 ---
 

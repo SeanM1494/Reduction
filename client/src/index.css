@@ -881,16 +881,35 @@ body {
  * one-line summary and the strip comes forward.
  * ------------------------------------------------------------------ */
 
-.rd-swap { animation: rd-swap-in 1s cubic-bezier(.2,.7,.3,1); }
+/* NOTHING THAT CONTAINS OR IS THE STICKY INGREDIENT COLUMN MAY ANIMATE A
+   TRANSFORM.
+
+   `.rd-ing` is `position: sticky`, and a transform on a sticky element — or
+   on an ancestor of one — makes that element a containing block and forces a
+   fresh compositing layer. WebKit responds by dropping the sticky constraint
+   for the duration of the animation, which is a bar appearing across the left
+   edge for exactly as long as the animation runs, cutting off the ingredient
+   names, and then healing. One second, which is this animation's duration.
+
+   So the lift is for things that are neither: `.rd-op` cells and the
+   collapsed chip. Everything sticky, and everything wrapping the sticky
+   column, fades without moving. */
+.rd-swap { animation: rd-fade-in 1s cubic-bezier(.2,.7,.3,1); }
 @keyframes rd-swap-in {
   from { opacity: 0; transform: translateY(6px); }
   to   { opacity: 1; transform: none; }
+}
+@keyframes rd-fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
 }
 
 /* Same swap as .rd-swap, scoped to individual cells: whichever rows a
    collapse/expand click actually mounts (the tucked chip, or the rows it
    reveals) fade in on their own instead of restarting the whole table. */
 .rd-row-swap { animation: rd-swap-in 1s cubic-bezier(.2,.7,.3,1); }
+/* The sticky column: same fade, no transform. See the block above. */
+.rd-ing.rd-row-swap { animation-name: rd-fade-in; }
 
 .rd-under {
   display: flex; align-items: baseline; justify-content: space-between;
@@ -1015,7 +1034,7 @@ body {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .rd-swap, .rd-finish.is-focus, .rd-row-swap { animation: none; }
+  .rd-swap, .rd-finish.is-focus, .rd-row-swap, .rd-ing.rd-row-swap { animation: none; }
   .rd-steps-slide-in-fwd, .rd-steps-slide-in-back,
   .rd-steps-slide-out-fwd, .rd-steps-slide-out-back { animation: none; }
 }

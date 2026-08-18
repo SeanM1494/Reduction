@@ -68,6 +68,40 @@ export interface DragGhost {
   label: string;
 }
 
+/**
+ * The ghost is `position: fixed`, and a fixed element is not clipped by any
+ * ancestor's overflow — so left unclamped it paints past the right edge of
+ * the viewport whenever the finger nears it. Chromium neither grows
+ * scrollWidth nor scrolls for that, which is why a page-level h-scroll sweep
+ * calls it clean; Safari zooms the whole layout viewport out to fit, and the
+ * diagram suddenly spans the screen with no margin until you pinch back.
+ *
+ * Measured before clamping: on an iPhone 13 the ghost reached right=462
+ * against a 390px viewport, and 380 against 320 on an SE.
+ *
+ * These are the offsets .rd-drag-ghost carries in CSS (margin: -18px 0 0
+ * -22px), which put it under the fingertip rather than on it. They live here
+ * too because the clamp has to know where the box actually lands.
+ */
+const GHOST_OFFSET_X = 22;
+const GHOST_OFFSET_Y = 18;
+/** Roughly the ghost's height; only used to keep it on screen vertically. */
+const GHOST_HEIGHT = 44;
+
+function clampGhost(x: number, y: number, width: number): { x: number; y: number } {
+  const vw = document.documentElement.clientWidth;
+  const vh = document.documentElement.clientHeight;
+  // left edge of the painted box is (x - GHOST_OFFSET_X)
+  const minX = GHOST_OFFSET_X;
+  const maxX = Math.max(minX, vw - width + GHOST_OFFSET_X);
+  const minY = GHOST_OFFSET_Y;
+  const maxY = Math.max(minY, vh - GHOST_HEIGHT + GHOST_OFFSET_Y);
+  return {
+    x: Math.min(Math.max(x, minX), maxX),
+    y: Math.min(Math.max(y, minY), maxY),
+  };
+}
+
 export interface IngredientDrag {
   /** Held but not yet picked up — drives the ring that fills over HOLD_MS. */
   pressing: string | null;
@@ -167,7 +201,8 @@ export function useIngredientDrag({ recipe, enabled, onMove }: Options): Ingredi
       setBlockedReason(targets.length ? null : noTargetsReason(recipeRef.current, s.id));
       setPressing(null);
       setDragging(s.id);
-      setGhost({ x: clientX, y: clientY, width: s.width, label: s.label });
+      const at = clampGhost(clientX, clientY, s.width);
+      setGhost({ x: at.x, y: at.y, width: s.width, label: s.label });
       document.body.classList.add("rd-dragging-body");
 
       // Android/Chrome only; iOS Safari has no Vibration API at all, which is
@@ -243,7 +278,11 @@ export function useIngredientDrag({ recipe, enabled, onMove }: Options): Ingredi
         return;
       }
 
-      setGhost((prev) => (prev ? { ...prev, x: e.clientX, y: e.clientY } : prev));
+      setGhost((prev) => {
+        if (!prev) return prev;
+        const at = clampGhost(e.clientX, e.clientY, prev.width);
+        return at.x === prev.x && at.y === prev.y ? prev : { ...prev, x: at.x, y: at.y };
+      });
 
       // The ghost is pointer-events:none, so this finds what is under it.
       const under = document.elementFromPoint(e.clientX, e.clientY);
