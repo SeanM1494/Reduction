@@ -344,62 +344,118 @@ select count(*) from recipes where user_id is null and owner_key not like 'trial
 
 ---
 
-## Open bugs — found while cooking, on a real iPhone
+## 8. A real recipe library, and a bottom nav
 
-**Status: a cause was found for each and fixed, in Chromium. Neither fix is
-confirmed on WebKit yet** — the container has none, so the confirmation has
-to happen on a real iPhone. What to look for is in CLAUDE.md under "Two
-things WebKit punishes that Chromium forgives".
+**The idea:** "My Recipes" as a destination rather than a list under the
+paste box — browsable, sortable, filterable, with the app's top-level
+sections reachable from a persistent bottom bar.
 
-Both are WebKit-only as far as anyone can tell; neither reproduces on
-desktop, and the container has no WebKit.
+**Why now:** the current library is a grid of cards below the import box,
+which works at three recipes and falls apart at thirty. Someone who cooks
+from this weekly accumulates a collection, and a collection wants structure.
 
-**A bar flashes on the left edge when a step completes.** Appears over or
-across the ingredient column for about a second, cutting off the names,
-then fades. Looks like a scrollbar or an overlay. Candidates were: the
-sticky column's pin shadow, a momentum-scroll indicator triggered by an
-auto-scroll, or the tuck/collapse animation painting outside its bounds.
-**Diagnosis has moved three times, and the discriminating fact each time
-came from the phone, not the container.** First the sticky column
-(killed by the bars being symmetric), then the entrance fade — re-mounted
-rows really did fade from opacity 0 for 1s at both edges, and that fix (450ms,
-from 0.35, no transform) is real and kept — killed as *the* mechanism by the
-bars being **page-coloured**: the frame's own background is opaque card, so
-any DOM-level gap (a fading cell, a width mismatch) would flash card colour.
-Page colour means the frame's own paint was missing, which only the
-compositor can do. That implicates `-webkit-overflow-scrolling: touch` on
-`.rd-frame` — the legacy composited-scroller opt-in whose documented failure
-mode is unpainted tiles during content changes (the collapse resizes the
-table 419 → 400 and back). Removed; momentum scrolling is the iOS default
-since iOS 13, so it cost nothing.
+**What it needs:**
 
-**Note when re-testing:** the 450ms fade fix (`ad437fd`) was NOT in the
-`a5123b6` deploy — production was still running the 1s-from-0 fade during the
-last round of phone testing. Redeploy before judging either fix.
+- **Bottom nav, three tabs: Find** (paste a link, search the web, search
+  your own), **My Recipes**, **Settings**. Add and Search started as
+  separate tabs and merged — both are "get me a new recipe", and splitting
+  them asks the user to know which kind of finding they are doing before
+  they start.
+- Sorting and filtering by meal type, recently cooked, recently added,
+  source, and total time.
+- Ratings, which are the interesting one — see below.
 
-**The layout viewport occasionally zooms out.** The diagram fills the
-full screen width with no margin, and it takes a pinch to recover. This
-is the same signature as the SE toolbar overflow: something overflows
-horizontally and Safari scales to fit, and `innerHeight` then reports a
-larger number than the real viewport. The standing h-scroll sweep passes,
-so it's a state the sweep doesn't reach — mid-drag, mid-animation, edit
-mode on a long recipe, an expanded finish strip, or an unusually long
-label or ingredient name.
+**Meal types — the eight:** Breakfast, Lunch, Dinner, Dessert, Snack, Side,
+Drink, Baking.
 
-The cheap detector: check `innerWidth`/`innerHeight` after every
-interaction in the sweep rather than only at rest. A zoomed layout
-viewport reports differently, which is exactly how the SE overflow was
-caught. Fix the overflow rather than reaching for a viewport meta
-workaround.
+Eight fits a filter row on a phone. Deliberately fewer than the obvious
+list: appetizers fold into snacks, soups and salads into mains or sides.
+Splitting a category later is easy; merging after people have filtered by it
+is not.
 
-**Found:** the drag ghost. It is `position: fixed` and followed the pointer
-unclamped, reaching `right=462` against a 390px viewport. A fixed element is
-clipped by nothing and grows neither `scrollWidth` nor a scrollbar in
-Chromium, which is why every h-scroll sweep called it clean. Now clamped to
-the viewport. Every other state tested — completing steps through the whole
-1s cell animation, steps mode, an expanded finish strip, deliberately long
-labels and ingredient names, at 390 and 320 — was clean, so if the zoom
-recurs outside a drag there is a second cause still out there.
+**A recipe can carry several types with one primary.** Chili is dinner and
+lunch; muffins are breakfast and snack. The primary drives sorting and
+display, the rest widen filter matches.
+
+**Inferred at extraction, editable by the user.** The model has already read
+the page, so one more field is effectively free, and inference means nobody
+faces a tagging chore they will skip. The user can change it — which also
+makes a wrong guess cheap rather than permanent. Recipes saved before this
+ships need backfilling or an "untagged" bucket.
+
+**Ratings are more than a number.** A rating is the first piece of data that
+is genuinely about the cook rather than the recipe, and it feeds several
+things already in this file:
+
+- It is the honest signal for #3's "corrections must propagate" — a
+  correction from someone who has cooked a recipe three times and rated it
+  is worth more than one from someone who opened it once.
+- It is the ranking signal for #2's cross-user search. "Recipes people
+  actually cooked twice" is a better sort than relevance.
+- Combined with the forks from #6, it starts to answer which variation is
+  worth suggesting in #5.
+
+Worth capturing **"cooked it" separately from "liked it"** — they are
+different facts, and the first is the more reliable one because it is
+observed rather than reported. The app already knows when someone works
+through a recipe's steps.
+
+---
+
+## Known cosmetic issue, tabled: the edge bars on step completion
+
+**Status: tabled as cosmetic, not active work.** Still present after
+`41e9633`, still page-coloured. iOS/WebKit only; never reproduced on desktop
+or in this container (no WebKit here).
+
+**Symptom:** completing a step that finishes a branch flashes bars at BOTH
+edges of the diagram for ~1s. The bars are the colour of the *page*
+background, not the card.
+
+**The discriminator — whoever picks this up should start here:** the frame's
+own background is opaque card, so any DOM-level cause (a fading cell, a
+momentary width mismatch, a shadow) flashes **card**-coloured. **Page**-
+coloured bars mean the frame's own paint was absent, which only the
+compositor can produce. Check the bar's colour before theorising.
+
+**Three mechanisms were found. Two were real defects, fixed and kept
+regardless; the third is where the bug still lives:**
+
+1. **Sticky-column transform** — misdiagnosis. The bars being symmetric
+   killed it (an unpinned sticky column cannot produce a right-edge bar),
+   and sticky offsets held at 0 in Chromium, measured with the frame
+   actually scrolled. The no-transform-in-the-scroller rule was kept as
+   prevention; the transform was never needed.
+2. **The entrance fade** (`ad437fd`) — real defect, kept. Re-mounted rows
+   faded from opacity 0 for a full second at both edges. Now 450ms, from
+   0.35, no transform. Would have flashed **card**-coloured, so it was not
+   this bug — but it was a genuine both-edges blank.
+3. **Compositor tile blanking** (`41e9633`) — the surviving diagnosis,
+   consistent with the colour. The collapse resizes the table (419 → 400
+   and back, measured), and the composited scroller shows unpainted tiles
+   until it catches up. `-webkit-overflow-scrolling: touch` (the legacy
+   opt-in with exactly this documented failure mode) was removed; the bug
+   survived that, so the scroller is being composited regardless.
+
+**The untried lever: `translateZ(0)` (or `will-change: transform`) on
+`.rd-table`**, forcing the table onto its own persistent layer so its tiles
+survive the resize. Untried because it is a blind fix from this container —
+Chromium cannot reproduce iOS tiling, so there is no way to measure whether
+it works or what it costs (memory, paint) except on a real device. If tried:
+one change, one deploy, judge on the phone; the standing sweeps guard the
+Chromium side.
+
+Also in the file of record: the collapse yanks `scrollLeft` when the
+narrower table cannot contain the old scroll position (41 → 22 in one frame,
+measured) — inherent to content shrinking, noted in CLAUDE.md.
+
+**The layout-viewport zoom bug is believed fixed** (`6750779`): the drag
+ghost, `position: fixed`, followed the pointer past the right edge
+(right=462 on a 390px viewport). A fixed element grows neither scrollWidth
+nor a scrollbar in Chromium, which is why every h-scroll sweep called it
+clean; Safari zooms the layout viewport to fit it. Now clamped. Every other
+state tested clean at 390 and 320; if the zoom recurs outside a drag, there
+is a second cause still out there.
 
 ---
 
