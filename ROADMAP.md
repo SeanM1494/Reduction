@@ -464,8 +464,7 @@ is a second cause still out there.
 OAuth and the visual editor's first version are built, so this is what is
 actually left, cheapest and most blocking first.
 
-1. **Confirm the two iPhone fixes** on a real device. Cheap, and until it is
-   done the editor is unproven on the platform this app is primarily for.
+1. **The library and bottom nav** (#8) — the active build item.
 2. **Finish editing** (#6) — adding, deleting, splitting and merging steps.
    These are the repairs that make a recipe *unusable* rather than merely
    wrong, and they are the only reason the raw JSON hatch still exists. New

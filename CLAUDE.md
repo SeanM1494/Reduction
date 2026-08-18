@@ -28,14 +28,18 @@ them is the whole point:
 
 | result | meaning |
 |---|---|
-| **23 pass, 16 skipped** | no `DATABASE_URL`, or nothing listening. Fine. |
-| **39 pass, 0 skipped** | a database with a current schema. This is the real gate. |
-| ***n* failures naming a missing table** | a reachable database whose schema is behind `shared/schema.ts`. Run `npm run db:push`. |
+| ***n* pass, 16 skipped** | no `DATABASE_URL`, or nothing listening. Fine. |
+| ***n*+16 pass, 0 skipped** | a database with a current schema. This is the real gate. |
+| **failures naming a missing table** | a reachable database whose schema is behind `shared/schema.ts`. Run `npm run db:push`. |
 
-The 16 are the two claim suites — `claim.db.test.ts` (the anonymous library)
-and `trial.db.test.ts` (the free extraction). Both are transactional
-guarantees: all-or-nothing rollback, idempotent repeats, never taking another
-user's rows. **All 39 have been run against a real Postgres and pass.**
+The total grows as suites are added — pin your expectation to the **16
+skipped**, not the pass count (an earlier version of this table hard-coded
+23/39 and went stale within a week). The 16 are the two claim suites —
+`claim.db.test.ts` (the anonymous library) and `trial.db.test.ts` (the free
+extraction). Both are transactional guarantees: all-or-nothing rollback,
+idempotent repeats, never taking another user's rows. **The full suite — 75
+tests at the time of writing — has been run against a real Postgres and
+passes 75/0.**
 
 **A skip must only ever mean "there is no database".** It used to be able to
 mean "there is a database but it is missing the table I was about to test",
