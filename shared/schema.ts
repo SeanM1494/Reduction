@@ -73,10 +73,19 @@ export const recipes = pgTable(
     /**
      * Epoch-ms timestamps of completed cook-throughs, appended when `done`
      * reaches the full count (ROADMAP #8). Observed rather than reported,
-     * which is what makes it the reliable half of a future rating. Merged by
+     * which is what makes it the more reliable of the two signals. Merged by
      * union with an hours-scale dedupe window.
      */
     cooked: jsonb("cooked").$type<number[]>().notNull().default([]),
+    /**
+     * The reported half: -1 (would not make again), 0 (fine), 1 (favourite),
+     * or null for unrated. Deliberately coarse — repeat cooks already outrank
+     * opinion in the ranking hierarchy, so a five-point scale would only add
+     * resolution to the weaker input. One rating per recipe, not per cook: it
+     * is a standing verdict, and the per-cook history is what `cooked`
+     * already records.
+     */
+    rating: integer("rating"),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),
   },

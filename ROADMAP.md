@@ -375,7 +375,7 @@ select count(*) from recipes where user_id is null and owner_key not like 'trial
 
 ## 8. A real recipe library, and a bottom nav
 
-**Status: phase 1 built.** Bottom nav (Find / My Recipes / Settings, hidden
+**Status: built, including ratings.** Bottom nav (Find / My Recipes / Settings, hidden
 while a recipe is open — cooking gets the full viewport), the library as a
 destination with meal-type filter chips and sorting (recently added,
 recently cooked, total time, source, meal type), the eight types inferred at
@@ -384,10 +384,24 @@ the next user through the extraction cache and through the trial claim for
 free — a two-row Primary/Also edit sheet in the recipe's overflow menu, an
 untagged bucket for pre-existing recipes, and observed "cooked it" capture:
 a timestamp when `done` reaches the full count, deduped within six hours,
-merged across devices by `mergeCooked`. Ratings UI deferred by decision
-until there is cooked data to look at. Filter chips render only for types
-the library actually contains — a chip that filters to nothing is a dead
-end.
+merged across devices by `mergeCooked`. Filter chips render only for types
+the library actually contains — a chip that filters to nothing is a dead end.
+
+**Ratings: three states, not five.** 👎 / 👌 / 👍 (-1 / 0 / 1, null unrated),
+one standing verdict per recipe rather than one per cook. Coarse on purpose:
+repeat cooks already outrank opinion in the hierarchy above, so a five-point
+scale would add resolution to the weaker input. It appears on the open recipe
+beside the meal-type badge, and **only once the recipe has been cooked at
+least once** — asking before that collects an opinion about a web page.
+Tapping the current rating clears it.
+
+A 👍 marks the library card; **a 👎 never does.** The rating still sorts and
+filters, it just does not decorate — a library that shows your rejects back
+at you is a worse library. "Favourites first" is an available sort and
+deliberately **not** the default: it looks obviously better and has no data
+behind it yet, so `added` stays until real libraries exist to judge against.
+The rejects rank last under that sort rather than being hidden, because
+unfindable is worse than last.
 
 **The idea:** "My Recipes" as a destination rather than a list under the
 paste box — browsable, sortable, filterable, with the app's top-level
@@ -513,9 +527,8 @@ actually left, cheapest and most blocking first.
    Verified with two real browser contexts against a real Postgres: the
    clobber scenario, branch-union, and uncheck-resurrection all pass. See
    `shared/sync.ts` and CLAUDE.md's sync section.
-2. ~~**The library and bottom nav** (#8)~~ **Done, phase 1** — see the
-   entry. Remaining in #8: the ratings UI, deferred until cooked data
-   exists to design against.
+2. ~~**The library and bottom nav** (#8)~~ **Done** — see the entry,
+   ratings included.
 3. **Finish editing** (#6) — adding, deleting, splitting and merging steps.
    These are the repairs that make a recipe *unusable* rather than merely
    wrong, and they are the only reason the raw JSON hatch still exists. New

@@ -4,3 +4,9 @@ dist
 .env.local
 *.log
 .DS_Store
+
+# Database snapshots. They belong outside the repo — a dump is a copy of
+# production user data, it goes stale the moment it is written, and a repo is
+# the wrong place to keep either. Two were committed before this rule (both
+# happened to be schema-only, no rows), which is exactly how the habit starts.
+*.sql

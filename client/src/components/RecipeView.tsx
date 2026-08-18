@@ -24,6 +24,7 @@ import StepsMode from "./StepsMode";
 import RecipeJsonEditor from "./RecipeJsonEditor";
 import EditSheet from "./EditSheet";
 import MealTypeSheet from "./MealTypeSheet";
+import RatingControl from "./RatingControl";
 import { MEAL_TYPE_LABELS, sanitizeMealTypes } from "../../../shared/mealTypes";
 import { applyEdit, type EditOp } from "../../../shared/edits";
 import { reconcileDone } from "../../../shared/progress";
@@ -524,6 +525,16 @@ export default function RecipeView({
                 badge is the same fact My Recipes' cards show, so tapping the
                 thing itself is the obvious edit path. Hidden for the trial
                 recipe along with every other write. */}
+            {/* Tag and rating share a row: both are standing facts about the
+                recipe rather than about this cooking session. The rating only
+                appears once the recipe has actually been cooked — before
+                that it would collect an opinion about a web page. */}
+            {canEdit && (entry.cooked?.length ?? 0) > 0 ? (
+              <RatingControl
+                rating={entry.rating}
+                onChange={(rating) => onUpdate({ ...entry, rating })}
+              />
+            ) : null}
             {canEdit ? (
               <button
                 className="rfx-tag-badge no-print"

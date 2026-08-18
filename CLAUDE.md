@@ -66,6 +66,11 @@ insert failed into the `start_failed` branch.
 **Report the commit hash after every push**, so it can be verified against
 what actually landed rather than trusted.
 
+**Database snapshots live outside the repo.** `*.sql` is gitignored. A dump
+is a copy of production user data, it is stale the moment it is written, and
+a repo is the wrong home for either property — take one before every
+`db:push`, keep it somewhere else.
+
 ## This app is mobile-first
 
 It will ship as an App Store app, and most real use is a phone propped on a

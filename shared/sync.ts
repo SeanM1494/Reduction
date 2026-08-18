@@ -41,6 +41,8 @@ export interface SyncableEntry {
   timer: { stepId: string; endsAt: number } | null;
   /** Timestamps of completed cook-throughs. Merged by union. */
   cooked?: number[];
+  /** -1 | 0 | 1, or null when unrated. Last writer wins. */
+  rating?: number | null;
 }
 
 export interface MergeResult {
@@ -219,6 +221,13 @@ export function mergeEntry(
   const mode = pick("mode", () => mine.mode);
   const servings = pick("servings", () => mine.servings);
   const cooked = pick("cooked", () => mergeCooked(mine.cooked, theirs.cooked));
+  /**
+   * Both devices rated it: mine wins, like mode and servings and for the same
+   * reason — it is a deliberate statement the person just made, and ignoring
+   * a tap someone just made is the worse failure. Unlike the tree, nothing is
+   * destroyed: the other rating was one tap and can be re-made in one tap.
+   */
+  const rating = pick("rating", () => mine.rating ?? null);
 
   // Whatever tree won: done is reconciled against it (no id the tree lost),
   // then closure-repaired (no done step with an undone input — see
@@ -226,7 +235,7 @@ export function mergeEntry(
   const reconciled = enforceClosure(recipe, reconcileDone(recipe, done).done);
 
   return {
-    merged: { recipe, done: reconciled, servings, mode, timer, cooked },
+    merged: { recipe, done: reconciled, servings, mode, timer, cooked, rating: rating ?? null },
     treeConflict,
   };
 }

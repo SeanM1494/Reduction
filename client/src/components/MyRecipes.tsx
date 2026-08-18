@@ -19,8 +19,8 @@ import {
   type MealType,
 } from "../../../shared/mealTypes";
 
-type SortKey = "added" | "cooked" | "time" | "source" | "type";
-type Filter = MealType | "all" | "untagged";
+type SortKey = "added" | "cooked" | "time" | "source" | "type" | "rating";
+type Filter = MealType | "all" | "untagged" | "favourites";
 
 interface Props {
   library: Entry[];
@@ -29,12 +29,16 @@ interface Props {
   onFind: () => void;
 }
 
+/** `added` stays first and therefore stays the default. Favourites-first
+ *  looks obviously better and has no data behind it yet — deliberately left
+ *  alone until real libraries exist to judge it against. */
 const SORTS: Array<[SortKey, string]> = [
   ["added", "Recently added"],
   ["cooked", "Recently cooked"],
   ["time", "Total time"],
   ["source", "Source"],
   ["type", "Meal type"],
+  ["rating", "Favourites first"],
 ];
 
 /** Sum of every step's minutes — the honest lower bound on hands-on-to-done.
@@ -56,9 +60,13 @@ function totalMinutes(entry: Entry): number | null {
 const lastCooked = (e: Entry): number =>
   e.cooked && e.cooked.length ? Math.max(...e.cooked) : 0;
 
+const ratingOf = (e: Entry): number => (typeof e.rating === "number" ? e.rating : 0);
+
 export default function MyRecipes({ library, onOpen, onFind }: Props) {
   const [filter, setFilter] = useState<Filter>("all");
   const [sort, setSort] = useState<SortKey>("added");
+
+  const hasFavourites = useMemo(() => library.some((e) => ratingOf(e) === 1), [library]);
 
   const hasUntagged = useMemo(
     () => library.some((e) => sanitizeMealTypes(e.recipe.mealTypes).length === 0),
@@ -76,6 +84,7 @@ export default function MyRecipes({ library, onOpen, onFind }: Props) {
   const shown = useMemo(() => {
     const matches = (e: Entry): boolean => {
       if (filter === "all") return true;
+      if (filter === "favourites") return ratingOf(e) === 1;
       const types = sanitizeMealTypes(e.recipe.mealTypes);
       if (filter === "untagged") return types.length === 0;
       // The primary drives sorting and display; ALL types widen filters.
@@ -98,6 +107,10 @@ export default function MyRecipes({ library, onOpen, onFind }: Props) {
         (primaryMealType(a.recipe.mealTypes) ?? "￿").localeCompare(
           primaryMealType(b.recipe.mealTypes) ?? "￿"
         ),
+      // Favourites, then unrated, then the rejects — and within each, the
+      // most recently added. A 👎 recipe is not hidden by this sort, only
+      // ranked last; hiding it would make it unfindable.
+      rating: (a, b) => ratingOf(b) - ratingOf(a) || b.savedAt - a.savedAt,
     };
     return [...list].sort(by[sort]);
   }, [library, filter, sort]);
@@ -129,6 +142,9 @@ export default function MyRecipes({ library, onOpen, onFind }: Props) {
           wrapped chip row two deep pushes the actual recipes below the fold. */}
       <div className="rd-chip-row no-print" role="tablist" aria-label="Filter by meal type">
         <FilterChip current={filter} value="all" label="All" onPick={setFilter} />
+        {hasFavourites ? (
+          <FilterChip current={filter} value="favourites" label="★ Favourites" onPick={setFilter} />
+        ) : null}
         {presentTypes.map((t) => (
           <FilterChip
             key={t}
@@ -182,6 +198,15 @@ export default function MyRecipes({ library, onOpen, onFind }: Props) {
                   )}
                   {types.length > 1 ? (
                     <span className="rd-card-type-more">+{types.length - 1}</span>
+                  ) : null}
+                  {/* Favourites are marked; a 👎 is NOT shown back. A library
+                      that displays your rejects at you is a worse library —
+                      the rating still sorts and filters, it just does not
+                      decorate. */}
+                  {ratingOf(entry) === 1 ? (
+                    <span className="rd-card-fav" aria-label="Favourite">
+                      ★
+                    </span>
                   ) : null}
                   {mins !== null ? (
                     <span className="rd-card-time">

@@ -261,6 +261,36 @@ test("merged done is reconciled against the winning tree", () => {
   assert.ok(merged.done.includes("onion"));
 });
 
+test("rating: one side rated, that rating is adopted", () => {
+  const base = entry();
+  const mine = entry();
+  const theirs = entry({ rating: 1 });
+  assert.equal(mergeEntry(base, mine, theirs).merged.rating, 1);
+});
+
+test("rating: both rated, mine wins — a tap just made beats a stored one", () => {
+  const base = entry({ rating: 0 });
+  const mine = entry({ rating: 1 });
+  const theirs = entry({ rating: -1 });
+  assert.equal(mergeEntry(base, mine, theirs).merged.rating, 1);
+});
+
+test("rating: clearing to unrated is a change like any other", () => {
+  const base = entry({ rating: 1 });
+  const mine = entry({ rating: null });
+  const theirs = entry({ rating: 1 });
+  assert.equal(mergeEntry(base, mine, theirs).merged.rating, null);
+});
+
+test("rating and cooked are independent — merging one never disturbs the other", () => {
+  const base = entry({ cooked: [1000] });
+  const mine = entry({ cooked: [1000], rating: 1 });
+  const theirs = entry({ cooked: [1000, 1000 + 30 * 60 * 60 * 1000] });
+  const { merged } = mergeEntry(base, mine, theirs);
+  assert.equal(merged.rating, 1, "their cook did not clear my rating");
+  assert.equal(merged.cooked!.length, 2, "my rating did not drop their cook");
+});
+
 test("null base treats everything as mine-changed but still adopts their additions", () => {
   const mine = entry({ done: ["avocados"] });
   const theirs = entry({ done: ["onion"], servings: 8 });

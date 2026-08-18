@@ -90,6 +90,7 @@ function wireEntry(row: typeof recipes.$inferSelect) {
     mode: row.mode,
     timer: row.timer,
     cooked: row.cooked ?? [],
+    rating: row.rating ?? null,
     version: row.version ?? 1,
     savedAt: row.createdAt ? new Date(row.createdAt).getTime() : Date.now(),
   };
@@ -97,6 +98,11 @@ function wireEntry(row: typeof recipes.$inferSelect) {
 
 const isValidCooked = (v: unknown): v is number[] =>
   Array.isArray(v) && v.every((x) => typeof x === "number" && Number.isFinite(x));
+
+/** -1 | 0 | 1, or null for unrated. Three states, deliberately coarse — see
+ *  the column comment in shared/schema.ts. */
+const isValidRating = (v: unknown): v is number | null =>
+  v === null || v === -1 || v === 0 || v === 1;
 
 libraryRouter.get("/", async (req: Request, res: Response) => {
   try {
@@ -182,16 +188,19 @@ libraryRouter.post("/", async (req: Request, res: Response) => {
 
 libraryRouter.patch("/:id", async (req: Request, res: Response) => {
   const id = String(req.params.id);
-  const { recipe, done, servings, mode, timer, cooked, ifVersion } = req.body ?? {};
+  const { recipe, done, servings, mode, timer, cooked, rating, ifVersion } = req.body ?? {};
   if (ifVersion !== undefined && typeof ifVersion !== "number")
     return res.status(400).json({ error: "ifVersion must be a number." });
   if (cooked !== undefined && !isValidCooked(cooked))
     return res.status(400).json({ error: "cooked must be an array of timestamps." });
+  if (rating !== undefined && !isValidRating(rating))
+    return res.status(400).json({ error: "rating must be -1, 0, 1, or null." });
   const patch: Partial<typeof recipes.$inferInsert> = {
     updatedAt: new Date(),
     version: sql`${recipes.version} + 1` as unknown as number,
   };
   if (cooked !== undefined) patch.cooked = cooked;
+  if (rating !== undefined) patch.rating = rating;
 
   /**
    * A replacement tree, from the JSON editor. Validated here and not merely

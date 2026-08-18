@@ -38,6 +38,8 @@ export interface Entry {
   /** Epoch-ms timestamps of completed cook-throughs. Server-merged by union;
    *  see shared/sync.ts. */
   cooked?: number[];
+  /** -1 would-not-repeat | 0 fine | 1 favourite | null unrated. */
+  rating?: number | null;
   savedAt: number;
 }
 
@@ -295,6 +297,7 @@ function toEntry(row: any): Entry {
     mode: row.mode === "steps" ? "steps" : "diagram",
     timer: row.timer ?? null,
     cooked: Array.isArray(row.cooked) ? row.cooked : [],
+    rating: typeof row.rating === "number" ? row.rating : null,
     savedAt: row.savedAt ?? Date.now(),
   };
 }
@@ -404,6 +407,7 @@ const toSyncable = (e: Entry): SyncableEntry => ({
   mode: e.mode,
   timer: e.timer,
   cooked: e.cooked ?? [],
+  rating: e.rating ?? null,
 });
 
 /** What actually goes on the wire for an update: only the fields that
@@ -420,6 +424,7 @@ function buildPatch(base: Entry | null, entry: Entry): Record<string, unknown> |
   if (changed("mode")) body.mode = entry.mode;
   if (changed("timer")) body.timer = entry.timer;
   if (changed("cooked")) body.cooked = entry.cooked ?? [];
+  if (changed("rating")) body.rating = entry.rating ?? null;
   if (Object.keys(body).length === 0) return null;
   const v = versions.get(entry.id);
   if (v !== undefined) body.ifVersion = v;
