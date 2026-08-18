@@ -59,9 +59,11 @@ recipes client-side and falls through to web search.
 That needs a search index over the `recipes` table — Postgres full-text
 search is enough at this scale, and needs no new dependency.
 
-**Design question worth settling early:** are saved recipes public by
-default, private by default, or is there a "share" toggle? This decides
-whether idea #3 is even possible, so decide it before building either.
+**Design question, now settled — see "Visibility — settled" in #3.**
+Libraries stay private; nobody browses anyone else's. What crosses between
+accounts is an aggregate count and nothing else. The question was whether
+saved recipes are public by default, private by default, or toggled, and it
+blocked both this and #3.
 
 **Half-made already, deliberately.** `visibility` (default `private`) and
 `share_slug` columns exist so that sharing is not a migration against a live
@@ -97,6 +99,33 @@ pastes a link.
   is different from caching for one person. The tree is our own structured
   data rather than the source's prose, and every recipe links back to its
   source — worth keeping that invariant as this scales.
+
+### Visibility — settled
+
+**Libraries stay private. Nobody browses anyone else's recipes.** The
+`visibility` and `share_slug` columns exist for a possible future
+share-a-link feature; they are not the model here.
+
+**Aggregate counts are fine.** "3 other people saved this" is a useful
+signal and reveals nothing about who — it is a number, not a list. That
+is the whole of what crosses between accounts.
+
+This splits the work into two stages that can ship independently:
+
+**Stage one — cached trees in search results.** A search checks the
+extraction cache before offering to extract. A match renders instantly,
+costs no API call, and exposes nothing about anybody: it is the same
+cached tree a URL paste already serves today, surfaced somewhere new. No
+visibility question arises, so this needs no further decision.
+
+**Stage two — the count.** "3 other people saved this" as a ranking
+signal and a badge on a result. This is where one account's behaviour
+becomes visible to another, in aggregate only. Needs a saved-count per
+canonical recipe, which is derivable from `recipes` rather than a new
+table.
+
+Ratings (#8) are the natural companion to stage two: "people cooked this
+twice" is a better sort than relevance, and better than a raw save count.
 
 ### Two pieces of cache work, and the order is the point
 
@@ -493,8 +522,10 @@ actually left, cheapest and most blocking first.
    op types against the existing `applyEdit(recipe, op)` signature.
 4. **Make the trial row patchable**, so the one free recipe can be edited.
    Small, and it is precisely the recipe someone would want to correct.
-5. **Public/private decision** — still just a decision, and it blocks both
-   #2 and #3. The columns are already there.
+5. ~~**Public/private decision**~~ **Settled** — libraries private,
+   aggregate counts only. See "Visibility — settled" in #3. That splits #3
+   into stage one (cached trees in search results, no visibility question at
+   all) and stage two (the saved count), which can ship independently.
 6. **Corrections replace the cached tree, then URL normalisation** (#3, in
    that order — see the reasoning there).
 7. **Cross-user search + cache reuse** (#2 and #3 together) — the same
