@@ -28,21 +28,23 @@ them is the whole point:
 
 | result | meaning |
 |---|---|
-| ***n* pass, 23 skipped** | no `DATABASE_URL`, or nothing listening. Fine. |
-| ***n*+23 pass, 0 skipped** | a database with a current schema. This is the real gate. |
+| ***n* pass, 27 skipped** | no `DATABASE_URL`, or nothing listening. Fine. |
+| ***n*+27 pass, 0 skipped** | a database with a current schema. This is the real gate. |
 | **failures naming a missing table** | a reachable database whose schema is behind `shared/schema.ts`. Run `npm run db:push`. |
 
 The total grows as suites are added — pin your expectation to the **skip
 count**, not the pass count (an earlier version of this table hard-coded
 23/39 and went stale within a week, so treat the number above as needing an
-edit whenever a database-backed suite is added). The 23 are three suites:
+edit whenever a database-backed suite is added). The 27 are four suites:
 `claim.db.test.ts` (the anonymous library), `trial.db.test.ts` (the free
-extraction) and `cache.db.test.ts` (the URL alias and the "Instant" badge).
-The first two are transactional guarantees — all-or-nothing rollback,
-idempotent repeats, never taking another user's rows. The third is a promise
-about money and correctness: that a badged result really is free, and that a
-normalised URL never serves a different page. **The full suite — 174 tests at
-the time of writing — has been run against a real Postgres and passes 174/0.**
+extraction), `cache.db.test.ts` (the URL alias and the "Instant" badge) and
+`extractionLog.test.ts` (the cost table). The first two are transactional
+guarantees — all-or-nothing rollback, idempotent repeats, never taking another
+user's rows. The third is a promise about correctness: that a normalised URL
+never serves a different page. The fourth guards a denominator — a cache hit
+that recorded a `via` would silently corrupt every "what fraction" query the
+table exists to answer. **The full suite — 180 tests at the time of writing —
+has been run against a real Postgres and passes 180/0.**
 
 **A skip must only ever mean "there is no database".** It used to be able to
 mean "there is a database but it is missing the table I was about to test",

@@ -102,6 +102,68 @@ What does NOT change: correctness. Serving somebody the wrong recipe costs
 trust, and no hit rate pays for it. Every cost decision below is bounded by
 that, most explicitly in the deny-list rule for URL parameters.
 
+### Where the money goes — measured, and now recorded
+
+Numbers from the code as it stands. All three tasks run `claude-sonnet-5`.
+
+| path | input | note |
+|---|---|---|
+| system prompt | ~1,010 tok | every extraction call |
+| user scaffold (`CRUST_EXAMPLE`) | ~250 tok | every extraction call |
+| JSON-LD extraction | **~1,630 tok** total | the cheap, common case |
+| pasted-text extraction | **~6,700 tok** | `MAX_CHARS = 24,000` of prose |
+| **`fetchViaClaude`** | **up to ~120k tok** | `max_content_tokens: 40000` x `max_uses: 3` |
+| output | ~350-400 tok | a whole tree is small |
+
+**`extraction_events` exists so the tuning starts from data.** One row per
+extraction attempt or cache hit, written on `res.on("finish")` so no exit path
+can be missed and no latency is added. It answers the two questions that gate
+everything below:
+
+```sql
+-- what fraction takes the expensive path
+select via, count(*) from extraction_events
+ where not cached and source = 'url' group by via;
+
+-- how often the repair retry fires
+select via, attempts, count(*) from extraction_events
+ where not cached group by via, attempts;
+```
+
+It is **operational, not behavioural**: no user id, no trial id, and host
+rather than URL. That is a boundary, not an oversight — a column identifying a
+person would turn it into a record of what people read, with a retention
+policy attached, in exchange for answering nothing it does not already answer.
+A 400, 413 or 429 records nothing, because counting requests that never
+reached the model would wreck the denominator of every query above.
+
+**The levers, biggest first. Do not pull any of them before the table has a
+week of data.**
+
+1. **`fetchViaClaude` is the whale** — one call can cost 20-70x a JSON-LD one.
+   Two cheap changes: `max_content_tokens` from 40k to ~15k (a recipe page's
+   *recipe* is a few thousand tokens; the rest is navigation and comments) and
+   `max_uses` from 3 to 1. Worth knowing the frequency first: if it is 5% of
+   extractions it may still be most of the bill, and if it is 40% the fix is
+   to make `fetchSource` succeed more often instead.
+2. **The retry resends everything.** `MAX_ATTEMPTS = 2`, and attempt 2 sends
+   the original conversation *plus* the model's full previous JSON *plus* the
+   repair text — so a repair costs more than the original call, and on the
+   web_fetch path it re-sends the fetched page. The top few recurring
+   validator errors are probably fixable with one sentence in `prompt.ts`,
+   which is the cheapest fix in this list.
+3. **Model choice per task is untried.** Search is a formatting job wrapped
+   around a tool call; it does not obviously need the same model as building a
+   tree that must satisfy `validateRecipe` first time. Haiku for search,
+   Sonnet for extraction, is the split to test. Do not economise on the tree.
+4. **~1,260 tokens of identical prefix on every call wants prompt caching**,
+   not trimming. Every rule in `prompt.ts` maps to a `validateRecipe` check,
+   so cutting one buys a retry — lever 2 in reverse.
+5. **`MAX_CHARS = 24,000` on the text path is NOT a lever.** Truncating a page
+   mid-recipe produces a wrong tree, which costs more than the tokens saved.
+
+---
+
 ---
 
 ## 3. Reuse extracted recipes across users

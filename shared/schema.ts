@@ -22,6 +22,7 @@ import {
   index,
   uniqueIndex,
   primaryKey,
+  bigserial,
 } from "drizzle-orm/pg-core";
 import type { Recipe } from "./layout";
 
@@ -131,6 +132,52 @@ export const extractionCache = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
   },
   (table) => [index("extraction_cache_url_key_idx").on(table.urlKey)]
+);
+
+/**
+ * One row per extraction attempt or cache hit. OPERATIONAL, NOT BEHAVIOURAL.
+ *
+ * It exists to answer two questions before any cost tuning happens: what
+ * fraction of extractions take the expensive `fetchViaClaude` path, and how
+ * often the repair retry fires. Both were already on the wire as `meta.via`
+ * and `meta.attempts` and nothing recorded them.
+ *
+ * TWO OMISSIONS THAT ARE THE POINT, not oversights:
+ *
+ *   - **No user id, and no trial id.** None of the questions this table
+ *     answers need one. Adding one would turn an operations table into a
+ *     record of what individual people read, with a retention policy and a
+ *     deletion story attached, in exchange for nothing.
+ *   - **Host, never the URL.** "Which sites force the expensive path" is the
+ *     next question after the two above, and the host answers it. The path is
+ *     what would make this a log of what somebody was cooking.
+ *
+ * Keep it that way. If you find yourself adding a column that identifies a
+ * person, you are building a different table and it needs a different
+ * conversation.
+ */
+export const extractionEvents = pgTable(
+  "extraction_events",
+  {
+    id: bigserial("id", { mode: "number" }).primaryKey(),
+    at: timestamp("at", { withTimezone: true }).notNull().defaultNow(),
+    /** url | text | file | reextract */
+    source: text("source").notNull(),
+    /** True when this was served from extraction_cache: the denominator for
+     *  the hit rate, and the rows that cost nothing. */
+    cached: boolean("cached").notNull(),
+    /** self | claude — null on a cache hit, because neither ran. */
+    via: text("via"),
+    /** 1, or 2 when the tree failed validateRecipe and was sent back. */
+    attempts: integer("attempts"),
+    /** How many validator errors triggered that retry. */
+    repaired: integer("repaired"),
+    /** Registrable-ish host, no path, no query. */
+    host: text("host"),
+    ok: boolean("ok").notNull(),
+    ms: integer("ms"),
+  },
+  (table) => [index("extraction_events_at_idx").on(table.at)]
 );
 
 // ---------------------------------------------------------------- accounts --

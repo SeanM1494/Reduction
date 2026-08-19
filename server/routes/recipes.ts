@@ -23,6 +23,7 @@ import type { Recipe } from "../../shared/layout";
 import { userIdOf } from "../middleware/session";
 import { ensureTrialId, refundTrial, spendTrial, storeTrialRecipe } from "../lib/trial";
 import { urlKeyOf } from "../lib/urlKey";
+import { hostOf, recordExtraction, type ExtractionEvent } from "../lib/extractionLog";
 
 export const recipesRouter = Router();
 
@@ -279,7 +280,47 @@ async function sendRecipe(
   }
 }
 
+/**
+ * Starts collecting facts about this extraction, written once the response is
+ * finished.
+ *
+ * ON `res.on("finish")` RATHER THAN A CALL AT EACH RETURN. The handler has
+ * seven exits that matter — three cache hits, three successes and the catch —
+ * and a per-exit call would have to be added to the eighth the day somebody
+ * adds one. The finish hook cannot be forgotten, gets `ok` and `ms` for free,
+ * and runs after the bytes are out so it can never add latency.
+ *
+ * NOTHING IS RECORDED UNTIL `mark` IS CALLED. A 400 for a missing body, a 413
+ * for an oversized file or a 429 from the throttle never reached the model,
+ * and counting them would quietly wreck the denominator of every "what
+ * fraction" query this table exists to answer. A 402 cannot get here at all —
+ * the allowance middleware answers those before the handler runs.
+ */
+function extractionRecorder(req: Request, res: Response) {
+  const startedAt = Date.now();
+  let facts: Partial<ExtractionEvent> | null = null;
+
+  res.on("finish", () => {
+    if (!facts) return;
+    recordExtraction({
+      source: facts.source ?? "url",
+      cached: facts.cached ?? false,
+      via: facts.via ?? null,
+      attempts: facts.attempts ?? null,
+      repaired: facts.repaired ?? null,
+      host: facts.host ?? null,
+      ok: res.statusCode < 400,
+      ms: Date.now() - startedAt,
+    });
+  });
+
+  return (next: Partial<ExtractionEvent>) => {
+    facts = { ...(facts ?? {}), ...next };
+  };
+}
+
 recipesRouter.post("/extract", requireExtractionAllowance, async (req: Request, res: Response) => {
+  const mark = extractionRecorder(req, res);
   const { url, text, file } = req.body ?? {};
 
   if (!url && !text && !file)
@@ -295,9 +336,12 @@ recipesRouter.post("/extract", requireExtractionAllowance, async (req: Request, 
       // that genuinely is about cost: a hit makes no API call, so there is
       // nothing for a rate limit to protect. The trial allowance is a
       // different thing and has already been taken above — see the middleware.
+      mark({ source: "url", host: hostOf(url) });
       const cached = await cacheGetUrl(url);
-      if (cached)
+      if (cached) {
+        mark({ cached: true });
         return sendRecipe(req, res, { recipe: cached, meta: { cached: true, source: "url" } });
+      }
 
       if (overLimit(req.ip ?? "unknown"))
         return res
@@ -329,6 +373,10 @@ recipesRouter.post("/extract", requireExtractionAllowance, async (req: Request, 
       } catch (selfErr) {
         // Blocked, JS-rendered, or unreadable. Let Claude fetch it instead —
         // the request comes from Anthropic's infrastructure, not this Repl.
+        // Marked here rather than only on success, so a failure on the
+        // expensive path still shows up as one — otherwise the fraction this
+        // table exists to measure would count only the calls that worked.
+        mark({ via: "claude" });
         console.warn("[extract] self-fetch failed, using web_fetch:", (selfErr as Error).message);
         const out = await structureRecipeFromUrl(url);
         recipe = out.recipe;
@@ -338,6 +386,7 @@ recipesRouter.post("/extract", requireExtractionAllowance, async (req: Request, 
       }
 
       await cacheSetUrl(url, recipe);
+      mark({ cached: false, via, attempts, repaired: repaired.length });
       return sendRecipe(req, res, {
         recipe,
         meta: {
@@ -362,9 +411,12 @@ recipesRouter.post("/extract", requireExtractionAllowance, async (req: Request, 
 
       const clipped = text.slice(0, MAX_TEXT);
       const key = hash(`text:${clipped}`);
+      mark({ source: "text" });
       const cached = await cacheGet(key);
-      if (cached)
+      if (cached) {
+        mark({ cached: true });
         return sendRecipe(req, res, { recipe: cached, meta: { cached: true, source: "text" } });
+      }
 
       if (overLimit(req.ip ?? "unknown"))
         return res
@@ -373,6 +425,7 @@ recipesRouter.post("/extract", requireExtractionAllowance, async (req: Request, 
 
       const { recipe, attempts, repaired } = await structureRecipe({ text: clipped });
       await cacheSet(key, recipe);
+      mark({ cached: false, via: "self", attempts, repaired: repaired.length });
       return sendRecipe(req, res, {
         recipe,
         meta: { cached: false, source: "text", attempts, repaired },
@@ -393,9 +446,12 @@ recipesRouter.post("/extract", requireExtractionAllowance, async (req: Request, 
       return res.status(413).json({ error: "That file is larger than 8 MB." });
 
     const key = hash(`file:${clean.slice(0, 4096)}:${clean.length}`);
+    mark({ source: "file" });
     const cached = await cacheGet(key);
-    if (cached)
+    if (cached) {
+      mark({ cached: true });
       return sendRecipe(req, res, { recipe: cached, meta: { cached: true, source: "file" } });
+    }
 
     if (overLimit(req.ip ?? "unknown"))
       return res
@@ -406,6 +462,7 @@ recipesRouter.post("/extract", requireExtractionAllowance, async (req: Request, 
       file: { data: clean, mediaType },
     });
     await cacheSet(key, recipe);
+    mark({ cached: false, via: "self", attempts, repaired: repaired.length });
     return sendRecipe(req, res, {
       recipe,
       meta: { cached: false, source: "file", attempts, repaired },
@@ -522,6 +579,13 @@ recipesRouter.post("/reextract", async (req: Request, res: Response) => {
       code: "reextract_limit",
     });
 
+  // Its own source value, so re-reads never contaminate the fraction of
+  // ordinary extractions that take the expensive path — and so the cost of
+  // the hatch itself is visible separately, which is the number that decides
+  // whether 5/day is the right cap.
+  const mark = extractionRecorder(req, res);
+  mark({ source: "reextract", cached: false, host: hostOf(url), via: "self" });
+
   try {
     // Evict FIRST. If the extraction below fails, the next person pays for a
     // fresh one rather than inheriting the tree somebody just told us is
@@ -546,6 +610,7 @@ recipesRouter.post("/reextract", async (req: Request, res: Response) => {
       repaired = out.repaired;
       recipe.source = src.siteName;
     } catch {
+      mark({ via: "claude" });
       const out = await structureRecipeFromUrl(url);
       recipe = out.recipe;
       attempts = out.attempts;
@@ -553,6 +618,7 @@ recipesRouter.post("/reextract", async (req: Request, res: Response) => {
     }
 
     await cacheSetUrl(url, recipe);
+    mark({ attempts, repaired: repaired.length });
     return res.json({ recipe, meta: { cached: false, source: "url", attempts, repaired } });
   } catch (e) {
     const err = e as Error & { details?: string[] };
