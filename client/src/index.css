@@ -233,6 +233,10 @@ input, select, textarea { font-size: 16px; }
 .rd-search-web-note { font-size: 12px; color: var(--muted); }
 .rd-search-web-status {
   display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted);
+  /* Reserved, for the same reason as .rd-extracting: the five messages are
+     different lengths and the card is narrow, so without this the card would
+     grow and shrink every 2.2s and shove the results below it. */
+  min-height: 32px;
 }
 .rd-search-web-card-error { font-size: 12px; color: var(--danger-ink); }
 
@@ -1443,6 +1447,11 @@ input, select, textarea { font-size: 16px; }
 @media (prefers-reduced-motion: reduce) {
   .rd-coach-text, .rd-tip { animation: none; }
   .rd-demo-panel, .rd-invite-arrow { transition: none; }
+  /* Nothing spins or pulses while a recipe is being read. The message
+     changing carries the whole signal, which is why the sequence was written
+     to read as progress on its own rather than to decorate a spinner. */
+  .rd-extracting-dots { display: none; }
+  .rd-spinner { display: none; }
 }
 
 @media (max-width: 520px) {
@@ -2000,6 +2009,39 @@ button.rd-section-head:focus-visible {
   padding: 2px 7px; border-radius: 999px;
   color: var(--cool-ink); background: var(--cool-bg);
   border: 1px solid var(--cool-line);
+}
+
+/* The extraction progress line.
+ *
+ * `min-height` is the whole point: the five messages are different lengths,
+ * and at 320px the longest wraps where the shortest does not. Without a
+ * reserved height the line would grow and shrink under the message, moving
+ * everything below it every 2.2 seconds — which is the one thing this must
+ * not do. Two lines' worth, so even a wrap costs nothing.
+ *
+ * No transition on the text. The message changing IS the signal; fading it
+ * would be a second animation to disable for reduced motion and a class of
+ * bug for nothing. */
+.rd-extracting {
+  display: flex; align-items: center; gap: 2px;
+  min-height: 40px; margin: 10px 0 0;
+  font-size: 14px; line-height: 1.35; color: var(--muted);
+}
+/* Three dots that fade in turn. The only moving thing here, fixed width so
+ * it cannot reflow the line, and gone entirely under reduced motion — the
+ * text changing is enough. */
+.rd-extracting-dots {
+  flex: none; width: 18px; height: 1em; position: relative;
+}
+.rd-extracting-dots::before {
+  content: "\2026"; position: absolute; left: 0;
+  animation: rd-ellipsis 1.4s steps(1, end) infinite;
+}
+@keyframes rd-ellipsis {
+  0%   { opacity: .25; }
+  33%  { opacity: .55; }
+  66%  { opacity: 1; }
+  100% { opacity: .25; }
 }
 
 .rd-field-anchor { position: relative; }

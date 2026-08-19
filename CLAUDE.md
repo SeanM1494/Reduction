@@ -241,6 +241,15 @@ not have it. It was paid for by unwrapping `.rd-nav` at ≤380px — the brand
 the row wrapped and cost 52px. Tightening the theme toggle's padding and
 type took nav-right to 230px and the nav from 124px back to 72px.
 
+**During an extraction the SE overflows, on purpose.** The progress line
+(`ExtractionProgress`) is 40px plus margin below the CTA form, which pushes
+"Create an account or log in" from y=500 to y=560 on a 568px viewport —
+measured. The form itself does not move, because the line is inserted after
+it, and the button is not something anyone needs mid-wait. A permanently
+reserved slot would have spent the SE's remaining headroom for a line that is
+absent most of the time, so the line renders only while running. Its own
+height is fixed, so the message changing moves nothing.
+
 **So the SE is at +24 with no cheap reclaim left.** The next one is real
 design work, not a trim: the landing copy, or a small-phone layout. Measure
 before adding anything above the call to action.

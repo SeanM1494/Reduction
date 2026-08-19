@@ -825,6 +825,58 @@ actually left, cheapest and most blocking first.
 
 ---
 
+## 9. A loading state for extraction
+
+**Status:** built. `client/src/components/ExtractionProgress.tsx`. Before it,
+an extraction showed a disabled button and nothing else for however long the
+model took, which read as frozen at the exact moment a first-time visitor is
+deciding whether the thing works.
+
+Five messages, in order, the last one sticking:
+
+> Reading the recipe / Bringing it to a simmer / Cooking it down /
+> Skimming the excess / **Down to the essence**
+
+The arc is a reduction going from raw to concentrated, so it reads as progress
+without measuring anything. No percentage and no bar — a bar that stalls at
+90% is worse than no bar. All four entry points: paste, link, file, a search
+result, and `/reextract`.
+
+**Timed, not real, and the blocker is worth recording.** The pipeline does
+know when it moves from fetching to structuring to validating. Reporting that
+needs streaming, and the cost is not the plumbing — **the HTTP status is
+committed before the body starts.** `/api/recipes/extract` signals four
+outcomes through status codes the client depends on: 402 `trial_spent` (which
+turns the paste box into the sign-up path), 429, 422 and 500. A streamed
+response must send 200 before its first stage event, so all four would move
+into the body and every call site would stop reading `err.code`/`err.status` —
+four entry points and the whole funnel. A job id plus polling needs a durable
+job store, because an in-memory one dies on a restart mid-extraction. If
+streaming ever happens for another reason, real stages come nearly free; on
+its own it is not worth that.
+
+**What makes timed honest** is that the sequence ENDS rather than looping, and
+the last message describes what the app did rather than what it is still
+doing. That is also what covers the worst case: `MAX_ATTEMPTS = 2` means a
+tree failing `validateRecipe` is sent back to be repaired, roughly doubling
+the wait, and a sequence that ran out or restarted would pick exactly that
+moment to look broken.
+
+**`STAGE_MS` is a placeholder at 2200ms** and is deliberately one named
+constant. It was set before `extraction_events` had a single production row.
+Retune it from the real distribution — the query is in the file, and the aim
+is for the last stage to land near p50 so a typical wait shows the whole arc
+and a slow one rests on the final message. Getting it wrong is bounded: too
+fast shows all five early and holds, too slow shows two or three. Neither is
+broken.
+
+Reserved height on the line, so a message change cannot move anything —
+measured stable at 40px across all five messages at 320, 390 and 393. Under
+`prefers-reduced-motion` the dots and the search spinner are hidden entirely
+and the text change carries the whole signal.
+
+---
+
 ## Still open from earlier work
 
 - **The servings stepper does not exist, and scaling is unreachable.**

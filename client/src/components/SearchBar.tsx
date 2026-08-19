@@ -10,6 +10,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import type { Entry } from "../lib/storage";
 import { searchRecipes, type SearchResult } from "../lib/api";
+import { useReductionStage } from "./ExtractionProgress";
 
 interface Props {
   library: Entry[];
@@ -160,58 +161,80 @@ export default function SearchBar({ library, onOpen, onPickWebResult }: Props) {
               </p>
             ) : (
               <div className="rd-search-section rd-search-web-results">
-                {webResults.map((r) => {
-                  const isLoading = loadingUrl === r.url;
-                  const cardError = cardErrors[r.url];
-                  return (
-                    <button
-                      key={r.url}
-                      type="button"
-                      className={[
-                        "rd-search-web-card",
-                        isLoading ? "is-loading" : "",
-                        cardError ? "has-error" : "",
-                      ]
-                        .filter(Boolean)
-                        .join(" ")}
-                      onClick={() => pickWebResult(r)}
-                      disabled={isLoading}
-                    >
-                      <span className="rd-search-row-title">
-                        {r.title}
-                        {/* "Instant" says what the user gets, not what
-                            happened behind it — nobody needs to know that
-                            somebody else read this page first, and the
-                            promise the badge makes is the one that matters:
-                            tapping it opens straight away and takes nothing
-                            from the free allowance. */}
-                        {r.cached ? (
-                          <span className="rd-search-instant">Instant</span>
-                        ) : null}
-                      </span>
-                      <span className="rd-search-row-meta">{r.site}</span>
-                      {r.note ? (
-                        <span className="rd-search-web-note">{r.note}</span>
-                      ) : null}
-                      {isLoading ? (
-                        <span className="rd-search-web-status">
-                          <span className="rd-spinner" aria-hidden="true" />
-                          {r.cached ? "Opening\u2026" : "Reading this recipe\u2026"}
-                        </span>
-                      ) : null}
-                      {cardError ? (
-                        <span className="rd-search-web-card-error">
-                          {cardError} Try another result.
-                        </span>
-                      ) : null}
-                    </button>
-                  );
-                })}
+                {webResults.map((r) => (
+                  <WebResultCard
+                    key={r.url}
+                    result={r}
+                    loading={loadingUrl === r.url}
+                    error={cardErrors[r.url]}
+                    onPick={() => pickWebResult(r)}
+                  />
+                ))}
               </div>
             )
           ) : null}
         </div>
       ) : null}
     </div>
+  );
+}
+
+/**
+ * One web result.
+ *
+ * Its own component only so it can hold a hook: the rotating wait message is
+ * per card, because only the card you tapped is doing anything.
+ */
+function WebResultCard({
+  result: r,
+  loading,
+  error: cardError,
+  onPick,
+}: {
+  result: SearchResult;
+  loading: boolean;
+  error?: string;
+  onPick: () => void;
+}) {
+  // A cached result opens with no extraction at all, so the sequence would be
+  // a lie about work nobody is doing — and it would be gone before the second
+  // message anyway.
+  const stage = useReductionStage(loading && !r.cached);
+
+  return (
+    <button
+      type="button"
+      className={[
+        "rd-search-web-card",
+        loading ? "is-loading" : "",
+        cardError ? "has-error" : "",
+      ]
+        .filter(Boolean)
+        .join(" ")}
+      onClick={onPick}
+      disabled={loading}
+    >
+      <span className="rd-search-row-title">
+        {r.title}
+        {/* "Instant" says what the user gets, not what happened behind it —
+            nobody needs to know that somebody else read this page first, and
+            the promise the badge makes is the one that matters: tapping it
+            opens straight away. */}
+        {r.cached ? <span className="rd-search-instant">Instant</span> : null}
+      </span>
+      <span className="rd-search-row-meta">{r.site}</span>
+      {r.note ? <span className="rd-search-web-note">{r.note}</span> : null}
+      {loading ? (
+        <span className="rd-search-web-status" role="status" aria-live="polite">
+          <span className="rd-spinner" aria-hidden="true" />
+          {stage ?? "Opening\u2026"}
+        </span>
+      ) : null}
+      {cardError ? (
+        <span className="rd-search-web-card-error">
+          {cardError} Try another result.
+        </span>
+      ) : null}
+    </button>
   );
 }

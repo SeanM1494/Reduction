@@ -4,6 +4,7 @@
 
 import React, { useState, useRef } from "react";
 import type { Entry } from "../lib/storage";
+import ExtractionProgress from "./ExtractionProgress";
 
 type Mode = "link" | "paste" | "photo";
 
@@ -129,6 +130,10 @@ export default function Home({
             />
           </div>
         ) : null}
+
+        {/* One line for all three modes: whichever is open, the wait is the
+            same pipeline and the same sequence. */}
+        <ExtractionProgress active={busy} />
 
         {error ? (
           <div className="rd-alert">

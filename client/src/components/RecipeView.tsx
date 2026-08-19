@@ -29,6 +29,7 @@ import { MEAL_TYPE_LABELS, sanitizeMealTypes } from "../../../shared/mealTypes";
 import { applyEdit, type EditOp } from "../../../shared/edits";
 import { reconcileDone } from "../../../shared/progress";
 import { reextract } from "../lib/api";
+import ExtractionProgress from "./ExtractionProgress";
 import { lastAcceptedEntry, onSyncFailure } from "../lib/storage";
 import { useIngredientDrag } from "../lib/useIngredientDrag";
 import { saveRecipeAsImage, slugForFile } from "../lib/exportImage";
@@ -749,6 +750,10 @@ export default function RecipeView({
                     Keep this one
                   </button>
                 </div>
+                {/* The re-read is a full extraction and takes just as long as
+                    the first one did, so it gets the same sequence rather
+                    than a button that says "Reading…" and then nothing. */}
+                <ExtractionProgress active={rereading} />
               </div>
             </div>
           </div>

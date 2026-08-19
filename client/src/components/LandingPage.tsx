@@ -29,6 +29,7 @@ import Diagram from "./Diagram";
 import StepsMode from "./StepsMode";
 import ThemeToggle from "./ThemeToggle";
 import { DEMO_RECIPE, DEMO_PRECHECKED } from "../data/demo";
+import ExtractionProgress from "./ExtractionProgress";
 import {
   buildDemoGraph,
   useCoachStage,
@@ -424,6 +425,12 @@ export default function LandingPage({
               {busy ? "Reading\u2026" : trialSpent ? "Sign up to diagram it" : "Diagram it"}
             </button>
           </form>
+          {/* Rendered only while running. The landing page has +24px of
+              headroom on an iPhone SE (see CLAUDE.md) and a permanently
+              reserved slot would spend it; the line appearing at the START of
+              an extraction is not a shift "as the message changes", which is
+              the thing that must not move. */}
+          <ExtractionProgress active={busy} />
           <button className="rd-go rd-cta-account" onClick={onTryOwnRecipe}>
             Create an account or log in
           </button>
