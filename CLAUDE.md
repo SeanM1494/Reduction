@@ -46,6 +46,17 @@ that recorded a `via` would silently corrupt every "what fraction" query the
 table exists to answer. **The full suite — 180 tests at the time of writing —
 has been run against a real Postgres and passes 180/0.**
 
+**`npm test` must never be run against production.** It reads `DATABASE_URL`,
+which on a deployed host is the live database — so running the suite there
+points every database-backed test at real data. That happened once. Nothing
+was damaged, because each suite works inside its own random namespace
+(`test-owner-<uuid>`, `cache-test.invalid`, a random trial id) and deletes only
+what it made — but one test did leave a row behind, and "scoped" is not the
+same as "safe against production". `server/lib/testdb.ts` now refuses a
+non-local `DATABASE_URL` outright, before connecting, unless
+`ALLOW_REMOTE_TEST_DB=1` is set. It throws rather than skipping, for the same
+reason a missing table does.
+
 **A skip must only ever mean "there is no database".** It used to be able to
 mean "there is a database but it is missing the table I was about to test",
 because each suite probed by selecting from its own table and reported the
