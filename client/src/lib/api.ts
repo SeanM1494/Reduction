@@ -8,9 +8,6 @@ interface ExtractResponse {
   recipe: Recipe;
   meta: {
     cached: boolean;
-    /** True when serving this cost no API call and therefore took no free
-     *  extraction. The client must not mark the trial spent on these. */
-    free?: boolean;
     source: "url" | "text" | "file";
     extraction?: "jsonld" | "text";
     attempts?: number;
@@ -68,9 +65,6 @@ async function post(body: unknown): Promise<ExtractResponse> {
 }
 
 export const extractFromUrl = (url: string) => post({ url });
-/** Did that response cost the visitor their free extraction? */
-export const wasFree = (r: { meta?: unknown }): boolean =>
-  !!(r.meta as { free?: boolean } | undefined)?.free;
 export const extractFromText = (text: string) => post({ text });
 export const extractFromFile = (data: string, mediaType: string) =>
   post({ file: { data, mediaType } });

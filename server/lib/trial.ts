@@ -129,58 +129,6 @@ export async function storeTrialRecipe(
   return recipeId;
 }
 
-/**
- * Parks a recipe against the trial WITHOUT spending it, replacing whatever
- * was parked before.
- *
- * This exists for cached hits. A cache hit costs no API call, so it does not
- * take the free extraction (ROADMAP #3) — but the visitor is still looking at
- * a diagram they will want to keep, and if nothing is parked then signing up
- * hands them an empty library, which is the exact "lose your work" moment the
- * trial was built to prevent.
- *
- * REPLACE, NOT INSERT, and that is the difference from storeTrialRecipe.
- * That one inserts a fresh row and repoints `trials.recipeId`, which is
- * correct when it can only run once per trial. Cached views can happen any
- * number of times, and inserting each one would leave a pile of rows under
- * `trial:<id>` that no claim will ever collect — only the last is pointed at.
- * So the previous parked rows go in the same transaction.
- *
- * A CLAIMED trial parks nothing. The person already has an account, they are
- * simply browsing signed out, and a row parked now would never be claimed by
- * anything.
- */
-export async function parkTrialRecipe(
-  trialId: string,
-  recipe: unknown,
-  servings: number | null
-): Promise<string | null> {
-  const db = getDb();
-  const ownerKey = trialOwnerKey(trialId);
-  const recipeId = crypto.randomUUID();
-
-  return db.transaction(async (tx) => {
-    // A visitor whose first ever request is a cache hit has a cookie but no
-    // row yet — spendTrial is what usually creates it, and it did not run.
-    // Created UNUSED: parking is not spending.
-    await tx.insert(trials).values({ id: trialId }).onConflictDoNothing();
-    const [trial] = await tx.select().from(trials).where(eq(trials.id, trialId));
-    if (!trial || trial.claimedByUserId) return null;
-
-    await tx.delete(recipes).where(eq(recipes.ownerKey, ownerKey));
-    await tx.insert(recipes).values({
-      id: recipeId,
-      ownerKey,
-      userId: null,
-      recipe: recipe as never,
-      done: [],
-      servings,
-    });
-    await tx.update(trials).set({ recipeId }).where(eq(trials.id, trialId));
-    return recipeId;
-  });
-}
-
 // ------------------------------------------------------------------ claim --
 
 export interface TrialClaimResult {

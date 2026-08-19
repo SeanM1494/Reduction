@@ -166,38 +166,31 @@ and ranking cached results first leaks it whether or not a badge exists. It
 says nothing about who, and nothing about saving — the saved count is stage
 two.
 
-### A cached hit does not spend the free extraction — DECIDED, not a leak
+### A cached hit DOES spend the free recipe — decided
 
-If you are here because it looks like the trial is being given away: it is,
-deliberately, and the reasoning is below. Do not "fix" it.
+If you are here because it looks like the trial is charging for something that
+cost nothing to serve: it is, deliberately.
 
-**A cache hit takes no free extraction.** It costs no API call, so charging
-for it would be metering something that did not happen. `takeExtractionAllowance`
-is called only once a cache miss is known — which is also why it stopped being
-middleware, since as middleware it 402'd a spent trial before anything had
-looked in the cache, and a visitor who had used their one extraction could not
-be shown a recipe that costs nothing to serve.
+**One free recipe means one, cached or not.** The trial is not a meter on our
+cost, so "a cache hit costs no API call" is not an argument about it. The
+trial exists to convert, and the wall is the product: someone who views
+unlimited free diagrams because they happened to pick popular recipes never
+reaches it, and never has a reason to make an account. The better the cache
+gets, the more that would erode the funnel — success at #3 quietly dismantling
+#7.
 
-**The known consequence.** As the cache grows, "one free recipe" softens
-toward "unlimited free popular recipes", because popular recipes are exactly
-what people search for. Success at #3 erodes the gate at #7. That is
-**accepted**: the account gate is on **saving**, not viewing. Somebody who
-views ten cached diagrams and keeps none of them has cost nothing and has seen
-the product work ten times, which is a better position to ask for an account
-from than never having shown them anything.
+This was built the other way first, on the fairness reasoning that charging
+for a coincidence is arbitrary. That framing was wrong for a paid product: see
+"The business model" above. Do not re-derive it.
 
-**The lever, if it ever proves too soft:** a separate cap on free cached views
-per browser — a counter on the `trials` row. **Not** charging the extraction
-allowance, which would re-introduce a 402 on a request that costs nothing and
-take the top-of-funnel value away to fix a problem it did not cause.
+**So `requireExtractionAllowance` is middleware**, taken before the handler
+and before anything looks in the cache. `storeTrialRecipe` keeps its
+insert-once semantics, because a signed-out visitor can only ever have one
+successful extraction.
 
-**A cached view still parks the recipe**, replacing whatever was parked
-before (`parkTrialRecipe`, as distinct from `storeTrialRecipe`, which inserts
-and may only run once). Without that, a visitor could look at ten diagrams,
-sign up to keep the one they liked, and be handed an empty library — the same
-"lose your work" moment the trial was built to prevent, arrived at from the
-other direction. Replace rather than insert, or every cached view leaves a row
-under `trial:<id>` that no claim will ever collect.
+**The per-IP throttle is a different gate and stays behind the cache lookup.**
+That one genuinely is about cost — it exists to cap API spend, and a cache hit
+has none to cap. Do not collapse the two: they answer different questions.
 
 **Stage two — the count.** "3 other people saved this" as a ranking
 signal and a badge on a result. This is where one account's behaviour
@@ -221,7 +214,8 @@ Today the cached tree and the user's library row are separate copies.
 `extraction_cache` is written once by `cacheSet` in `server/routes/recipes.ts`
 and never touched again; fixing a recipe in the visual editor (#6) updates
 only `recipes.recipe` for that one user. So the next person to paste the same
-link still gets the original bad parse, for the rest of the 30-day TTL.
+link still gets the original bad parse — and now indefinitely, since the TTL
+is gone, which is what makes `/reextract` load-bearing rather than a nicety.
 
 This is newly worth building because the editor now exists — before it, there
 were no corrections to propagate. The open questions come from #6 and should
@@ -264,6 +258,21 @@ case-insensitive, paths are not) and stripping a trailing `/amp` path segment
 **Several raw URLs sharing an alias is the normal outcome**, so the alias
 lookup orders by `created_at DESC` — if one of them was re-read because the
 tree was wrong, that is the one to serve.
+
+**Extracted trees do not expire.** There was a 30-day TTL; it is gone, not
+extended. Recipe pages do not meaningfully change, and every expiry threw away
+an extraction already paid for — the good trees along with the bad. The risk
+it was insuring against was a bad parse becoming everyone's for a month, and
+`/reextract` bounds that directly and on demand, which is strictly better than
+a timer that cannot tell the two apart. `created_at` is still written and
+still load-bearing: it is what the alias lookup orders by.
+
+**One assumption this touched.** The TTL constant was shared with
+`searchCache`, and those two want opposite things. Search results are a list of
+live URLs and a dead link is worse than a fresh search, so that cache keeps a
+30-day expiry as `SEARCH_TTL_MS`. Removing the extraction TTL without
+splitting the constant first would have made search results immortal too.
+Nothing else read it.
 
 **The re-extract hatch** (`POST /api/recipes/reextract`) is what bounds the
 blast radius that normalisation widens. Anyone who lands on a plainly wrong

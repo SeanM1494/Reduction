@@ -2,13 +2,14 @@
  * server/routes/cache.db.test.ts — the alias lookup, against a real database.
  *
  * urlKey.test.ts proves which URLs normalise together. This proves the cache
- * actually answers to both keys, that a row past its TTL is not a hit, and
- * that a search result is only badged when tapping it really would be free.
+ * actually answers to both keys, that age never disqualifies a row, and that
+ * a search result is badged only when tapping it really would be instant.
  *
  * The badge is the reason this needs a database rather than a fake. It is a
  * promise — "Instant", no extraction — and the thing that would break it is a
- * query detail: a missed TTL filter, or an `or` that matches on a null
- * `url_key` and marks every uncached row. Both are invisible against a stub.
+ * query detail: an `or` that matches on a null `url_key` and marks every
+ * uncached row, or an alias lookup that picks an arbitrary row when several
+ * share a key. Neither is visible against a stub.
  */
 
 import test from "node:test";
@@ -102,28 +103,27 @@ test("a content-selecting parameter does NOT hit", async (t) => {
   await wipe(["/page", "/page?page=2"]);
 });
 
-test("a row past its TTL is not a hit, and is swept", async (t) => {
+test("an old row is still a hit — extracted trees do not expire", async (t) => {
   if (!(await needsDatabase(t, ...TABLES))) return;
-  await wipe(["/stale"]);
-  const u = url("/stale");
-  await cacheSetUrl(u, recipeFor("Stale", u));
+  await wipe(["/old"]);
+  const u = url("/old");
+  await cacheSetUrl(u, recipeFor("Old", u));
 
+  // Two years back, well past the 30-day TTL this cache used to carry. An
+  // extraction is paid for once; throwing it away on a timer discards every
+  // good tree to catch the occasional bad one, and /reextract catches those
+  // on demand instead.
   const db = getDb();
-  const longAgo = new Date(Date.now() - 1000 * 60 * 60 * 24 * 40);
   await db
     .update(extractionCache)
-    .set({ createdAt: longAgo })
+    .set({ createdAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 730) })
     .where(eq(extractionCache.hash, rawKeyOf(u)));
 
-  assert.equal(await cacheGetUrl(u), null);
-  // Also through the alias, which is its own code path and its own TTL check.
-  await cacheSetUrl(u, recipeFor("Stale", u));
-  await db
-    .update(extractionCache)
-    .set({ createdAt: longAgo })
-    .where(eq(extractionCache.hash, rawKeyOf(u)));
-  assert.equal(await cacheGetUrl(`${u}?utm_source=x`), null);
-  await wipe(["/stale"]);
+  assert.equal((await cacheGetUrl(u))?.title, "Old");
+  assert.equal((await cacheGetUrl(`${u}?utm_source=x`))?.title, "Old");
+  // And it is still badgeable, which is the same promise from the other side.
+  assert.ok((await cachedAmong([u])).has(u));
+  await wipe(["/old"]);
 });
 
 test("cachedAmong answers for exact and aliased URLs in one query", async (t) => {

@@ -21,7 +21,7 @@ import { structureRecipeFromUrl } from "../lib/fetchViaClaude";
 import { searchRecipes, type SearchResult } from "../lib/searchRecipes";
 import type { Recipe } from "../../shared/layout";
 import { userIdOf } from "../middleware/session";
-import { ensureTrialId, parkTrialRecipe, refundTrial, spendTrial, storeTrialRecipe } from "../lib/trial";
+import { ensureTrialId, refundTrial, spendTrial, storeTrialRecipe } from "../lib/trial";
 import { urlKeyOf } from "../lib/urlKey";
 
 export const recipesRouter = Router();
@@ -37,24 +37,41 @@ const ALLOWED_MEDIA = new Set([
 const MAX_TEXT = 30_000;
 const MAX_FILE_BYTES = 8 * 1024 * 1024;
 
-const CACHE_TTL_MS = 1000 * 60 * 60 * 24 * 30;
+/**
+ * Search results DO expire. They are a list of live URLs, and a link that
+ * 404s or a page that moved is worse than a fresh search — unlike an
+ * extracted tree, which is a structured copy of a recipe that has already
+ * been read and does not rot.
+ *
+ * This used to be one constant shared with the extraction cache. Removing the
+ * extraction TTL without splitting it first would have made search results
+ * immortal too, which is the opposite of what either wants.
+ */
+const SEARCH_TTL_MS = 1000 * 60 * 60 * 24 * 30;
 
 const hash = (s: string) => crypto.createHash("sha256").update(s).digest("hex");
 
-const freshEnough = (at: Date | string | null | undefined): boolean =>
-  Date.now() - (at ? new Date(at).getTime() : 0) <= CACHE_TTL_MS;
+/**
+ * EXTRACTED TREES DO NOT EXPIRE.
+ *
+ * There was a 30-day TTL here. It threw away an extraction already paid for,
+ * on the theory that a page might have changed — but recipe pages do not
+ * meaningfully change, and the real risk it was insuring against was a bad
+ * parse becoming everyone's for a month. `/reextract` bounds that directly
+ * and on demand, which is strictly better than a timer that also discards
+ * every good tree alongside the bad ones.
+ *
+ * `created_at` is still written and still load-bearing: it is what the alias
+ * lookup orders by, so a page re-read through `/reextract` wins over the tree
+ * it replaced.
+ */
 
 // Extraction is slow and costs an API call, so never do it twice for the
 // same input. Backed by the extraction_cache table so it survives restarts.
 async function cacheGet(key: string): Promise<Recipe | null> {
   const db = getDb();
   const [hit] = await db.select().from(extractionCache).where(eq(extractionCache.hash, key));
-  if (!hit) return null;
-  if (!freshEnough(hit.createdAt)) {
-    await db.delete(extractionCache).where(eq(extractionCache.hash, key));
-    return null;
-  }
-  return hit.recipe;
+  return hit ? hit.recipe : null;
 }
 
 async function cacheSet(key: string, recipe: Recipe): Promise<void> {
@@ -92,12 +109,7 @@ export async function cacheGetUrl(rawUrl: string): Promise<Recipe | null> {
     .where(eq(extractionCache.urlKey, alias))
     .orderBy(desc(extractionCache.createdAt))
     .limit(1);
-  if (!hit) return null;
-  if (!freshEnough(hit.createdAt)) {
-    await db.delete(extractionCache).where(eq(extractionCache.hash, hit.hash));
-    return null;
-  }
-  return hit.recipe;
+  return hit ? hit.recipe : null;
 }
 
 export async function cacheSetUrl(rawUrl: string, recipe: Recipe): Promise<void> {
@@ -144,11 +156,7 @@ export async function cachedAmong(rawUrls: string[]): Promise<Set<string>> {
 
   const db = getDb();
   const rows = await db
-    .select({
-      hash: extractionCache.hash,
-      urlKey: extractionCache.urlKey,
-      createdAt: extractionCache.createdAt,
-    })
+    .select({ hash: extractionCache.hash, urlKey: extractionCache.urlKey })
     .from(extractionCache)
     .where(
       or(
@@ -158,9 +166,6 @@ export async function cachedAmong(rawUrls: string[]): Promise<Set<string>> {
     );
 
   for (const row of rows) {
-    // A row past its TTL is not a hit — marking it would promise an instant
-    // open and then quietly pay for an extraction when the user tapped it.
-    if (!freshEnough(row.createdAt)) continue;
     const exact = byRaw.get(row.hash);
     if (exact) out.add(exact);
     if (row.urlKey) for (const u of byAlias.get(row.urlKey) ?? []) out.add(u);
@@ -177,7 +182,7 @@ const searchCache = new Map<string, { results: SearchResult[]; at: number }>();
 function searchCacheGet(key: string): SearchResult[] | null {
   const hit = searchCache.get(key);
   if (!hit) return null;
-  if (Date.now() - hit.at > CACHE_TTL_MS) {
+  if (Date.now() - hit.at > SEARCH_TTL_MS) {
     searchCache.delete(key);
     return null;
   }
@@ -198,82 +203,49 @@ function overLimit(ip: string): boolean {
 }
 
 /**
- * One free EXTRACTION per browser, enforced here rather than in the client.
+ * One free RECIPE per browser, enforced here rather than in the client.
  *
- * THIS IS NO LONGER MIDDLEWARE, AND THE MOVE IS THE POINT.
+ * A CACHED HIT SPENDS IT TOO, AND THAT IS THE POINT.
  *
- * It used to run before the handler, which meant a spent trial was refused
- * with a 402 before anything had looked in the cache — so a visitor who had
- * used their free extraction could not be shown a recipe that costs nothing
- * to serve. A cache hit is margin, not expense: the tree already exists, no
- * API call is made, and the account gate that matters is on *saving*, not on
- * viewing. So the cache is consulted first and this is called only once a
- * miss is known, which also makes the name honest — the allowance is taken
- * exactly when an extraction is about to happen.
+ * This was briefly built the other way, on the reasoning that a cache hit
+ * costs no API call so charging for it charges for nothing. That reasoning
+ * was about *our* cost, and the trial is not a meter on our cost — it exists
+ * to convert. Someone who views unlimited free diagrams because they happened
+ * to pick popular recipes never reaches the wall, and the wall is the product.
+ * One free recipe means one, cached or not. See ROADMAP #3.
  *
- * Everything that made it safe is unchanged. Signed-in requests skip it. For
- * everyone else the allowance is still taken *before* the work and
- * atomically, so two requests fired at once cannot both come back free, and a
- * failure still refunds it because a broken URL should not cost someone their
- * one try.
+ * So this is middleware again, running before the handler and before anything
+ * looks in the cache. The allowance is taken *before* the work and
+ * atomically, so two requests fired at once cannot both come back free; a
+ * failure refunds it, because a broken URL should not cost someone their one
+ * try.
  *
  * The count lives in an httpOnly cookie plus a row, not in localStorage. That
  * is not unbypassable — clearing cookies or a private window resets it — but
  * the check being server-side is what matters: a modified client still gets a
  * 402 here.
- *
- * Returns false when it has already answered the request.
  */
-async function takeExtractionAllowance(req: Request, res: Response): Promise<boolean> {
-  if (userIdOf(req)) return true;
+async function requireExtractionAllowance(
+  req: Request,
+  res: Response,
+  next: NextFunction
+) {
+  if (userIdOf(req)) return next();
 
   try {
     const trialId = ensureTrialId(req, res);
     const spent = await spendTrial(trialId);
     if (!spent) {
-      res.status(402).json({
+      return res.status(402).json({
         error: "You have used your free recipe. Create an account to keep going.",
         code: "trial_spent",
       });
-      return false;
     }
     (req as Request & { trialId?: string }).trialId = trialId;
-    return true;
+    return next();
   } catch (e) {
     console.error("[trial:gate]", e);
-    res.status(500).json({ error: "Could not start that extraction." });
-    return false;
-  }
-}
-
-/**
- * Serves a cached tree, which costs nothing and therefore charges nothing.
- *
- * The recipe is still parked against the trial, replacing whatever was parked
- * before. Not doing so would mean a signed-out visitor could look at ten
- * diagrams, sign up to keep the one they liked, and be handed an empty
- * library — the "lose your work" moment the trial exists to prevent, arrived
- * at from the other direction.
- */
-async function sendCached(
-  req: Request,
-  res: Response,
-  recipe: Recipe,
-  source: "url" | "text" | "file" = "url"
-) {
-  const body = { recipe, meta: { cached: true, source, free: true } };
-  if (userIdOf(req)) return res.json(body);
-
-  try {
-    const trialId = ensureTrialId(req, res);
-    const servings = typeof recipe.servings === "number" ? recipe.servings : null;
-    const trialRecipeId = await parkTrialRecipe(trialId, recipe, servings);
-    return res.json(trialRecipeId ? { ...body, trialRecipeId } : body);
-  } catch (e) {
-    // Parking failed; the diagram is still free and still correct. Nothing to
-    // refund, because nothing was spent.
-    console.error("[trial:park]", e);
-    return res.json(body);
+    return res.status(500).json({ error: "Could not start that extraction." });
   }
 }
 
@@ -307,7 +279,7 @@ async function sendRecipe(
   }
 }
 
-recipesRouter.post("/extract", async (req: Request, res: Response) => {
+recipesRouter.post("/extract", requireExtractionAllowance, async (req: Request, res: Response) => {
   const { url, text, file } = req.body ?? {};
 
   if (!url && !text && !file)
@@ -319,17 +291,18 @@ recipesRouter.post("/extract", async (req: Request, res: Response) => {
       if (typeof url !== "string")
         return res.status(400).json({ error: "url must be a string." });
 
-      // Before the throttle and before the allowance, because a hit spends
-      // neither. The throttle is there to cap API spend, and this path has
-      // none to cap.
+      // The cache is consulted before the THROTTLE, which is the one gate
+      // that genuinely is about cost: a hit makes no API call, so there is
+      // nothing for a rate limit to protect. The trial allowance is a
+      // different thing and has already been taken above — see the middleware.
       const cached = await cacheGetUrl(url);
-      if (cached) return sendCached(req, res, cached);
+      if (cached)
+        return sendRecipe(req, res, { recipe: cached, meta: { cached: true, source: "url" } });
 
       if (overLimit(req.ip ?? "unknown"))
         return res
           .status(429)
           .json({ error: "Too many extractions this hour. Try again later." });
-      if (!(await takeExtractionAllowance(req, res))) return;
 
       let recipe;
       let attempts = 1;
@@ -390,13 +363,13 @@ recipesRouter.post("/extract", async (req: Request, res: Response) => {
       const clipped = text.slice(0, MAX_TEXT);
       const key = hash(`text:${clipped}`);
       const cached = await cacheGet(key);
-      if (cached) return sendCached(req, res, cached, "text");
+      if (cached)
+        return sendRecipe(req, res, { recipe: cached, meta: { cached: true, source: "text" } });
 
       if (overLimit(req.ip ?? "unknown"))
         return res
           .status(429)
           .json({ error: "Too many extractions this hour. Try again later." });
-      if (!(await takeExtractionAllowance(req, res))) return;
 
       const { recipe, attempts, repaired } = await structureRecipe({ text: clipped });
       await cacheSet(key, recipe);
@@ -421,13 +394,13 @@ recipesRouter.post("/extract", async (req: Request, res: Response) => {
 
     const key = hash(`file:${clean.slice(0, 4096)}:${clean.length}`);
     const cached = await cacheGet(key);
-    if (cached) return sendCached(req, res, cached, "file");
+    if (cached)
+      return sendRecipe(req, res, { recipe: cached, meta: { cached: true, source: "file" } });
 
     if (overLimit(req.ip ?? "unknown"))
       return res
         .status(429)
         .json({ error: "Too many extractions this hour. Try again later." });
-    if (!(await takeExtractionAllowance(req, res))) return;
 
     const { recipe, attempts, repaired } = await structureRecipe({
       file: { data: clean, mediaType },

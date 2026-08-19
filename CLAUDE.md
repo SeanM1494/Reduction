@@ -414,6 +414,15 @@ are deliberately not folded despite reading like trackers.
 by `created_at DESC` — a page re-read through `/reextract` should win over the
 older tree it was re-read to replace.
 
+**Extracted trees never expire, and a cached hit still spends the free
+recipe.** Two decisions that look like mistakes and are not. The TTL is gone
+because an expiry throws away an extraction already paid for and cannot tell a
+good tree from a bad one, while `/reextract` can. The trial charges for a
+cached hit because it is not a meter on our cost — it exists to convert, and
+someone who never reaches the wall never makes an account. `SEARCH_TTL_MS`
+still expires *search results*, which are live URLs and do rot; do not confuse
+the two caches.
+
 **Corrections still do not propagate between users**, and that is what the
 re-extract hatch bounds: `POST /api/recipes/reextract` re-runs the extractor
 and evicts the cached row, signed in only and capped per user per day, because
