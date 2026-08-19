@@ -1,5 +1,5 @@
 /**
- * shared/edits.ts — the three things the visual editor can do to a recipe.
+ * shared/edits.ts — everything the visual editor can do to a recipe.
  *
  * One pure function, `applyEdit`, and one op type per operation. It lives in
  * `shared/` for the same reason `layout.ts` does: the server has to be able to
@@ -19,8 +19,15 @@
  * user drags against IS the gate that will judge the drop. They cannot
  * disagree, because they are the same call.
  *
- * It also does not add, delete, split or merge steps. Those are the next op
- * types against this same signature, not a rewrite of it.
+ * WHY THE FIELD OPS ARE "FIELDS" AND NOT ONE OP PER FIELD
+ *
+ * `setIngredientFields` and `setStepFields` both take a partial bag where
+ * ABSENT means "leave alone" and PRESENT-AND-NULL means "clear". That is not
+ * laziness about op granularity: a sheet commits on blur, and a person who
+ * tabs through four boxes changing one of them must not have the other three
+ * rewritten with values they never looked at. It is the same reason the sync
+ * PATCH sends only changed fields — see shared/sync.ts — and it fails the
+ * same way if broken, by a stale value quietly overwriting a fresh one.
  */
 
 import {
@@ -45,10 +52,29 @@ export interface IngredientFields {
   note?: string | null;
 }
 
+/** The fields the step sheet can change. Same absent/null contract as
+ *  IngredientFields. `minutes` and `tempF` are what StepsMode's timer and the
+ *  library's total-time estimate read, so they are worth typing even when the
+ *  label already says "bake 325°F 12 min". */
+export interface StepFields {
+  label?: string;
+  minutes?: number | null;
+  tempF?: number | null;
+}
+
 export type EditOp =
   | { type: "setIngredientFields"; ingredientId: string; fields: IngredientFields }
-  | { type: "setStepLabel"; stepId: string; label: string }
+  | { type: "setStepFields"; stepId: string; fields: StepFields }
   | { type: "moveIngredient"; ingredientId: string; toStepId: string }
+  /** Add an ingredient, consumed by `toStepId`. */
+  | {
+      type: "addIngredient";
+      toStepId: string;
+      fields: IngredientFields;
+      newId?: string;
+    }
+  /** Remove an ingredient, and the input naming it. */
+  | { type: "deleteIngredient"; ingredientId: string }
   /** Insert a new step between `afterStepId` and whatever consumed it. */
   | { type: "addStepAfter"; afterStepId: string; label: string; newId?: string }
   /** Splice a step out; its inputs move into its consumer, in place. */
@@ -137,14 +163,62 @@ export function applyEdit(recipe: Recipe, op: EditOp): Recipe {
       return withSection(recipe, si, { ...section, ingredients });
     }
 
-    case "setStepLabel": {
+    case "setStepFields": {
       const si = sectionIndexOfId(recipe, op.stepId);
       if (si < 0) throw new EditTargetError(`No step "${op.stepId}".`);
       const section = recipe.sections[si];
       const nodes = section.nodes.map((n) =>
-        n.id === op.stepId ? { ...n, label: op.label } : n
+        n.id === op.stepId ? mergeStepFields(n, op.fields) : n
       );
       return withSection(recipe, si, { ...section, nodes });
+    }
+
+    case "addIngredient": {
+      const si = sectionIndexOfId(recipe, op.toStepId);
+      if (si < 0) throw new EditTargetError(`No step "${op.toStepId}".`);
+      const section = recipe.sections[si];
+      if (!section.nodes.some((n) => n.id === op.toStepId)) {
+        throw new EditTargetError(`"${op.toStepId}" is not a step.`);
+      }
+      const id = op.newId ?? mintIngredientId(section, op.fields.name ?? "");
+      const created = mergeFields(
+        { id, qty: null, unit: null, name: "" },
+        op.fields
+      );
+      // Appended to the step's inputs, so it lands at the bottom of that
+      // step's group rather than displacing rows that are already there —
+      // input order is what drives row order (see deleteStep). Its position
+      // in `section.ingredients` is layout-neutral: computeLayout only ever
+      // looks ingredients up by id.
+      const nodes = section.nodes.map((n) =>
+        n.id === op.toStepId ? { ...n, inputs: [...(n.inputs ?? []), id] } : n
+      );
+      return withSection(recipe, si, {
+        ...section,
+        ingredients: [...section.ingredients, created],
+        nodes,
+      });
+    }
+
+    case "deleteIngredient": {
+      const si = sectionIndexOfId(recipe, op.ingredientId);
+      if (si < 0) throw new EditTargetError(`No ingredient "${op.ingredientId}".`);
+      const section = recipe.sections[si];
+      if (!section.ingredients.some((i) => i.id === op.ingredientId)) {
+        throw new EditTargetError(`"${op.ingredientId}" is not an ingredient.`);
+      }
+      // Deliberately NOT cascading. If this was a step's only input the step
+      // is left with none and validateRecipe says so, which is the same
+      // answer a drag out of that step gets (see validMoveTargets). Silently
+      // deleting the emptied step would make one tap remove two things, and
+      // "delete the step" already exists and splices its inputs properly.
+      const ingredients = section.ingredients.filter((i) => i.id !== op.ingredientId);
+      const nodes = section.nodes.map((n) =>
+        (n.inputs ?? []).includes(op.ingredientId)
+          ? { ...n, inputs: (n.inputs ?? []).filter((x) => x !== op.ingredientId) }
+          : n
+      );
+      return withSection(recipe, si, { ...section, ingredients, nodes });
     }
 
     case "addStepAfter": {
@@ -359,6 +433,37 @@ function mintStepId(section: Section): string {
   throw new Error("Could not mint an unused step id.");
 }
 
+/** An ingredient id that is unique within the section. Derived from the name
+ *  for the same reason step ids are prefixed — a hand-read tree, or a diff of
+ *  one, stays legible — with a numeric fallback when the name is empty or
+ *  yields nothing usable (an id has to be truthy for validateRecipe). */
+function mintIngredientId(section: Section, name: string): string {
+  const taken = new Set([
+    ...(section.ingredients ?? []).map((i) => i.id),
+    ...(section.nodes ?? []).map((n) => n.id),
+  ]);
+  const slug = name
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "")
+    .slice(0, 24);
+  const stem = slug || "ing";
+  if (slug && !taken.has(stem)) return stem;
+  for (let i = 1; i < 10000; i++) {
+    const id = `${stem}_${i}`;
+    if (!taken.has(id)) return id;
+  }
+  throw new Error("Could not mint an unused ingredient id.");
+}
+
+function mergeStepFields(step: Step, fields: StepFields): Step {
+  const next: Step = { ...step };
+  if ("label" in fields) next.label = fields.label ?? "";
+  if ("minutes" in fields) next.minutes = fields.minutes ?? null;
+  if ("tempF" in fields) next.tempF = fields.tempF ?? null;
+  return next;
+}
+
 function mergeFields(ing: Ingredient, fields: IngredientFields): Ingredient {
   const next: Ingredient = { ...ing };
   if ("qty" in fields) next.qty = fields.qty ?? null;
@@ -421,6 +526,33 @@ export function noTargetsReason(recipe: Recipe, ingredientId: string): string | 
   const stepCount = si < 0 ? 0 : (recipe.sections[si].nodes ?? []).length;
   if (stepCount <= 1) return "There is nowhere else to put this — the section has one step.";
   return "There is nowhere valid to move this.";
+}
+
+/**
+ * Why this ingredient cannot be deleted, phrased for a person. Null when it
+ * can be.
+ *
+ * `validateRecipe` on the candidate is still the gate — this only decides
+ * whether to offer a friendlier sentence than "step d1 has no inputs", which
+ * names an id the user has never seen and does not say what to do instead.
+ */
+export function deleteIngredientBlocker(
+  recipe: Recipe,
+  ingredientId: string
+): string | null {
+  let candidate: Recipe;
+  try {
+    candidate = applyEdit(recipe, { type: "deleteIngredient", ingredientId });
+  } catch (e) {
+    return (e as Error).message;
+  }
+  const errors = validateRecipe(candidate);
+  if (errors.length === 0) return null;
+  const parent = parentStepOf(recipe, ingredientId);
+  if (parent && (parent.inputs ?? []).length <= 1) {
+    return `“${parent.label}” would be left with nothing. Delete the step instead, or move something into it first.`;
+  }
+  return errors[0];
 }
 
 // ---------------------------------------------------------------- amount --
@@ -500,4 +632,21 @@ export function parseAmount(input: string): ParsedAmount {
   // Not a number in any form we recognise — keep it exactly as typed. This is
   // the "to taste" / "1 (14 oz) can" case validateRecipe's `text` exists for.
   return { qty: null, qtyMax: null, text: raw };
+}
+
+/**
+ * The minutes / °F boxes. One parser for both, because both want the same
+ * thing: a non-negative number, or null for "not specified".
+ *
+ * It goes through `parseNumber`, so "1 1/2" and "½" work — someone typing a
+ * resting time is as likely to write "1 1/2" as "90". A negative or
+ * unparseable value returns null rather than throwing: an unreadable time is
+ * an absent time, and `validateRecipe` has no opinion on either field, so a
+ * thrown error here would be the only thing standing between a typo and a
+ * NaN reaching StepsMode's timer.
+ */
+export function parseTiming(input: string): number | null {
+  const n = parseNumber(input);
+  if (n == null || !Number.isFinite(n) || n < 0) return null;
+  return n;
 }

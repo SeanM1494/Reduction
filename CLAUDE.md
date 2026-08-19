@@ -407,6 +407,21 @@ proofs. The rules that must survive any refactor:
 op type per operation. Adding, deleting, splitting and merging steps are new
 op types against that same signature, not a rewrite.
 
+**A sheet's error message may not take up space.** `.rd-sheet-scrim` is
+`align-items: flex-end` and `.rd-sheet` is capped at `86svh`, which makes the
+sheet move in two different directions when something is inserted into its
+flow: below the cap it grows upward and lifts everything above the insertion
+point (19px on an SE, 67px on an iPhone 13, measured); at the cap it scrolls
+instead and pushes everything below the insertion point *down* (56px on an
+SE, which put "Delete step" partly off screen). Both are larger than the 44px
+targets they move, and both straddle a tap — blur fires on pointerdown and
+React's `onClick` on pointerup — so committing an invalid label by tapping a
+button under it slid a *different* button under the finger before it lifted.
+Field errors are therefore `position: absolute` against their own field, and
+`pointer-events: none` so the tap that revealed the message still lands on
+what it was aimed at. If you add a field to `EditSheet`, wrap it in `Field`
+rather than rendering a message inline.
+
 **Never re-derive what is a legal edit.** `validMoveTargets` builds the
 candidate tree for every step and runs the real `validateRecipe` on each. That
 is deliberately more work than checking the two or three invariants by hand,
@@ -436,10 +451,26 @@ else in the app. When it temporarily means something else, the bar, the frame
 outline and the hint all say so — someone who wanders in and taps around must
 not be left wondering why nothing checks off.
 
-**Editing is off for the trial recipe** (`canEdit={!viewingTrial}`). It has no
-library row: App's trial branch deliberately does not POST or PATCH, so edits
-would change the screen and nothing else, and sign-up would claim the parked
-server copy and discard them.
+**No edit cascades.** Deleting an ingredient that is a step's only input
+leaves the step with no inputs and `validateRecipe` refuses it, with
+`deleteIngredientBlocker` turning that into a sentence that names the step
+and points at "delete the step" — which splices its inputs into its consumer.
+One tap removing two things is a destructive reading of "delete", and the
+un-cascading version composes: the two-tap path reaches the same tree.
+
+**`minutes` and `tempF` are the only numbers in a stored recipe that
+`validateRecipe` has no opinion on**, and they are now typed by hand. Render
+them through `formatMinutes`/`stepMinutes` in `shared/amounts.ts`, never
+`step.minutes ?` — a string is truthy, which is what every call site used to
+test, and `"12 min" * 60_000` is the NaN that reaches the timer.
+
+**Editing is on for the trial recipe, and that took a server route.** It has
+no library row, but it does have a row — parked under the trial id until
+sign-up claims it — and `PATCH /api/trial/recipe` writes to that one. So an
+edit made before signing up is the edit the account gets. The trial id comes
+from the httpOnly cookie and never from the body, and the WHERE clause keeps
+`user_id IS NULL`, so a claimed trial is refused rather than written to by
+whoever still holds the old cookie.
 
 ### Writes are confirmed, not assumed
 

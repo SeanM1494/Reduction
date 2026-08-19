@@ -435,9 +435,11 @@ export default function RecipeView({
               >
                 {savingImage ? "Saving…" : "Save as Image"}
               </button>
-              {/* Gated with canEdit for the same reason editing is: a trial
-                  recipe's changes would be discarded when sign-up claims the
-                  parked server copy. */}
+              {/* Still gated on canEdit, which now means "this entry can be
+                  written to" rather than "this is not the trial" — the trial
+                  is patchable (PATCH /api/trial/recipe) and App no longer
+                  passes canEdit={false} for it. Kept because a read-only
+                  view is a thing this component should still be able to be. */}
               {canEdit ? (
                 <button
                   className="rfx-menu-item"

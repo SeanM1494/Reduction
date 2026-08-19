@@ -21,7 +21,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { type Ingredient, type Recipe, type Step } from "../../../shared/layout";
 import { cardSequence } from "../../../shared/sequence";
-import { formatAmount } from "../../../shared/amounts";
+import { formatAmount, formatMinutes, stepMinutes } from "../../../shared/amounts";
 import type { Entry, StepTimer } from "../lib/storage";
 
 interface StepCard {
@@ -38,13 +38,6 @@ interface StepCard {
    *  line. Empty when every input is a raw ingredient. */
   fromLabels: string[];
   actionNumber: number;
-}
-
-function fmtTime(min: number): string {
-  if (min < 60) return `${min} min`;
-  const h = Math.floor(min / 60);
-  const m = min % 60;
-  return m ? `${h} hr ${m} min` : `${h} hr`;
 }
 
 function fmtRemaining(ms: number): string {
@@ -254,7 +247,7 @@ export default function StepsMode({ recipe, entry, done, scale, onToggle, onUpda
         // Only ever asked here, on the user's own tap — never on page load.
         Notification.requestPermission().catch(() => {});
       }
-      const endsAt = Date.now() + (step.minutes || 0) * 60_000;
+      const endsAt = Date.now() + (stepMinutes(step.minutes) ?? 0) * 60_000;
       onUpdate({ ...entry, timer: { stepId: step.id, endsAt } });
     },
     [entry, onUpdate]
@@ -265,7 +258,7 @@ export default function StepsMode({ recipe, entry, done, scale, onToggle, onUpda
   // from OTHER sections — a different section is always a different tree,
   // so it can never be downstream of the current step.
   const parallelSuggestion = useMemo(() => {
-    if (!card || !card.step.minutes) return null;
+    if (!card || stepMinutes(card.step.minutes) == null) return null;
     const candidate = cards.find(
       (c) =>
         c.sectionIndex !== card.sectionIndex &&
@@ -386,7 +379,7 @@ export default function StepsMode({ recipe, entry, done, scale, onToggle, onUpda
           <div key={card.key} className={`rd-steps-card ${enterClass}`}>
             {stepBody(card)}
 
-            {card.step.minutes ? (
+            {stepMinutes(card.step.minutes) != null ? (
               <div className="rd-steps-timer">
                 {timerForCurrent ? (
                   elapsed ? (
@@ -398,7 +391,7 @@ export default function StepsMode({ recipe, entry, done, scale, onToggle, onUpda
                   )
                 ) : (
                   <button className="rd-btn" onClick={() => startTimer(card.step)}>
-                    Start timer ({fmtTime(card.step.minutes)})
+                    Start timer ({formatMinutes(card.step.minutes)})
                   </button>
                 )}
 

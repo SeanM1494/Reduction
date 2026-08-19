@@ -10,7 +10,7 @@
 
 import React, { useMemo, useState } from "react";
 import type { Entry } from "../lib/storage";
-import { countAll, countSteps } from "../../../shared/amounts";
+import { countAll, countSteps, stepMinutes } from "../../../shared/amounts";
 import {
   MEAL_TYPES,
   MEAL_TYPE_LABELS,
@@ -48,8 +48,9 @@ function totalMinutes(entry: Entry): number | null {
   let any = false;
   for (const s of entry.recipe.sections ?? []) {
     for (const n of s.nodes ?? []) {
-      if (typeof n.minutes === "number") {
-        sum += n.minutes;
+      const m = stepMinutes(n.minutes);
+      if (m != null) {
+        sum += m;
         any = true;
       }
     }

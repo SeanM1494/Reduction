@@ -314,26 +314,52 @@ by default, its label, with a one-tap choice of either; joining the two
 labels is not offered because `validateRecipe` caps a label at eight words,
 so joined labels would routinely be refused.
 
+**Ingredients can be added and deleted, and steps carry their time and
+temperature.** `addIngredient` / `deleteIngredient` / `setStepFields` —
+`setStepFields` replaced `setStepLabel` so a step's label, `minutes` and
+`tempF` go through one op with the partial-bag contract the ingredient sheet
+already used: absent means leave alone, present-and-null means clear. That is
+not granularity fussiness — a sheet commits on blur, and blurring the label
+box must not rewrite the time with whatever was in state.
+
+Add is offered from the **step** sheet ("Add an ingredient here"), because an
+ingredient has to attach to a step; delete is at the foot of the **ingredient**
+sheet. Neither cascades: deleting a step's only input leaves the step with no
+inputs, `validateRecipe` says so, and `deleteIngredientBlocker` turns that
+into a sentence naming the step and pointing at "delete the step" instead,
+which already splices its inputs into its consumer properly. One tap removing
+two things is a destructive reading of "delete".
+
+**A validation error may not move a control.** Found while sweeping this: the
+sheet is bottom-anchored and capped at 86svh, so an error box appended at its
+foot lifted every button by 19px (SE) / 67px (iPhone 13) below the cap, and
+pushed them *down* 56px at the cap where the sheet scrolls instead. Blur fires
+on pointerdown and React's onClick on pointerup, so committing an invalid
+label by tapping "Add an ingredient here" slid "Split…" under the finger
+before it lifted — CLAUDE.md's "nothing may resize under a fingertip", with a
+sheet instead of a chip. Errors are now positioned absolutely against their
+own field (zero movement, measured identical geometry at rest and in error)
+and are `pointer-events: none`, so the tap that surfaced the message still
+reaches the control it was aimed at instead of being eaten by it.
+
 **What the JSON hatch can still express that the editor cannot** — it stays
 until this list is empty:
 
-1. **Ingredients cannot be added or deleted.** A missing ingredient makes a
-   recipe unusable, where a wrong split only makes it awkward. This is the
-   next round, not a maybe-later one.
-2. **`minutes` and `tempF` are not editable** — only a step's label is. So a
-   wrong oven temperature can only be fixed in JSON, and those fields drive
-   the timers. Same round as (1).
-3. **Nothing above the step level:** recipe title, servings, source, the
-   section header (oven temp), section names, and the section-as-ingredient
-   link `sequence.ts` orders by. Third round.
+1. **Nothing above the step level:** recipe title, servings, source and
+   `sourceUrl`, the section header (oven temp), section names, adding or
+   deleting a whole section, and the section-as-ingredient link
+   `sequence.ts` orders by. Third round.
+2. **Ingredient `qtyMax` and `text` are reachable but not separable.** One
+   Amount box is parsed by `parseAmount`, which is deliberate — three boxes
+   would make someone choose what kind of amount they are typing before
+   typing it — but it means an amount that round-trips through the parser
+   differently from how it was stored can only be set exactly in JSON.
+3. **`mealTypes`** is edited through its own sheet rather than the editor, so
+   it is not a gap, but it is the one recipe-level field that already has a
+   visual path — worth copying the pattern for (1).
 
-**Not available on the free trial recipe.** It has no library row to write
-to — App's trial branch deliberately does not POST or PATCH, because the
-server already parked the recipe under the trial id. Editing it would change
-the screen and nothing else, and signing up would claim the parked copy,
-discarding every edit at the moment the user was promised their work was
-safe. Making the trial row patchable is the fix; hiding the button is the
-honest stopgap.
+**Available on the free trial recipe too**, since `PATCH /api/trial/recipe`
+landed — see "Still open from earlier work".
 
 ---
 
@@ -548,12 +574,13 @@ actually left, cheapest and most blocking first.
    `shared/sync.ts` and CLAUDE.md's sync section.
 2. ~~**The library and bottom nav** (#8)~~ **Done** — see the entry,
    ratings included.
-3. **Finish editing** (#6) — adding, deleting, splitting and merging steps.
-   These are the repairs that make a recipe *unusable* rather than merely
-   wrong, and they are the only reason the raw JSON hatch still exists. New
-   op types against the existing `applyEdit(recipe, op)` signature.
-4. **Make the trial row patchable**, so the one free recipe can be edited.
-   Small, and it is precisely the recipe someone would want to correct.
+3. ~~**Finish editing** (#6) — steps, then ingredients and timings~~
+   **Done for everything at or below the step level.** What is left of #6 is
+   recipe- and section-level fields: title, servings, source, section header,
+   section names, adding/deleting a section, and the section-as-ingredient
+   link. That is what still keeps the JSON hatch alive.
+4. ~~**Make the trial row patchable**~~ **Done** — `PATCH
+   /api/trial/recipe`.
 5. ~~**Public/private decision**~~ **Settled** — libraries private,
    aggregate counts only. See "Visibility — settled" in #3. That splits #3
    into stage one (cached trees in search results, no visibility question at

@@ -29,11 +29,14 @@ import { formatAmount } from "../../../shared/amounts";
 import {
   applyEdit,
   consumerOf,
+  deleteIngredientBlocker,
   noTargetsReason,
   parentStepOf,
   parseAmount,
+  parseTiming,
   validMoveTargets,
   type EditOp,
+  type StepFields,
 } from "../../../shared/edits";
 
 interface Props {
@@ -110,6 +113,50 @@ export default function EditSheet({ recipe, targetId, onApply, onClose }: Props)
   );
 }
 
+/**
+ * A field and, when it has one, its problem — which is drawn OVER the sheet
+ * rather than inside its flow.
+ *
+ * This is geometry, not decoration. The sheet is bottom-anchored
+ * (`.rd-sheet-scrim` is `align-items: flex-end`) and capped at 86svh, and an
+ * error box used to be appended at its foot. Both of those states move the
+ * controls when the box appears, in opposite directions:
+ *
+ *   - below the cap, the sheet grows upward and everything above the box
+ *     lifts — measured at 19px on an iPhone SE and 67px on an iPhone 13;
+ *   - at the cap the sheet scrolls instead, and anything inserted above the
+ *     buttons pushes them DOWN — 56px on the SE, with "Delete step" landing
+ *     partly off screen.
+ *
+ * Either way a 44px target moves further than its own height, and a tap
+ * straddles the move: blur fires on pointerdown and React's onClick on
+ * pointerup, so committing an invalid label by tapping "Add an ingredient
+ * here" slid "Split…" under the finger before it lifted. CLAUDE.md's rule —
+ * nothing may resize under a fingertip — with a sheet instead of a chip.
+ *
+ * So the message is positioned absolutely against this wrapper: it takes no
+ * space, and nothing in the sheet moves at all. It is also
+ * `pointer-events: none`, which is the half that makes it honest — the tap
+ * that revealed the error still reaches the control it was aimed at, rather
+ * than being swallowed by the thing that appeared over it.
+ */
+function Field({ messages, children }: { messages: string[]; children: React.ReactNode }) {
+  return (
+    <div className="rd-field-anchor">
+      {children}
+      {messages.length ? (
+        <div className="rd-error rd-field-error" role="alert">
+          <ul className="rd-json-errors">
+            {messages.map((m, i) => (
+              <li key={i}>{m}</li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 /** Problems the candidate tree would have. Shown rather than swallowed: the
  *  validator's messages were written to be read by a person. */
 function problemsWith(recipe: Recipe, op: EditOp): string[] {
@@ -145,27 +192,30 @@ function IngredientFieldsForm({
   );
   const [name, setName] = useState(ing.name ?? "");
   const [note, setNote] = useState(ing.note ?? "");
-  const [problems, setProblems] = useState<string[]>([]);
+  // Keyed by field so the message can be rendered under the box that caused
+  // it — see Field for why that is load-bearing rather than tidy.
+  const [problems, setProblems] = useState<Record<string, string[]>>({});
+  const at = (field: string) => problems[field] ?? [];
 
-  const commit = (fields: Parameters<typeof buildOp>[1]) => {
+  const commit = (field: string, fields: Parameters<typeof buildOp>[1]) => {
     const op = buildOp(ingredientId, fields);
     const errors = problemsWith(recipe, op);
-    if (errors.length) {
-      setProblems(errors);
-      return;
-    }
-    setProblems([]);
-    onApply(op);
+    setProblems(errors.length ? { [field]: errors } : {});
+    if (!errors.length) onApply(op);
   };
 
   const commitAmount = () => {
     const p = parseAmount(amount);
-    commit({ qty: p.qty, qtyMax: p.qtyMax, text: p.text });
+    commit("amount", { qty: p.qty, qtyMax: p.qtyMax, text: p.text });
   };
 
   const targets = useMemo(() => validMoveTargets(recipe, ingredientId), [recipe, ingredientId]);
   const parent = parentStepOf(recipe, ingredientId);
   const blocked = targets.length ? null : noTargetsReason(recipe, ingredientId);
+  const blockedDelete = useMemo(
+    () => deleteIngredientBlocker(recipe, ingredientId),
+    [recipe, ingredientId]
+  );
 
   return (
     <>
@@ -176,62 +226,70 @@ function IngredientFieldsForm({
         </button>
       </div>
 
-      <label className="rd-field">
-        <span className="rd-field-label">Amount</span>
-        <input
-          ref={firstFieldRef}
-          className="rd-field-input"
-          value={amount}
-          inputMode="text"
-          placeholder="2, 2-3, ½, or “to taste”"
-          onChange={(e) => setAmount(e.target.value)}
-          onBlur={commitAmount}
-          onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), commitAmount())}
-        />
-      </label>
+      <Field messages={at("amount")}>
+  <label className="rd-field">
+          <span className="rd-field-label">Amount</span>
+          <input
+            ref={firstFieldRef}
+            className="rd-field-input"
+            value={amount}
+            inputMode="text"
+            placeholder="2, 2-3, ½, or “to taste”"
+            onChange={(e) => setAmount(e.target.value)}
+            onBlur={commitAmount}
+            onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), commitAmount())}
+          />
+        </label>
+      </Field>
 
-      <label className="rd-field">
-        <span className="rd-field-label">Unit</span>
-        <select
-          className="rd-field-input"
-          value={ing.unit ?? ""}
-          onChange={(e) => commit({ unit: (e.target.value || null) as Unit | null })}
-        >
-          <option value="">none (countable)</option>
-          {UNIT_OPTIONS.map((u) => (
-            <option key={u} value={u}>
-              {UNIT_LABEL[u] ?? u}
-            </option>
-          ))}
-        </select>
-      </label>
+      <Field messages={at("unit")}>
+  <label className="rd-field">
+          <span className="rd-field-label">Unit</span>
+          <select
+            className="rd-field-input"
+            value={ing.unit ?? ""}
+            onChange={(e) => commit("unit", { unit: (e.target.value || null) as Unit | null })}
+          >
+            <option value="">none (countable)</option>
+            {UNIT_OPTIONS.map((u) => (
+              <option key={u} value={u}>
+                {UNIT_LABEL[u] ?? u}
+              </option>
+            ))}
+          </select>
+        </label>
+      </Field>
 
-      <label className="rd-field">
-        <span className="rd-field-label">Name</span>
-        <input
-          className="rd-field-input"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          onBlur={() => commit({ name })}
-          onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), commit({ name }))}
-        />
-      </label>
+      <Field messages={at("name")}>
+  <label className="rd-field">
+          <span className="rd-field-label">Name</span>
+          <input
+            className="rd-field-input"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            onBlur={() => commit("name", { name })}
+            onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), commit("name", { name }))}
+          />
+        </label>
+      </Field>
 
-      <label className="rd-field">
-        <span className="rd-field-label">
-          Note <span className="rd-field-hint">prep that isn’t a step</span>
-        </span>
-        <input
-          className="rd-field-input"
-          value={note}
-          placeholder="finely diced"
-          onChange={(e) => setNote(e.target.value)}
-          onBlur={() => commit({ note: note.trim() || null })}
-          onKeyDown={(e) =>
-            e.key === "Enter" && (e.preventDefault(), commit({ note: note.trim() || null }))
-          }
-        />
-      </label>
+      <Field messages={at("note")}>
+  <label className="rd-field">
+          <span className="rd-field-label">
+            Note <span className="rd-field-hint">prep that isn’t a step</span>
+          </span>
+          <input
+            className="rd-field-input"
+            value={note}
+            placeholder="finely diced"
+            onChange={(e) => setNote(e.target.value)}
+            onBlur={() => commit("note", { note: note.trim() || null })}
+            onKeyDown={(e) =>
+              e.key === "Enter" && (e.preventDefault(), commit("note", { note: note.trim() || null }))
+            }
+          />
+        </label>
+      </Field>
 
       <div className="rd-field">
         <span className="rd-field-label">
@@ -264,15 +322,21 @@ function IngredientFieldsForm({
         )}
       </div>
 
-      {problems.length ? (
-        <div className="rd-error" role="alert">
-          <ul className="rd-json-errors">
-            {problems.map((m, i) => (
-              <li key={i}>{m}</li>
-            ))}
-          </ul>
-        </div>
-      ) : null}
+      {/* Delete is last, is the only red thing in the sheet, and says why it
+          cannot happen rather than going grey with no explanation. The
+          blocker is computed from the candidate tree, so it is the same
+          answer the server would give. */}
+      <div className="rd-field">
+        <button
+          className="rd-btn rd-step-danger"
+          disabled={!!blockedDelete}
+          onClick={() => onApply({ type: "deleteIngredient", ingredientId })}
+        >
+          Delete “{ing.name || "this ingredient"}”
+        </button>
+        {blockedDelete ? <p className="rd-sheet-blocked">{blockedDelete}</p> : null}
+      </div>
+
     </>
   );
 }
@@ -306,18 +370,23 @@ function StepFieldsForm({
 }) {
   const node = recipe.sections.flatMap((s) => s.nodes).find((n) => n.id === stepId)!;
   const [label, setLabel] = useState(node.label ?? "");
-  const [problems, setProblems] = useState<string[]>([]);
+  const [minutes, setMinutes] = useState(
+    typeof node.minutes === "number" ? String(node.minutes) : ""
+  );
+  const [tempF, setTempF] = useState(
+    typeof node.tempF === "number" ? String(node.tempF) : ""
+  );
+  const [problems, setProblems] = useState<Record<string, string[]>>({});
+  const at = (field: string) => problems[field] ?? [];
 
-  const commit = () => {
-    const op: EditOp = { type: "setStepLabel", stepId, label: label.trim() };
+  const commit = (field: string, fields: StepFields) => {
+    const op: EditOp = { type: "setStepFields", stepId, fields };
     const errors = problemsWith(recipe, op);
-    if (errors.length) {
-      setProblems(errors);
-      return;
-    }
-    setProblems([]);
-    onApply(op);
+    setProblems(errors.length ? { [field]: errors } : {});
+    if (!errors.length) onApply(op);
   };
+
+  const commitLabel = () => commit("label", { label: label.trim() });
 
   return (
     <>
@@ -328,31 +397,69 @@ function StepFieldsForm({
         </button>
       </div>
 
-      <label className="rd-field">
-        <span className="rd-field-label">
-          Label <span className="rd-field-hint">a few words</span>
-        </span>
-        <input
-          ref={firstFieldRef}
-          className="rd-field-input"
-          value={label}
-          onChange={(e) => setLabel(e.target.value)}
-          onBlur={commit}
-          onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), commit())}
-        />
-      </label>
+      <Field messages={at("label")}>
+        <label className="rd-field">
+          <span className="rd-field-label">
+            Label <span className="rd-field-hint">a few words</span>
+          </span>
+          <input
+            ref={firstFieldRef}
+            className="rd-field-input"
+            value={label}
+            onChange={(e) => setLabel(e.target.value)}
+            onBlur={commitLabel}
+            onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), commitLabel())}
+          />
+        </label>
+      </Field>
+
+      {/* Time and temperature are not decoration on the label. `minutes` is
+          what StepsMode offers a timer for and what the library card totals;
+          `tempF` is what the finish strip shows. A step whose label says
+          "bake 325°F 12 min" with both fields empty looks right and silently
+          has no timer, which is exactly the recipe someone is editing here to
+          fix. Two boxes side by side — they are short, and stacking them
+          would push the structural actions below the fold on an SE. */}
+      <Field messages={[...at("minutes"), ...at("tempF")]}>
+        <div className="rd-field-row">
+        <label className="rd-field">
+          <span className="rd-field-label">
+            Time <span className="rd-field-hint">minutes</span>
+          </span>
+          <input
+            className="rd-field-input"
+            value={minutes}
+            inputMode="decimal"
+            placeholder="—"
+            onChange={(e) => setMinutes(e.target.value)}
+            onBlur={() => commit("minutes", { minutes: parseTiming(minutes) })}
+            onKeyDown={(e) =>
+              e.key === "Enter" &&
+              (e.preventDefault(), commit("minutes", { minutes: parseTiming(minutes) }))
+            }
+          />
+        </label>
+        <label className="rd-field">
+          <span className="rd-field-label">
+            Temp <span className="rd-field-hint">°F</span>
+          </span>
+          <input
+            className="rd-field-input"
+            value={tempF}
+            inputMode="decimal"
+            placeholder="—"
+            onChange={(e) => setTempF(e.target.value)}
+            onBlur={() => commit("tempF", { tempF: parseTiming(tempF) })}
+            onKeyDown={(e) =>
+              e.key === "Enter" &&
+              (e.preventDefault(), commit("tempF", { tempF: parseTiming(tempF) }))
+            }
+          />
+        </label>
+        </div>
+      </Field>
 
       <StepActions recipe={recipe} stepId={stepId} onApply={onApply} onClose={onClose} />
-
-      {problems.length ? (
-        <div className="rd-error" role="alert">
-          <ul className="rd-json-errors">
-            {problems.map((m, i) => (
-              <li key={i}>{m}</li>
-            ))}
-          </ul>
-        </div>
-      ) : null}
     </>
   );
 }
@@ -378,6 +485,7 @@ function StepActions({
 }) {
   const [splitting, setSplitting] = useState(false);
   const [merging, setMerging] = useState(false);
+  const [adding, setAdding] = useState(false);
 
   const node = recipe.sections.flatMap((s) => s.nodes).find((n) => n.id === stepId)!;
   const next = consumerOf(recipe, stepId);
@@ -391,6 +499,21 @@ function StepActions({
   };
 
   const [blocked, setBlocked] = useState<string | null>(null);
+
+  if (adding) {
+    return (
+      <AddIngredientForm
+        recipe={recipe}
+        stepId={stepId}
+        onApply={onApply}
+        onDone={() => {
+          setAdding(false);
+          onClose();
+        }}
+        onCancel={() => setAdding(false)}
+      />
+    );
+  }
 
   if (splitting) {
     return (
@@ -449,7 +572,20 @@ function StepActions({
 
   return (
     <div className="rd-field">
-      <span className="rd-field-label">This step</span>
+      {/* Adding an ingredient is its own row above the structural actions,
+          not a fifth button among them. It is the one thing here someone
+          reaches for because the recipe is WRONG rather than because they
+          want it shaped differently — a missing ingredient makes the recipe
+          unusable, where a bad split only makes it awkward — so it does not
+          queue behind four ways to rearrange steps. */}
+      <span className="rd-field-label">Ingredients</span>
+      <div className="rd-step-actions">
+        <button className="rd-btn" onClick={() => setAdding(true)}>
+          Add an ingredient here
+        </button>
+      </div>
+
+      <span className="rd-field-label rd-field-label-gap">This step</span>
       <div className="rd-step-actions">
         <button className="rd-btn" onClick={() => setSplitting(true)}>
           Split…
@@ -597,6 +733,135 @@ function SplitForm({
           }}
         >
           Split
+        </button>
+        <button className="rd-btn" onClick={onCancel}>
+          Cancel
+        </button>
+      </div>
+
+      {problems.length ? (
+        <div className="rd-error" role="alert">
+          <ul className="rd-json-errors">
+            {problems.map((m, i) => (
+              <li key={i}>{m}</li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+/**
+ * Adding an ingredient. The same three boxes as the ingredient sheet, minus
+ * the note and the move list — a thing that does not exist yet has nowhere to
+ * move from, and a prep note is an edit you make once you can see it.
+ *
+ * It does not commit on blur the way the edit sheet does. Blur-commit is
+ * right when the row already exists and each field is an independent
+ * correction; here the three fields are one act, and committing on the first
+ * blur would insert a nameless ingredient the validator immediately rejects,
+ * with the sheet still open over it. So: one button, one op.
+ */
+function AddIngredientForm({
+  recipe,
+  stepId,
+  onApply,
+  onDone,
+  onCancel,
+}: {
+  recipe: Recipe;
+  stepId: string;
+  onApply: (op: EditOp) => void;
+  onDone: () => void;
+  onCancel: () => void;
+}) {
+  const step = recipe.sections.flatMap((s) => s.nodes).find((n) => n.id === stepId)!;
+  const [amount, setAmount] = useState("");
+  const [unit, setUnit] = useState<string>("");
+  const [name, setName] = useState("");
+  const [problems, setProblems] = useState<string[]>([]);
+  const nameRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    nameRef.current?.focus();
+  }, []);
+
+  const build = (): EditOp => {
+    const p = parseAmount(amount);
+    return {
+      type: "addIngredient",
+      toStepId: stepId,
+      fields: {
+        qty: p.qty,
+        qtyMax: p.qtyMax,
+        text: p.text,
+        unit: (unit || null) as Unit | null,
+        name: name.trim(),
+      },
+    };
+  };
+
+  return (
+    <div className="rd-field">
+      <span className="rd-field-label">
+        Add to “{step.label}” <span className="rd-field-hint">it joins this step</span>
+      </span>
+
+      <label className="rd-field">
+        <span className="rd-field-label">Name</span>
+        <input
+          ref={nameRef}
+          className="rd-field-input"
+          value={name}
+          placeholder="egg yolks"
+          onChange={(e) => setName(e.target.value)}
+        />
+      </label>
+
+      <div className="rd-field-row">
+        <label className="rd-field">
+          <span className="rd-field-label">Amount</span>
+          <input
+            className="rd-field-input"
+            value={amount}
+            inputMode="text"
+            placeholder="2 or 2-3"
+            onChange={(e) => setAmount(e.target.value)}
+          />
+        </label>
+        <label className="rd-field">
+          <span className="rd-field-label">Unit</span>
+          <select
+            className="rd-field-input"
+            value={unit}
+            onChange={(e) => setUnit(e.target.value)}
+          >
+            <option value="">none</option>
+            {UNIT_OPTIONS.map((u) => (
+              <option key={u} value={u}>
+                {UNIT_LABEL[u] ?? u}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+
+      <div className="rd-step-actions">
+        <button
+          className="rd-go"
+          onClick={() => {
+            const op = build();
+            const errors = problemsWith(recipe, op);
+            if (errors.length) {
+              setProblems(errors);
+              return;
+            }
+            onApply(op);
+            onDone();
+          }}
+        >
+          Add
         </button>
         <button className="rd-btn" onClick={onCancel}>
           Cancel

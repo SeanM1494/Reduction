@@ -15,7 +15,7 @@
 
 import React, { useLayoutEffect, useRef, useState } from "react";
 import { computeLayout, type Section, type Step } from "../../../shared/layout";
-import { formatAmount } from "../../../shared/amounts";
+import { formatAmount, formatMinutes } from "../../../shared/amounts";
 
 /**
  * Columns shade deeper to the right, so stage depth reads before interaction.
@@ -46,13 +46,6 @@ const depthTint = (d: number) => {
  * glass before the first pixel moves. One uninterrupted ease beats two.
  */
 const SWAP_MS = 380;
-
-function fmtTime(min: number): string {
-  if (min < 60) return `${min} min`;
-  const h = Math.floor(min / 60);
-  const m = min % 60;
-  return m ? `${h} hr ${m} min` : `${h} hr`;
-}
 
 /**
  * Edit mode, supplied by RecipeView and absent everywhere else.
@@ -594,8 +587,8 @@ export default function Diagram({
                   <span className="rd-fin-mark" aria-hidden="true" />
                   <span className="rd-fin-num">{i + 1}</span>
                   <span className="rd-fin-label">{n.label}</span>
-                  {n.minutes ? (
-                    <span className="rd-fin-time">{fmtTime(n.minutes)}</span>
+                  {formatMinutes(n.minutes) ? (
+                    <span className="rd-fin-time">{formatMinutes(n.minutes)}</span>
                   ) : null}
                 </div>
               </li>

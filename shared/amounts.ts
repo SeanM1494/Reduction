@@ -59,3 +59,35 @@ export function countAll(recipe: Recipe): number {
     0
   );
 }
+
+/**
+ * A step's time, rendered — or null when it does not have one.
+ *
+ * Null rather than "" so callers `if` on it, and `unknown` rather than
+ * `number | null` on purpose. Until the editor, `minutes` only ever came from
+ * an extraction that had already been through `validateRecipe`. It is now a
+ * box a person types into, and it will now also arrive from the JSON hatch
+ * and from any client that can PATCH — and `validateRecipe` has no opinion on
+ * this field, so nothing upstream will catch `"12 min"`. That string is
+ * truthy, which is what every caller used to test, so it reached `min < 60`
+ * as a comparison against a string and the timer as `"12 min" * 60_000`, i.e.
+ * NaN. One guard, at the one place that turns the number into words.
+ *
+ * (The visual editor cannot produce a bad value — `parseTiming` in
+ * shared/edits.ts only ever emits a number or null. This is for everything
+ * that does not go through it.)
+ */
+export function formatMinutes(min: unknown): string | null {
+  if (typeof min !== "number" || !Number.isFinite(min) || min <= 0) return null;
+  const whole = Math.round(min);
+  if (whole < 60) return `${whole} min`;
+  const h = Math.floor(whole / 60);
+  const m = whole % 60;
+  return m ? `${h} hr ${m} min` : `${h} hr`;
+}
+
+/** The same guard, as a number, for arithmetic (timer end times). */
+export function stepMinutes(min: unknown): number | null {
+  if (typeof min !== "number" || !Number.isFinite(min) || min <= 0) return null;
+  return min;
+}

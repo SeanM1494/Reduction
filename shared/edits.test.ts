@@ -1,5 +1,5 @@
 /**
- * shared/edits.test.ts — the three edit operations and the drop rule.
+ * shared/edits.test.ts — every edit operation and the drop rule.
  *
  * These run without a database or a browser: applyEdit is pure and
  * validMoveTargets is pure, which is exactly why the drag's validity logic was
@@ -14,10 +14,12 @@ import { reconcileDone } from "./progress";
 import {
   applyEdit,
   consumerOf,
+  deleteIngredientBlocker,
   EditTargetError,
   noTargetsReason,
   parentStepOf,
   parseAmount,
+  parseTiming,
   validMoveTargets,
 } from "./edits";
 
@@ -93,7 +95,7 @@ test("applyEdit never mutates the recipe it is given", () => {
     ingredientId: "salt",
     fields: { name: "flaky salt" },
   });
-  applyEdit(before, { type: "setStepLabel", stepId: "d1", label: "scoop" });
+  applyEdit(before, { type: "setStepFields", stepId: "d1", fields: { label: "scoop" } });
   applyEdit(before, { type: "moveIngredient", ingredientId: "salt", toStepId: "d3" });
   assert.equal(JSON.stringify(before), snapshot);
 });
@@ -110,26 +112,26 @@ test("clearing a name produces an invalid candidate rather than throwing", () =>
   assert.ok(validateRecipe(after).some((e) => /missing a name/.test(e)));
 });
 
-// -------------------------------------------------------------- step label --
+// ------------------------------------------------------------- step fields --
 
-test("setStepLabel renames one step", () => {
-  const after = applyEdit(RECIPE(), { type: "setStepLabel", stepId: "d3", label: "dice and mix" });
+test("setStepFields renames one step", () => {
+  const after = applyEdit(RECIPE(), { type: "setStepFields", stepId: "d3", fields: { label: "dice and mix" } });
   assert.equal(step(after, "d3").label, "dice and mix");
   assert.deepEqual(validateRecipe(after), []);
 });
 
 test("an over-long label is a validator problem, not a thrown one", () => {
   const after = applyEdit(RECIPE(), {
-    type: "setStepLabel",
+    type: "setStepFields",
     stepId: "d3",
-    label: "one two three four five six seven eight nine",
+    fields: { label: "one two three four five six seven eight nine" },
   });
   assert.ok(validateRecipe(after).some((e) => /too long/.test(e)));
 });
 
 test("an unknown id throws, because that is a caller bug", () => {
   assert.throws(
-    () => applyEdit(RECIPE(), { type: "setStepLabel", stepId: "nope", label: "x" }),
+    () => applyEdit(RECIPE(), { type: "setStepFields", stepId: "nope", fields: { label: "x" } }),
     EditTargetError
   );
 });
@@ -507,4 +509,179 @@ test("minted step ids do not collide with existing ones", () => {
   const ids = [...r.sections[0].ingredients.map((x) => x.id), ...stepIds(r)];
   assert.equal(new Set(ids).size, ids.length);
   assert.deepEqual(validateRecipe(r), []);
+});
+
+// ------------------------------------------------------------ step timing --
+
+test("setStepFields sets minutes and tempF without touching the label", () => {
+  const after = applyEdit(RECIPE(), {
+    type: "setStepFields",
+    stepId: "d4",
+    fields: { minutes: 10, tempF: 325 },
+  });
+  assert.equal(step(after, "d4").label, "fold together");
+  assert.equal(step(after, "d4").minutes, 10);
+  assert.equal(step(after, "d4").tempF, 325);
+  assert.deepEqual(validateRecipe(after), []);
+});
+
+test("an absent field is left alone and a null one clears it", () => {
+  // The whole reason these ops take a bag rather than a value: a sheet
+  // commits on blur, and blurring the label box must not wipe the time.
+  const timed = applyEdit(RECIPE(), {
+    type: "setStepFields",
+    stepId: "d4",
+    fields: { minutes: 10, tempF: 325 },
+  });
+  const renamed = applyEdit(timed, {
+    type: "setStepFields",
+    stepId: "d4",
+    fields: { label: "fold gently" },
+  });
+  assert.equal(renamed.sections[0].nodes.find((n) => n.id === "d4")!.minutes, 10);
+
+  const cleared = applyEdit(renamed, {
+    type: "setStepFields",
+    stepId: "d4",
+    fields: { minutes: null },
+  });
+  assert.equal(step(cleared, "d4").minutes, null);
+  assert.equal(step(cleared, "d4").tempF, 325);
+});
+
+test("parseTiming takes what people type and refuses what breaks a timer", () => {
+  assert.equal(parseTiming("12"), 12);
+  assert.equal(parseTiming(" 90 "), 90);
+  assert.equal(parseTiming("1 1/2"), 1.5);
+  assert.equal(parseTiming("½"), 0.5);
+  assert.equal(parseTiming(""), null);
+  assert.equal(parseTiming("soon"), null);
+  assert.equal(parseTiming("12 min"), null);
+  // A negative time would run the timer backwards; it is absent, not an error.
+  assert.equal(parseTiming("-5"), null);
+});
+
+// --------------------------------------------------------- add ingredient --
+
+test("addIngredient appends to the section and to the step's inputs", () => {
+  const after = applyEdit(RECIPE(), {
+    type: "addIngredient",
+    toStepId: "d3",
+    fields: { qty: 2, unit: "tbsp", name: "cilantro" },
+  });
+  const added = after.sections[0].ingredients.at(-1)!;
+  assert.equal(added.name, "cilantro");
+  assert.equal(added.qty, 2);
+  assert.equal(added.unit, "tbsp");
+  // Appended, not inserted: row order comes from input order, and inserting
+  // would push existing rows around under someone who was reading them.
+  assert.deepEqual(step(after, "d3").inputs, ["onion", "tomato", added.id]);
+  assert.deepEqual(validateRecipe(after), []);
+});
+
+test("a minted ingredient id is derived from the name and never collides", () => {
+  const one = applyEdit(RECIPE(), {
+    type: "addIngredient",
+    toStepId: "d3",
+    fields: { qty: 1, unit: null, name: "Roma Tomato" },
+  });
+  assert.equal(one.sections[0].ingredients.at(-1)!.id, "roma_tomato");
+
+  const two = applyEdit(one, {
+    type: "addIngredient",
+    toStepId: "d3",
+    fields: { qty: 1, unit: null, name: "Roma Tomato" },
+  });
+  assert.equal(two.sections[0].ingredients.at(-1)!.id, "roma_tomato_1");
+  assert.deepEqual(validateRecipe(two), []);
+});
+
+test("an unnameable ingredient still gets a truthy id", () => {
+  // validateRecipe requires an id; a name of "…" slugs to nothing.
+  const after = applyEdit(RECIPE(), {
+    type: "addIngredient",
+    toStepId: "d3",
+    fields: { qty: 1, unit: null, name: "…" },
+  });
+  const added = after.sections[0].ingredients.at(-1)!;
+  assert.ok(added.id);
+  assert.ok(!after.sections[0].ingredients.some((i) => i !== added && i.id === added.id));
+});
+
+test("adding a nameless ingredient is a validator problem, not a thrown one", () => {
+  const after = applyEdit(RECIPE(), {
+    type: "addIngredient",
+    toStepId: "d3",
+    fields: { qty: 1, unit: null, name: "" },
+  });
+  assert.ok(validateRecipe(after).some((e) => /missing a name/.test(e)));
+});
+
+test("addIngredient onto something that is not a step throws", () => {
+  assert.throws(
+    () =>
+      applyEdit(RECIPE(), {
+        type: "addIngredient",
+        toStepId: "salt",
+        fields: { qty: 1, unit: null, name: "pepper" },
+      }),
+    EditTargetError
+  );
+});
+
+// ------------------------------------------------------ delete ingredient --
+
+test("deleteIngredient removes the row and the input naming it", () => {
+  const after = applyEdit(RECIPE(), { type: "deleteIngredient", ingredientId: "salt" });
+  assert.ok(!after.sections[0].ingredients.some((i) => i.id === "salt"));
+  assert.deepEqual(step(after, "d2").inputs, ["d1", "lime"]);
+  assert.deepEqual(validateRecipe(after), []);
+});
+
+test("deleting a step's only input leaves an invalid tree rather than cascading", () => {
+  // d1's only input is `avocados`. Removing it must NOT also remove d1: one
+  // tap deleting two things is a destructive reading of "delete", and
+  // deleteStep already exists and splices properly.
+  const after = applyEdit(RECIPE(), { type: "deleteIngredient", ingredientId: "avocados" });
+  assert.ok(after.sections[0].nodes.some((n) => n.id === "d1"));
+  assert.ok(validateRecipe(after).some((e) => /no inputs/.test(e)));
+});
+
+test("deleteIngredientBlocker says why, in words that name the step", () => {
+  assert.equal(deleteIngredientBlocker(RECIPE(), "salt"), null);
+  const why = deleteIngredientBlocker(RECIPE(), "avocados");
+  assert.ok(why);
+  assert.match(why!, /halve and scoop/);
+  assert.match(why!, /Delete the step instead/);
+});
+
+test("deleteIngredient on a step id throws, because that is a caller bug", () => {
+  assert.throws(
+    () => applyEdit(RECIPE(), { type: "deleteIngredient", ingredientId: "d2" }),
+    EditTargetError
+  );
+});
+
+test("add then delete round-trips to the original tree", () => {
+  const before = RECIPE();
+  const added = applyEdit(before, {
+    type: "addIngredient",
+    toStepId: "d3",
+    fields: { qty: 2, unit: "tbsp", name: "cilantro" },
+  });
+  const back = applyEdit(added, { type: "deleteIngredient", ingredientId: "cilantro" });
+  assert.deepEqual(back, before);
+});
+
+test("the ingredient ops do not mutate the input recipe", () => {
+  const before = RECIPE();
+  const snapshot = JSON.stringify(before);
+  applyEdit(before, {
+    type: "addIngredient",
+    toStepId: "d3",
+    fields: { qty: 1, unit: null, name: "pepper" },
+  });
+  applyEdit(before, { type: "deleteIngredient", ingredientId: "salt" });
+  applyEdit(before, { type: "setStepFields", stepId: "d4", fields: { minutes: 5 } });
+  assert.equal(JSON.stringify(before), snapshot);
 });

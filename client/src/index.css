@@ -1942,6 +1942,31 @@ body.rd-dragging-body {
 /* The step sheet's shape-changing actions. Wrapped rather than a row: four
    44px buttons do not fit one line at 320px, and a horizontally scrolling
    row would hide the destructive ones off-screen. */
+/* Two short fields on one line. `flex-wrap` with a 130px basis rather than a
+ * media query: the sheet is narrower than the viewport by its own padding and
+ * narrower still inside a nested form, so the width that matters is not one a
+ * breakpoint can see. Below that they stack, which is the SE's answer and the
+ * same lesson as .rd-cta-form — side by side, the smaller field starves. */
+/* A field's error is drawn OVER the sheet, never inside its flow — see the
+ * Field component in EditSheet.tsx for the measurements. Two properties do
+ * the work and neither is optional:
+ *   position: absolute   nothing in the sheet moves when a message appears
+ *   pointer-events: none the tap that surfaced the message still reaches the
+ *                        control it was aimed at, instead of being eaten by
+ *                        the thing that appeared over it
+ * The background must stay opaque: it sits on top of the next field. */
+.rd-field-anchor { position: relative; }
+.rd-field-error {
+  position: absolute; z-index: 3; pointer-events: none;
+  top: calc(100% - 8px); left: 0; right: 0;
+  background: var(--danger-bg);
+  box-shadow: 0 2px 10px rgba(var(--shadow-rgb), .18);
+}
+
+.rd-field-row { display: flex; flex-wrap: wrap; gap: 10px; }
+.rd-field-row > .rd-field { flex: 1 1 130px; min-width: 0; }
+.rd-field-label-gap { margin-top: 16px; }
+
 .rd-step-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .rd-step-actions .rd-btn, .rd-step-actions .rd-go { flex: 1 1 auto; }
 .rd-step-danger { color: var(--danger-ink); border-color: var(--danger-line); }
