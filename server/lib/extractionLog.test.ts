@@ -94,18 +94,52 @@ test("a cache hit records no via, which is what makes the fraction correct", asy
   await db.delete(extractionEvents).where(sql`${extractionEvents.host} = ${host}`);
 });
 
-test("a write against a missing table is swallowed, not thrown", async (t) => {
+test("a failing write is swallowed, not thrown, and leaves nothing behind", async (t) => {
   if (!(await needsDatabase(t, "extraction_events"))) return;
-  // The realistic version of this: the migration has not been run yet. The
-  // insert fails, and the extraction it was describing must still have
-  // succeeded. Asserted by calling it with a value the column rejects, which
-  // reaches the same catch as a missing relation would.
+  const db = getDb();
+  const before = await db.select({ n: sql<number>`count(*)::int` }).from(extractionEvents);
+
+  // The realistic version of this is the migration not having been run yet:
+  // the insert fails and the extraction it was describing must still have
+  // succeeded. A NOT NULL violation reaches the same catch as a missing
+  // relation.
+  //
+  // The first attempt at this test used a 100,000-character `source`, on the
+  // assumption a text column would reject it. Postgres text has no length
+  // limit, so the insert SUCCEEDED — the test asserted nothing and left a
+  // 100KB row behind on every run. Hence `host` being capped in
+  // extractionLog.ts, and hence this test counting rows.
   assert.doesNotThrow(() =>
-    recordExtraction({
-      source: "x".repeat(100_000),
-      cached: false,
-      ok: true,
-    } as never)
+    recordExtraction({ source: "url", cached: false, ok: null as never })
   );
-  await new Promise((r) => setTimeout(r, 300));
+  await new Promise((r) => setTimeout(r, 400));
+
+  const after = await db.select({ n: sql<number>`count(*)::int` }).from(extractionEvents);
+  assert.equal(after[0].n, before[0].n);
+});
+
+test("host is capped, so a hostile URL cannot write an unbounded row", async (t) => {
+  if (!(await needsDatabase(t, "extraction_events"))) return;
+  const db = getDb();
+  // The stamp goes at the FRONT: the cap truncates the tail, so a unique
+  // suffix would be the part that got cut off and every run would collide
+  // with the last one's row.
+  const stamp = `t${Date.now()}`;
+  const like = `${stamp}-%`;
+  recordExtraction({
+    source: "url",
+    cached: false,
+    ok: true,
+    host: `${stamp}-${"a".repeat(400)}.invalid`,
+  });
+  await new Promise((r) => setTimeout(r, 400));
+
+  const rows = await db
+    .select({ host: extractionEvents.host })
+    .from(extractionEvents)
+    .where(sql`${extractionEvents.host} like ${like}`);
+  assert.equal(rows.length, 1);
+  assert.ok(rows[0].host!.length <= 253, `host was ${rows[0].host!.length} chars`);
+
+  await db.delete(extractionEvents).where(sql`${extractionEvents.host} like ${like}`);
 });

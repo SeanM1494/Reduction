@@ -77,7 +77,11 @@ export function recordExtraction(event: ExtractionEvent): void {
         via: event.via ?? null,
         attempts: event.attempts ?? null,
         repaired: event.repaired ?? null,
-        host: event.host ?? null,
+        // Capped HERE rather than in hostOf, so no caller can route round it.
+        // `host` is the only column fed by a user-supplied string, `text` has
+        // no length limit in Postgres, and this table's whole premise is that
+        // it is cheap to keep for ever. 253 is the DNS maximum.
+        host: event.host ? event.host.slice(0, 253) : null,
         ok: event.ok,
         ms: event.ms ?? null,
       });
