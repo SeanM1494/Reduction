@@ -336,7 +336,10 @@ recipesRouter.post("/extract", requireExtractionAllowance, async (req: Request, 
       // that genuinely is about cost: a hit makes no API call, so there is
       // nothing for a rate limit to protect. The trial allowance is a
       // different thing and has already been taken above — see the middleware.
-      mark({ source: "url", host: hostOf(url) });
+      // via defaults to "self" and is overwritten with "claude" if the
+      // fallback fires, so a failure on either path is attributable rather
+      // than landing in a null bucket.
+      mark({ source: "url", host: hostOf(url), via: "self" });
       const cached = await cacheGetUrl(url);
       if (cached) {
         mark({ cached: true });
@@ -411,7 +414,13 @@ recipesRouter.post("/extract", requireExtractionAllowance, async (req: Request, 
 
       const clipped = text.slice(0, MAX_TEXT);
       const key = hash(`text:${clipped}`);
-      mark({ source: "text" });
+      // via up front, not on success. The text and file paths have no
+      // fallback — they are always structureRecipe, i.e. "self" — so marking
+      // it only when the call returns means a FAILED extraction records a
+      // null via and lands in a bucket that says nothing. The URL path
+      // already gets this right by marking "claude" as the fallback is
+      // entered; this is the same rule.
+      mark({ source: "text", via: "self" });
       const cached = await cacheGet(key);
       if (cached) {
         mark({ cached: true });
@@ -446,7 +455,7 @@ recipesRouter.post("/extract", requireExtractionAllowance, async (req: Request, 
       return res.status(413).json({ error: "That file is larger than 8 MB." });
 
     const key = hash(`file:${clean.slice(0, 4096)}:${clean.length}`);
-    mark({ source: "file" });
+    mark({ source: "file", via: "self" });
     const cached = await cacheGet(key);
     if (cached) {
       mark({ cached: true });
