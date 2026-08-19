@@ -28,6 +28,7 @@ import { UNITS, validateRecipe, type Recipe, type Unit } from "../../../shared/l
 import { formatAmount } from "../../../shared/amounts";
 import {
   applyEdit,
+  consumerOf,
   noTargetsReason,
   parentStepOf,
   parseAmount,
@@ -341,10 +342,7 @@ function StepFieldsForm({
         />
       </label>
 
-      <p className="rd-sheet-note">
-        Adding, splitting and deleting steps aren’t here yet — use{" "}
-        <strong>Advanced: edit raw data</strong> for those.
-      </p>
+      <StepActions recipe={recipe} stepId={stepId} onApply={onApply} onClose={onClose} />
 
       {problems.length ? (
         <div className="rd-error" role="alert">
@@ -356,5 +354,264 @@ function StepFieldsForm({
         </div>
       ) : null}
     </>
+  );
+}
+
+/**
+ * The four shape-changing operations, under the label field in the step
+ * sheet — no new gesture and no new mode, because edit mode already brings
+ * someone here by tapping the step they think is wrong.
+ *
+ * Order is deliberate: the two constructive actions first, the two
+ * destructive ones last.
+ */
+function StepActions({
+  recipe,
+  stepId,
+  onApply,
+  onClose,
+}: {
+  recipe: Recipe;
+  stepId: string;
+  onApply: (op: EditOp) => void;
+  onClose: () => void;
+}) {
+  const [splitting, setSplitting] = useState(false);
+  const [merging, setMerging] = useState(false);
+
+  const node = recipe.sections.flatMap((s) => s.nodes).find((n) => n.id === stepId)!;
+  const next = consumerOf(recipe, stepId);
+  const isRoot = !next;
+
+  const run = (op: EditOp) => {
+    const errors = problemsWith(recipe, op);
+    if (errors.length) return errors;
+    onApply(op);
+    return null;
+  };
+
+  const [blocked, setBlocked] = useState<string | null>(null);
+
+  if (splitting) {
+    return (
+      <SplitForm
+        recipe={recipe}
+        stepId={stepId}
+        onApply={onApply}
+        onDone={() => {
+          setSplitting(false);
+          onClose();
+        }}
+        onCancel={() => setSplitting(false)}
+      />
+    );
+  }
+
+  if (merging && next) {
+    return (
+      <div className="rd-field">
+        <span className="rd-field-label">
+          Merge into “{next.label}” <span className="rd-field-hint">which label stays?</span>
+        </span>
+        <div className="rd-move-list">
+          {/* The later label first, because it is the default and usually
+              names the finished state. Joining the two is not offered:
+              validateRecipe caps a label at eight words, so a joined label
+              would routinely be refused. */}
+          <button
+            className="rd-move-opt is-current"
+            onClick={() => {
+              const errors = run({ type: "mergeStepInto", stepId, label: next.label });
+              if (errors) setBlocked(errors[0]);
+              else onClose();
+            }}
+          >
+            {next.label}
+          </button>
+          <button
+            className="rd-move-opt"
+            onClick={() => {
+              const errors = run({ type: "mergeStepInto", stepId, label: node.label });
+              if (errors) setBlocked(errors[0]);
+              else onClose();
+            }}
+          >
+            {node.label}
+          </button>
+        </div>
+        <button className="rd-btn rd-step-cancel" onClick={() => setMerging(false)}>
+          Cancel
+        </button>
+        {blocked ? <p className="rd-sheet-blocked">{blocked}</p> : null}
+      </div>
+    );
+  }
+
+  return (
+    <div className="rd-field">
+      <span className="rd-field-label">This step</span>
+      <div className="rd-step-actions">
+        <button className="rd-btn" onClick={() => setSplitting(true)}>
+          Split…
+        </button>
+        <button
+          className="rd-btn"
+          onClick={() => {
+            const errors = run({
+              type: "addStepAfter",
+              afterStepId: stepId,
+              label: "new step",
+            });
+            if (errors) setBlocked(errors[0]);
+            else onClose();
+          }}
+        >
+          Add step after
+        </button>
+        <button
+          className="rd-btn"
+          disabled={isRoot}
+          title={isRoot ? "Nothing comes after this step" : `Merge into “${next!.label}”`}
+          onClick={() => setMerging(true)}
+        >
+          Merge into next
+        </button>
+        <button
+          className="rd-btn rd-step-danger"
+          onClick={() => {
+            const errors = run({ type: "deleteStep", stepId });
+            if (errors) setBlocked(errors[0]);
+            else onClose();
+          }}
+        >
+          Delete step
+        </button>
+      </div>
+      {blocked ? <p className="rd-sheet-blocked">{blocked}</p> : null}
+    </div>
+  );
+}
+
+/**
+ * Splitting needs one decision the other three do not: which inputs go to
+ * which half. Everything starts on the FIRST half — the first half is "the
+ * step you already had", the second is "the one you are adding after it" —
+ * and that default is always valid, because the second half is never
+ * input-less: it always consumes the first.
+ */
+function SplitForm({
+  recipe,
+  stepId,
+  onApply,
+  onDone,
+  onCancel,
+}: {
+  recipe: Recipe;
+  stepId: string;
+  onApply: (op: EditOp) => void;
+  onDone: () => void;
+  onCancel: () => void;
+}) {
+  const section = recipe.sections.find((s) => s.nodes.some((n) => n.id === stepId))!;
+  const node = section.nodes.find((n) => n.id === stepId)!;
+  const nameOf = (id: string) =>
+    section.ingredients.find((i) => i.id === id)?.name ??
+    section.nodes.find((n) => n.id === id)?.label ??
+    id;
+
+  const [firstLabel, setFirstLabel] = useState(node.label ?? "");
+  const [secondLabel, setSecondLabel] = useState("");
+  const [toSecond, setToSecond] = useState<string[]>([]);
+  const [problems, setProblems] = useState<string[]>([]);
+
+  const op: EditOp = {
+    type: "splitStep",
+    stepId,
+    firstLabel: firstLabel.trim(),
+    secondLabel: secondLabel.trim(),
+    toSecond,
+  };
+
+  return (
+    <div className="rd-field">
+      <span className="rd-field-label">
+        Split in two <span className="rd-field-hint">the second follows the first</span>
+      </span>
+
+      <label className="rd-field">
+        <span className="rd-field-label">First step</span>
+        <input
+          className="rd-field-input"
+          value={firstLabel}
+          onChange={(e) => setFirstLabel(e.target.value)}
+        />
+      </label>
+      <label className="rd-field">
+        <span className="rd-field-label">Then</span>
+        <input
+          className="rd-field-input"
+          value={secondLabel}
+          placeholder="what happens next"
+          onChange={(e) => setSecondLabel(e.target.value)}
+        />
+      </label>
+
+      {(node.inputs ?? []).length ? (
+        <div className="rd-field">
+          <span className="rd-field-label">
+            Move to the second step <span className="rd-field-hint">tap to move</span>
+          </span>
+          <div className="rd-move-list">
+            {(node.inputs ?? []).map((id) => {
+              const on = toSecond.includes(id);
+              return (
+                <button
+                  key={id}
+                  aria-pressed={on}
+                  className={`rd-move-opt ${on ? "is-current" : ""}`}
+                  onClick={() =>
+                    setToSecond((prev) =>
+                      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+                    )
+                  }
+                >
+                  {nameOf(id)}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      ) : null}
+
+      <div className="rd-step-actions">
+        <button
+          className="rd-go"
+          onClick={() => {
+            const errors = problemsWith(recipe, op);
+            if (errors.length) {
+              setProblems(errors);
+              return;
+            }
+            onApply(op);
+            onDone();
+          }}
+        >
+          Split
+        </button>
+        <button className="rd-btn" onClick={onCancel}>
+          Cancel
+        </button>
+      </div>
+
+      {problems.length ? (
+        <div className="rd-error" role="alert">
+          <ul className="rd-json-errors">
+            {problems.map((m, i) => (
+              <li key={i}>{m}</li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+    </div>
   );
 }

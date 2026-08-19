@@ -12,6 +12,7 @@ import { fileURLToPath } from "node:url";
 import { recipesRouter } from "./routes/recipes";
 import { libraryRouter } from "./routes/library";
 import { authRouter } from "./routes/auth";
+import { trialRouter } from "./routes/trial";
 import { attachSession } from "./middleware/session";
 import { startSessionSweep } from "./lib/sessions";
 import { cleanupSeedRecipes } from "./cleanupSeed";
@@ -34,6 +35,7 @@ app.use(attachSession);
 app.use("/api/auth", authRouter);
 app.use("/api/recipes", recipesRouter);
 app.use("/api/library", libraryRouter);
+app.use("/api/trial", trialRouter);
 
 if (isProd) {
   const clientDir = path.resolve(__dirname, "../dist/public");

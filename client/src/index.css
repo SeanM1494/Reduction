@@ -1938,3 +1938,12 @@ body.rd-dragging-body {
 
 /* Favourite mark on a library card. There is no 👎 counterpart on purpose. */
 .rd-card-fav { color: var(--warm-line); font-size: 13px; line-height: 1; }
+
+/* The step sheet's shape-changing actions. Wrapped rather than a row: four
+   44px buttons do not fit one line at 320px, and a horizontally scrolling
+   row would hide the destructive ones off-screen. */
+.rd-step-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.rd-step-actions .rd-btn, .rd-step-actions .rd-go { flex: 1 1 auto; }
+.rd-step-danger { color: var(--danger-ink); border-color: var(--danger-line); }
+.rd-step-danger:hover { background: var(--danger-bg); }
+.rd-step-cancel { margin-top: 10px; }

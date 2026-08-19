@@ -302,11 +302,30 @@ reading of a drag, and deleting steps is not in this version.
 **Edits apply immediately, with 50 levels of undo.** A server rejection rolls
 back to the last accepted version and says why.
 
-**Still only reachable through the raw JSON editor**, which is why it stays,
-now labelled *Advanced: edit raw data*: adding, deleting, splitting and
-merging steps, and fixing a bad root. Those are the repairs that make a
-recipe unusable rather than merely wrong. They are the next op types in
-`shared/edits.ts`, against the same `applyEdit(recipe, op)` signature.
+**Step shape is now editable too**: add, delete, split and merge, as op
+types against the same `applyEdit(recipe, op)` signature, in the step sheet
+edit mode already opens. Split chains rather than branching (the common
+failure is one step describing two sequential actions) and the user assigns
+which inputs move; **the first half keeps the step's id, and that is derived
+rather than preferred** — giving the second half the id would leave a done
+step above an undone input on every split of a completed step, breaking the
+closure invariant the whole app rests on. Merge keeps the consumer's id and,
+by default, its label, with a one-tap choice of either; joining the two
+labels is not offered because `validateRecipe` caps a label at eight words,
+so joined labels would routinely be refused.
+
+**What the JSON hatch can still express that the editor cannot** — it stays
+until this list is empty:
+
+1. **Ingredients cannot be added or deleted.** A missing ingredient makes a
+   recipe unusable, where a wrong split only makes it awkward. This is the
+   next round, not a maybe-later one.
+2. **`minutes` and `tempF` are not editable** — only a step's label is. So a
+   wrong oven temperature can only be fixed in JSON, and those fields drive
+   the timers. Same round as (1).
+3. **Nothing above the step level:** recipe title, servings, source, the
+   section header (oven temp), section names, and the section-as-ingredient
+   link `sequence.ts` orders by. Third round.
 
 **Not available on the free trial recipe.** It has no library row to write
 to — App's trial branch deliberately does not POST or PATCH, because the
@@ -555,12 +574,14 @@ actually left, cheapest and most blocking first.
 
 ## Still open from earlier work
 
-- **The trial recipe cannot be edited.** Disabled deliberately: the trial
-  recipe has no library row, so an edit would change the screen only, and
-  signup would then claim the parked server copy and discard it — at
-  exactly the moment the app promises the work is safe. The fix is making
-  the trial row patchable. Worth doing: someone's one free recipe is
-  precisely the one they would want to correct.
+- ~~**The trial recipe cannot be edited.**~~ **Done.** `PATCH
+  /api/trial/recipe` — its own route rather than a third case in the
+  library's `scopeOf`, because widening that predicate would hand a
+  signed-out browser the whole library surface (create, delete, list), which
+  is the anonymous library #7 retired. The trial id comes from the httpOnly
+  cookie only, and `user_id IS NULL` in the WHERE closes the path the moment
+  an account owns the row. The edits survive signup for free: `claimTrialRecipe`
+  moves *that* row, so there is no second copy to reconcile.
 - **Reordering the step-by-step sequence.** A list view of collapsed
   steps, drag to reorder. Note that card order is *derived*, not stored —
   so a drag can only reorder branches that are genuinely interchangeable

@@ -11,6 +11,7 @@ import { useTheme } from "./hooks/useTheme";
 import {
   loadLibrary,
   saveLibrary,
+  saveTrialRecipe,
   refreshLibrary,
   onEntryReplaced,
   onSyncNotice,
@@ -533,14 +534,17 @@ export default function App() {
               entry={entry}
               onBack={() => setOpenId(null)}
               onUpdate={(updated) => {
-                // A trial recipe has no account to be saved against yet, so
-                // progress stays in memory until sign-up claims the row.
-                if (viewingTrial) setTrialEntry(updated);
-                else persist(library.map((e) => (e.id === updated.id ? updated : e)));
+                // The trial recipe has no LIBRARY row, but it does have a
+                // row — parked under trial:<id> until signup claims it — and
+                // that row is patchable, so edits and progress persist and
+                // survive the claim. See server/routes/trial.ts.
+                if (viewingTrial) {
+                  setTrialEntry(updated);
+                  saveTrialRecipe(updated);
+                } else {
+                  persist(library.map((e) => (e.id === updated.id ? updated : e)));
+                }
               }}
-              // The trial recipe has no library row to write to yet — see the
-              // canEdit comment in RecipeView.
-              canEdit={!viewingTrial}
               onDelete={() => {
                 if (viewingTrial) {
                   setTrialEntry(null);

@@ -48,7 +48,23 @@ export interface IngredientFields {
 export type EditOp =
   | { type: "setIngredientFields"; ingredientId: string; fields: IngredientFields }
   | { type: "setStepLabel"; stepId: string; label: string }
-  | { type: "moveIngredient"; ingredientId: string; toStepId: string };
+  | { type: "moveIngredient"; ingredientId: string; toStepId: string }
+  /** Insert a new step between `afterStepId` and whatever consumed it. */
+  | { type: "addStepAfter"; afterStepId: string; label: string; newId?: string }
+  /** Splice a step out; its inputs move into its consumer, in place. */
+  | { type: "deleteStep"; stepId: string }
+  /** Split into a CHAIN: first half keeps the id, second half is new and
+   *  takes the consumer. `toSecond` names the inputs that move. */
+  | {
+      type: "splitStep";
+      stepId: string;
+      firstLabel: string;
+      secondLabel: string;
+      toSecond: string[];
+      newId?: string;
+    }
+  /** Merge a step into the step that consumes it. */
+  | { type: "mergeStepInto"; stepId: string; label?: string };
 
 /** Thrown when an op names something that is not in the recipe. That is a
  *  caller bug rather than a rejected edit, so it is loud instead of silent. */
@@ -66,6 +82,17 @@ export function sectionIndexOfId(recipe: Recipe, id: string): number {
     if (s.nodes?.some((x) => x.id === id)) return i;
   }
   return -1;
+}
+
+/** The step that consumes `id` — an ingredient or another step. Null for the
+ *  root, and for anything orphaned, which validateRecipe already rejects. */
+export function consumerOf(recipe: Recipe, id: string): Step | null {
+  const si = sectionIndexOfId(recipe, id);
+  if (si < 0) return null;
+  for (const node of recipe.sections[si].nodes ?? []) {
+    if ((node.inputs ?? []).includes(id)) return node;
+  }
+  return null;
 }
 
 /** The step that currently consumes `ingredientId`. Null when nothing does,
@@ -120,6 +147,174 @@ export function applyEdit(recipe: Recipe, op: EditOp): Recipe {
       return withSection(recipe, si, { ...section, nodes });
     }
 
+    case "addStepAfter": {
+      const si = sectionIndexOfId(recipe, op.afterStepId);
+      if (si < 0) throw new EditTargetError(`No step "${op.afterStepId}".`);
+      const section = recipe.sections[si];
+      if (!section.nodes.some((n) => n.id === op.afterStepId)) {
+        throw new EditTargetError(`"${op.afterStepId}" is not a step.`);
+      }
+      const id = op.newId ?? mintStepId(section);
+      const inserted: Step = { id, label: op.label, inputs: [op.afterStepId] };
+      // Whatever consumed the old step now consumes the new one. If nothing
+      // did, the old step was the root and the new step becomes it.
+      const consumer = consumerOf(recipe, op.afterStepId);
+      const nodes = section.nodes.map((n) =>
+        consumer && n.id === consumer.id
+          ? { ...n, inputs: (n.inputs ?? []).map((x) => (x === op.afterStepId ? id : x)) }
+          : n
+      );
+      return withSection(recipe, si, {
+        ...section,
+        nodes: [...nodes, inserted],
+        root: consumer ? section.root : id,
+      });
+    }
+
+    case "deleteStep": {
+      const si = sectionIndexOfId(recipe, op.stepId);
+      if (si < 0) throw new EditTargetError(`No step "${op.stepId}".`);
+      const section = recipe.sections[si];
+      const victim = section.nodes.find((n) => n.id === op.stepId);
+      if (!victim) throw new EditTargetError(`"${op.stepId}" is not a step.`);
+      const consumer = consumerOf(recipe, op.stepId);
+      const inputs = victim.inputs ?? [];
+
+      if (!consumer) {
+        // The root. Its inputs would each become a root of their own, and a
+        // section has exactly one — so this is only legal when it has a
+        // single input, and that input is a step (an ingredient cannot be a
+        // root). Left to validateRecipe alone this would surface as a
+        // confusing "not connected to the root" for every other branch.
+        const onlyStep =
+          inputs.length === 1 && section.nodes.some((n) => n.id === inputs[0]) ? inputs[0] : null;
+        if (!onlyStep) {
+          throw new EditTargetError(
+            `"${victim.label}" is the last step. Deleting it would leave the section without one.`
+          );
+        }
+        return withSection(recipe, si, {
+          ...section,
+          nodes: section.nodes.filter((n) => n.id !== op.stepId),
+          root: onlyStep,
+        });
+      }
+
+      // Splice the victim's inputs into its consumer, in place — input order
+      // drives row order, so appending them would reshuffle the diagram.
+      const nodes = section.nodes
+        .filter((n) => n.id !== op.stepId)
+        .map((n) =>
+          n.id === consumer.id
+            ? {
+                ...n,
+                inputs: (n.inputs ?? []).flatMap((x) => (x === op.stepId ? inputs : [x])),
+              }
+            : n
+        );
+      return withSection(recipe, si, { ...section, nodes });
+    }
+
+    case "splitStep": {
+      const si = sectionIndexOfId(recipe, op.stepId);
+      if (si < 0) throw new EditTargetError(`No step "${op.stepId}".`);
+      const section = recipe.sections[si];
+      const original = section.nodes.find((n) => n.id === op.stepId);
+      if (!original) throw new EditTargetError(`"${op.stepId}" is not a step.`);
+
+      /**
+       * WHICH HALF KEEPS THE ID IS DERIVED, NOT PREFERRED.
+       *
+       * `done` is upstream-closed: a step is only ever done when everything
+       * feeding it is done, and the whole app depends on that (see
+       * shared/sync.ts). A split has to leave a done set that still satisfies
+       * it.
+       *
+       * Give the SECOND half the old id and a done entry for the original now
+       * marks the second half done while the first — its own input — is new
+       * and undone. That is precisely the invalid state, produced silently,
+       * on every split of a completed step.
+       *
+       * Give the FIRST half the old id and the same entry marks the first
+       * half done and the second not. The first is upstream of the second, so
+       * that is an ordinary partial state and closure holds untouched. Hence:
+       * first keeps the id, second is new, and the consumer is rewired.
+       */
+      const secondId = op.newId ?? mintStepId(section);
+      const moving = new Set(op.toSecond);
+      const firstInputs = (original.inputs ?? []).filter((x) => !moving.has(x));
+      const secondInputs = [
+        op.stepId,
+        ...(original.inputs ?? []).filter((x) => moving.has(x)),
+      ];
+
+      const first: Step = { ...original, label: op.firstLabel, inputs: firstInputs };
+      const second: Step = {
+        id: secondId,
+        label: op.secondLabel,
+        inputs: secondInputs,
+        // Time and temperature describe the finishing action, so they travel
+        // with the second half rather than being duplicated onto both.
+        minutes: original.minutes ?? null,
+        tempF: original.tempF ?? null,
+      };
+      delete (first as { minutes?: number | null }).minutes;
+      delete (first as { tempF?: number | null }).tempF;
+
+      const consumer = consumerOf(recipe, op.stepId);
+      const nodes = section.nodes
+        .map((n) => (n.id === op.stepId ? first : n))
+        .map((n) =>
+          consumer && n.id === consumer.id
+            ? { ...n, inputs: (n.inputs ?? []).map((x) => (x === op.stepId ? secondId : x)) }
+            : n
+        );
+      return withSection(recipe, si, {
+        ...section,
+        nodes: [...nodes, second],
+        root: consumer ? section.root : secondId,
+      });
+    }
+
+    case "mergeStepInto": {
+      const si = sectionIndexOfId(recipe, op.stepId);
+      if (si < 0) throw new EditTargetError(`No step "${op.stepId}".`);
+      const section = recipe.sections[si];
+      const victim = section.nodes.find((n) => n.id === op.stepId);
+      if (!victim) throw new EditTargetError(`"${op.stepId}" is not a step.`);
+      const consumer = consumerOf(recipe, op.stepId);
+      if (!consumer || !section.nodes.some((n) => n.id === consumer.id)) {
+        throw new EditTargetError(
+          `"${victim.label}" is the last step, so there is nothing after it to merge into.`
+        );
+      }
+
+      /**
+       * The CONSUMER's id survives, so whatever consumes IT needs no rewrite.
+       * Its label survives by default too — the later step usually names the
+       * finished state — but the caller may pass either. Concatenating them
+       * is not offered: validateRecipe caps a label at eight words, so joined
+       * labels would routinely be rejected and a reasonable edit would
+       * surface as an error message.
+       */
+      const nodes = section.nodes
+        .filter((n) => n.id !== op.stepId)
+        .map((n) =>
+          n.id === consumer.id
+            ? {
+                ...n,
+                label: op.label ?? consumer.label,
+                inputs: (n.inputs ?? []).flatMap((x) =>
+                  x === op.stepId ? victim.inputs ?? [] : [x]
+                ),
+                minutes: consumer.minutes ?? victim.minutes ?? null,
+                tempF: consumer.tempF ?? victim.tempF ?? null,
+              }
+            : n
+        );
+      return withSection(recipe, si, { ...section, nodes });
+    }
+
     case "moveIngredient": {
       const si = sectionIndexOfId(recipe, op.ingredientId);
       if (si < 0) throw new EditTargetError(`No ingredient "${op.ingredientId}".`);
@@ -147,6 +342,21 @@ export function applyEdit(recipe: Recipe, op: EditOp): Recipe {
       return withSection(recipe, si, { ...section, nodes });
     }
   }
+}
+
+/** A short id that is unique within the section. Prefixed rather than a raw
+ *  UUID so a hand-read tree stays legible, which is the same reason prompt.ts
+ *  asks the model for section-prefixed ids. */
+function mintStepId(section: Section): string {
+  const taken = new Set([
+    ...(section.ingredients ?? []).map((i) => i.id),
+    ...(section.nodes ?? []).map((n) => n.id),
+  ]);
+  for (let i = 1; i < 10000; i++) {
+    const id = `s${i}`;
+    if (!taken.has(id)) return id;
+  }
+  throw new Error("Could not mint an unused step id.");
 }
 
 function mergeFields(ing: Ingredient, fields: IngredientFields): Ingredient {

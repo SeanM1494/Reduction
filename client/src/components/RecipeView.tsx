@@ -38,13 +38,12 @@ interface Props {
   onUpdate: (entry: Entry) => void;
   onDelete: () => void;
   /**
-   * False for the free trial recipe, which is shown from memory and has no
-   * library row to write to: App's trial branch deliberately does not POST or
-   * PATCH, because the server already parked the recipe under the trial id.
-   * Editing it would therefore change what is on screen and nothing else, and
-   * signing up would claim the *parked* copy — silently discarding every edit
-   * at the exact moment the user was promised their work was safe. Until the
-   * trial row can be patched, the honest answer is not to offer the button.
+   * Kept as a prop even though everything now sets it true: it is the one
+   * switch that turns off every write, and a future read-only case (a shared
+   * recipe someone else owns) wants exactly this. The trial recipe used to
+   * set it false, because its edits would have been discarded when signup
+   * claimed the parked copy — that is fixed: the trial row itself is now
+   * patched, so the edits are on the row the account receives.
    */
   canEdit?: boolean;
 }

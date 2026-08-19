@@ -605,6 +605,67 @@ export function saveLibrary(entries: Entry[]): void {
 }
 
 /**
+ * Saves the browser's own trial recipe — the one row a signed-out visitor
+ * may edit (see server/routes/trial.ts).
+ *
+ * Serialized and debounced like the library writes, and reporting through the
+ * same onSyncFailure channel, because the failure modes are the same. It does
+ * NOT go through saveLibrary: a trial recipe has no library row, no version
+ * token and no second device, so the whole conflict apparatus would be
+ * machinery around a case that cannot arise.
+ *
+ * The edits survive signup without anything special happening at claim time:
+ * claimTrialRecipe moves this very row into the account.
+ */
+let trialInFlight: Promise<void> | null = null;
+let trialPending: Entry | null = null;
+
+export function saveTrialRecipe(entry: Entry): void {
+  trialPending = entry;
+  if (trialInFlight) return;
+  const run = async (): Promise<void> => {
+    while (trialPending) {
+      const next = trialPending;
+      trialPending = null;
+      try {
+        const res = await fetch("/api/trial/recipe", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            recipe: next.recipe,
+            done: next.done,
+            servings: next.servings,
+            mode: next.mode,
+            timer: next.timer,
+            cooked: next.cooked ?? [],
+            rating: next.rating ?? null,
+          }),
+        });
+        const body = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          reportSyncFailure({
+            id: next.id,
+            kind: "update",
+            message: body.error || `Could not save that change (${res.status}).`,
+            details: Array.isArray(body.details) ? body.details : undefined,
+            accepted: null,
+          });
+        }
+      } catch (e) {
+        reportSyncFailure({
+          id: next.id,
+          kind: "update",
+          message: (e as Error).message,
+          accepted: null,
+        });
+      }
+    }
+    trialInFlight = null;
+  };
+  trialInFlight = run();
+}
+
+/**
  * Re-reads the library and reconciles it with local state — the cheap move
  * that makes most conflicts never exist. Called on window focus: the laptop
  * that comes back to the foreground learns about tonight's phone cooking

@@ -10,8 +10,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { validateRecipe, type Recipe } from "./layout";
+import { reconcileDone } from "./progress";
 import {
   applyEdit,
+  consumerOf,
   EditTargetError,
   noTargetsReason,
   parentStepOf,
@@ -297,4 +299,212 @@ test("a parsed amount keeps the recipe valid", () => {
     });
     assert.deepEqual(validateRecipe(after), [], `"${typed}" made the recipe invalid`);
   }
+});
+
+// ------------------------------------------------- add / delete / split / merge --
+
+const stepIds = (r: Recipe) => r.sections[0].nodes.map((n) => n.id);
+const inputsOf = (r: Recipe, id: string) =>
+  r.sections[0].nodes.find((n) => n.id === id)!.inputs;
+
+test("addStepAfter inserts between a step and its consumer", () => {
+  const after = applyEdit(RECIPE(), {
+    type: "addStepAfter",
+    afterStepId: "d2",
+    label: "rest 10 min",
+    newId: "new1",
+  });
+  assert.deepEqual(inputsOf(after, "new1"), ["d2"]);
+  assert.ok(inputsOf(after, "d4").includes("new1"), "d4 consumes the new step");
+  assert.ok(!inputsOf(after, "d4").includes("d2"), "and no longer d2 directly");
+  assert.deepEqual(validateRecipe(after), []);
+});
+
+test("adding after the root makes the new step the root", () => {
+  const after = applyEdit(RECIPE(), {
+    type: "addStepAfter",
+    afterStepId: "d4",
+    label: "serve",
+    newId: "new1",
+  });
+  assert.equal(after.sections[0].root, "new1");
+  assert.deepEqual(inputsOf(after, "new1"), ["d4"]);
+  assert.deepEqual(validateRecipe(after), []);
+});
+
+test("deleteStep splices its inputs into the consumer, in place", () => {
+  // d2 = [d1, lime, salt] feeding d4 = [d2, d3]. Deleting d2 should put its
+  // inputs exactly where d2 sat, because input order drives row order.
+  const after = applyEdit(RECIPE(), { type: "deleteStep", stepId: "d2" });
+  assert.deepEqual(inputsOf(after, "d4"), ["d1", "lime", "salt", "d3"]);
+  assert.ok(!stepIds(after).includes("d2"));
+  assert.deepEqual(validateRecipe(after), []);
+});
+
+test("deleting the root is refused when it has more than one input", () => {
+  assert.throws(
+    () => applyEdit(RECIPE(), { type: "deleteStep", stepId: "d4" }),
+    /last step/
+  );
+});
+
+test("deleting a root with a single step input promotes that input", () => {
+  const r = applyEdit(RECIPE(), {
+    type: "addStepAfter",
+    afterStepId: "d4",
+    label: "serve",
+    newId: "tip",
+  });
+  const after = applyEdit(r, { type: "deleteStep", stepId: "tip" });
+  assert.equal(after.sections[0].root, "d4");
+  assert.deepEqual(validateRecipe(after), []);
+});
+
+test("splitStep chains: first keeps the id, second is new and takes the consumer", () => {
+  const after = applyEdit(RECIPE(), {
+    type: "splitStep",
+    stepId: "d2",
+    firstLabel: "mash",
+    secondLabel: "season",
+    toSecond: ["salt"],
+    newId: "d2b",
+  });
+  assert.deepEqual(inputsOf(after, "d2"), ["d1", "lime"], "first half keeps the rest");
+  assert.deepEqual(inputsOf(after, "d2b"), ["d2", "salt"], "second consumes the first");
+  assert.ok(inputsOf(after, "d4").includes("d2b"), "the consumer now takes the second half");
+  assert.equal(consumerOf(after, "d2")?.id, "d2b");
+  assert.deepEqual(validateRecipe(after), []);
+});
+
+test("splitting a DONE step leaves a done set that is still upstream-closed", () => {
+  // The derivation behind the id choice. Everything up to and including d2 is
+  // done; splitting d2 must not produce a done step whose input is undone.
+  const before = RECIPE();
+  const done = ["avocados", "d1", "lime", "salt", "d2"];
+  const after = applyEdit(before, {
+    type: "splitStep",
+    stepId: "d2",
+    firstLabel: "mash",
+    secondLabel: "season",
+    toSecond: ["salt"],
+    newId: "d2b",
+  });
+  const kept = new Set(reconcileDone(after, done).done);
+  assert.ok(kept.has("d2"), "the first half stays done");
+  assert.ok(!kept.has("d2b"), "the new second half is not");
+  for (const n of after.sections[0].nodes) {
+    if (!kept.has(n.id)) continue;
+    for (const i of n.inputs ?? []) {
+      assert.ok(kept.has(i), `closure broken: ${n.id} is done but its input ${i} is not`);
+    }
+  }
+});
+
+test("splitting the root makes the second half the root", () => {
+  const after = applyEdit(RECIPE(), {
+    type: "splitStep",
+    stepId: "d4",
+    firstLabel: "fold",
+    secondLabel: "rest",
+    toSecond: [],
+    newId: "d4b",
+  });
+  assert.equal(after.sections[0].root, "d4b");
+  assert.deepEqual(inputsOf(after, "d4b"), ["d4"]);
+  assert.deepEqual(validateRecipe(after), []);
+});
+
+test("split with every input left on the first half is still valid", () => {
+  // The sheet's default. The second half is never input-less because it
+  // always consumes the first.
+  const after = applyEdit(RECIPE(), {
+    type: "splitStep",
+    stepId: "d2",
+    firstLabel: "mash",
+    secondLabel: "then",
+    toSecond: [],
+    newId: "d2b",
+  });
+  assert.deepEqual(inputsOf(after, "d2b"), ["d2"]);
+  assert.deepEqual(validateRecipe(after), []);
+});
+
+test("moving EVERY input to the second half empties the first, and is caught", () => {
+  const after = applyEdit(RECIPE(), {
+    type: "splitStep",
+    stepId: "d2",
+    firstLabel: "mash",
+    secondLabel: "then",
+    toSecond: ["d1", "lime", "salt"],
+    newId: "d2b",
+  });
+  assert.ok(validateRecipe(after).some((e) => /has no inputs/.test(e)));
+});
+
+test("mergeStepInto folds a step into its consumer, keeping the consumer's id", () => {
+  const after = applyEdit(RECIPE(), { type: "mergeStepInto", stepId: "d1" });
+  assert.ok(!stepIds(after).includes("d1"));
+  assert.deepEqual(inputsOf(after, "d2"), ["avocados", "lime", "salt"], "spliced in place");
+  assert.deepEqual(validateRecipe(after), []);
+});
+
+test("merge keeps the consumer's label by default, or the one given", () => {
+  const dflt = applyEdit(RECIPE(), { type: "mergeStepInto", stepId: "d1" });
+  assert.equal(dflt.sections[0].nodes.find((n) => n.id === "d2")!.label, "mash");
+  const chosen = applyEdit(RECIPE(), {
+    type: "mergeStepInto",
+    stepId: "d1",
+    label: "halve and scoop",
+  });
+  assert.equal(chosen.sections[0].nodes.find((n) => n.id === "d2")!.label, "halve and scoop");
+});
+
+test("merging the root is refused — there is nothing after it", () => {
+  assert.throws(
+    () => applyEdit(RECIPE(), { type: "mergeStepInto", stepId: "d4" }),
+    /nothing after it/
+  );
+});
+
+test("split then merge returns the tree to its original shape", () => {
+  const before = RECIPE();
+  const split = applyEdit(before, {
+    type: "splitStep",
+    stepId: "d2",
+    firstLabel: "mash",
+    secondLabel: "season",
+    toSecond: ["salt"],
+    newId: "d2b",
+  });
+  const back = applyEdit(split, { type: "mergeStepInto", stepId: "d2", label: "mash" });
+  const merged = back.sections[0].nodes.find((n) => n.id === "d2b")!;
+  assert.deepEqual(merged.inputs, ["d1", "lime", "salt"], "inputs are restored in order");
+  assert.equal(merged.label, "mash");
+  assert.deepEqual(validateRecipe(back), []);
+});
+
+test("the new ops never mutate the recipe they are given", () => {
+  const before = RECIPE();
+  const snapshot = JSON.stringify(before);
+  applyEdit(before, { type: "addStepAfter", afterStepId: "d2", label: "x" });
+  applyEdit(before, { type: "deleteStep", stepId: "d2" });
+  applyEdit(before, {
+    type: "splitStep",
+    stepId: "d2",
+    firstLabel: "a",
+    secondLabel: "b",
+    toSecond: ["salt"],
+  });
+  applyEdit(before, { type: "mergeStepInto", stepId: "d1" });
+  assert.equal(JSON.stringify(before), snapshot);
+});
+
+test("minted step ids do not collide with existing ones", () => {
+  let r = RECIPE();
+  for (let i = 0; i < 5; i++) {
+    r = applyEdit(r, { type: "addStepAfter", afterStepId: "d4", label: `step ${i}` });
+  }
+  const ids = [...r.sections[0].ingredients.map((x) => x.id), ...stepIds(r)];
+  assert.equal(new Set(ids).size, ids.length);
+  assert.deepEqual(validateRecipe(r), []);
 });
