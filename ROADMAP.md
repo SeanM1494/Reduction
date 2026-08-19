@@ -881,8 +881,28 @@ and the text change carries the whole signal.
 
 ## Still open from earlier work
 
-- **The servings stepper does not exist, and scaling is unreachable.**
-  `entry.servings` is plumbed end to end — `storage.ts` reads and writes it,
+- ~~**The servings stepper does not exist, and scaling is unreachable.**~~
+  **Done.** `client/src/components/ServingsRow.tsx`, above the first section
+  rather than in the badge row — it is the control that changes every number
+  in the tables, where the rating and the meal type are standing facts about
+  the recipe. It steps by `base/8` rounded rather than by 1, because a
+  24-cookie batch stepped by 1 takes twelve taps to halve. `yieldText` shares
+  its second line: the source's words at scale 1, the multiplier once scaled,
+  never both — a yield line saying "makes 24 cookies" directly above doubled
+  amounts is simply false. Correcting `recipe.servings` clears
+  `entry.servings`, as decided below. The old CSS was reused with the buttons
+  taken from 32x30 to 44px.
+
+  **Two things this surfaced, neither fixed:** `formatQty` renders a scaled
+  amount as `2.81 cup` when no vulgar fraction is within its 0.02 snap — only
+  visible now that scaling is reachable, and rounding cooking amounts is a
+  judgement call rather than a tidy-up. And correcting `recipe.servings`
+  leaves a `yieldText` that may now contradict it; nothing can tell, because
+  yield text is free prose, so Yield sits directly under Serves in the recipe
+  sheet instead.
+
+- **Historic detail, kept for the reasoning.**
+  `entry.servings` was plumbed end to end — `storage.ts` reads and writes it,
   the PATCH carries it, `RecipeView` computes `scale` from it and `Diagram`
   renders every amount through `formatAmount(ing, scale)`. Nothing renders a
   control. `.rd-servings`, `.rd-stepper`, `.rd-step-btn` and `.rd-step-val`
@@ -906,7 +926,13 @@ and the text change carries the whole signal.
   lands, clear `entry.servings` on a `recipe.servings` correction — the
   target was expressed against a base that no longer means what it meant.
 
-- **`yieldText` is extracted, stored, and rendered nowhere.** `fetchSource`
+- ~~**`yieldText` is extracted, stored, and rendered nowhere.**~~ **Done** —
+  it is the second line of the servings block above, shown at scale 1 and
+  replaced by the multiplier once scaled. The decision it was waiting for
+  turned out to be "show it", and where fell out of the scaling question
+  rather than being chosen: the two are the same fact, so they are one slot.
+
+- **Historic detail on `yieldText`.** `fetchSource`
   pulls it from JSON-LD, `prompt.ts` asks for it, `structureRecipe` keeps it,
   and no component in `client/src` reads it. It is in the recipe sheet as of
   round three so that the editor has parity with the JSON that used to be

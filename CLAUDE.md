@@ -549,15 +549,23 @@ and points at "delete the step" — which splices its inputs into its consumer.
 One tap removing two things is a destructive reading of "delete", and the
 un-cascading version composes: the two-tap path reaches the same tree.
 
+**The servings stepper writes `entry.servings` ONLY**, and lives above the
+first section rather than in the badge row — it is the control that changes
+every number in the tables, not a standing fact about the recipe like the
+rating and the meal type. It steps by `base/8` rounded, not by 1: a serves-4
+dinner still steps by 1, but a 24-cookie batch stepped by 1 takes twelve taps
+to halve and produces multipliers no kitchen can measure.
+
 **`recipe.servings` and `entry.servings` are different numbers and one
 control must never write both.** `recipe.servings` is what the recipe makes
 (a correction, edited in the recipe sheet); `entry.servings` is what you are
 cooking tonight; and `scale` — which every amount in the diagram is rendered
 through — is the second divided by the first. Wire one stepper to both and
 `scale` is pinned at exactly 1 for ever: scaling stops working, every amount
-still looks right, and nothing reports it. Note that **`entry.servings` has no
-control at all today** — it is plumbed end to end and unreachable, with
-`.rd-servings`/`.rd-stepper` sitting in `index.css` unused. See ROADMAP.
+still looks right, and nothing reports it. Correcting `recipe.servings` clears `entry.servings` in the same update
+(`applyOp` in RecipeView): "8" expressed against a base of 4 meant double, and
+against a corrected base of 6 it silently means 1.33x, moving every amount on
+the page because of an edit to a different field.
 
 **`minutes` and `tempF` are the only numbers in a stored recipe that
 `validateRecipe` has no opinion on**, and they are now typed by hand. Render

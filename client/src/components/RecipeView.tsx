@@ -25,6 +25,7 @@ import RecipeJsonEditor from "./RecipeJsonEditor";
 import EditSheet, { type EditTarget } from "./EditSheet";
 import MealTypeSheet from "./MealTypeSheet";
 import RatingControl from "./RatingControl";
+import ServingsRow from "./ServingsRow";
 import { MEAL_TYPE_LABELS, sanitizeMealTypes } from "../../../shared/mealTypes";
 import { applyEdit, type EditOp } from "../../../shared/edits";
 import { reconcileDone } from "../../../shared/progress";
@@ -187,7 +188,20 @@ export default function RecipeView({
       setUndoStack((prev) =>
         [...prev, { recipe, done: entry.done ?? [] }].slice(-UNDO_LIMIT)
       );
-      onUpdate({ ...entry, recipe: next, done: reconciled.done });
+      // Correcting what the recipe MAKES invalidates what you told it you
+      // were making: "8" was expressed against a base of 4 and meant double,
+      // and against a corrected base of 6 it silently means 1.33x instead —
+      // every amount on the page moving because of an edit to a different
+      // field. Clearing it means the correction lands and the scale resets to
+      // the recipe, which is the only reading that is not a surprise.
+      const clearsServings =
+        op.type === "setRecipeFields" && "servings" in op.fields;
+      onUpdate({
+        ...entry,
+        recipe: next,
+        done: reconciled.done,
+        ...(clearsServings ? { servings: null } : {}),
+      });
     },
     [recipe, entry, onUpdate]
   );
@@ -629,6 +643,20 @@ export default function RecipeView({
                 </button>
               </div>
             ) : null}
+
+            {/* Above the tables because it is the control that changes every
+                number in them, and NOT in the badge row: the rating and the
+                meal type are standing facts about the recipe, while this is
+                about tonight. At 320px that row is already 247px of 320 with
+                the two of them, so a 128px stepper would have wrapped it
+                anyway — but the reason it lives here is the kind of thing it
+                is, not the width. */}
+            <ServingsRow
+              base={recipe.servings}
+              entryServings={entry.servings ?? null}
+              yieldText={recipe.yieldText}
+              onChange={(servings) => onUpdate({ ...entry, servings })}
+            />
 
             {recipe.sections.map((s, i) => (
               <Diagram
