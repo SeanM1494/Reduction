@@ -862,8 +862,10 @@ tree failing `validateRecipe` is sent back to be repaired, roughly doubling
 the wait, and a sequence that ran out or restarted would pick exactly that
 moment to look broken.
 
-**`STAGE_MS` is a placeholder at 2200ms** and is deliberately one named
-constant. It was set before `extraction_events` had a single production row.
+**`STAGE_MS` is a placeholder at 3000ms** and is deliberately one named
+constant. It was set before `extraction_events` had a single production row,
+and raised from 2200 after watching it run — 2.2s read rushed, which is the
+only evidence there is so far and is not the kind `ms` will supply.
 Retune it from the real distribution — the query is in the file, and the aim
 is for the last stage to land near p50 so a typical wait shows the whole arc
 and a slow one rests on the final message. Getting it wrong is bounded: too

@@ -53,10 +53,16 @@ export const STAGES = [
 /**
  * PLACEHOLDER — pending real durations.
  *
- * This was set before `extraction_events` had any production rows, so it is a
- * guess bounded by the two failure modes: below about 1.2s the sequence looks
- * frantic, and above about 4s a normal extraction only ever shows two of the
- * five. 2.2s puts the last message up at 8.8s.
+ * Set before `extraction_events` had a single production row, so it is bounded
+ * by the two failure modes rather than measured: too fast and the sequence
+ * reads frantic, too slow and a normal extraction only ever shows two of the
+ * five. 3s puts the last message up at 12s.
+ *
+ * It started at 2200 and was raised after watching it — 2.2s read rushed in
+ * practice, which is the one piece of evidence there is so far and is not the
+ * kind `ms` will give. Keep it when the real numbers arrive: if p50 suggests
+ * something under about 2.5s, the phrases are competing with the wait rather
+ * than filling it, and the floor should win.
  *
  * Retune it from the real distribution once there is a few days of data:
  *
@@ -70,7 +76,7 @@ export const STAGES = [
  * Aim for the last stage to land around p50, so a typical wait shows the
  * whole arc and a slow one rests on the final message: STAGE_MS = p50 / 4.
  */
-export const STAGE_MS = 2200;
+export const STAGE_MS = 3000;
 
 /**
  * Which message to show. Null when nothing is running.
