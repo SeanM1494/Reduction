@@ -549,6 +549,16 @@ and points at "delete the step" — which splices its inputs into its consumer.
 One tap removing two things is a destructive reading of "delete", and the
 un-cascading version composes: the two-tap path reaches the same tree.
 
+**The recipe screen has ~240px of headroom left on an iPhone SE, and that is
+the budget for anything new above the diagram.** Measured: the bar (65px),
+the rating and meal-type row (44px + margin) and the servings block (81px)
+put the first table at **y=327 of 568**, and the table itself is ~181px, so it
+ends at 508. That is most of the room gone. Anything else wanting to sit above
+the diagram — a note, a timer, a second control — has to either replace
+something or go somewhere else, and the honest options are the overflow menu,
+the edit bar (which exists only in edit mode and already absorbed a button at
+zero cost), or below the diagram. Measure before adding, and say the number.
+
 **The servings stepper writes `entry.servings` ONLY**, and lives above the
 first section rather than in the badge row — it is the control that changes
 every number in the tables, not a standing fact about the recipe like the

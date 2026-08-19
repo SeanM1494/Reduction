@@ -893,13 +893,46 @@ and the text change carries the whole signal.
   `entry.servings`, as decided below. The old CSS was reused with the buttons
   taken from 32x30 to 44px.
 
-  **Two things this surfaced, neither fixed:** `formatQty` renders a scaled
-  amount as `2.81 cup` when no vulgar fraction is within its 0.02 snap — only
-  visible now that scaling is reachable, and rounding cooking amounts is a
-  judgement call rather than a tidy-up. And correcting `recipe.servings`
-  leaves a `yieldText` that may now contradict it; nothing can tell, because
-  yield text is free prose, so Yield sits directly under Serves in the recipe
-  sheet instead.
+  **Two things this surfaced.** Scaled amounts render as `2.81 cup` — its own
+  entry below. And correcting `recipe.servings` leaves a `yieldText` that may
+  now contradict it; **settled as leave-alone**, because yield text is free
+  prose ("makes 2 dozen", "one 9-inch pie", "serves 4-6") and clearing it on a
+  guess destroys the source's own words. Yield sits directly under Serves in
+  the recipe sheet, so anyone correcting one is looking at the other.
+
+- **Scaled amounts round to numbers no kitchen can measure.** Doubling a
+  recipe turns `2¼ cup` into `2.81 cup`. Nobody owns a 2.81-cup measure, and
+  it is the first thing anyone sees the first time they use scaling — it
+  undercuts the feature at the exact moment it is being judged.
+
+  Pre-existing in `formatQty` (`shared/amounts.ts`), which snaps to a vulgar
+  fraction only when one is within 0.02 of the fractional part and otherwise
+  falls back to `toFixed(2)`. Invisible until now because `scale` was always
+  exactly 1 and every amount rendered as extracted.
+
+  **Not a patch — the right answer differs by unit**, which is why the fix is
+  a design pass rather than a tolerance tweak. Real recipes round to what a
+  measure can express: teaspoons and tablespoons to eighths, cups to quarters
+  (an eighth-cup at a push), grams to fives or tens, pounds and ounces to
+  quarters, countable things to whole numbers. `formatQty` currently takes no
+  unit at all, so it cannot do any of this — the signature has to change, or
+  the rounding has to move into `formatAmount`, which does have the unit.
+
+  **Two constraints for whoever builds it.**
+
+  1. **Scale 1 must still render exactly what was extracted.** A recipe nobody
+     has scaled must not silently have its amounts rewritten on screen; the
+     rounding is a consequence of scaling, not a house style.
+  2. **Check the amount round-trip.** The audit that closed the JSON hatch
+     measured drift through `formatAmount` -> the edit box -> `parseAmount` and
+     bounded it at 0.02 of a unit. Unit-aware rounding would widen that — a
+     stored 2.8125 shown as `2¾` re-parses as 2.75, four times the old bound.
+     It happens that `EditSheet` renders the amount box with
+     `formatAmount({ ...ing, unit: null })`, so unit-keyed rounding would not
+     reach it — but that is currently an accident, and the split it implies is
+     probably the right design made explicit: **round for the diagram, stay
+     exact in the editor.** Say so in code rather than relying on the nulled
+     unit.
 
 - **Historic detail, kept for the reasoning.**
   `entry.servings` was plumbed end to end — `storage.ts` reads and writes it,
