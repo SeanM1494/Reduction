@@ -110,11 +110,28 @@ export const recipes = pgTable(
   ]
 );
 
-export const extractionCache = pgTable("extraction_cache", {
-  hash: text("hash").primaryKey(),
-  recipe: jsonb("recipe").$type<Recipe>().notNull(),
-  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
-});
+export const extractionCache = pgTable(
+  "extraction_cache",
+  {
+    /** sha256("url:" + the raw string). THE identity — unchanged since the
+     *  cache was written, so every stored row stays addressable. */
+    hash: text("hash").primaryKey(),
+    /**
+     * sha256("urlkey:" + the normalised string), or null for a row written
+     * before this column existed and for anything that would not parse.
+     *
+     * An ALIAS, not a second identity: `cacheGet` tries `hash` first and only
+     * then this, so dropping the alias lookup would be a one-line change with
+     * nothing to migrate. See server/lib/urlKey.ts for why that matters —
+     * it is what makes normalising safe to ship ahead of corrections
+     * propagating between users.
+     */
+    urlKey: text("url_key"),
+    recipe: jsonb("recipe").$type<Recipe>().notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
+  },
+  (table) => [index("extraction_cache_url_key_idx").on(table.urlKey)]
+);
 
 // ---------------------------------------------------------------- accounts --
 

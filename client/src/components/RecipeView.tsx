@@ -28,6 +28,7 @@ import RatingControl from "./RatingControl";
 import { MEAL_TYPE_LABELS, sanitizeMealTypes } from "../../../shared/mealTypes";
 import { applyEdit, type EditOp } from "../../../shared/edits";
 import { reconcileDone } from "../../../shared/progress";
+import { reextract } from "../lib/api";
 import { lastAcceptedEntry, onSyncFailure } from "../lib/storage";
 import { useIngredientDrag } from "../lib/useIngredientDrag";
 import { saveRecipeAsImage, slugForFile } from "../lib/exportImage";
@@ -93,6 +94,8 @@ export default function RecipeView({
    */
   const [editing, setEditing] = useState(false);
   const [sheetFor, setSheetFor] = useState<EditTarget | null>(null);
+  const [confirmReread, setConfirmReread] = useState(false);
+  const [rereading, setRereading] = useState(false);
   const [mealSheetOpen, setMealSheetOpen] = useState(false);
   /**
    * Undo is multi-level because it costs almost nothing to make it so: every
@@ -462,6 +465,25 @@ export default function RecipeView({
               >
                 Clear progress
               </button>
+              {/* Re-reading the source page, which replaces what is cached
+                  for that URL for everyone, not only here. Offered only when
+                  there is a URL to re-read and an account to be answerable
+                  for it — the route refuses otherwise and caps it per day,
+                  because every call is an extraction billed against a
+                  subscription already paid for. Confirmed rather than
+                  immediate: it discards every edit made to this recipe. */}
+              {canEdit && recipe.sourceUrl ? (
+                <button
+                  className="rfx-menu-item"
+                  role="menuitem"
+                  onClick={() => {
+                    setMenuOpen(false);
+                    setConfirmReread(true);
+                  }}
+                >
+                  Read the page again
+                </button>
+              ) : null}
               {/* The escape hatch for everything the visual editor cannot
                   express yet — adding, deleting, splitting or merging steps,
                   or a root that came out wrong. Those are the repairs that
@@ -677,6 +699,59 @@ export default function RecipeView({
             }
             onClose={() => setMealSheetOpen(false)}
           />
+        ) : null}
+
+        {confirmReread ? (
+          <div
+            className="rd-sheet-scrim"
+            onPointerDown={(e) => e.target === e.currentTarget && setConfirmReread(false)}
+          >
+            <div className="rd-sheet" role="dialog" aria-modal="true" aria-label="Read the page again">
+              <div className="rd-sheet-grab" aria-hidden="true" />
+              <div className="rd-sheet-head">
+                <h2 className="rd-sheet-title">Read the page again?</h2>
+                <button className="rd-btn" onClick={() => setConfirmReread(false)}>
+                  Cancel
+                </button>
+              </div>
+              <div className="rd-field">
+                <p className="rd-sheet-blocked">
+                  This reads {recipe.source || "the source page"} from scratch and replaces
+                  this diagram with what comes back. Any changes you have made here are
+                  lost, and there is no undo for it.
+                </p>
+                <div className="rd-step-actions">
+                  <button
+                    className="rd-btn rd-step-danger"
+                    disabled={rereading}
+                    onClick={async () => {
+                      setRereading(true);
+                      setSyncError(null);
+                      try {
+                        const { recipe: fresh } = await reextract(recipe.sourceUrl!);
+                        onUpdate({
+                          ...entry,
+                          recipe: fresh,
+                          done: reconcileDone(fresh, entry.done ?? []).done,
+                        });
+                        setConfirmReread(false);
+                      } catch (e) {
+                        setSyncError((e as Error).message);
+                        setConfirmReread(false);
+                      } finally {
+                        setRereading(false);
+                      }
+                    }}
+                  >
+                    {rereading ? "Reading\u2026" : "Read it again"}
+                  </button>
+                  <button className="rd-btn" onClick={() => setConfirmReread(false)}>
+                    Keep this one
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
         ) : null}
 
         {editing && sheetFor ? (

@@ -1991,6 +1991,17 @@ button.rd-section-head:focus-visible {
 .rd-field-error > .rd-link-warn + .rd-link-warn,
 .rd-field-error > ul + .rd-link-warn { margin-top: 6px; }
 
+/* The cached-result badge. Sits inline after the title so it wraps with it
+ * rather than reserving a column that is empty on most rows. */
+.rd-search-instant {
+  display: inline-block; margin-left: 8px; vertical-align: middle;
+  font-family: "Space Mono", ui-monospace, monospace;
+  font-size: 10px; letter-spacing: .08em; text-transform: uppercase;
+  padding: 2px 7px; border-radius: 999px;
+  color: var(--cool-ink); background: var(--cool-bg);
+  border: 1px solid var(--cool-line);
+}
+
 .rd-field-anchor { position: relative; }
 .rd-field-error {
   position: absolute; z-index: 3; pointer-events: none;

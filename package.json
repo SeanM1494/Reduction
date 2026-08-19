@@ -11,7 +11,8 @@
     "start": "NODE_ENV=production tsx server/index.ts",
     "check": "tsc --noEmit",
     "test": "node --import tsx --test '{server,shared}/**/*.test.ts'",
-    "db:push": "drizzle-kit push"
+    "db:push": "drizzle-kit push",
+    "db:backfill-url-key": "tsx server/scripts/backfillUrlKey.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.65.0",

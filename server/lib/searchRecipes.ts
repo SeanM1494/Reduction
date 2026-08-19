@@ -27,6 +27,9 @@ export interface SearchResult {
   url: string;
   site: string;
   note: string;
+  /** Set by the route, not by the model: true when a tree for this URL is
+   *  already in extraction_cache, so opening it costs no API call. */
+  cached?: boolean;
 }
 
 function textFrom(msg: Anthropic.Message): string {

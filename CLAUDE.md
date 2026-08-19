@@ -28,18 +28,21 @@ them is the whole point:
 
 | result | meaning |
 |---|---|
-| ***n* pass, 16 skipped** | no `DATABASE_URL`, or nothing listening. Fine. |
-| ***n*+16 pass, 0 skipped** | a database with a current schema. This is the real gate. |
+| ***n* pass, 23 skipped** | no `DATABASE_URL`, or nothing listening. Fine. |
+| ***n*+23 pass, 0 skipped** | a database with a current schema. This is the real gate. |
 | **failures naming a missing table** | a reachable database whose schema is behind `shared/schema.ts`. Run `npm run db:push`. |
 
-The total grows as suites are added — pin your expectation to the **16
-skipped**, not the pass count (an earlier version of this table hard-coded
-23/39 and went stale within a week). The 16 are the two claim suites —
-`claim.db.test.ts` (the anonymous library) and `trial.db.test.ts` (the free
-extraction). Both are transactional guarantees: all-or-nothing rollback,
-idempotent repeats, never taking another user's rows. **The full suite — 75
-tests at the time of writing — has been run against a real Postgres and
-passes 75/0.**
+The total grows as suites are added — pin your expectation to the **skip
+count**, not the pass count (an earlier version of this table hard-coded
+23/39 and went stale within a week, so treat the number above as needing an
+edit whenever a database-backed suite is added). The 23 are three suites:
+`claim.db.test.ts` (the anonymous library), `trial.db.test.ts` (the free
+extraction) and `cache.db.test.ts` (the URL alias and the "Instant" badge).
+The first two are transactional guarantees — all-or-nothing rollback,
+idempotent repeats, never taking another user's rows. The third is a promise
+about money and correctness: that a badged result really is free, and that a
+normalised URL never serves a different page. **The full suite — 174 tests at
+the time of writing — has been run against a real Postgres and passes 174/0.**
 
 **A skip must only ever mean "there is no database".** It used to be able to
 mean "there is a database but it is missing the table I was about to test",
@@ -374,18 +377,49 @@ touch a name, route it through `linkConsequence` and show the result before
 the commit. It is a warning and not a refusal on purpose: breaking the link is
 sometimes the intent.
 
-## The URL cache has no normalisation
+## The URL cache: two keys, and one of them is an alias
 
-`extraction_cache` is keyed on `sha256("url:" + the raw string)`. A trailing
-slash, a `utm_` parameter, `http` vs `https` or a `#fragment` is a different
-key and pays for a fresh extraction — which is also why the same link can come
-back as two different trees.
+**This app is paid — one free recipe, then an account, then a subscription —
+and the user never bears the API cost.** That single fact decides more than it
+looks like it should, so it is worth carrying into any change here: a cache
+hit is margin, a cache miss is margin burnt on a page somebody already paid to
+read, and a call the *user* triggers is the user spending money on your
+behalf. See ROADMAP's "The business model" section before arguing about
+whether something is fair to charge for — the question is whether it converts,
+not whether it is proportionate.
 
-**This is deliberate and the sequencing is decided — see ROADMAP #3.** More
-cache hits also make a bad parse stickier, since the first parse of a URL is
-what everyone gets for the 30-day TTL. So a correction has to be able to
-replace the cached tree *first*; normalising only after that turns it from a
-trade into a tidy-up. Do not normalise as a drive-by improvement.
+`extraction_cache` has **two** keys per row:
+
+- `hash` — `sha256("url:" + the raw string)`. **The identity.** Unchanged
+  since the cache was written, so every stored row stays addressable.
+- `url_key` — `sha256("urlkey:" + normalizeUrl(raw))`, indexed. **An alias.**
+
+`cacheGetUrl` tries the exact key first and only then the alias, and that
+order is the safety property, not a micro-optimisation: it means turning
+normalisation off is deleting one lookup, with nothing to migrate and no row
+made unreachable. Keep it that way. If you find yourself writing the
+normalised key into `hash`, stop — you have just made every fold permanent and
+irreversible.
+
+**The parameter rule is a DENY-LIST and it must stay one.** Query parameters
+are kept unless they are on a list of known-inert tracking tokens. An
+allow-list would drop every parameter it had not heard of, which is the
+default that serves page 1 to someone who asked for `?page=2`, or a 4-serving
+tree to someone who asked for `?servings=8`. `server/lib/urlKey.test.ts` has a
+"must NOT fold" block; it is the specification, and a change that makes it
+fail is a change that serves the wrong recipe. `ref`, `source` and `campaign`
+are deliberately not folded despite reading like trackers.
+
+**Several raw URLs sharing one alias is normal**, so the alias lookup orders
+by `created_at DESC` — a page re-read through `/reextract` should win over the
+older tree it was re-read to replace.
+
+**Corrections still do not propagate between users**, and that is what the
+re-extract hatch bounds: `POST /api/recipes/reextract` re-runs the extractor
+and evicts the cached row, signed in only and capped per user per day, because
+it is the one route where a user can spend the API budget on purpose. It does
+not propagate anyone's *edits* — see ROADMAP #3 for why that still needs
+several independent people making the same fix.
 
 ## Sync: the server detects, the client resolves
 

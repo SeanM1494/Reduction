@@ -177,7 +177,18 @@ export default function SearchBar({ library, onOpen, onPickWebResult }: Props) {
                       onClick={() => pickWebResult(r)}
                       disabled={isLoading}
                     >
-                      <span className="rd-search-row-title">{r.title}</span>
+                      <span className="rd-search-row-title">
+                        {r.title}
+                        {/* "Instant" says what the user gets, not what
+                            happened behind it — nobody needs to know that
+                            somebody else read this page first, and the
+                            promise the badge makes is the one that matters:
+                            tapping it opens straight away and takes nothing
+                            from the free allowance. */}
+                        {r.cached ? (
+                          <span className="rd-search-instant">Instant</span>
+                        ) : null}
+                      </span>
                       <span className="rd-search-row-meta">{r.site}</span>
                       {r.note ? (
                         <span className="rd-search-web-note">{r.note}</span>
@@ -185,7 +196,7 @@ export default function SearchBar({ library, onOpen, onPickWebResult }: Props) {
                       {isLoading ? (
                         <span className="rd-search-web-status">
                           <span className="rd-spinner" aria-hidden="true" />
-                          {"Reading this recipe\u2026"}
+                          {r.cached ? "Opening\u2026" : "Reading this recipe\u2026"}
                         </span>
                       ) : null}
                       {cardError ? (

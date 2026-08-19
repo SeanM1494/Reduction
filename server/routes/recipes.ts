@@ -12,7 +12,7 @@
 
 import { Router, type Request, type Response, type NextFunction } from "express";
 import crypto from "node:crypto";
-import { eq, lt } from "drizzle-orm";
+import { desc, eq, inArray, or } from "drizzle-orm";
 import { getDb } from "../db";
 import { extractionCache } from "../../shared/schema";
 import { fetchSource } from "../lib/fetchSource";
@@ -21,7 +21,8 @@ import { structureRecipeFromUrl } from "../lib/fetchViaClaude";
 import { searchRecipes, type SearchResult } from "../lib/searchRecipes";
 import type { Recipe } from "../../shared/layout";
 import { userIdOf } from "../middleware/session";
-import { ensureTrialId, refundTrial, spendTrial, storeTrialRecipe } from "../lib/trial";
+import { ensureTrialId, parkTrialRecipe, refundTrial, spendTrial, storeTrialRecipe } from "../lib/trial";
+import { urlKeyOf } from "../lib/urlKey";
 
 export const recipesRouter = Router();
 
@@ -40,14 +41,16 @@ const CACHE_TTL_MS = 1000 * 60 * 60 * 24 * 30;
 
 const hash = (s: string) => crypto.createHash("sha256").update(s).digest("hex");
 
+const freshEnough = (at: Date | string | null | undefined): boolean =>
+  Date.now() - (at ? new Date(at).getTime() : 0) <= CACHE_TTL_MS;
+
 // Extraction is slow and costs an API call, so never do it twice for the
 // same input. Backed by the extraction_cache table so it survives restarts.
 async function cacheGet(key: string): Promise<Recipe | null> {
   const db = getDb();
   const [hit] = await db.select().from(extractionCache).where(eq(extractionCache.hash, key));
   if (!hit) return null;
-  const at = hit.createdAt ? new Date(hit.createdAt).getTime() : 0;
-  if (Date.now() - at > CACHE_TTL_MS) {
+  if (!freshEnough(hit.createdAt)) {
     await db.delete(extractionCache).where(eq(extractionCache.hash, key));
     return null;
   }
@@ -60,6 +63,109 @@ async function cacheSet(key: string, recipe: Recipe): Promise<void> {
     .insert(extractionCache)
     .values({ hash: key, recipe })
     .onConflictDoUpdate({ target: extractionCache.hash, set: { recipe, createdAt: new Date() } });
+}
+
+/**
+ * A URL's cached tree — exact key first, normalised alias second.
+ *
+ * The order is the safety property. An exact match is what this cache has
+ * always served and cannot have been widened by normalisation; the alias only
+ * ever answers when nothing was stored under the string itself. So turning
+ * normalisation off is deleting the second lookup, with nothing to migrate.
+ */
+export async function cacheGetUrl(rawUrl: string): Promise<Recipe | null> {
+  const exact = await cacheGet(hash(`url:${rawUrl}`));
+  if (exact) return exact;
+
+  const alias = urlKeyOf(rawUrl);
+  if (!alias) return null;
+
+  // Several raw URLs can share one alias — that is the whole point — so this
+  // has to choose, and the freshest is the only defensible choice: if one of
+  // them was re-read through /reextract because the tree was wrong, that is
+  // the one to serve. Ordering by anything else, or not ordering at all,
+  // makes which tree you get depend on the order Postgres felt like.
+  const db = getDb();
+  const [hit] = await db
+    .select()
+    .from(extractionCache)
+    .where(eq(extractionCache.urlKey, alias))
+    .orderBy(desc(extractionCache.createdAt))
+    .limit(1);
+  if (!hit) return null;
+  if (!freshEnough(hit.createdAt)) {
+    await db.delete(extractionCache).where(eq(extractionCache.hash, hit.hash));
+    return null;
+  }
+  return hit.recipe;
+}
+
+export async function cacheSetUrl(rawUrl: string, recipe: Recipe): Promise<void> {
+  const db = getDb();
+  const key = hash(`url:${rawUrl}`);
+  const alias = urlKeyOf(rawUrl);
+  await db
+    .insert(extractionCache)
+    .values({ hash: key, urlKey: alias, recipe })
+    .onConflictDoUpdate({
+      target: extractionCache.hash,
+      set: { recipe, urlKey: alias, createdAt: new Date() },
+    });
+}
+
+/** Drops whatever is cached for a URL, under either key. */
+async function cacheDropUrl(rawUrl: string): Promise<void> {
+  const db = getDb();
+  await db.delete(extractionCache).where(eq(extractionCache.hash, hash(`url:${rawUrl}`)));
+  const alias = urlKeyOf(rawUrl);
+  if (alias) await db.delete(extractionCache).where(eq(extractionCache.urlKey, alias));
+}
+
+/**
+ * Which of these URLs already have a tree, as a set of the raw strings given.
+ *
+ * One query for the whole result list rather than one per row. Deliberately
+ * takes the URLs the SERVER just produced rather than exposing a
+ * "is this cached?" endpoint: the same answer over an arbitrary list would be
+ * a bulk oracle for "has anyone ever extracted this page", and there is no
+ * reason to hand that out when the only caller is the search response itself.
+ */
+export async function cachedAmong(rawUrls: string[]): Promise<Set<string>> {
+  const out = new Set<string>();
+  if (!rawUrls.length) return out;
+
+  const byRaw = new Map<string, string>();
+  const byAlias = new Map<string, string[]>();
+  for (const u of rawUrls) {
+    byRaw.set(hash(`url:${u}`), u);
+    const alias = urlKeyOf(u);
+    if (alias) byAlias.set(alias, [...(byAlias.get(alias) ?? []), u]);
+  }
+
+  const db = getDb();
+  const rows = await db
+    .select({
+      hash: extractionCache.hash,
+      urlKey: extractionCache.urlKey,
+      createdAt: extractionCache.createdAt,
+    })
+    .from(extractionCache)
+    .where(
+      or(
+        inArray(extractionCache.hash, [...byRaw.keys()]),
+        byAlias.size ? inArray(extractionCache.urlKey, [...byAlias.keys()]) : undefined
+      )
+    );
+
+  for (const row of rows) {
+    // A row past its TTL is not a hit — marking it would promise an instant
+    // open and then quietly pay for an extraction when the user tapped it.
+    if (!freshEnough(row.createdAt)) continue;
+    const exact = byRaw.get(row.hash);
+    if (exact) out.add(exact);
+    if (row.urlKey) for (const u of byAlias.get(row.urlKey) ?? []) out.add(u);
+  }
+  return out;
 }
 
 // Search results are not worth a durable table — they go stale fast and a
@@ -92,40 +198,82 @@ function overLimit(ip: string): boolean {
 }
 
 /**
- * One free extraction per browser, enforced here rather than in the client.
+ * One free EXTRACTION per browser, enforced here rather than in the client.
  *
- * Signed-in requests pass straight through — existing behaviour is unchanged.
- * For everyone else the allowance is taken *before* the work, atomically, so
- * two requests fired at once cannot both come back free; a failure refunds it
- * in sendRecipe below, because a broken URL should not cost someone their one
- * try.
+ * THIS IS NO LONGER MIDDLEWARE, AND THE MOVE IS THE POINT.
+ *
+ * It used to run before the handler, which meant a spent trial was refused
+ * with a 402 before anything had looked in the cache — so a visitor who had
+ * used their free extraction could not be shown a recipe that costs nothing
+ * to serve. A cache hit is margin, not expense: the tree already exists, no
+ * API call is made, and the account gate that matters is on *saving*, not on
+ * viewing. So the cache is consulted first and this is called only once a
+ * miss is known, which also makes the name honest — the allowance is taken
+ * exactly when an extraction is about to happen.
+ *
+ * Everything that made it safe is unchanged. Signed-in requests skip it. For
+ * everyone else the allowance is still taken *before* the work and
+ * atomically, so two requests fired at once cannot both come back free, and a
+ * failure still refunds it because a broken URL should not cost someone their
+ * one try.
  *
  * The count lives in an httpOnly cookie plus a row, not in localStorage. That
  * is not unbypassable — clearing cookies or a private window resets it — but
  * the check being server-side is what matters: a modified client still gets a
  * 402 here.
+ *
+ * Returns false when it has already answered the request.
  */
-async function requireExtractionAllowance(
-  req: Request,
-  res: Response,
-  next: NextFunction
-) {
-  if (userIdOf(req)) return next();
+async function takeExtractionAllowance(req: Request, res: Response): Promise<boolean> {
+  if (userIdOf(req)) return true;
 
   try {
     const trialId = ensureTrialId(req, res);
     const spent = await spendTrial(trialId);
     if (!spent) {
-      return res.status(402).json({
+      res.status(402).json({
         error: "You have used your free recipe. Create an account to keep going.",
         code: "trial_spent",
       });
+      return false;
     }
     (req as Request & { trialId?: string }).trialId = trialId;
-    return next();
+    return true;
   } catch (e) {
     console.error("[trial:gate]", e);
-    return res.status(500).json({ error: "Could not start that extraction." });
+    res.status(500).json({ error: "Could not start that extraction." });
+    return false;
+  }
+}
+
+/**
+ * Serves a cached tree, which costs nothing and therefore charges nothing.
+ *
+ * The recipe is still parked against the trial, replacing whatever was parked
+ * before. Not doing so would mean a signed-out visitor could look at ten
+ * diagrams, sign up to keep the one they liked, and be handed an empty
+ * library — the "lose your work" moment the trial exists to prevent, arrived
+ * at from the other direction.
+ */
+async function sendCached(
+  req: Request,
+  res: Response,
+  recipe: Recipe,
+  source: "url" | "text" | "file" = "url"
+) {
+  const body = { recipe, meta: { cached: true, source, free: true } };
+  if (userIdOf(req)) return res.json(body);
+
+  try {
+    const trialId = ensureTrialId(req, res);
+    const servings = typeof recipe.servings === "number" ? recipe.servings : null;
+    const trialRecipeId = await parkTrialRecipe(trialId, recipe, servings);
+    return res.json(trialRecipeId ? { ...body, trialRecipeId } : body);
+  } catch (e) {
+    // Parking failed; the diagram is still free and still correct. Nothing to
+    // refund, because nothing was spent.
+    console.error("[trial:park]", e);
+    return res.json(body);
   }
 }
 
@@ -159,13 +307,7 @@ async function sendRecipe(
   }
 }
 
-recipesRouter.post("/extract", requireExtractionAllowance, async (req: Request, res: Response) => {
-  const ip = req.ip ?? "unknown";
-  if (overLimit(ip))
-    return res
-      .status(429)
-      .json({ error: "Too many extractions this hour. Try again later." });
-
+recipesRouter.post("/extract", async (req: Request, res: Response) => {
   const { url, text, file } = req.body ?? {};
 
   if (!url && !text && !file)
@@ -177,10 +319,17 @@ recipesRouter.post("/extract", requireExtractionAllowance, async (req: Request, 
       if (typeof url !== "string")
         return res.status(400).json({ error: "url must be a string." });
 
-      const key = hash(`url:${url}`);
-      const cached = await cacheGet(key);
-      if (cached)
-        return sendRecipe(req, res, { recipe: cached, meta: { cached: true, source: "url" } });
+      // Before the throttle and before the allowance, because a hit spends
+      // neither. The throttle is there to cap API spend, and this path has
+      // none to cap.
+      const cached = await cacheGetUrl(url);
+      if (cached) return sendCached(req, res, cached);
+
+      if (overLimit(req.ip ?? "unknown"))
+        return res
+          .status(429)
+          .json({ error: "Too many extractions this hour. Try again later." });
+      if (!(await takeExtractionAllowance(req, res))) return;
 
       let recipe;
       let attempts = 1;
@@ -215,7 +364,7 @@ recipesRouter.post("/extract", requireExtractionAllowance, async (req: Request, 
         via = "claude";
       }
 
-      await cacheSet(key, recipe);
+      await cacheSetUrl(url, recipe);
       return sendRecipe(req, res, {
         recipe,
         meta: {
@@ -241,8 +390,13 @@ recipesRouter.post("/extract", requireExtractionAllowance, async (req: Request, 
       const clipped = text.slice(0, MAX_TEXT);
       const key = hash(`text:${clipped}`);
       const cached = await cacheGet(key);
-      if (cached)
-        return sendRecipe(req, res, { recipe: cached, meta: { cached: true, source: "text" } });
+      if (cached) return sendCached(req, res, cached, "text");
+
+      if (overLimit(req.ip ?? "unknown"))
+        return res
+          .status(429)
+          .json({ error: "Too many extractions this hour. Try again later." });
+      if (!(await takeExtractionAllowance(req, res))) return;
 
       const { recipe, attempts, repaired } = await structureRecipe({ text: clipped });
       await cacheSet(key, recipe);
@@ -267,8 +421,13 @@ recipesRouter.post("/extract", requireExtractionAllowance, async (req: Request, 
 
     const key = hash(`file:${clean.slice(0, 4096)}:${clean.length}`);
     const cached = await cacheGet(key);
-    if (cached)
-      return sendRecipe(req, res, { recipe: cached, meta: { cached: true, source: "file" } });
+    if (cached) return sendCached(req, res, cached, "file");
+
+    if (overLimit(req.ip ?? "unknown"))
+      return res
+        .status(429)
+        .json({ error: "Too many extractions this hour. Try again later." });
+    if (!(await takeExtractionAllowance(req, res))) return;
 
     const { recipe, attempts, repaired } = await structureRecipe({
       file: { data: clean, mediaType },
@@ -298,6 +457,144 @@ recipesRouter.post("/extract", requireExtractionAllowance, async (req: Request, 
   }
 });
 
+/**
+ * Marks the results we already have a tree for, and floats them to the top.
+ *
+ * WHY THIS RUNS ON EVERY RESPONSE, INCLUDING A SEARCH-CACHE HIT.
+ *
+ * `searchCache` holds a query's results for 30 days. The extraction cache
+ * moves underneath it constantly — every extraction anyone runs adds to it,
+ * and TTL expiry takes rows away — so a flag computed once and stored beside
+ * the results would be stale almost immediately, in both directions: a badge
+ * promising an instant open that then quietly paid for an extraction, and a
+ * cached tree nobody was told about. It is one indexed query per response.
+ *
+ * The sort is a STABLE PARTITION, not a re-sort. The order inside each group
+ * is the relevance order the search returned; all this does is move the free
+ * ones in front of the paid ones, because they are faster for the user and
+ * cost nothing to serve.
+ *
+ * What this exposes is one bit — "somebody, at some point, extracted this
+ * page" — and it is a bit the product already gives away: `meta.cached` comes
+ * back on the paste path today, and ranking cached results first leaks it
+ * whether or not there is a badge. It says nothing about who, and nothing
+ * about saving; the saved count is stage two.
+ */
+export async function withCacheFlags(results: SearchResult[]): Promise<SearchResult[]> {
+  let hits: Set<string>;
+  try {
+    hits = await cachedAmong(results.map((r) => r.url));
+  } catch (e) {
+    // A cache lookup failing must not fail the search. Everything is simply
+    // unmarked, which is exactly the behaviour before this existed.
+    console.error("[search:cacheFlags]", e);
+    return results;
+  }
+  const flagged = results.map((r) => ({ ...r, cached: hits.has(r.url) }));
+  return [...flagged.filter((r) => r.cached), ...flagged.filter((r) => !r.cached)];
+}
+
+/**
+ * Re-reading a page, evicting whatever was cached for it.
+ *
+ * WHAT THIS IS FOR. Normalising URLs multiplies cache hits, which is margin —
+ * and multiplies the reach of a bad parse along with them, because
+ * corrections do not propagate between users yet (ROADMAP #3). This is what
+ * bounds that: anyone who lands on a tree that is plainly wrong can make the
+ * extractor read the page again, for themselves and for everyone after them.
+ *
+ * WHAT IT IS NOT. It does not propagate a user's EDITS. It re-runs the
+ * extractor, so the worst a single person can do is spend one API call and
+ * replace a machine-generated tree with another machine-generated tree. The
+ * consensus requirement in ROADMAP #3 — several independent people making the
+ * same correction before it becomes everyone's — is about propagating edits,
+ * and this does not pre-empt it.
+ *
+ * TIGHTLY LIMITED, BECAUSE IT SPENDS MARGIN. Under a subscription this is not
+ * a free safety valve: every call is an extraction billed against revenue
+ * already collected, and it is the one route a user can invoke repeatedly on
+ * purpose. Signed in only — an account is answerable in a way a cookie is
+ * not — and capped per user per day.
+ */
+const REEXTRACT_PER_DAY = 5;
+const REEXTRACT_WINDOW_MS = 24 * 60 * 60 * 1000;
+const reextracts = new Map<string, number[]>();
+
+function overReextractLimit(userId: string): boolean {
+  const now = Date.now();
+  const hits = (reextracts.get(userId) ?? []).filter(
+    (t) => now - t < REEXTRACT_WINDOW_MS
+  );
+  hits.push(now);
+  reextracts.set(userId, hits);
+  return hits.length > REEXTRACT_PER_DAY;
+}
+
+recipesRouter.post("/reextract", async (req: Request, res: Response) => {
+  const userId = userIdOf(req);
+  if (!userId)
+    return res
+      .status(401)
+      .json({ error: "Sign in to re-read a page.", code: "auth_required" });
+
+  const { url } = req.body ?? {};
+  if (typeof url !== "string" || !url.trim())
+    return res.status(400).json({ error: "url must be a string." });
+  if (!urlKeyOf(url))
+    return res.status(400).json({ error: "That is not a web address we can read." });
+
+  if (overReextractLimit(userId))
+    return res.status(429).json({
+      error: `You can re-read ${REEXTRACT_PER_DAY} pages a day. Try again tomorrow.`,
+      code: "reextract_limit",
+    });
+
+  try {
+    // Evict FIRST. If the extraction below fails, the next person pays for a
+    // fresh one rather than inheriting the tree somebody just told us is
+    // wrong — the cheaper mistake of the two.
+    await cacheDropUrl(url);
+
+    let recipe: Recipe;
+    let attempts = 1;
+    let repaired: string[] = [];
+    try {
+      const src = await fetchSource(url);
+      const out = await structureRecipe({
+        title: src.title,
+        yieldText: src.yieldText,
+        ingredients: src.ingredients,
+        instructions: src.instructions,
+        text: src.quality === "text" ? src.text : undefined,
+        sourceUrl: url,
+      });
+      recipe = out.recipe;
+      attempts = out.attempts;
+      repaired = out.repaired;
+      recipe.source = src.siteName;
+    } catch {
+      const out = await structureRecipeFromUrl(url);
+      recipe = out.recipe;
+      attempts = out.attempts;
+      repaired = out.repaired;
+    }
+
+    await cacheSetUrl(url, recipe);
+    return res.json({ recipe, meta: { cached: false, source: "url", attempts, repaired } });
+  } catch (e) {
+    const err = e as Error & { details?: string[] };
+    const isUserFacing =
+      /URL|host|page|refused|too large|too short|recipe from that page|valid diagram/i.test(
+        err.message
+      );
+    if (!isUserFacing) console.error("[recipes/reextract]", err);
+    return res.status(isUserFacing ? 422 : 500).json({
+      error: isUserFacing ? err.message : "Could not read that page again.",
+      details: err.details,
+    });
+  }
+});
+
 recipesRouter.post("/search", async (req: Request, res: Response) => {
   const ip = req.ip ?? "unknown";
   // Same throttle as extraction — a search also costs an API call.
@@ -318,12 +615,12 @@ recipesRouter.post("/search", async (req: Request, res: Response) => {
 
   const key = hash(`search:${trimmed}`);
   const cached = searchCacheGet(key);
-  if (cached) return res.json({ results: cached });
+  if (cached) return res.json({ results: await withCacheFlags(cached) });
 
   try {
     const results = await searchRecipes(trimmed);
     searchCache.set(key, { results, at: Date.now() });
-    return res.json({ results });
+    return res.json({ results: await withCacheFlags(results) });
   } catch (e) {
     const err = e as Error;
     const isUserFacing = /too short|too long|different search/i.test(err.message);

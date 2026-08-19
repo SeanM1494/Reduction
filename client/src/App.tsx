@@ -19,6 +19,7 @@ import {
   type Entry,
 } from "./lib/storage";
 import { readPendingUrl, writePendingUrl, clearPendingUrl } from "./lib/pendingUrl";
+import { wasFree } from "./lib/api";
 import {
   claimIfNeeded,
   fetchProviders,
@@ -286,11 +287,12 @@ export default function App() {
   );
 
   const run = useCallback(
-    async (fn: () => Promise<{ recipe: Recipe; trialRecipeId?: string }>) => {
+    async (fn: () => Promise<{ recipe: Recipe; trialRecipeId?: string; meta?: unknown }>) => {
       setBusy(true);
       setError(null);
       try {
-        const { recipe, trialRecipeId } = await fn();
+        const result = await fn();
+        const { recipe, trialRecipeId } = result;
         if (user) {
           addRecipe(recipe);
           return;
@@ -308,7 +310,12 @@ export default function App() {
           savedAt: Date.now(),
         };
         setTrialEntry(entry);
-        setTrialSpent(true);
+        // A cached tree costs no API call, so the server did not take the free
+        // extraction and this must not claim it did. As the cache grows this
+        // makes "one free recipe" softer for popular recipes, which is a
+        // decided trade — the account gate is on SAVING, not viewing. See
+        // ROADMAP #3.
+        if (!wasFree(result)) setTrialSpent(true);
         setOpenId(entry.id);
       } catch (e) {
         const err = e as Error & { code?: string };

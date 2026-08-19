@@ -74,6 +74,36 @@ question from "private", and not one the schema answers.
 
 ---
 
+## The business model, because it decides several of these
+
+**One free recipe, then an account, then a monthly subscription.** The user
+never sees or bears the API cost. It is margin.
+
+Three consequences that should be applied wherever they bite, rather than
+re-derived case by case:
+
+1. **The trial exists to convert, not to be fair.** It is not a meter that
+   has to be proportionate to what a request cost us. Do not argue about
+   whether charging someone for something is "fair" — argue about whether it
+   converts, and whether it makes the product feel worth paying for.
+
+2. **The cache is margin, not a courtesy.** Every hit is a recipe served at
+   near-zero marginal cost against revenue already collected. Anything that
+   raises the hit rate without risking correctness pays for itself, and that
+   is why URL normalisation went from "a trade to be careful about" to
+   something worth doing straight away.
+
+3. **A user-triggered API call is the user spending my money.** That is a
+   different thing from a call the product decided to make, and it wants a
+   tighter leash — see the re-extract hatch below, which is signed-in only and
+   capped per day for exactly this reason.
+
+What does NOT change: correctness. Serving somebody the wrong recipe costs
+trust, and no hit rate pays for it. Every cost decision below is bounded by
+that, most explicitly in the deny-list rule for URL parameters.
+
+---
+
 ## 3. Reuse extracted recipes across users
 
 **The idea:** once anyone has extracted a recipe from a URL, serve that
@@ -112,11 +142,62 @@ is the whole of what crosses between accounts.
 
 This splits the work into two stages that can ship independently:
 
-**Stage one — cached trees in search results.** A search checks the
-extraction cache before offering to extract. A match renders instantly,
-costs no API call, and exposes nothing about anybody: it is the same
-cached tree a URL paste already serves today, surfaced somewhere new. No
-visibility question arises, so this needs no further decision.
+**Stage one — cached trees in search results.** ~~A search checks the
+extraction cache before offering to extract.~~ **Built.** `/api/recipes/search`
+annotates each result with `cached` and stable-partitions the cached ones to
+the front; the badge reads **"Instant"**, which describes what the user gets
+rather than what happened behind it. Opening one costs no API call and takes
+no free extraction.
+
+The annotation runs on every response, including a search-cache hit —
+`searchCache` holds a query for 30 days while `extraction_cache` moves under
+it constantly, so a flag stored beside the results would go stale in both
+directions: a badge promising an instant open that then quietly paid for an
+extraction, and a cached tree nobody was told about.
+
+There is deliberately **no "is this URL cached?" endpoint**. The same answer
+over an arbitrary list would be a bulk oracle for "has anyone ever extracted
+this page", and the only caller is the search response, which already knows
+the URLs because it produced them.
+
+*What this exposes*, stated plainly: one bit, "somebody at some point
+extracted this page". `meta.cached` already returns that on the paste path,
+and ranking cached results first leaks it whether or not a badge exists. It
+says nothing about who, and nothing about saving — the saved count is stage
+two.
+
+### A cached hit does not spend the free extraction — DECIDED, not a leak
+
+If you are here because it looks like the trial is being given away: it is,
+deliberately, and the reasoning is below. Do not "fix" it.
+
+**A cache hit takes no free extraction.** It costs no API call, so charging
+for it would be metering something that did not happen. `takeExtractionAllowance`
+is called only once a cache miss is known — which is also why it stopped being
+middleware, since as middleware it 402'd a spent trial before anything had
+looked in the cache, and a visitor who had used their one extraction could not
+be shown a recipe that costs nothing to serve.
+
+**The known consequence.** As the cache grows, "one free recipe" softens
+toward "unlimited free popular recipes", because popular recipes are exactly
+what people search for. Success at #3 erodes the gate at #7. That is
+**accepted**: the account gate is on **saving**, not viewing. Somebody who
+views ten cached diagrams and keeps none of them has cost nothing and has seen
+the product work ten times, which is a better position to ask for an account
+from than never having shown them anything.
+
+**The lever, if it ever proves too soft:** a separate cap on free cached views
+per browser — a counter on the `trials` row. **Not** charging the extraction
+allowance, which would re-introduce a 402 on a request that costs nothing and
+take the top-of-funnel value away to fix a problem it did not cause.
+
+**A cached view still parks the recipe**, replacing whatever was parked
+before (`parkTrialRecipe`, as distinct from `storeTrialRecipe`, which inserts
+and may only run once). Without that, a visitor could look at ten diagrams,
+sign up to keep the one they liked, and be handed an empty library — the same
+"lose your work" moment the trial was built to prevent, arrived at from the
+other direction. Replace rather than insert, or every cached view leaves a row
+under `trial:<id>` that no claim will ever collect.
 
 **Stage two — the count.** "3 other people saved this" as a ranking
 signal and a badge on a result. This is where one account's behaviour
@@ -149,19 +230,51 @@ correction should need several independent people making the same fix rather
 than one report, which costs nothing to require and stops one confident cook
 rewriting a recipe for everyone.
 
-**Then: URL normalisation.**
+**URL normalisation — built, and it went FIRST after all.**
 
-There is none at all. The key is `sha256("url:" + the raw string)`, so a
-trailing slash, a `utm_`/`fbclid` parameter, `http` vs `https`, `www.` or a
-`#fragment` each pay for a fresh extraction — and are also why the same link
-can come back as two different trees on two submissions.
+The order above was written when the worry was blast radius. Two things
+changed it. The editor now covers every field in a stored recipe, so a person
+who lands on a bad tree fixes it in taps rather than raw JSON. And the
+business model says a miss is margin burnt on a page somebody already paid to
+read — which makes the hit rate the objective rather than a nice-to-have.
 
-**Why it waits.** Normalising multiplies cache hits, and until corrections
-propagate it multiplies the blast radius of a bad parse along with them: a
-fresh extraction costs pennies, while a wrong tree that everyone inherits for
-30 days is a bad experience for every future user of that URL. Once a
-correction can replace the cached version, more hits are straightforwardly
-good and this becomes a tidy-up rather than a trade.
+**The design is what makes it safe to ship ahead of correction-propagation:
+the raw string is still the identity, and the normalised key is an ALIAS.**
+`extraction_cache.hash` is unchanged — `sha256("url:" + raw)` — and the new
+indexed `url_key` column holds `sha256("urlkey:" + normalised)`. `cacheGetUrl`
+tries the exact key first and only then the alias. If a fold ever proves wrong
+for some site, deleting the second lookup is a one-line change and every row
+is still correct and still addressable. Nothing has to be migrated to undo it.
+See `server/lib/urlKey.ts`.
+
+**Correctness is the constraint and it is expressed as a DENY-LIST.** Query
+parameters are kept unless they are on a list of known-inert tracking tokens
+(`utm_*`, `fbclid`, `gclid`, `mc_cid`, `_ga`, `amp`, …). Never an allow-list:
+`?page=2`, `?print=1` and `?servings=6` select content, and an allow-list gets
+that backwards by default — it would silently drop every parameter it had not
+heard of, on exactly the pages where the parameter mattered. Three that read
+like trackers are deliberately NOT folded — `ref`, `source`, `campaign` — for
+the same reason. `server/lib/urlKey.test.ts` has a "must NOT fold" block that
+is the real specification.
+
+Two folds considered and rejected: lowercasing the path (hosts are
+case-insensitive, paths are not) and stripping a trailing `/amp` path segment
+(a path is a path; the `?amp=1` query flag is folded).
+
+**Several raw URLs sharing an alias is the normal outcome**, so the alias
+lookup orders by `created_at DESC` — if one of them was re-read because the
+tree was wrong, that is the one to serve.
+
+**The re-extract hatch** (`POST /api/recipes/reextract`) is what bounds the
+blast radius that normalisation widens. Anyone who lands on a plainly wrong
+tree can make the extractor read the page again, for themselves and everyone
+after them. It is **not** correction-propagation and does not pre-empt the
+consensus requirement above: it re-runs the extractor rather than propagating
+one person's edits, so the worst a single user can do is spend one API call
+and replace a machine-generated tree with another. Signed in only, capped at
+5/day per user, and the client confirms first because it discards local edits.
+The cap is in memory, so a restart resets it — a durable counter is the fix if
+that ever matters.
 
 ---
 

@@ -8,6 +8,9 @@ interface ExtractResponse {
   recipe: Recipe;
   meta: {
     cached: boolean;
+    /** True when serving this cost no API call and therefore took no free
+     *  extraction. The client must not mark the trial spent on these. */
+    free?: boolean;
     source: "url" | "text" | "file";
     extraction?: "jsonld" | "text";
     attempts?: number;
@@ -22,6 +25,24 @@ export interface ExtractResult {
   recipe: Recipe;
   meta?: unknown;
   trialRecipeId?: string;
+}
+
+/** Ask the server to read a page again, replacing what it had cached.
+ *  Signed in only, and rate-limited server-side — see the route. */
+export async function reextract(url: string): Promise<{ recipe: Recipe }> {
+  const res = await fetch("/api/recipes/reextract", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ url }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw Object.assign(new Error(data.error || "Could not read that page again."), {
+      code: typeof data.code === "string" ? data.code : undefined,
+      status: res.status,
+    });
+  }
+  return data as { recipe: Recipe };
 }
 
 async function post(body: unknown): Promise<ExtractResponse> {
@@ -47,6 +68,9 @@ async function post(body: unknown): Promise<ExtractResponse> {
 }
 
 export const extractFromUrl = (url: string) => post({ url });
+/** Did that response cost the visitor their free extraction? */
+export const wasFree = (r: { meta?: unknown }): boolean =>
+  !!(r.meta as { free?: boolean } | undefined)?.free;
 export const extractFromText = (text: string) => post({ text });
 export const extractFromFile = (data: string, mediaType: string) =>
   post({ file: { data, mediaType } });
@@ -56,6 +80,9 @@ export interface SearchResult {
   url: string;
   site: string;
   note: string;
+  /** The server already has a tree for this URL: it opens with no extraction,
+   *  and it does not spend the free one. */
+  cached?: boolean;
 }
 
 export async function searchRecipes(query: string): Promise<SearchResult[]> {
