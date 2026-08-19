@@ -361,6 +361,19 @@ with no components comes out untouched, and a cycle (which a bad parse can
 produce) falls back to the original order rather than hanging or dropping a
 section.
 
+**Any edit that changes a name can break that link, and nothing else in the
+codebase can see it.** `validateRecipe` runs per section, so when the link
+goes both sections stay valid, the diagram stays correct, and the only symptom
+is step-by-step quietly reordering. Three edits reach it: renaming a section,
+deleting a section, and — the one that shipped first and went unnoticed for a
+round — **renaming an ingredient**. `brokenComponentLinks(before, after)` in
+`shared/edits.ts` is the guard, and it works by diffing the real
+`componentLinks` over both trees rather than re-deriving the matching rule, so
+what the warning says is what `sequence.ts` will do. If you add an op that can
+touch a name, route it through `linkConsequence` and show the result before
+the commit. It is a warning and not a refusal on purpose: breaking the link is
+sometimes the intent.
+
 ## The URL cache has no normalisation
 
 `extraction_cache` is keyed on `sha256("url:" + the raw string)`. A trailing
@@ -422,6 +435,19 @@ Field errors are therefore `position: absolute` against their own field, and
 what it was aimed at. If you add a field to `EditSheet`, wrap it in `Field`
 rather than rendering a message inline.
 
+**That applies to anything that appears next to a field, not just errors.**
+The link-consequence warning was written in flow first and moved "Done" by
+122px on an SE — same defect, different colour. `Field` takes a `notice` as
+well as `messages`, and both share the one absolute slot.
+
+**Not everything in the editor hangs off a cell.** Ingredients and steps are
+tapped directly; a section is tapped by its title (`.rd-section-head` becomes
+a 44px button in edit mode); and the recipe's own fields are reached from a
+button in `.rd-editbar`, because the bar title is 29x16 on an SE and there is
+no room in that bar to make a target out of it. Section ops are addressed by
+INDEX rather than id — the one asymmetry in `edits.ts` — so the section sheet
+closes on any structural op and no index outlives the tree it came from.
+
 **Never re-derive what is a legal edit.** `validMoveTargets` builds the
 candidate tree for every step and runs the real `validateRecipe` on each. That
 is deliberately more work than checking the two or three invariants by hand,
@@ -457,6 +483,16 @@ leaves the step with no inputs and `validateRecipe` refuses it, with
 and points at "delete the step" — which splices its inputs into its consumer.
 One tap removing two things is a destructive reading of "delete", and the
 un-cascading version composes: the two-tap path reaches the same tree.
+
+**`recipe.servings` and `entry.servings` are different numbers and one
+control must never write both.** `recipe.servings` is what the recipe makes
+(a correction, edited in the recipe sheet); `entry.servings` is what you are
+cooking tonight; and `scale` — which every amount in the diagram is rendered
+through — is the second divided by the first. Wire one stepper to both and
+`scale` is pinned at exactly 1 for ever: scaling stops working, every amount
+still looks right, and nothing reports it. Note that **`entry.servings` has no
+control at all today** — it is plumbed end to end and unreachable, with
+`.rd-servings`/`.rd-stepper` sitting in `index.css` unused. See ROADMAP.
 
 **`minutes` and `tempF` are the only numbers in a stored recipe that
 `validateRecipe` has no opinion on**, and they are now typed by hand. Render

@@ -13,15 +13,19 @@ import { validateRecipe, type Recipe } from "./layout";
 import { reconcileDone } from "./progress";
 import {
   applyEdit,
+  brokenComponentLinks,
   consumerOf,
   deleteIngredientBlocker,
+  deleteSectionBlocker,
   EditTargetError,
+  linkConsequence,
   noTargetsReason,
   parentStepOf,
   parseAmount,
   parseTiming,
   validMoveTargets,
 } from "./edits";
+import { cardSequence } from "./sequence";
 
 /** The guacamole demo's shape: two branches converging on a fold, then a rest.
  *  Small enough to reason about, and the tree the drag was designed against. */
@@ -683,5 +687,273 @@ test("the ingredient ops do not mutate the input recipe", () => {
   });
   applyEdit(before, { type: "deleteIngredient", ingredientId: "salt" });
   applyEdit(before, { type: "setStepFields", stepId: "d4", fields: { minutes: 5 } });
+  assert.equal(JSON.stringify(before), snapshot);
+});
+
+
+// ------------------------------------------------------------ input order --
+
+test("reorderInputs permutes row order without changing the tree", () => {
+  const after = applyEdit(RECIPE(), {
+    type: "reorderInputs",
+    stepId: "d2",
+    inputs: ["salt", "d1", "lime"],
+  });
+  assert.deepEqual(step(after, "d2").inputs, ["salt", "d1", "lime"]);
+  assert.deepEqual(validateRecipe(after), []);
+});
+
+test("reorderInputs refuses anything that is not a permutation", () => {
+  // Dropping or adding an input here would be a silent structural edit
+  // wearing a cosmetic op's name, so it is a caller bug rather than an
+  // invalid candidate.
+  for (const inputs of [["d1", "lime"], ["d1", "lime", "salt", "onion"], ["d1", "lime", "lime"]]) {
+    assert.throws(
+      () => applyEdit(RECIPE(), { type: "reorderInputs", stepId: "d2", inputs }),
+      EditTargetError
+    );
+  }
+});
+
+// -------------------------------------------------------- recipe & section --
+
+test("setRecipeFields changes only the fields given", () => {
+  const after = applyEdit(RECIPE(), {
+    type: "setRecipeFields",
+    fields: { title: "Best guacamole", servings: 6 },
+  });
+  assert.equal(after.title, "Best guacamole");
+  assert.equal(after.servings, 6);
+  assert.deepEqual(validateRecipe(after), []);
+
+  const again = applyEdit(after, {
+    type: "setRecipeFields",
+    fields: { source: "NYT Cooking" },
+  });
+  assert.equal(again.title, "Best guacamole");
+  assert.equal(again.servings, 6);
+  assert.equal(again.source, "NYT Cooking");
+});
+
+test("clearing the title is a validator problem, not a thrown one", () => {
+  const after = applyEdit(RECIPE(), { type: "setRecipeFields", fields: { title: "" } });
+  assert.ok(validateRecipe(after).some((e) => /Missing title/.test(e)));
+});
+
+test("setSectionFields renames a section and sets its header", () => {
+  const after = applyEdit(RECIPE(), {
+    type: "setSectionFields",
+    sectionIndex: 0,
+    fields: { name: "The guac", header: "Have a bowl ready" },
+  });
+  assert.equal(after.sections[0].name, "The guac");
+  assert.equal(after.sections[0].header, "Have a bowl ready");
+  assert.deepEqual(validateRecipe(after), []);
+});
+
+test("a section op with no such index throws", () => {
+  assert.throws(
+    () => applyEdit(RECIPE(), { type: "setSectionFields", sectionIndex: 4, fields: { name: "x" } }),
+    EditTargetError
+  );
+  assert.throws(
+    () => applyEdit(RECIPE(), { type: "deleteSection", sectionIndex: 4 }),
+    EditTargetError
+  );
+});
+
+test("addSection builds the minimum that validates", () => {
+  const after = applyEdit(RECIPE(), {
+    type: "addSection",
+    name: "Chips",
+    firstStep: "fry",
+    firstIngredient: "corn tortillas",
+  });
+  assert.equal(after.sections.length, 2);
+  const added = after.sections[1];
+  assert.equal(added.name, "Chips");
+  assert.equal(added.ingredients.length, 1);
+  assert.equal(added.ingredients[0].name, "corn tortillas");
+  // qty 1 rather than null: an ingredient with neither a qty nor a text
+  // fallback is refused, so the default has to be a valid one.
+  assert.equal(added.ingredients[0].qty, 1);
+  assert.equal(added.nodes.length, 1);
+  assert.deepEqual(added.nodes[0].inputs, [added.ingredients[0].id]);
+  assert.equal(added.root, added.nodes[0].id);
+  assert.deepEqual(validateRecipe(after), []);
+});
+
+test("a new section's ids never collide with the rest of the recipe", () => {
+  // The fixture already has an ingredient literally called "salt" and steps
+  // d1..d4; ids are unique across the WHOLE recipe, not per section.
+  const after = applyEdit(RECIPE(), {
+    type: "addSection",
+    name: "More",
+    firstStep: "stir",
+    firstIngredient: "kosher salt",
+  });
+  const ids = after.sections.flatMap((s) => [
+    ...s.ingredients.map((i) => i.id),
+    ...s.nodes.map((n) => n.id),
+  ]);
+  assert.equal(new Set(ids).size, ids.length);
+  assert.deepEqual(validateRecipe(after), []);
+});
+
+test("deleting the only section is refused", () => {
+  assert.throws(
+    () => applyEdit(RECIPE(), { type: "deleteSection", sectionIndex: 0 }),
+    EditTargetError
+  );
+  assert.match(deleteSectionBlocker(RECIPE(), 0)!, /only section/);
+});
+
+// ------------------------------------------------------------- name links --
+
+/** Two sections linked by name: "Dry ingredients" is made, then consumed. */
+const LINKED = (): Recipe => ({
+  title: "Cookies",
+  servings: 24,
+  sections: [
+    {
+      name: "Dry ingredients",
+      ingredients: [
+        { id: "flour", qty: 2, unit: "cup", name: "flour" },
+        { id: "soda", qty: 1, unit: "tsp", name: "baking soda" },
+      ],
+      nodes: [{ id: "a1", label: "whisk together", inputs: ["flour", "soda"] }],
+      root: "a1",
+    },
+    {
+      name: "Dough",
+      ingredients: [
+        { id: "dry", qty: 1, unit: null, name: "Dry ingredients" },
+        { id: "butter", qty: 1, unit: "cup", name: "butter" },
+      ],
+      nodes: [{ id: "b1", label: "cream and fold", inputs: ["butter", "dry"] }],
+      root: "b1",
+    },
+  ],
+});
+
+test("the linked fixture cooks the component first", () => {
+  assert.deepEqual(validateRecipe(LINKED()), []);
+  assert.deepEqual(
+    cardSequence(LINKED()).map((c) => c.stepId),
+    ["a1", "b1"]
+  );
+});
+
+test("renaming a SECTION breaks the link, and the diff sees it", () => {
+  const before = LINKED();
+  const after = applyEdit(before, {
+    type: "setSectionFields",
+    sectionIndex: 0,
+    fields: { name: "Dry mix" },
+  });
+  const { lost, gained } = brokenComponentLinks(before, after);
+  assert.equal(lost.length, 1);
+  assert.equal(lost[0].fromName, "Dry ingredients");
+  assert.equal(lost[0].toName, "Dough");
+  assert.deepEqual(gained, []);
+  // And the order really does change, which is the whole point.
+  assert.deepEqual(validateRecipe(after), []);
+});
+
+test("renaming the INGREDIENT breaks it too — the hole that already shipped", () => {
+  // This is reachable today from the ingredient sheet, with no new ops
+  // involved. The tree stays valid and the diagram stays correct; only the
+  // cooking order changes, silently. That is the cookie bug.
+  const before = LINKED();
+  const after = applyEdit(before, {
+    type: "setIngredientFields",
+    ingredientId: "dry",
+    fields: { name: "dry mixture" },
+  });
+  assert.deepEqual(validateRecipe(after), []);
+  const { lost } = brokenComponentLinks(before, after);
+  assert.equal(lost.length, 1);
+  assert.equal(lost[0].fromName, "Dry ingredients");
+  assert.match(linkConsequence(before, after)!, /Dry ingredients/);
+});
+
+test("deleting the producing section leaves a bought ingredient, and says so", () => {
+  const before = LINKED();
+  assert.equal(deleteSectionBlocker(before, 0), null); // legal, just consequential
+  const after = applyEdit(before, { type: "deleteSection", sectionIndex: 0 });
+  // Both halves stay internally valid, which is exactly why validateRecipe
+  // cannot be the thing that warns here.
+  assert.deepEqual(validateRecipe(after), []);
+  assert.ok(after.sections[0].ingredients.some((i) => i.name === "Dry ingredients"));
+  const why = linkConsequence(before, after)!;
+  assert.match(why, /Dough/);
+  assert.match(why, /something you buy/);
+});
+
+test("deleting the CONSUMING section is not worth a warning", () => {
+  // The link goes away, but nothing is left holding a phantom ingredient and
+  // no order is now wrong. Reported as lost, phrased about the consumer.
+  const before = LINKED();
+  const after = applyEdit(before, { type: "deleteSection", sectionIndex: 1 });
+  assert.deepEqual(validateRecipe(after), []);
+  assert.equal(brokenComponentLinks(before, after).lost.length, 1);
+});
+
+test("a rename can CREATE a link, which also reorders the cooking", () => {
+  const before = LINKED();
+  // Section 1 renamed to match an ingredient in section 0 would be a cycle;
+  // use a fresh, unlinked pair instead.
+  const plain: Recipe = {
+    title: "Two things",
+    servings: 2,
+    sections: [
+      {
+        name: "Second",
+        ingredients: [{ id: "x", qty: 1, unit: null, name: "First" }],
+        nodes: [{ id: "p1", label: "use it", inputs: ["x"] }],
+        root: "p1",
+      },
+      {
+        name: "Other",
+        ingredients: [{ id: "y", qty: 1, unit: null, name: "thing" }],
+        nodes: [{ id: "q1", label: "make it", inputs: ["y"] }],
+        root: "q1",
+      },
+    ],
+  };
+  assert.deepEqual(cardSequence(plain).map((c) => c.stepId), ["p1", "q1"]);
+  const after = applyEdit(plain, {
+    type: "setSectionFields",
+    sectionIndex: 1,
+    fields: { name: "First" },
+  });
+  const { lost, gained } = brokenComponentLinks(plain, after);
+  assert.deepEqual(lost, []);
+  assert.equal(gained.length, 1);
+  assert.equal(gained[0].fromName, "First");
+  // The order really flips, which is what the warning is about.
+  assert.deepEqual(cardSequence(after).map((c) => c.stepId), ["q1", "p1"]);
+  assert.match(linkConsequence(plain, after)!, /will be cooked first/);
+  assert.equal(brokenComponentLinks(before, before).lost.length, 0);
+});
+
+test("an edit that touches no name reports no consequence", () => {
+  const before = LINKED();
+  const after = applyEdit(before, {
+    type: "setStepFields",
+    stepId: "b1",
+    fields: { minutes: 12 },
+  });
+  assert.equal(linkConsequence(before, after), null);
+});
+
+test("the recipe- and section-level ops do not mutate the input recipe", () => {
+  const before = LINKED();
+  const snapshot = JSON.stringify(before);
+  applyEdit(before, { type: "setRecipeFields", fields: { title: "x" } });
+  applyEdit(before, { type: "setSectionFields", sectionIndex: 0, fields: { name: "x" } });
+  applyEdit(before, { type: "addSection", name: "n", firstStep: "s", firstIngredient: "i" });
+  applyEdit(before, { type: "deleteSection", sectionIndex: 1 });
+  applyEdit(before, { type: "reorderInputs", stepId: "b1", inputs: ["dry", "butter"] });
   assert.equal(JSON.stringify(before), snapshot);
 });

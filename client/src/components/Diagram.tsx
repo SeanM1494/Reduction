@@ -59,6 +59,9 @@ export interface DiagramEdit {
   active: boolean;
   /** A tap in edit mode opens fields instead of marking anything done. */
   onTapCell: (id: string) => void;
+  /** A tap on the section's own title. Diagram does not know what a section
+   *  is addressed by — the caller closes over that — so this takes nothing. */
+  onTapSection: () => void;
   onPointerDown: (e: React.PointerEvent, ingredientId: string) => void;
   pressing: string | null;
   dragging: string | null;
@@ -370,17 +373,34 @@ export default function Diagram({
     };
   };
 
+  const headContent = (
+    <>
+      <p className="rd-eyebrow">
+        <span className="rd-eyebrow-num">{String(index + 1).padStart(2, "0")}</span>
+        {section.name}
+      </p>
+      {section.header ? <p className="rd-oven">{section.header}</p> : null}
+    </>
+  );
+
   return (
     <section className="rd-section">
-      <div className="rd-section-head">
-        <p className="rd-eyebrow">
-          <span className="rd-eyebrow-num">
-            {String(index + 1).padStart(2, "0")}
-          </span>
-          {section.name}
-        </p>
-        {section.header ? <p className="rd-oven">{section.header}</p> : null}
-      </div>
+      {/* In edit mode the section's title becomes the way to edit the section
+          — the same tap-the-thing rule the cells follow. It is a 15px-tall
+          line the rest of the time, so the edit-mode variant grows to a 44px
+          target rather than relying on a 15px one being hittable. */}
+      {edit?.active ? (
+        <button
+          type="button"
+          className="rd-section-head is-editable"
+          onClick={edit.onTapSection}
+          title="Rename this section, or delete it"
+        >
+          {headContent}
+        </button>
+      ) : (
+        <div className="rd-section-head">{headContent}</div>
+      )}
 
       {showTable ? (
         <div className="rd-swap" ref={swapRef}>

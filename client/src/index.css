@@ -1955,13 +1955,52 @@ body.rd-dragging-body {
  *                        control it was aimed at, instead of being eaten by
  *                        the thing that appeared over it
  * The background must stay opaque: it sits on top of the next field. */
+/* The section title as a control. Only in edit mode: at rest the head is a
+ * 15px line, and 15px is not a target. Everything here is inside the button
+ * so the whole strip is tappable, including the standing note. */
+button.rd-section-head {
+  width: 100%; min-height: 44px; font: inherit; text-align: left;
+  background: none; color: inherit; cursor: pointer;
+  border: 1px dashed var(--line-strong); border-radius: 10px;
+  padding: 6px 10px; margin-bottom: 12px;
+}
+button.rd-section-head:hover { background: var(--hover-ing); }
+button.rd-section-head:focus-visible {
+  outline: 2px solid var(--warm-line); outline-offset: 1px;
+}
+
+/* Input order. A row is 44px because both buttons in it are, and the name
+ * takes the slack — a long ingredient name wraps rather than squeezing the
+ * two controls, which is why the name is the flexible one. */
+.rd-order-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.rd-order-row { display: flex; align-items: center; gap: 8px; }
+.rd-order-name { flex: 1 1 auto; min-width: 0; font-size: 14px; }
+.rd-order-btn { min-width: 44px; min-height: 44px; padding: 0; line-height: 1; }
+
+/* A link consequence is not an error: the edit is legal and will be accepted,
+ * it just changes something the user cannot see from here. Warm rather than
+ * red, and it shares the absolutely-positioned slot with field errors — a
+ * notice that took up space would move the controls exactly as an error did
+ * (measured: "Done" jumped 122px on an SE when this was in flow). */
+.rd-link-warn {
+  margin: 0; font-size: 13px; line-height: 1.45; border-radius: 10px;
+  padding: 9px 11px;
+  color: var(--warm-ink); background: var(--warm-bg);
+  border: 1px solid var(--warm-line);
+}
+.rd-field-error > .rd-link-warn + .rd-link-warn,
+.rd-field-error > ul + .rd-link-warn { margin-top: 6px; }
+
 .rd-field-anchor { position: relative; }
 .rd-field-error {
   position: absolute; z-index: 3; pointer-events: none;
   top: calc(100% - 8px); left: 0; right: 0;
-  background: var(--danger-bg);
-  box-shadow: 0 2px 10px rgba(var(--shadow-rgb), .18);
+  /* No background of its own any more: it is a container for an error list, a
+     link notice, or both, and each carries its own. It still needs the shadow,
+     because whatever is inside sits on top of the next field. */
+  filter: drop-shadow(0 2px 8px rgba(var(--shadow-rgb), .18));
 }
+.rd-field-error > .rd-error { margin: 0; }
 
 .rd-field-row { display: flex; flex-wrap: wrap; gap: 10px; }
 .rd-field-row > .rd-field { flex: 1 1 130px; min-width: 0; }

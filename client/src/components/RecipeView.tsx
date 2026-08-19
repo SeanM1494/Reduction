@@ -22,7 +22,7 @@ import type { Entry } from "../lib/storage";
 import Diagram from "./Diagram";
 import StepsMode from "./StepsMode";
 import RecipeJsonEditor from "./RecipeJsonEditor";
-import EditSheet from "./EditSheet";
+import EditSheet, { type EditTarget } from "./EditSheet";
 import MealTypeSheet from "./MealTypeSheet";
 import RatingControl from "./RatingControl";
 import { MEAL_TYPE_LABELS, sanitizeMealTypes } from "../../../shared/mealTypes";
@@ -92,7 +92,7 @@ export default function RecipeView({
    * someone opening a recipe is nearly always in.
    */
   const [editing, setEditing] = useState(false);
-  const [sheetFor, setSheetFor] = useState<string | null>(null);
+  const [sheetFor, setSheetFor] = useState<EditTarget | null>(null);
   const [mealSheetOpen, setMealSheetOpen] = useState(false);
   /**
    * Undo is multi-level because it costs almost nothing to make it so: every
@@ -566,6 +566,19 @@ export default function RecipeView({
                   <strong>Editing.</strong> Tap to change a cell; press and hold an
                   ingredient to move it. Nothing is being checked off.
                 </span>
+                {/* The recipe's own fields have no cell to be tapped, and
+                    the bar title cannot become one: it measures 29x16 on an
+                    iPhone SE and is already truncated. This bar exists only
+                    while editing and already had the room — appending this
+                    button cost 0px of height at 320 and 390, because the bar
+                    already wraps. */}
+                <button
+                  className="rd-btn"
+                  onClick={() => setSheetFor({ kind: "recipe" })}
+                  title="Title, servings, source and sections"
+                >
+                  Recipe&hellip;
+                </button>
                 <button
                   className="rd-btn"
                   onClick={undo}
@@ -608,7 +621,8 @@ export default function RecipeView({
                   editing
                     ? {
                         active: true,
-                        onTapCell: setSheetFor,
+                        onTapCell: (id: string) => setSheetFor({ kind: "node", id }),
+                        onTapSection: () => setSheetFor({ kind: "section", index: i }),
                         onPointerDown: drag.onPointerDown,
                         pressing: drag.pressing,
                         dragging: drag.dragging,
@@ -668,7 +682,7 @@ export default function RecipeView({
         {editing && sheetFor ? (
           <EditSheet
             recipe={recipe}
-            targetId={sheetFor}
+            target={sheetFor}
             onApply={applyOp}
             onClose={() => setSheetFor(null)}
           />

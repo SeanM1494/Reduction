@@ -38,6 +38,7 @@ import {
   type Step,
   type Unit,
 } from "./layout";
+import { componentLinks } from "./sequence";
 
 // ------------------------------------------------------------------- ops --
 
@@ -60,6 +61,31 @@ export interface StepFields {
   label?: string;
   minutes?: number | null;
   tempF?: number | null;
+}
+
+/** The fields the recipe sheet can change.
+ *
+ *  `servings` HERE IS `recipe.servings` — what the recipe makes, which is a
+ *  correction. It is NOT `entry.servings`, the number you are cooking for
+ *  tonight, and the two must never be written by one control: `scale` is the
+ *  second divided by the first, so a control that moved both would hold scale
+ *  at exactly 1 for ever and scaling would stop working with nothing to show
+ *  for it. See CLAUDE.md. */
+export interface RecipeFields {
+  title?: string;
+  servings?: number | null;
+  source?: string | null;
+  sourceUrl?: string | null;
+  yieldText?: string | null;
+}
+
+/** The fields the section sheet can change. Both reach beyond their own
+ *  section: `name` is one half of the component link `sequence.ts` orders by
+ *  (see brokenComponentLinks), and `header` is the standing instruction —
+ *  usually an oven temperature — drawn above the table. */
+export interface SectionFields {
+  name?: string;
+  header?: string | null;
 }
 
 export type EditOp =
@@ -90,7 +116,17 @@ export type EditOp =
       newId?: string;
     }
   /** Merge a step into the step that consumes it. */
-  | { type: "mergeStepInto"; stepId: string; label?: string };
+  | { type: "mergeStepInto"; stepId: string; label?: string }
+  /** Reorder one step's inputs. Row order in the diagram is input order. */
+  | { type: "reorderInputs"; stepId: string; inputs: string[] }
+  /** Recipe-level fields — the only ones not attached to a cell. */
+  | { type: "setRecipeFields"; fields: RecipeFields }
+  /** Section-level fields, addressed by INDEX rather than by id: sections
+   *  have no id, and a name is mutable and may repeat. */
+  | { type: "setSectionFields"; sectionIndex: number; fields: SectionFields }
+  /** A new section, carrying the minimum that validates. */
+  | { type: "addSection"; name: string; firstStep: string; firstIngredient: string }
+  | { type: "deleteSection"; sectionIndex: number };
 
 /** Thrown when an op names something that is not in the recipe. That is a
  *  caller bug rather than a rejected edit, so it is loud instead of silent. */
@@ -389,6 +425,111 @@ export function applyEdit(recipe: Recipe, op: EditOp): Recipe {
       return withSection(recipe, si, { ...section, nodes });
     }
 
+    case "reorderInputs": {
+      const si = sectionIndexOfId(recipe, op.stepId);
+      if (si < 0) throw new EditTargetError(`No step "${op.stepId}".`);
+      const section = recipe.sections[si];
+      const target = section.nodes.find((n) => n.id === op.stepId);
+      if (!target) throw new EditTargetError(`"${op.stepId}" is not a step.`);
+      // A permutation, and nothing else. Reordering is the only op whose
+      // whole purpose is cosmetic, so it must not be able to change the tree
+      // by accident: dropping or adding an input here would be a structural
+      // edit wearing a cosmetic op's name.
+      const was = [...(target.inputs ?? [])].sort();
+      const now = [...op.inputs].sort();
+      if (was.length !== now.length || was.some((x, i) => x !== now[i])) {
+        throw new EditTargetError(
+          `reorderInputs must be a permutation of "${op.stepId}" inputs.`
+        );
+      }
+      const nodes = section.nodes.map((n) =>
+        n.id === op.stepId ? { ...n, inputs: [...op.inputs] } : n
+      );
+      return withSection(recipe, si, { ...section, nodes });
+    }
+
+    case "setRecipeFields": {
+      const next: Recipe = { ...recipe };
+      const f = op.fields;
+      if ("title" in f) next.title = f.title ?? "";
+      if ("servings" in f) next.servings = f.servings ?? null;
+      if ("source" in f) next.source = f.source ?? null;
+      if ("sourceUrl" in f) next.sourceUrl = f.sourceUrl ?? null;
+      if ("yieldText" in f) next.yieldText = f.yieldText ?? null;
+      return next;
+    }
+
+    case "setSectionFields": {
+      const section = recipe.sections[op.sectionIndex];
+      if (!section) throw new EditTargetError(`No section ${op.sectionIndex}.`);
+      const next: Section = { ...section };
+      if ("name" in op.fields) next.name = op.fields.name ?? "";
+      if ("header" in op.fields) next.header = op.fields.header ?? null;
+      return withSection(recipe, op.sectionIndex, next);
+    }
+
+    case "addSection": {
+      // An empty section cannot exist: validateRecipe wants at least one step
+      // with at least one input, and an ingredient wants a qty or a text
+      // fallback. So the minimum is built here rather than left for someone
+      // to assemble out of an invalid starting point. qty 1 is the default
+      // because it always validates and is one tap from being corrected in a
+      // pattern the user already knows; asking for the amount up front would
+      // make a five-field form of a first impression.
+      const taken = new Set(
+        recipe.sections.flatMap((s) => [
+          ...(s.ingredients ?? []).map((i) => i.id),
+          ...(s.nodes ?? []).map((n) => n.id),
+        ])
+      );
+      const mint = (stem: string) => {
+        if (stem && !taken.has(stem)) {
+          taken.add(stem);
+          return stem;
+        }
+        for (let i = 1; i < 10000; i++) {
+          const id = `${stem || "x"}_${i}`;
+          if (!taken.has(id)) {
+            taken.add(id);
+            return id;
+          }
+        }
+        throw new Error("Could not mint an unused id.");
+      };
+      const slug = op.firstIngredient
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "_")
+        .replace(/^_+|_+$/g, "")
+        .slice(0, 24);
+      const ingId = mint(slug || "ing");
+      const stepId = mint("s1");
+      const created: Section = {
+        name: op.name,
+        ingredients: [{ id: ingId, qty: 1, unit: null, name: op.firstIngredient }],
+        nodes: [{ id: stepId, label: op.firstStep, inputs: [ingId] }],
+        root: stepId,
+      };
+      return { ...recipe, sections: [...recipe.sections, created] };
+    }
+
+    case "deleteSection": {
+      const section = recipe.sections[op.sectionIndex];
+      if (!section) throw new EditTargetError(`No section ${op.sectionIndex}.`);
+      if (recipe.sections.length <= 1) {
+        throw new EditTargetError(
+          `“${section.name || "This"}” is the only section. A recipe needs one.`
+        );
+      }
+      // Deletes the section and NOTHING else. If another section consumes
+      // this one by name, that ingredient stays where it is and becomes
+      // something bought rather than made — a consequence validateRecipe
+      // cannot see, which linkConsequence states out loud before the tap.
+      return {
+        ...recipe,
+        sections: recipe.sections.filter((_, i) => i !== op.sectionIndex),
+      };
+    }
+
     case "moveIngredient": {
       const si = sectionIndexOfId(recipe, op.ingredientId);
       if (si < 0) throw new EditTargetError(`No ingredient "${op.ingredientId}".`);
@@ -553,6 +694,126 @@ export function deleteIngredientBlocker(
     return `“${parent.label}” would be left with nothing. Delete the step instead, or move something into it first.`;
   }
   return errors[0];
+}
+
+// ----------------------------------------------------------- name links --
+
+/**
+ * One section-as-ingredient link: section `fromName` is made separately, and
+ * an ingredient of that name in another section is where it gets used.
+ */
+export interface ComponentLink {
+  /** The producing section's name, as written. */
+  fromName: string;
+  /** The consuming section's name, as written. */
+  toName: string;
+}
+
+const norm = (s: string | null | undefined) => (s ?? "").trim().toLowerCase();
+
+/**
+ * Which component links a candidate tree would lose, and which it would gain.
+ *
+ * WHY THIS IS A FIX AND NOT ONLY A GUARD FOR THE NEW OPS
+ *
+ * `sequence.ts` orders sections by a link that is a NAME MATCH across
+ * sections: a component is made in its own section and then appears as an
+ * ingredient, of the same name, in the section that consumes it. Nothing else
+ * in the codebase can see that link. `validateRecipe` runs per section, and
+ * both sides stay internally valid when it breaks.
+ *
+ * That is the cookie bug (see the header of sequence.ts), and it is
+ * REACHABLE TODAY, by a user, silently: renaming an ingredient in the
+ * ingredient sheet is all it takes, and that has shipped. The tree stays
+ * valid, the diagram stays correct, and step-by-step quietly starts saying
+ * bake before mix. Section rename and section delete add two more ways in,
+ * which is what brought this to light, but the hole predates them.
+ *
+ * The check is a diff of the REAL `componentLinks` over both trees rather
+ * than a re-derivation of the matching rule. Same argument as
+ * `validMoveTargets` running the real `validateRecipe`: what the warning
+ * describes is exactly what `sequence.ts` will do, because it is the same
+ * call. A hand-written "does this name still match something" would start
+ * correct and drift the first time the matching rule gained a case, and the
+ * symptom would be a warning that fires on the wrong edits.
+ *
+ * `gained` is not a bonus. A rename that makes a name match where none did
+ * before ADDS an ordering constraint, and can create a cycle, which
+ * `sectionOrder` survives by falling back to the original order. It degrades
+ * quietly rather than loudly, so it is worth saying before the tap.
+ */
+export function brokenComponentLinks(
+  before: Recipe,
+  after: Recipe
+): { lost: ComponentLink[]; gained: ComponentLink[] } {
+  const read = (r: Recipe): Map<string, ComponentLink> => {
+    const out = new Map<string, ComponentLink>();
+    // componentLinks is index-keyed, and an index does not survive a delete,
+    // so the links are re-expressed by name here, which is what they are
+    // made of in the first place.
+    for (const [to, froms] of componentLinks(r)) {
+      for (const from of froms) {
+        const fromName = r.sections[from]?.name ?? "";
+        const toName = r.sections[to]?.name ?? "";
+        out.set(`${norm(fromName)}\u0000${norm(toName)}`, { fromName, toName });
+      }
+    }
+    return out;
+  };
+
+  const a = read(before);
+  const b = read(after);
+  const lost: ComponentLink[] = [];
+  const gained: ComponentLink[] = [];
+  for (const [k, v] of a) if (!b.has(k)) lost.push(v);
+  for (const [k, v] of b) if (!a.has(k)) gained.push(v);
+  return { lost, gained };
+}
+
+/**
+ * What an edit would do to the cooking order, in a sentence, or null when it
+ * would do nothing.
+ *
+ * Deliberately a WARNING and not a refusal. Breaking a link is sometimes
+ * exactly the intent, because you may be deleting a component section
+ * precisely so that you can buy the thing instead. A check that refused would
+ * be a parallel predicate deciding validity, which is the thing this file
+ * exists not to do: `validateRecipe` decides what is legal, and this says
+ * what changes.
+ */
+export function linkConsequence(before: Recipe, after: Recipe): string | null {
+  const { lost, gained } = brokenComponentLinks(before, after);
+  const parts: string[] = [];
+  for (const l of lost) {
+    parts.push(
+      `“${l.toName}” uses “${l.fromName}” as an ingredient. This stops it being made by the “${l.fromName}” section, so it becomes something you buy and the cooking order no longer puts it first.`
+    );
+  }
+  for (const g of gained) {
+    parts.push(
+      `“${g.toName}” now takes “${g.fromName}” as an ingredient, so “${g.fromName}” will be cooked first.`
+    );
+  }
+  return parts.length ? parts.join(" ") : null;
+}
+
+/**
+ * Why this section cannot be deleted at all. Null when it can.
+ *
+ * The only hard stop is the last section. Everything else is a consequence
+ * rather than an error, and `linkConsequence` is what says it.
+ */
+export function deleteSectionBlocker(
+  recipe: Recipe,
+  sectionIndex: number
+): string | null {
+  try {
+    const candidate = applyEdit(recipe, { type: "deleteSection", sectionIndex });
+    const errors = validateRecipe(candidate);
+    return errors.length ? errors[0] : null;
+  } catch (e) {
+    return (e as Error).message;
+  }
 }
 
 // ---------------------------------------------------------------- amount --

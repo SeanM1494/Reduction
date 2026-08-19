@@ -342,21 +342,63 @@ own field (zero movement, measured identical geometry at rest and in error)
 and are `pointer-events: none`, so the tap that surfaced the message still
 reaches the control it was aimed at instead of being eaten by it.
 
-**What the JSON hatch can still express that the editor cannot** — it stays
-until this list is empty:
+**Round three: recipe- and section-level fields, and the name link.**
+`setRecipeFields` (title, servings, source, sourceUrl, yieldText),
+`setSectionFields` (name, header), `addSection`, `deleteSection` and
+`reorderInputs`.
 
-1. **Nothing above the step level:** recipe title, servings, source and
-   `sourceUrl`, the section header (oven temp), section names, adding or
-   deleting a whole section, and the section-as-ingredient link
-   `sequence.ts` orders by. Third round.
-2. **Ingredient `qtyMax` and `text` are reachable but not separable.** One
-   Amount box is parsed by `parseAmount`, which is deliberate — three boxes
-   would make someone choose what kind of amount they are typing before
-   typing it — but it means an amount that round-trips through the parser
-   differently from how it was stored can only be set exactly in JSON.
-3. **`mealTypes`** is edited through its own sheet rather than the editor, so
-   it is not a gap, but it is the one recipe-level field that already has a
-   visual path — worth copying the pattern for (1).
+*Where they live.* Recipe fields have no cell to be tapped and the top bar
+cannot supply one — `.rfx-bar-title` measures **29×16 on an iPhone SE** and is
+already truncated, in a bar carrying back, progress, Edit and the overflow
+menu at 320px. They are reached from a "Recipe…" button in the edit bar,
+which exists only while editing and already announces the mode; appending an
+84px button to it cost **0px of height at both 320 and 390**, because the bar
+already wraps. Sections keep the tap-the-thing rule: `.rd-section-head` is a
+15px line at rest and becomes a 44px button in edit mode.
+
+*Sections are addressed by index, and that is the editor's one asymmetry.*
+Every other op takes an id, deliberately, so no array position has to be kept
+in sync with the UI. A `Section` has no id — only a name, which is mutable and
+may repeat — and adding one means touching `layout.ts` and migrating every
+stored recipe. The index is made safe by closing the sheet on any structural
+op, so no index outlives the tree it was read from.
+
+*A new section is three fields, not five.* It cannot be empty
+(`validateRecipe` wants a step with an input, and an ingredient wants a qty or
+a text fallback), so `addSection` builds the minimum: one ingredient at
+`qty: 1`, one step consuming it. The amount defaults rather than being asked
+for, because one tap of correction in a known pattern beats a five-field form
+as a first impression.
+
+**`brokenComponentLinks` is a fix, not only a guard for the new ops.**
+`sequence.ts` links a component section to its consumer by NAME. Nothing else
+can see that link: `validateRecipe` runs per section, and both sides stay
+internally valid when it breaks. **Renaming an ingredient severs it, and that
+has shipped** — so the cookie bug (see #6's history and `sequence.ts`) has
+been re-creatable by a user in production, silently, since the ingredient
+sheet landed. Section rename and section delete add two more ways in; they are
+what brought it to light, not what caused it.
+
+The check diffs the real `componentLinks` over the before and after trees
+rather than re-deriving the matching rule — same argument as
+`validMoveTargets` running the real `validateRecipe`. It reports `gained`
+links too, because a rename that creates a match adds an ordering constraint
+and can create a cycle, which `sectionOrder` survives by falling back to the
+original order, i.e. quietly. It is a **warning, not a refusal**: breaking the
+link is sometimes the intent, and refusing would be a parallel predicate
+deciding validity, which is the thing `edits.ts` exists not to do.
+
+*The warning shares the field-error slot* — absolutely positioned,
+`pointer-events: none`. In flow it moved "Done" by **122px on an SE**, which
+is the same defect fixed in the previous round, and it would have straddled a
+tap the same way.
+
+**The JSON hatch can now go, and has not been removed.** Every field in a
+stored recipe has a visual path — the audit is under "Closed, kept for the
+record" below. The standing rule was that the hatch stays until nothing is
+left that it can express and the editor cannot; that gate is met. Actually
+removing it is a separate call, because it is the last escape route for a
+tree the editor somehow cannot fix, and taking it away is outward-facing.
 
 **Available on the free trial recipe too**, since `PATCH /api/trial/recipe`
 landed — see "Still open from earlier work".
@@ -601,6 +643,42 @@ actually left, cheapest and most blocking first.
 
 ## Still open from earlier work
 
+- **The servings stepper does not exist, and scaling is unreachable.**
+  `entry.servings` is plumbed end to end — `storage.ts` reads and writes it,
+  the PATCH carries it, `RecipeView` computes `scale` from it and `Diagram`
+  renders every amount through `formatAmount(ing, scale)`. Nothing renders a
+  control. `.rd-servings`, `.rd-stepper`, `.rd-step-btn` and `.rd-step-val`
+  are all still in `index.css` from an earlier design, and nothing in
+  `client/src/components` uses them. So halving or doubling a recipe is a
+  shipped, working, completely unreachable feature.
+
+  **`recipe.servings` and `entry.servings` are different things and one
+  control must never write both.** `recipe.servings` is what the recipe makes
+  — a correction, and it lives in the recipe sheet as of round three.
+  `entry.servings` is what you are cooking tonight, and `scale` is the second
+  divided by the first. A single control moving them together would hold
+  `scale` at exactly 1 for ever: scaling would silently stop working, every
+  amount would look right, and nothing anywhere would report it. The stepper
+  to build is the *cooking* one, and it writes `entry.servings` only.
+
+  One decided consequence: correcting `recipe.servings` while `entry.servings`
+  is set rebases the scale (8 wanted of a 4-serving recipe is 2×; correct the
+  recipe to 6 and it becomes 1.33×, and every amount on screen moves). That
+  cannot happen today because nothing sets `entry.servings`. When the stepper
+  lands, clear `entry.servings` on a `recipe.servings` correction — the
+  target was expressed against a base that no longer means what it meant.
+
+- **`yieldText` is extracted, stored, and rendered nowhere.** `fetchSource`
+  pulls it from JSON-LD, `prompt.ts` asks for it, `structureRecipe` keeps it,
+  and no component in `client/src` reads it. It is in the recipe sheet as of
+  round three so that the editor has parity with the JSON that used to be
+  reachable — which means someone can now edit a field that is invisible.
+  That wants a decision rather than inheritance: either **show it** (under the
+  title on the choose screen, next to servings, is the obvious place) or
+  **remove it** from `Recipe` and from the prompt. Showing it is the cheaper
+  and probably better answer — "makes 24 cookies" is more useful on a card
+  than a bare serving count — but it is a product call, not a cleanup.
+
 - ~~**The trial recipe cannot be edited.**~~ **Done.** `PATCH
   /api/trial/recipe` — its own route rather than a third case in the
   library's `scopeOf`, because widening that predicate would hand a
@@ -627,6 +705,37 @@ actually left, cheapest and most blocking first.
   sleeping Repl cannot fire a scheduled push.
 
 ### Closed, kept for the record
+
+- **The JSON hatch reached parity** at the close of round three. It has NOT
+  been removed — that is still a decision to take. The audit:
+
+  | field | reached by |
+  |---|---|
+  | `title`, `servings`, `source`, `sourceUrl`, `yieldText` | recipe sheet |
+  | `mealTypes` | its own sheet |
+  | section `name`, `header` | section sheet |
+  | add / delete section | recipe sheet / section sheet |
+  | ingredient `qty`, `qtyMax`, `unit`, `name`, `text`, `note` | ingredient sheet |
+  | add / delete ingredient | step sheet / ingredient sheet |
+  | step `label`, `minutes`, `tempF` | step sheet |
+  | add / delete / split / merge step | step sheet |
+  | `inputs` membership | drag, or the move list |
+  | `inputs` order | the order list in the step sheet |
+  | section `root` | derived by add/delete step |
+
+  Two things the hatch could express that are deliberately not gaps.
+  **Cross-section ingredient moves** stay refused by `moveIngredient`, because
+  `deleteIngredient` + `addIngredient` reaches the identical tree — the same
+  composition argument that keeps the ops from cascading. And **`qty` and
+  `text` set together** cannot be produced by `parseAmount`: measured across
+  33 stored shapes, the only true loss in the amount round-trip is that
+  `{qty: 2, text: "2 heaping"}` commits back as `{qty: 2, text: null}` — but
+  `formatAmount` returns early on a non-null `qty`, so that text is already
+  invisible everywhere in the app, `prompt.ts` tells the model not to produce
+  it, and the hatch was the only thing that could. The other two drift classes
+  are a repair (`text: "2"` becoming `qty: 2`, which makes it scalable) and
+  display rounding **bounded at 0.02 of a unit** by `formatQty`'s snap
+  tolerance, which renders identically before and after.
 
 - **Pass 3 visual polish** shipped (`9dd9221`): two-layer warm shadows, more
   surface contrast, a stronger ready state, done receding further, louder
