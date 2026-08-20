@@ -10,7 +10,7 @@
     "build": "NODE_ENV=production vite build",
     "start": "NODE_ENV=production tsx server/index.ts",
     "check": "tsc --noEmit",
-    "test": "node --import tsx --test '{server,shared}/**/*.test.ts'",
+    "test": "node scripts/run-tests.mjs",
     "db:push": "drizzle-kit push",
     "db:backfill-url-key": "tsx server/scripts/backfillUrlKey.ts",
     "test:db": "bash scripts/test-db.sh run",

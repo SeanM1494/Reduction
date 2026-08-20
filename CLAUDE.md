@@ -36,15 +36,15 @@ them is the whole point:
 
 | result | meaning |
 |---|---|
-| ***n* pass, 27 skipped** | no `DATABASE_URL` at all. Fine on a machine with no Postgres. |
-| ***n*+27 pass, 0 skipped** | a local database with a current schema. This is the real gate — `npm run test:db` produces it. |
+| ***n* pass, 28 skipped** | no `DATABASE_URL` at all. Fine on a machine with no Postgres. |
+| ***n*+28 pass, 0 skipped** | a local database with a current schema. This is the real gate — `npm run test:db` produces it. |
 | **failures saying "Refusing to run database tests against …"** | `DATABASE_URL` in the shell points somewhere non-local — on Replit, that is production. Working as designed: use `npm run test:db`, which ignores the env var entirely. |
 | **failures naming a missing table** | a reachable local database whose schema is behind `shared/schema.ts`. `test:db` re-pushes on every start, so this means a hand-run database — push it or use the script. |
 
 The total grows as suites are added — pin your expectation to the **skip
 count**, not the pass count (an earlier version of this table hard-coded
 23/39 and went stale within a week, so treat the number above as needing an
-edit whenever a database-backed suite is added). The 27 are four suites:
+edit whenever a database-backed suite is added). The 28 are four suites:
 `claim.db.test.ts` (the anonymous library), `trial.db.test.ts` (the free
 extraction), `cache.db.test.ts` (the URL alias and the "Instant" badge) and
 `extractionLog.test.ts` (the cost table). The first two are transactional
