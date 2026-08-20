@@ -16,6 +16,7 @@ import { trialRouter } from "./routes/trial";
 import { pushRouter, timersRouter } from "./routes/push";
 import { attachSession } from "./middleware/session";
 import { startSessionSweep } from "./lib/sessions";
+import { startTimerDispatch } from "./lib/timerDispatch";
 import { cleanupSeedRecipes } from "./cleanupSeed";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -62,3 +63,7 @@ app.listen(PORT, "0.0.0.0", () => {
 
 cleanupSeedRecipes();
 startSessionSweep();
+// Fires timer notifications only while this process happens to be alive. On
+// Autoscale that means "while the app is in use", which is a bandaid and is
+// documented as one — see server/lib/timerDispatch.ts and ROADMAP.
+startTimerDispatch();

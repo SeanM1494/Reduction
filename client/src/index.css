@@ -1929,6 +1929,10 @@ body.rd-dragging-body {
 .rd-settings-sub { color: var(--muted); font-size: 13.5px; }
 .rd-settings-signout { margin-top: 10px; }
 .rd-settings-toggle { margin-top: 10px; }
+/* The limitation under the timers toggle. Dimmer than the description above
+   it, but not hidden — someone deciding whether to rely on this has to be
+   able to read it. */
+.rd-settings-caveat { margin-top: 10px; font-size: 12.5px; line-height: 1.5; }
 /* The Add-to-Home-Screen instructions. Numbered because they are a sequence
    someone follows with the phone in their hand, not a paragraph they read. */
 .rd-settings-steps {

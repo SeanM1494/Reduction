@@ -76,9 +76,9 @@ client/src/
 
 `.replit` is set up for Autoscale: builds with `npm run build`, runs `npm start`. Add `ANTHROPIC_API_KEY` to the deployment's secrets separately — it doesn't inherit from the workspace.
 
-Timer notifications need four more secrets: `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` (a `mailto:` or `https:` contact — Apple rejects anything else) and `TIMER_DISPATCH_SECRET`. With the VAPID pair unset the app runs normally and hides the notifications toggle; with `TIMER_DISPATCH_SECRET` unset, `POST /api/timers/dispatch` 404s rather than running unauthenticated. Generate a pair with `node -e "console.log(require('web-push').generateVAPIDKeys())"`.
+Timer notifications need three more secrets (four with the external-cron path): `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` (a `mailto:` or `https:` contact — Apple rejects anything else) and `TIMER_DISPATCH_SECRET`. With the VAPID pair unset the app runs normally and hides the notifications toggle; with `TIMER_DISPATCH_SECRET` unset, `POST /api/timers/dispatch` 404s rather than running unauthenticated. Generate a pair with `node -e "console.log(require('web-push').generateVAPIDKeys())"`.
 
-**Nothing fires those notifications yet.** Autoscale scales to zero, so no process is awake when a timer comes due — see ROADMAP's Phase B entry for the trigger options. The dispatcher itself is done and reachable three ways.
+**Notifications only fire while the app is awake.** An in-process interval dispatches due timers every 30s, but Autoscale scales to zero — so a timer that comes due after the deployment sleeps waits until someone opens the app. That is a deliberate bandaid, stated to the user in Settings; see ROADMAP's Phase B entry for the two paid options that fix it properly. `TIMER_DISPATCH_SECRET` is only needed for the external-cron path and can stay unset until then.
 
 ## Dependencies
 

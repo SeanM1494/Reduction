@@ -9,14 +9,27 @@
  * floors at its interval). So `dispatchDueTimers` is a plain async function
  * with no scheduler in it, reachable three ways:
  *
- *   - `startTimerDispatch()` below, an in-process interval — correct only on
- *     a deployment that does not sleep.
+ *   - `startTimerDispatch()` below, an in-process interval.
  *   - `POST /api/timers/dispatch`, for an external cron.
  *   - imported and called directly by a scheduled job that runs a command
  *     rather than making a request, which needs no shared secret and pays no
  *     cold start.
  *
  * Changing the trigger must never mean rewriting this file.
+ *
+ * WHAT IS ACTUALLY WIRED TODAY IS THE FIRST ONE, AND IT IS A BANDAID.
+ * The interval only runs while the process happens to be alive — which on
+ * Autoscale means while the app is being used, plus whatever keep-warm window
+ * follows. A timer that comes due while the deployment is asleep fires when
+ * someone next opens the app, which is exactly what happens today anyway. So
+ * this buys something real (a timer completing while you are cooking now
+ * reaches every device on the account, and reaches a phone whose screen is
+ * off) without buying the thing the feature is ultimately for, and without
+ * paying to keep anything awake on purpose.
+ *
+ * It is deliberately NOT dressed up as the real fix. The honest limitation is
+ * stated to the user in client/src/components/NotificationSetting.tsx, and
+ * ROADMAP still carries this as open with the two paid options costed.
  *
  * CLAIM BEFORE SEND, NOT AFTER. `claimDueTimers` stamps `notified_at` inside
  * the same statement that selects the rows, with SKIP LOCKED, so two
@@ -262,4 +275,61 @@ export async function cancelTimer(
         eq(timerNotifications.recipeId, recipeId)
       )
     );
+}
+
+/**
+ * How often the in-process trigger looks for due timers.
+ *
+ * 30s, not 1s: this only ever runs while the process is already up serving
+ * something else, so the cost is one indexed query against a partial index
+ * that is empty almost every time. Half a minute late on a braise is
+ * invisible, and the case where a second would matter — a 90-second sauté —
+ * is a case nobody walks away from, so the app is open and StepsMode's own
+ * countdown has already said so.
+ */
+const DISPATCH_EVERY_MS = 30_000;
+
+/**
+ * Start the in-process trigger. Returns a stop function.
+ *
+ * Deliberately the same shape as startSessionSweep in server/lib/sessions.ts,
+ * including the unref: a background interval must never be the reason the
+ * process stays alive, which matters for tests and for a clean shutdown — and
+ * matters more here, because on Autoscale holding the process open is
+ * literally the thing that costs money.
+ *
+ * Does nothing when push is unconfigured, and says so once rather than
+ * waking up every 30 seconds to discover it again.
+ */
+export function startTimerDispatch(): () => void {
+  if (!pushConfig()) {
+    console.log("[timers] push is not configured — dispatch not started.");
+    return () => {};
+  }
+
+  const pass = async () => {
+    try {
+      const r = await dispatchDueTimers();
+      if (r.claimed) {
+        console.log(
+          `[timers] ${r.claimed} due, ${r.sent} sent` +
+            (r.pruned ? `, ${r.pruned} dead subscription(s) dropped` : "") +
+            (r.retried ? `, ${r.retried} retried` : "") +
+            (r.abandoned ? `, ${r.abandoned} abandoned` : "")
+        );
+        await sweepDispatchedTimers();
+      }
+    } catch (e) {
+      // A database blip must not kill the interval — the next pass retries,
+      // and the claim is idempotent by construction.
+      console.error("[timers] dispatch skipped:", (e as Error).message);
+    }
+  };
+
+  // One immediately: a cold start is exactly when a backlog is waiting, since
+  // by definition nothing was awake to send it.
+  void pass();
+  const timer = setInterval(pass, DISPATCH_EVERY_MS);
+  timer.unref?.();
+  return () => clearInterval(timer);
 }

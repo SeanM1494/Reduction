@@ -1082,50 +1082,80 @@ and the text change carries the whole signal.
   Phase B does NOT depend on this and deliberately does not read that column;
   see `timer_notifications` in `shared/schema.ts` for the three reasons.
 
-- **Phase B timers: DONE except the wake-up.** Service worker, Web Push, VAPID,
-  two tables, and a dispatcher — see below for what is still open.
+- **Phase B timers: OPEN. The infrastructure is built; the wake-up is not
+  paid for.** This is deferred, not solved, and the entry stays here until it
+  is.
 
-  **The wake-up is the whole difficulty and it is a deployment decision, not a
-  code one.** The published deployment is Autoscale (`cloudrun`), which scales
-  to zero, so nothing is awake at 19:42 to notice a 19:42 timer. Confirmed
-  while scoping: this app has no Scheduled Deployment, only the published one.
-  So `dispatchDueTimers()` is a plain function with no scheduler in it,
-  reachable three ways — an in-process interval, `POST /api/timers/dispatch`
-  with a shared secret, or a direct import from a job that runs a command.
-  Changing the trigger must never mean rewriting `server/lib/timerDispatch.ts`.
+  **What exists and works:** `push_subscriptions` and `timer_notifications`,
+  `server/lib/push.ts` (VAPID send, dead-subscription pruning),
+  `server/lib/timerDispatch.ts` (claim, fan-out, retry, sweep), the routes,
+  `public/sw.js`, the client subscribe flow, and the Settings control. All of
+  it verified against a stub push service over real TLS — sent, pruned on 410,
+  retry bounded — and covered by `push.db.test.ts`.
 
-  The options, with the numbers as they stood in Aug 2026 (Replit cut cloud
-  prices on 1 Aug 2026, so anything older is stale):
+  **What is wired today is a bandaid:** an in-process interval
+  (`startTimerDispatch`, 30s, the shape of `startSessionSweep`) that runs only
+  while the process happens to be alive. On Autoscale that means while the app
+  is being used, plus the keep-warm window. A timer coming due while the
+  deployment sleeps fires when someone next opens the app — which is what
+  happened before this feature existed, so nothing regressed. What it does buy
+  is real: a timer finishing while you are actually cooking now reaches every
+  device on the account and reaches a phone whose screen is off, instead of
+  only a foreground tab.
+
+  It costs nothing, and it needs **no secret beyond the three push already
+  needs** (`VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT`).
+  `TIMER_DISPATCH_SECRET` is used in exactly one place — the HTTP dispatch
+  route — and leaving it unset makes that route 404. So the paid path is not
+  half-built; it is entirely absent until someone sets one variable.
+
+  **The limitation is stated to the user**, in the Timers card in Settings,
+  whether or not notifications are switched on: alerts arrive while the app is
+  open or has been used recently, and always-on background alerts need a paid
+  tier. The first draft of that copy said "even if the app is closed", which
+  would have been selling the unbuilt version — the first burnt dinner would
+  have been how someone found out.
+
+  **The real fix, for whenever it is worth paying for** (Aug 2026 prices;
+  Replit cut cloud pricing on 1 Aug 2026, so anything older is stale):
 
   | option | $/mo | accuracy |
   |---|---|---|
   | Reserved VM (`gce`), 0.5 vCPU/2 GB | 15 | ~1s — an always-on process can arm an exact `setTimeout` |
   | Autoscale + external cron | ~2 base + 1–3 | ≥60s |
-  | Autoscale + one-shot scheduler (QStash) | ~0 | seconds, but a third party in the path of a burnt dinner |
 
-  The trap worth recording: **a 1-minute cron against a scale-to-zero
-  deployment keeps the instance warm continuously**, so most of Autoscale's
-  saving evaporates and you are left paying nearly always-on prices for worse
-  latency plus a dependency. The real gap to a Reserved VM is ~$10–12, not
-  $15. Against that, $15/mo is 60% of a Core plan's credit pool, and
-  deployments draw from the same pool as Agent usage.
+  There is no Scheduled Deployment on this app — checked, only the published
+  one — so those are the two. The trap worth remembering: **a 1-minute cron
+  against a scale-to-zero deployment keeps the instance warm continuously**,
+  so most of Autoscale's saving evaporates and the real gap to a Reserved VM
+  is ~$10–12, not $15. Against that, $15/mo is 60% of a Core plan's credit
+  pool, and deployments draw from the same pool as Agent usage.
+
+  **Turning it on later is wiring a trigger, not rebuilding.** That is the
+  whole reason `dispatchDueTimers()` has no scheduler inside it. Reserved VM:
+  change `deploymentTarget` and optionally tighten `DISPATCH_EVERY_MS`, or arm
+  exact `setTimeout`s for timers due within the next minute — the interval is
+  already correct, it just becomes always-on. External cron: set
+  `TIMER_DISPATCH_SECRET` and point something at `POST /api/timers/dispatch`.
+  A job that runs a command imports the function directly and needs no secret
+  at all. None of those touch the dispatcher, the tables, or the send path.
 
   **What is deliberately not built.** The service worker has NO `fetch`
   handler. A fetch handler is what turns a service worker into a cache, and a
   cache is what strands people on a three-deploys-old build with no way to
   tell them. iOS requires a *registered* worker for push, not one that
   intercepts requests. Offline support is its own decision with its own
-  versioning story — not a side effect of wanting timers to buzz. The cost of
-  that choice is that Android Chrome will not consider the app installable
-  (it wants a fetch handler and a 192px icon; `public/brand/` has 32/64/180/512).
-  iOS uses the 180px `apple-touch-icon`, which exists, so the target platform
-  is unaffected.
+  versioning story — not a side effect of wanting timers to buzz. The cost is
+  that Android Chrome will not consider the app installable (it wants a fetch
+  handler and a 192px icon; `public/brand/` has 32/64/180/512). iOS uses the
+  180px `apple-touch-icon`, which exists, so the target platform is
+  unaffected.
 
   **What could not be verified in the container**, and has to be checked by
   hand on a real device: that an iPhone actually receives a push. WebKit is
   not installed here and the deployed site is unreachable from the agent
   proxy, so what is proven is registration, subscription round-trip, the
-  claim/fan-out/cleanup logic and the config posture — not delivery.
+  claim/fan-out/prune logic and the config posture — not delivery.
 
 ### Closed, kept for the record
 

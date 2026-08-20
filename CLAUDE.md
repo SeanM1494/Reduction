@@ -100,15 +100,33 @@ is a copy of production user data, it is stale the moment it is written, and
 a repo is the wrong home for either property — take one before every
 `db:push`, keep it somewhere else.
 
-## Timer notifications: the wake-up is not in the code
+## Timer notifications: the wake-up is a bandaid, on purpose
 
-`server/lib/timerDispatch.ts` has no scheduler in it, and that is deliberate.
-The published deployment is Autoscale, which scales to zero, so nothing is
-awake to notice a timer come due. `dispatchDueTimers()` is a plain function
-reachable three ways — an in-process interval, `POST /api/timers/dispatch`
-behind a shared secret, or a direct import from a job that runs a command.
-**Changing the trigger must never mean editing that file.** See ROADMAP for
-the options and what each costs.
+`server/lib/timerDispatch.ts` has no scheduler inside it, and that is
+deliberate. `dispatchDueTimers()` is a plain function reachable three ways —
+an in-process interval, `POST /api/timers/dispatch` behind a shared secret, or
+a direct import from a job that runs a command. **Changing the trigger must
+never mean editing that file.**
+
+What is wired is the first: `startTimerDispatch()`, a 30s interval in the
+shape of `startSessionSweep`, running only while the process happens to be
+alive. The published deployment is Autoscale, which scales to zero, so that
+means "while the app is being used". **A timer coming due while the deployment
+sleeps does not fire until someone opens the app**, which is what happened
+before the feature existed — so nothing regressed, and nothing costs money to
+stay awake.
+
+**Do not describe this to a user as background notifications.** The Timers
+card in Settings states the limitation whether or not the toggle is on, and
+that copy is load-bearing rather than decorative: its first draft promised
+"even if the app is closed", and the first burnt dinner would have been how
+someone discovered otherwise. If you change that card, keep the caveat.
+
+`TIMER_DISPATCH_SECRET` is used in exactly one place — the HTTP dispatch
+route — and unset it 404s. So the paid path is absent rather than
+half-configured, and the interval needs nothing beyond the three VAPID
+variables push already needs. ROADMAP carries the two real options and what
+each costs.
 
 **The scheduler does not read `recipes.timer`, and must not start.** That
 column is display state: it rides the optimistic-concurrency merge, so

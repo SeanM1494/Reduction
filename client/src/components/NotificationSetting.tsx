@@ -80,7 +80,16 @@ export default function NotificationSetting() {
         </ol>
         <p className="rd-settings-line rd-settings-sub">
           Apple only allows notifications for apps added this way. Until then
-          timers still work while the app is open.
+          timers still count down while the app is open.
+        </p>
+        {/* The caveat belongs here too, and arguably here most: this is the
+            state that asks someone to go and do something on the strength of
+            a promise. Telling them what they are getting only after they have
+            installed it would be the overselling this copy exists to avoid. */}
+        <p className="rd-settings-line rd-settings-sub rd-settings-caveat">
+          Even then, alerts arrive while Reduction is open or has been used
+          recently &mdash; the server sleeps when nobody&rsquo;s cooking.
+          Always-on background alerts need a paid tier.
         </p>
       </div>
     );
@@ -107,8 +116,8 @@ export default function NotificationSetting() {
       <h2 className="rd-settings-heading">Timers</h2>
       <p className="rd-settings-line rd-settings-sub">
         {on
-          ? "You'll get a notification when a timer finishes, even if the app is closed."
-          : "Get a notification when a timer finishes, even if the app is closed."}
+          ? "You'll get a notification when a timer finishes, on every device you've turned this on for."
+          : "Get a notification when a timer finishes, on every device you turn this on for."}
       </p>
       <button
         className="rd-btn rd-settings-toggle"
@@ -118,6 +127,21 @@ export default function NotificationSetting() {
       >
         {busy ? "One moment…" : on ? "Turn off notifications" : "Turn on notifications"}
       </button>
+      {/* THE LIMITATION IS STATED WHETHER OR NOT IT IS SWITCHED ON, and it is
+          stated before someone relies on it rather than after they miss a
+          timer. Reduction's server sleeps when nobody is using it, so a timer
+          that comes due long after the app was closed does not fire until
+          someone opens it again. Promising "even if the app is closed" — which
+          this copy did in its first draft — would be selling the version that
+          needs an always-on server, and the first burnt dinner would be the
+          user finding that out. */}
+      <p className="rd-settings-line rd-settings-sub rd-settings-caveat">
+        Alerts arrive while Reduction is open or has been used recently. The
+        server sleeps when nobody&rsquo;s cooking, so a timer that finishes
+        long after you closed the app waits until you come back. Always-on
+        background alerts need a paid tier &mdash; they&rsquo;re planned, not
+        built.
+      </p>
     </div>
   );
 }
