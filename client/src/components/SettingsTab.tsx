@@ -10,6 +10,7 @@ import React from "react";
 import ThemeToggle from "./ThemeToggle";
 import NotificationSetting from "./NotificationSetting";
 import SubscriptionSetting from "./SubscriptionSetting";
+import AccountId from "./AccountId";
 import type { ThemeMode } from "../lib/theme";
 import type { SessionUser } from "../lib/session";
 
@@ -39,6 +40,7 @@ export default function SettingsTab({
         <p className="rd-settings-line rd-settings-sub">
           {recipeCount} {recipeCount === 1 ? "recipe" : "recipes"} in your library
         </p>
+        <AccountId id={user.id} />
         <button className="rd-btn rd-settings-signout" onClick={onSignOut}>
           Sign out
         </button>

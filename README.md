@@ -78,6 +78,19 @@ client/src/
 
 Timer notifications need three more secrets (four with the external-cron path): `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` (a `mailto:` or `https:` contact — Apple rejects anything else) and `TIMER_DISPATCH_SECRET`. With the VAPID pair unset the app runs normally and hides the notifications toggle; with `TIMER_DISPATCH_SECRET` unset, `POST /api/timers/dispatch` 404s rather than running unauthenticated. Generate a pair with `node -e "console.log(require('web-push').generateVAPIDKeys())"`.
 
+### Admin lookup
+
+`ADMIN_SECRET` enables `GET /api/admin/user?email=…`, which returns matching accounts' ids plus their allowance and subscriptions. Unset, the route 404s.
+
+```
+curl -H "x-admin-secret: $ADMIN_SECRET" \
+  "https://<host>/api/admin/user?email=someone@example.com"
+```
+
+Matching is case-insensitive and covers both `users.email` and `identities.email`, and every match is returned — two accounts can legitimately share an address. This is a read for one operator, not an auth path and not a role system; see the note at the top of `server/routes/admin.ts`.
+
+Signed-in users can find their own id under Settings → Account ID, with a copy button.
+
 ### Subscriptions
 
 Off by default. With `STRIPE_SECRET_KEY` / `STRIPE_PRICE_ID` / `STRIPE_WEBHOOK_SECRET` unset the billing routes 404, the paywall UI hides its own Subscribe button, and nothing is enforced.

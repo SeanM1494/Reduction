@@ -15,6 +15,7 @@ import { authRouter } from "./routes/auth";
 import { trialRouter } from "./routes/trial";
 import { pushRouter, timersRouter } from "./routes/push";
 import { billingRouter, stripeWebhookHandler } from "./routes/billing";
+import { adminRouter } from "./routes/admin";
 import { attachSession } from "./middleware/session";
 import { startSessionSweep } from "./lib/sessions";
 import { startTimerDispatch } from "./lib/timerDispatch";
@@ -59,6 +60,10 @@ app.use("/api/push", pushRouter);
 // function, and this route is only one of the three ways to reach it.
 app.use("/api/timers", timersRouter);
 app.use("/api/billing", billingRouter);
+// One operator, one lookup, behind a shared secret. 404s when ADMIN_SECRET is
+// unset — see the note at the top of routes/admin.ts about why this is not an
+// authentication path.
+app.use("/api/admin", adminRouter);
 
 if (isProd) {
   const clientDir = path.resolve(__dirname, "../dist/public");
