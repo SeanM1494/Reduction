@@ -8,6 +8,7 @@
 
 import React from "react";
 import ThemeToggle from "./ThemeToggle";
+import NotificationSetting from "./NotificationSetting";
 import type { ThemeMode } from "../lib/theme";
 import type { SessionUser } from "../lib/session";
 
@@ -41,6 +42,8 @@ export default function SettingsTab({
           Sign out
         </button>
       </div>
+
+      <NotificationSetting />
 
       <div className="rd-settings-card">
         <h2 className="rd-settings-heading">Appearance</h2>

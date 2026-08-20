@@ -1928,6 +1928,14 @@ body.rd-dragging-body {
 .rd-settings-line { margin: 0 0 6px; font-size: 15px; }
 .rd-settings-sub { color: var(--muted); font-size: 13.5px; }
 .rd-settings-signout { margin-top: 10px; }
+.rd-settings-toggle { margin-top: 10px; }
+/* The Add-to-Home-Screen instructions. Numbered because they are a sequence
+   someone follows with the phone in their hand, not a paragraph they read. */
+.rd-settings-steps {
+  margin: 8px 0 10px; padding-left: 20px;
+  font-size: 15px; line-height: 1.55;
+}
+.rd-settings-steps li { margin-bottom: 4px; }
 
 /* The open recipe's meal-type badge — same fact as the card badge, tappable.
    Discoverability is the point: the overflow menu entry still exists, but

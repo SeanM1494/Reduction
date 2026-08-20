@@ -38,6 +38,8 @@ interface AuthParams {
   signedIn: boolean;
   pending: string | null;
   authError: string | null;
+  /** A recipe id from a notification tap (?open=). */
+  openRecipe: string | null;
 }
 
 /**
@@ -55,15 +57,19 @@ let cachedAuthParams: AuthParams | null = null;
 function takeAuthParams(): AuthParams {
   if (cachedAuthParams) return cachedAuthParams;
   if (typeof window === "undefined") {
-    return { signedIn: false, pending: null, authError: null };
+    return { signedIn: false, pending: null, authError: null, openRecipe: null };
   }
   const params = new URLSearchParams(window.location.search);
   const result: AuthParams = {
     signedIn: params.get("signed_in") === "1",
     pending: params.get("pending"),
     authError: params.get("auth_error"),
+    // A notification tap. The app has no router, so the service worker names
+    // the recipe here and it is consumed exactly like the auth params — read
+    // once, then wiped from the URL so a reload does not reopen it.
+    openRecipe: params.get("open"),
   };
-  if (result.signedIn || result.pending || result.authError) {
+  if (result.signedIn || result.pending || result.authError || result.openRecipe) {
     window.history.replaceState({}, "", window.location.pathname);
   }
   cachedAuthParams = result;
@@ -90,6 +96,33 @@ export default function App() {
   // below depend on what came back in the URL.
   const [authParams] = useState(takeAuthParams);
   const [authError, setAuthError] = useState<string | null>(authParams.authError);
+
+  /**
+   * A notification tap, arriving two ways.
+   *
+   * Cold start: the service worker opened /?open=<id>, takeAuthParams read it
+   * and cleared it, and this opens that recipe once the library has loaded —
+   * gated on `loaded` because openId names a row that is not there yet.
+   *
+   * Already open: the worker focuses the existing window and postMessages
+   * instead, because reloading would throw away whatever the cook was in the
+   * middle of.
+   */
+  useEffect(() => {
+    if (!loaded || !authParams.openRecipe) return;
+    setOpenId(authParams.openRecipe);
+  }, [loaded, authParams.openRecipe]);
+
+  useEffect(() => {
+    if (typeof navigator === "undefined" || !("serviceWorker" in navigator)) return;
+    const onMessage = (e: MessageEvent) => {
+      if (e.data?.type === "open-recipe" && e.data.recipeId) {
+        setOpenId(String(e.data.recipeId));
+      }
+    };
+    navigator.serviceWorker.addEventListener("message", onMessage);
+    return () => navigator.serviceWorker.removeEventListener("message", onMessage);
+  }, []);
   const [pendingUrl, setPendingUrl] = useState<string | null>(() => readPendingUrl());
   /**
    * Open the sign-in screen straight away when there is a link waiting for an

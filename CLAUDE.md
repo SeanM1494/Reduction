@@ -36,24 +36,26 @@ them is the whole point:
 
 | result | meaning |
 |---|---|
-| ***n* pass, 28 skipped** | no `DATABASE_URL` at all. Fine on a machine with no Postgres. |
-| ***n*+28 pass, 0 skipped** | a local database with a current schema. This is the real gate — `npm run test:db` produces it. |
+| ***n* pass, 41 skipped** | no `DATABASE_URL` at all. Fine on a machine with no Postgres. |
+| ***n*+41 pass, 0 skipped** | a local database with a current schema. This is the real gate — `npm run test:db` produces it. |
 | **failures saying "Refusing to run database tests against …"** | `DATABASE_URL` in the shell points somewhere non-local — on Replit, that is production. Working as designed: use `npm run test:db`, which ignores the env var entirely. |
 | **failures naming a missing table** | a reachable local database whose schema is behind `shared/schema.ts`. `test:db` re-pushes on every start, so this means a hand-run database — push it or use the script. |
 
 The total grows as suites are added — pin your expectation to the **skip
 count**, not the pass count (an earlier version of this table hard-coded
 23/39 and went stale within a week, so treat the number above as needing an
-edit whenever a database-backed suite is added). The 28 are four suites:
+edit whenever a database-backed suite is added). The 41 are five suites:
 `claim.db.test.ts` (the anonymous library), `trial.db.test.ts` (the free
-extraction), `cache.db.test.ts` (the URL alias and the "Instant" badge) and
-`extractionLog.test.ts` (the cost table). The first two are transactional
-guarantees — all-or-nothing rollback, idempotent repeats, never taking another
-user's rows. The third is a promise about correctness: that a normalised URL
-never serves a different page. The fourth guards a denominator — a cache hit
-that recorded a `via` would silently corrupt every "what fraction" query the
-table exists to answer. **The full suite — 205 tests at the time of writing —
-has been run against a real Postgres and passes 205/0.**
+extraction), `cache.db.test.ts` (the URL alias and the "Instant" badge),
+`extractionLog.test.ts` (the cost table) and `push.db.test.ts` (timer
+notifications). The first two are transactional guarantees — all-or-nothing
+rollback, idempotent repeats, never taking another user's rows. The third is a
+promise about correctness: that a normalised URL never serves a different page.
+The fourth guards a denominator — a cache hit that recorded a `via` would
+silently corrupt every "what fraction" query the table exists to answer. The
+fifth guards a claim that has to be atomic: two dispatchers racing must not
+buzz one phone twice. **The full suite — 222 tests at the time of writing —
+has been run against a real Postgres and passes 222/0.**
 
 **`npm test` must never be run against production.** It reads `DATABASE_URL`,
 which on a deployed host is the live database — so running the suite there
@@ -97,6 +99,48 @@ what actually landed rather than trusted.
 is a copy of production user data, it is stale the moment it is written, and
 a repo is the wrong home for either property — take one before every
 `db:push`, keep it somewhere else.
+
+## Timer notifications: the wake-up is not in the code
+
+`server/lib/timerDispatch.ts` has no scheduler in it, and that is deliberate.
+The published deployment is Autoscale, which scales to zero, so nothing is
+awake to notice a timer come due. `dispatchDueTimers()` is a plain function
+reachable three ways — an in-process interval, `POST /api/timers/dispatch`
+behind a shared secret, or a direct import from a job that runs a command.
+**Changing the trigger must never mean editing that file.** See ROADMAP for
+the options and what each costs.
+
+**The scheduler does not read `recipes.timer`, and must not start.** That
+column is display state: it rides the optimistic-concurrency merge, so
+`mergeTimer` can rewrite `endsAt` under you; writing a marker back into it
+would bump `version` and hand every other device a 409 for a write the user
+never made; it is keyed by `owner_key` when a notification is owed to an
+*account*; and nothing ever clears it, so every recipe anyone has timed
+carries a permanently-past `endsAt`. `timer_notifications` is the queue.
+
+**Scheduling happens in the library PATCH, not in `StepsMode`.** The client
+already sends `timer` there the moment one starts, so the cooking-mode
+countdown keeps its one job and knows nothing about push. If you find
+yourself importing anything push-related into `StepsMode.tsx`, stop.
+
+**The service worker has no `fetch` handler and must not grow one.** A fetch
+handler is what turns a service worker into a cache, and a cache is what
+strands people on a three-deploys-old build. iOS needs a *registered* worker
+for push, not one that intercepts requests. Offline support is its own
+decision with its own versioning story.
+
+**Three iOS rules, none of which reproduce on desktop or in this container:**
+web push only works in a Home-Screen-installed PWA (a Safari tab gets
+nothing, which is why `NotificationSetting` shows install instructions rather
+than a toggle that would silently fail); `requestPermission()` must be called
+inside a user gesture that Safari has not seen an `await` spend; and the
+service worker registration must already exist when the tap lands, which is
+why `initPush()` runs from `main.tsx` at boot and never from the handler.
+
+**Delivery to an iPhone cannot be verified here.** WebKit is not installed and
+the deployed site is unreachable from the agent proxy. What the suite proves
+is registration, the subscription round-trip, the claim/fan-out/prune logic
+and the config posture — not that a phone buzzes. That needs a real device.
 
 ## This app is mobile-first
 

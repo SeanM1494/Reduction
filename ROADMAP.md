@@ -1062,9 +1062,70 @@ and the text change carries the whole signal.
   array, `typeof UNITS[number]` for the type) is a small change now and an
   annoying one once a third list appears. Surfaced when the editor's unit
   picker needed the set at runtime.
-- Phase B timers: service worker + Web Push for notifications when the
-  app is closed. Needs a Reserved VM or external cron, because a
-  sleeping Repl cannot fire a scheduled push.
+- **`recipes.timer` is never cleared when a timer finishes.** Small, real,
+  and independent of Phase B. `StepsMode`'s completion effect fires the
+  in-page banner and nothing else — it does not PATCH, so the row keeps a
+  past `endsAt` for ever. Two visible consequences: `notifiedForRef` is
+  component-local, so leaving and re-entering steps mode re-fires the alert
+  for a timer that finished yesterday; and every recipe anyone has ever timed
+  carries permanent stale state.
+
+  The fix is to write `timer: null` once, on the same transition that already
+  fires the notification. What makes it worth its own line rather than a
+  drive-by: it is a WRITE on a path that currently only reads, so it has to
+  go through the normal `onUpdate` / `ifVersion` route, and `mergeTimer`
+  already has an opinion about a null timer (an explicit cancel wins over a
+  running one). Clearing on completion looks identical to a cancel from
+  another device's point of view. Probably fine — both mean "this timer is
+  over" — but it wants checking against `sync.test.ts` rather than assuming.
+
+  Phase B does NOT depend on this and deliberately does not read that column;
+  see `timer_notifications` in `shared/schema.ts` for the three reasons.
+
+- **Phase B timers: DONE except the wake-up.** Service worker, Web Push, VAPID,
+  two tables, and a dispatcher — see below for what is still open.
+
+  **The wake-up is the whole difficulty and it is a deployment decision, not a
+  code one.** The published deployment is Autoscale (`cloudrun`), which scales
+  to zero, so nothing is awake at 19:42 to notice a 19:42 timer. Confirmed
+  while scoping: this app has no Scheduled Deployment, only the published one.
+  So `dispatchDueTimers()` is a plain function with no scheduler in it,
+  reachable three ways — an in-process interval, `POST /api/timers/dispatch`
+  with a shared secret, or a direct import from a job that runs a command.
+  Changing the trigger must never mean rewriting `server/lib/timerDispatch.ts`.
+
+  The options, with the numbers as they stood in Aug 2026 (Replit cut cloud
+  prices on 1 Aug 2026, so anything older is stale):
+
+  | option | $/mo | accuracy |
+  |---|---|---|
+  | Reserved VM (`gce`), 0.5 vCPU/2 GB | 15 | ~1s — an always-on process can arm an exact `setTimeout` |
+  | Autoscale + external cron | ~2 base + 1–3 | ≥60s |
+  | Autoscale + one-shot scheduler (QStash) | ~0 | seconds, but a third party in the path of a burnt dinner |
+
+  The trap worth recording: **a 1-minute cron against a scale-to-zero
+  deployment keeps the instance warm continuously**, so most of Autoscale's
+  saving evaporates and you are left paying nearly always-on prices for worse
+  latency plus a dependency. The real gap to a Reserved VM is ~$10–12, not
+  $15. Against that, $15/mo is 60% of a Core plan's credit pool, and
+  deployments draw from the same pool as Agent usage.
+
+  **What is deliberately not built.** The service worker has NO `fetch`
+  handler. A fetch handler is what turns a service worker into a cache, and a
+  cache is what strands people on a three-deploys-old build with no way to
+  tell them. iOS requires a *registered* worker for push, not one that
+  intercepts requests. Offline support is its own decision with its own
+  versioning story — not a side effect of wanting timers to buzz. The cost of
+  that choice is that Android Chrome will not consider the app installable
+  (it wants a fetch handler and a 192px icon; `public/brand/` has 32/64/180/512).
+  iOS uses the 180px `apple-touch-icon`, which exists, so the target platform
+  is unaffected.
+
+  **What could not be verified in the container**, and has to be checked by
+  hand on a real device: that an iPhone actually receives a push. WebKit is
+  not installed here and the deployed site is unreachable from the agent
+  proxy, so what is proven is registration, subscription round-trip, the
+  claim/fan-out/cleanup logic and the config posture — not delivery.
 
 ### Closed, kept for the record
 

@@ -13,6 +13,7 @@ import { recipesRouter } from "./routes/recipes";
 import { libraryRouter } from "./routes/library";
 import { authRouter } from "./routes/auth";
 import { trialRouter } from "./routes/trial";
+import { pushRouter, timersRouter } from "./routes/push";
 import { attachSession } from "./middleware/session";
 import { startSessionSweep } from "./lib/sessions";
 import { cleanupSeedRecipes } from "./cleanupSeed";
@@ -36,6 +37,10 @@ app.use("/api/auth", authRouter);
 app.use("/api/recipes", recipesRouter);
 app.use("/api/library", libraryRouter);
 app.use("/api/trial", trialRouter);
+app.use("/api/push", pushRouter);
+// The dispatch trigger. See server/lib/timerDispatch.ts: the work is a plain
+// function, and this route is only one of the three ways to reach it.
+app.use("/api/timers", timersRouter);
 
 if (isProd) {
   const clientDir = path.resolve(__dirname, "../dist/public");

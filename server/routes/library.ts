@@ -20,6 +20,7 @@ import { pruneOrderPreference } from "../../shared/sequence";
 import { sanitizeMealTypes } from "../../shared/mealTypes";
 import { reconcileDone } from "../../shared/progress";
 import { userIdOf } from "../middleware/session";
+import { cancelTimer, scheduleTimer } from "../lib/timerDispatch";
 
 export const libraryRouter = Router();
 
@@ -45,6 +46,65 @@ function isValidTimer(v: unknown): v is TimerValue {
   if (typeof v !== "object") return false;
   const t = v as Record<string, unknown>;
   return typeof t.stepId === "string" && typeof t.endsAt === "number";
+}
+
+/**
+ * Mirror a row's `timer` into the notification queue.
+ *
+ * WHY THIS LIVES ON THE WRITE PATH AND NOT IN StepsMode. The client already
+ * sends `timer` here the moment a timer starts — buildPatch only puts it on
+ * the wire when it changed — so the intent is already crossing this line.
+ * Scheduling from the request that expresses it means the cooking-mode
+ * countdown keeps its one job (rendering endsAt - now) and gains no knowledge
+ * of push at all. Nothing in client/src/components/StepsMode.tsx changes.
+ *
+ * Signed in only, because a subscription is keyed to an account: a trial
+ * recipe's timer schedules nothing, which is a scoping decision and not a
+ * gap. Best-effort by design — a scheduling failure must never turn starting
+ * a timer into a failed save, because the in-app countdown still works
+ * without it. It is logged, not surfaced.
+ *
+ * The bound on endsAt is deliberately stricter than isValidTimer's. That
+ * predicate gates DISPLAY, where a nonsense value shows a nonsense
+ * countdown and someone fixes it; this gates a row a scheduler will act on
+ * later, where a far-future value is a buzz nobody can explain in a month
+ * and a far-past one fires the instant it lands.
+ */
+const MAX_TIMER_MS = 24 * 60 * 60 * 1000;
+
+async function syncTimerNotification(
+  req: Request,
+  row: typeof recipes.$inferSelect
+): Promise<void> {
+  const userId = userIdOf(req);
+  if (!userId) return;
+  try {
+    const timer = row.timer;
+    if (!timer) {
+      await cancelTimer(userId, row.id);
+      return;
+    }
+    const endsAt = new Date(timer.endsAt);
+    const delta = timer.endsAt - Date.now();
+    if (!Number.isFinite(timer.endsAt) || delta <= 0 || delta > MAX_TIMER_MS) {
+      await cancelTimer(userId, row.id);
+      return;
+    }
+    const tree = row.recipe as Recipe;
+    const step = tree?.sections
+      ?.flatMap((sec) => sec.nodes ?? [])
+      .find((n) => n.id === timer.stepId);
+    await scheduleTimer({
+      userId,
+      recipeId: row.id,
+      stepId: timer.stepId,
+      stepLabel: step?.label ?? null,
+      recipeTitle: tree?.title ?? null,
+      endsAt,
+    });
+  } catch (e) {
+    console.error("[library:timer] could not schedule:", (e as Error).message);
+  }
 }
 
 function requireOwnerKey(req: Request, res: Response, next: NextFunction) {
@@ -354,6 +414,10 @@ libraryRouter.patch("/:id", async (req: Request, res: Response) => {
         entry: wireEntry(result.current),
       });
 
+    // Only when the request actually carried a timer: an unrelated PATCH
+    // (a rating, a mode tap) must not re-schedule or cancel anything.
+    if (timer !== undefined) await syncTimerNotification(req, result.row);
+
     return res.json({ entry: wireEntry(result.row) });
   } catch (e) {
     console.error("[library:update]", e);
@@ -371,6 +435,17 @@ libraryRouter.delete("/:id", async (req: Request, res: Response) => {
       .returning({ id: recipes.id });
 
     if (!row) return res.status(404).json({ error: "No saved recipe with that id." });
+
+    // A deleted recipe must take its pending buzz with it, or someone gets
+    // told to check on a dish whose recipe no longer exists.
+    const userId = userIdOf(req);
+    if (userId) {
+      try {
+        await cancelTimer(userId, id);
+      } catch (e) {
+        console.error("[library:timer] could not cancel:", (e as Error).message);
+      }
+    }
     return res.json({ ok: true });
   } catch (e) {
     console.error("[library:delete]", e);

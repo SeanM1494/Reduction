@@ -316,3 +316,104 @@ export const authStates = pgTable(
   },
   (table) => [index("auth_states_expires_idx").on(table.expiresAt)]
 );
+
+/**
+ * A browser's Web Push subscription — one row per DEVICE, many per account.
+ *
+ * `endpoint` is the primary key because the push service's URL *is* the
+ * subscription's identity: re-subscribing on the same device with the same
+ * VAPID key returns the same endpoint, so an upsert on it is idempotent and
+ * a device cannot accumulate duplicate rows by reopening the app.
+ *
+ * KEYED TO THE ACCOUNT, NOT owner_key. A push subscription is a standing
+ * permission to interrupt someone's evening, and owner_key is a browser
+ * rather than a person — it survives no sign-out and identifies no one to
+ * revoke it. #7 retired it for exactly this class of thing. The practical
+ * consequence is that push is signed-in only: a trial recipe has no account
+ * to notify, which is a scoping decision rather than a gap.
+ *
+ * `failed_at` records a 404/410 from the push service, which is the
+ * documented "this subscription is dead" signal — the row is deleted on
+ * sight, and the column exists for the case where the delete itself fails.
+ */
+export const pushSubscriptions = pgTable(
+  "push_subscriptions",
+  {
+    endpoint: text("endpoint").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    /** The client's public key and auth secret, from PushSubscription.toJSON(). */
+    p256dh: text("p256dh").notNull(),
+    auth: text("auth").notNull(),
+    /** Display only — "iPhone, added 3 May" in Settings. Never matched on. */
+    userAgent: text("user_agent"),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
+    lastUsedAt: timestamp("last_used_at", { withTimezone: true }).defaultNow(),
+    failedAt: timestamp("failed_at", { withTimezone: true }),
+  },
+  (table) => [index("push_subs_user_idx").on(table.userId)]
+);
+
+/**
+ * One pending "your timer is done" push.
+ *
+ * WHY THIS IS NOT THE `recipes.timer` COLUMN, which already holds an
+ * absolute endsAt and looks like it would do. Three reasons, and each one
+ * alone is enough:
+ *
+ *  1. Writing a `notified_at` marker back into that jsonb would bump the
+ *     row's `version`, and every other device on the account would collect a
+ *     409 and a merge for a write the user did not make.
+ *  2. `mergeTimer` in shared/sync.ts can legitimately REWRITE endsAt while a
+ *     conflict resolves, so the column is not a stable target to schedule
+ *     against.
+ *  3. `recipes` is keyed (owner_key, id); a notification is owed to an
+ *     ACCOUNT. Reading a browser-keyed row to decide who to interrupt is the
+ *     same confusion push_subscriptions avoids above.
+ *
+ * There is also a fourth, more immediate one: nothing ever clears
+ * `recipes.timer` when a timer finishes, so every recipe anyone has ever
+ * timed carries a permanently-past endsAt. A scheduler reading that column
+ * would find thousands of rows that are forever due. (That staleness is its
+ * own small bug — see ROADMAP — but it is not this table's problem.)
+ *
+ * The unique (user_id, recipe_id) mirrors the one-timer-per-recipe shape the
+ * column already has, so starting a second timer replaces the first rather
+ * than queueing a second buzz.
+ */
+export const timerNotifications = pgTable(
+  "timer_notifications",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    /** No FK: recipes' primary key is (owner_key, id), and this table only
+     *  ever knows the account. A recipe deleted out from under a pending
+     *  timer takes its row with it via the DELETE route. */
+    recipeId: text("recipe_id").notNull(),
+    stepId: text("step_id").notNull(),
+    /** Denormalised at schedule time: these are the notification's title and
+     *  body, and reading them at dispatch would mean loading and walking a
+     *  recipe tree per timer, for text that cannot change between the tap
+     *  that started the timer and the buzz that ends it without the timer
+     *  itself being rewritten. */
+    stepLabel: text("step_label"),
+    recipeTitle: text("recipe_title"),
+    endsAt: timestamp("ends_at", { withTimezone: true }).notNull(),
+    /** The claim marker. Non-null means some dispatcher has taken this row;
+     *  see claimDueTimers for why that is set before the send and not after. */
+    notifiedAt: timestamp("notified_at", { withTimezone: true }),
+    attempts: integer("attempts").notNull().default(0),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("timer_notifs_user_recipe_idx").on(table.userId, table.recipeId),
+    /** The dispatcher's only query. Partial, because a claimed row is dead
+     *  weight in an index that exists to find unclaimed ones. */
+    index("timer_notifs_due_idx")
+      .on(table.endsAt)
+      .where(sql`notified_at is null`),
+  ]
+);
