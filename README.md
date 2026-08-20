@@ -78,6 +78,14 @@ client/src/
 
 Timer notifications need three more secrets (four with the external-cron path): `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` (a `mailto:` or `https:` contact — Apple rejects anything else) and `TIMER_DISPATCH_SECRET`. With the VAPID pair unset the app runs normally and hides the notifications toggle; with `TIMER_DISPATCH_SECRET` unset, `POST /api/timers/dispatch` 404s rather than running unauthenticated. Generate a pair with `node -e "console.log(require('web-push').generateVAPIDKeys())"`.
 
+### Subscriptions
+
+Off by default. With `STRIPE_SECRET_KEY` / `STRIPE_PRICE_ID` / `STRIPE_WEBHOOK_SECRET` unset the billing routes 404, the paywall UI hides its own Subscribe button, and nothing is enforced.
+
+Enforcement is a *separate* switch from configuration: `PAYWALL_ENFORCED=1` turns the wall on globally, and `account_access.enforce_override` forces it per account in either direction (`true` to live on the paid tier before anyone else, `false` to comp someone). With enforcement off the gate still runs and still records every decision to `access_events` — `decision = 'would_block'` is the wall firing in a world where the flag is on.
+
+The Stripe webhook is mounted with `express.raw` **before** `express.json()` in `server/index.ts`. Stripe signs the raw bytes; parse them first and every event fails signature verification permanently.
+
 **Notifications only fire while the app is awake.** An in-process interval dispatches due timers every 30s, but Autoscale scales to zero — so a timer that comes due after the deployment sleeps waits until someone opens the app. That is a deliberate bandaid, stated to the user in Settings; see ROADMAP's Phase B entry for the two paid options that fix it properly. `TIMER_DISPATCH_SECRET` is only needed for the external-cron path and can stay unset until then.
 
 ## Dependencies

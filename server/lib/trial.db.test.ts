@@ -14,12 +14,12 @@
  * database before releasing.
  */
 
-import test, { type TestContext } from "node:test";
+import test, { after, type TestContext } from "node:test";
 import assert from "node:assert/strict";
 import crypto from "node:crypto";
 import { and, eq } from "drizzle-orm";
 import { getDb } from "../db";
-import { recipes, trials } from "../../shared/schema";
+import { accountAccess, recipes, trials, users } from "../../shared/schema";
 import { claimTrialRecipe, spendTrial, storeTrialRecipe, trialOwnerKey } from "./trial";
 import { needsDatabase as gate } from "./testdb";
 import type { Recipe } from "../../shared/layout";
@@ -42,10 +42,53 @@ const STUB_RECIPE = {
  *  what reported these nine tests as "no reachable DATABASE_URL" while the
  *  library claim's tests passed against the same database in the same
  *  process. See server/lib/testdb.ts. */
-const needsDatabase = (t: TestContext) => gate(t, "trials", "recipes");
+const needsDatabase = (t: TestContext) =>
+  gate(t, "trials", "recipes", "users", "account_access");
 
 const newTrialId = () => `test-trial-${crypto.randomUUID()}`;
-const newUser = () => `test-user-${crypto.randomUUID()}`;
+
+/**
+ * A REAL account row, not just an id string.
+ *
+ * These used to be bare uuids that existed nowhere, which worked until the
+ * claim started spending the account's recipe allowance — `account_access`
+ * has a foreign key onto `users`, so a claim for a user who does not exist
+ * now fails loudly. That is the right behaviour (the claim only ever runs
+ * after sign-in, so the row is always there in production) and the fixture
+ * was the thing being unrealistic.
+ */
+const mintedUsers = new Set<string>();
+
+async function newUser(): Promise<string> {
+  const id = `test-user-${crypto.randomUUID()}`;
+  await getDb().insert(users).values({ id, displayName: "Trial Test" });
+  mintedUsers.add(id);
+  return id;
+}
+
+/**
+ * Every account this suite minted, removed at the end.
+ *
+ * Tracked in a set rather than cleaned per test because a claim moves a
+ * recipe INTO an account, so the teardown has to outlive the test that
+ * created it. A suite that leaves rows behind is the thing CLAUDE.md records
+ * happening once already.
+ */
+after(async () => {
+  // Nothing minted means every test skipped, which on a machine with no
+  // Postgres is the normal outcome — and getDb() THROWS there. An after hook
+  // that ignores this turns "no database" from a clean skip into a suite
+  // failure, which is exactly the confusion server/lib/testdb.ts exists to
+  // prevent.
+  if (!mintedUsers.size) return;
+  const db = getDb();
+  for (const id of mintedUsers) {
+    await db.delete(accountAccess).where(eq(accountAccess.userId, id));
+    await db.delete(recipes).where(eq(recipes.userId, id));
+    await db.delete(users).where(eq(users.id, id));
+  }
+  mintedUsers.clear();
+});
 
 /** A trial that has been spent and has its recipe parked, ready to claim. */
 async function spentTrial(): Promise<{ trialId: string; recipeId: string }> {
@@ -82,7 +125,7 @@ test("a spent trial can only be spent once", async (t) => {
 test("the trial recipe lands in the account that claims it", async (t) => {
   if (!(await needsDatabase(t))) return;
   const { trialId, recipeId } = await spentTrial();
-  const userId = newUser();
+  const userId = await newUser();
   try {
     const result = await claimTrialRecipe(userId, trialId);
     assert.equal(result.claimed, 1);
@@ -99,7 +142,7 @@ test("the trial recipe lands in the account that claims it", async (t) => {
 test("claiming twice is idempotent", async (t) => {
   if (!(await needsDatabase(t))) return;
   const { trialId } = await spentTrial();
-  const userId = newUser();
+  const userId = await newUser();
   try {
     await claimTrialRecipe(userId, trialId);
     const second = await claimTrialRecipe(userId, trialId);
@@ -116,8 +159,8 @@ test("claiming twice is idempotent", async (t) => {
 test("a trial already claimed by someone else is never taken", async (t) => {
   if (!(await needsDatabase(t))) return;
   const { trialId } = await spentTrial();
-  const first = newUser();
-  const second = newUser();
+  const first = await newUser();
+  const second = await newUser();
   try {
     await claimTrialRecipe(first, trialId);
     const result = await claimTrialRecipe(second, trialId);
@@ -133,7 +176,7 @@ test("a trial already claimed by someone else is never taken", async (t) => {
 test("an id collision inside the account re-keys rather than failing", async (t) => {
   if (!(await needsDatabase(t))) return;
   const { trialId, recipeId } = await spentTrial();
-  const userId = newUser();
+  const userId = await newUser();
   const db = getDb();
   const otherKey = `test-owner-${crypto.randomUUID()}`;
   try {
@@ -163,7 +206,7 @@ test("a trial with no recipe is a no-op, not an error", async (t) => {
   if (!(await needsDatabase(t))) return;
   // Spent but never stored — an extraction that failed after taking the slot.
   const trialId = newTrialId();
-  const userId = newUser();
+  const userId = await newUser();
   try {
     await spendTrial(trialId);
     const result = await claimTrialRecipe(userId, trialId);
@@ -176,14 +219,14 @@ test("a trial with no recipe is a no-op, not an error", async (t) => {
 
 test("an unknown trial id is a no-op", async (t) => {
   if (!(await needsDatabase(t))) return;
-  const result = await claimTrialRecipe(newUser(), newTrialId());
+  const result = await claimTrialRecipe(await newUser(), newTrialId());
   assert.equal(result.claimed, 0);
 });
 
 test("a failure partway through moves nothing", async (t) => {
   if (!(await needsDatabase(t))) return;
   const { trialId } = await spentTrial();
-  const userId = newUser();
+  const userId = await newUser();
   try {
     await assert.rejects(
       claimTrialRecipe(userId, trialId, {
@@ -209,7 +252,7 @@ test("a claim touches only its own trial", async (t) => {
   if (!(await needsDatabase(t))) return;
   const mine = await spentTrial();
   const bystander = await spentTrial();
-  const userId = newUser();
+  const userId = await newUser();
   try {
     await claimTrialRecipe(userId, mine.trialId);
     const other = await rowsFor(bystander.trialId);

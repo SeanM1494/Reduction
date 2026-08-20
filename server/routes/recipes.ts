@@ -21,6 +21,7 @@ import { structureRecipeFromUrl } from "../lib/fetchViaClaude";
 import { searchRecipes, type SearchResult } from "../lib/searchRecipes";
 import type { Recipe } from "../../shared/layout";
 import { userIdOf } from "../middleware/session";
+import { checkAccess, subscriptionRequired } from "../lib/billing/access";
 import { ensureTrialId, refundTrial, spendTrial, storeTrialRecipe } from "../lib/trial";
 import { urlKeyOf } from "../lib/urlKey";
 import { hostOf, recordExtraction, type ExtractionEvent } from "../lib/extractionLog";
@@ -231,7 +232,27 @@ async function requireExtractionAllowance(
   res: Response,
   next: NextFunction
 ) {
-  if (userIdOf(req)) return next();
+  /**
+   * TWO DIFFERENT GATES, FOR TWO DIFFERENT ACTORS, AND THEY MUST NOT MERGE.
+   *
+   * Signed in: an ACCOUNT allowance — how many recipes this account has ever
+   * added, against what it is allowed. Below: the pre-signup TRIAL, which is
+   * cookie-keyed, one-shot, and belongs to a browser rather than a person.
+   * They meet in exactly one place — the signup claim, which spends the
+   * account's first unit for the trial recipe it carries over — so that a
+   * visitor who extracts one recipe and then signs up has ONE recipe in
+   * total, not one before and one after.
+   *
+   * The gate runs BEFORE any model call. That is the point of gating here
+   * rather than at save: an extraction someone cannot then use is an API call
+   * bought for nothing, and a wall hit after the work is done reads as a
+   * bait-and-switch.
+   */
+  if (userIdOf(req)) {
+    const access = await checkAccess(req, "extract");
+    if (access.blocked) return subscriptionRequired(res, access.entitlement);
+    return next();
+  }
 
   try {
     const trialId = ensureTrialId(req, res);
@@ -588,6 +609,12 @@ recipesRouter.post("/reextract", async (req: Request, res: Response) => {
       code: "reextract_limit",
     });
 
+  // Re-reading a page is the most expensive call a user can trigger on
+  // purpose, so it is gated like any other. It does NOT spend allowance —
+  // this is a correction to a recipe they already hold, not a new one.
+  const access = await checkAccess(req, "reextract");
+  if (access.blocked) return subscriptionRequired(res, access.entitlement);
+
   // Its own source value, so re-reads never contaminate the fraction of
   // ordinary extractions that take the expensive path — and so the cost of
   // the hatch itself is visible separately, which is the number that decides
@@ -650,6 +677,17 @@ recipesRouter.post("/search", async (req: Request, res: Response) => {
     return res
       .status(429)
       .json({ error: "Too many searches this hour. Try again later." });
+
+  /**
+   * SEARCH IS WALLED TOO, and that is a cost decision before it is a product
+   * one. A search is an API call this app pays for; running one for somebody
+   * who cannot act on any result is money spent to produce a list of things
+   * they will be refused. The softer alternative — let them browse, wall the
+   * extraction — spends real money to make the wall feel less like a wall,
+   * which is the wrong thing to buy.
+   */
+  const access = await checkAccess(req, "search");
+  if (access.blocked) return subscriptionRequired(res, access.entitlement);
 
   const { query } = req.body ?? {};
   if (typeof query !== "string")

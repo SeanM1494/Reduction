@@ -1157,6 +1157,79 @@ and the text change carries the whole signal.
   proxy, so what is proven is registration, subscription round-trip, the
   claim/fan-out/prune logic and the config posture — not delivery.
 
+- **The subscription paywall: BUILT, SWITCHED OFF.** One recipe per free
+  account, $1.99/mo unlimited. Every line of it ships inert: with
+  `PAYWALL_ENFORCED` unset and no `enforce_override` rows, the gate computes
+  its decision, logs it, and allows the request.
+
+  **What "one recipe" means, precisely**, because each of these was a decision
+  rather than a detail:
+
+  - **One EVER, not one at a time.** `account_access.recipes_used` is
+    monotonic; deleting a recipe does not hand the slot back. A row count over
+    `recipes` would have, and would have turned the free tier into an
+    unlimited carousel.
+  - **One across the WHOLE free experience.** The pre-signup trial's recipe
+    becomes the account's one recipe, because the signup claim spends a unit
+    of allowance in the same transaction that moves the row. Not one before
+    signing up and another after.
+  - **Blocked at the earliest point**, which is search and extraction, not
+    save. An extraction someone cannot use is an API call bought for nothing,
+    and a wall hit after the work reads as a bait-and-switch. Search is walled
+    for the same reason: paying for a list of results nobody can act on is
+    money spent to make the wall feel softer.
+  - **Their own recipe is untouched.** Viewing, cooking, editing, scaling and
+    deleting it are ungated, and so is `GET /api/library`. The app does not
+    go dead — that is the difference between a limit and a dead end.
+
+  **The sign-out loophole is closed.** Without the spend inside the claim
+  transaction, a fresh cookie plus a second extraction plus a sign-in hands an
+  already-full account another recipe, repeatable for as long as you have
+  patience. The second trial is refused and its row stays PARKED — reclaimable
+  the moment they subscribe, never deleted. Three tests fail if the spend is
+  removed; that was checked by removing it.
+
+  **Provider-agnostic, and not speculatively.** The App Store requires IAP for
+  subscriptions that unlock in-app functionality and Play requires Play
+  Billing under the same category of rule — but neither is a MIGRATION, because
+  a subscription bought on the web must keep working forever. Each store adds
+  a provider; three live at once is the expected end state. `provider` is an
+  open string and `provider_ref` holds whatever that provider calls a
+  subscription, so `google_play` is an adapter file and a new value — no
+  schema change, no migration, proven by a test that entitles an account
+  through a provider no code mentions. The rule that makes it hold is in
+  CLAUDE.md: only `server/lib/billing/stripe.ts` may touch the Stripe SDK.
+
+  **Grace is the provider's retry window, not a timer here.** Stripe's default
+  dunning is 8 attempts over roughly two weeks and the end state is a
+  Dashboard setting — both changeable by the account owner. `past_due` maps to
+  `grace` and stays there until the provider says the subscription ended, so
+  there is no local constant to drift.
+
+  **Two coupon mechanics, deliberately not unified.** "N recipes free" is a
+  usage grant and adds to `recipe_allowance` — the same and only allowance the
+  free tier runs on. "Free months" is a billing discount and is a native
+  Stripe promotion code entered in Checkout, with no table here: mirroring
+  Stripe's discount engine locally would be a second billing system doing
+  worse what the first already does, and it would need building a third time
+  for Apple. Redemption is offered in both places it is wanted — at the wall,
+  where intent is, and in Settings, where someone given a code last week goes
+  looking.
+
+  **What has NOT been verified, and cannot be from this container:** live
+  Stripe Checkout, a real card, a real Stripe-delivered webhook, and the
+  signature verification against a genuine payload. What IS proven is the
+  entitlement arithmetic, the monotonic counter, the concurrent-spend guard,
+  the claim/loophole behaviour, the kill switch in both directions, shadow
+  logging, coupon redemption including the once-per-account index, and the
+  Stripe status translation. **Before switching anything on**, run a test-mode
+  checkout end to end and confirm a webhook writes a `subscriptions` row.
+
+  **Still to build when the App Store build happens:** a StoreKit adapter
+  (`server/lib/billing/apple.ts` plus a client purchase handler registered
+  through `setPurchaseHandler`), and receipt validation. Nothing else moves —
+  that is the point of the seam.
+
 ### Closed, kept for the record
 
 - **The JSON hatch reached parity** at the close of round three. It has NOT

@@ -21,11 +21,12 @@
 
 import crypto from "node:crypto";
 import type { Request, Response } from "express";
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq, isNull, sql } from "drizzle-orm";
 import { getDb } from "../db";
-import { recipes, trials } from "../../shared/schema";
+import { accountAccess, recipes, trials } from "../../shared/schema";
 import { readCookie, serializeCookie } from "./cookies";
 import { planClaim } from "./claim";
+import { paywallEnforcedGlobally } from "./billing/entitlement";
 
 export const TRIAL_COOKIE = "rd_trial";
 
@@ -132,6 +133,9 @@ export async function storeTrialRecipe(
 // ------------------------------------------------------------------ claim --
 
 export interface TrialClaimResult {
+  /** Set when the recipe was NOT taken because the account is out of
+   *  allowance — the sign-out loophole, closed. The row stays parked. */
+  blocked?: boolean;
   /** 1 when a recipe moved into the account, 0 otherwise. */
   claimed: number;
   /** The id the recipe ended up with — not necessarily the one it had, since
@@ -157,6 +161,52 @@ export interface TrialClaimHooks {
  * A trial claimed by another user is never taken. The cookie is not a
  * credential, so a copied or shared one must not transfer a recipe.
  */
+/**
+ * Spend one unit inside a caller's transaction, and report whether the wall
+ * is allowed to act on the answer.
+ *
+ * Inline rather than calling entitlement.ts's version because that one opens
+ * its own connection: the whole point here is that the charge and the recipe
+ * move commit together or not at all.
+ */
+async function spendAllowanceTx(
+  tx: Parameters<Parameters<ReturnType<typeof getDb>["transaction"]>[0]>[0],
+  userId: string
+): Promise<{ spent: boolean; enforced: boolean }> {
+  await tx
+    .insert(accountAccess)
+    .values({ userId })
+    .onConflictDoNothing({ target: accountAccess.userId });
+
+  const [row] = await tx
+    .select()
+    .from(accountAccess)
+    .where(eq(accountAccess.userId, userId));
+  const enforced = row?.enforceOverride ?? paywallEnforcedGlobally();
+
+  const spent = await tx
+    .update(accountAccess)
+    .set({ recipesUsed: sql`${accountAccess.recipesUsed} + 1`, updatedAt: new Date() })
+    .where(
+      and(
+        eq(accountAccess.userId, userId),
+        sql`${accountAccess.recipesUsed} < ${accountAccess.recipeAllowance}`
+      )
+    )
+    .returning({ used: accountAccess.recipesUsed });
+
+  // Over allowance and the wall is off: still count it, so the meter is
+  // honest when the flag flips.
+  if (!spent.length && !enforced) {
+    await tx
+      .update(accountAccess)
+      .set({ recipesUsed: sql`${accountAccess.recipesUsed} + 1`, updatedAt: new Date() })
+      .where(eq(accountAccess.userId, userId));
+  }
+
+  return { spent: spent.length > 0, enforced };
+}
+
 export async function claimTrialRecipe(
   userId: string,
   trialId: string,
@@ -213,6 +263,35 @@ export async function claimTrialRecipe(
     if (!move) return nothing;
 
     await hooks.beforeAssign?.();
+
+    /**
+     * THE SIGN-OUT LOOPHOLE, CLOSED HERE.
+     *
+     * Without this, the free tier leaks by exactly the amount of effort it
+     * takes to sign out: a new browser session mints a fresh rd_trial cookie,
+     * extracts a second recipe as an anonymous visitor, and signing back in
+     * hands it to an account that has already had its one. Repeat for as many
+     * recipes as you have patience for.
+     *
+     * So the claim spends a unit of the account's allowance, in the SAME
+     * transaction that moves the recipe. All-or-nothing: either the account
+     * has room and gets the recipe, or it has none and the row stays parked
+     * exactly where it was — reclaimable the moment they subscribe, which is
+     * why this refuses rather than deleting anything.
+     *
+     * This is also the join between the two gates. A visitor who extracts one
+     * recipe and then signs up ends with recipes_used = 1 against an
+     * allowance of 1: ONE recipe across the whole free experience, not one
+     * before signup and another after.
+     *
+     * Not enforced while the wall is off, but still SPENT — the counter has
+     * to reflect reality before the flag flips, or turning it on gives
+     * everybody a bonus recipe.
+     */
+    const room = await spendAllowanceTx(tx, userId);
+    if (!room.spent && room.enforced) {
+      return { claimed: 0, recipeId: null, blocked: true };
+    }
 
     await tx
       .update(recipes)

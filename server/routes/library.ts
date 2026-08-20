@@ -21,6 +21,8 @@ import { sanitizeMealTypes } from "../../shared/mealTypes";
 import { reconcileDone } from "../../shared/progress";
 import { userIdOf } from "../middleware/session";
 import { cancelTimer, scheduleTimer } from "../lib/timerDispatch";
+import { checkAccess, subscriptionRequired } from "../lib/billing/access";
+import { recordRecipeUsed } from "../lib/billing/entitlement";
 
 export const libraryRouter = Router();
 
@@ -229,6 +231,23 @@ libraryRouter.post("/", async (req: Request, res: Response) => {
   if (typeof id !== "string" || !id)
     return res.status(400).json({ error: "id must be a non-empty string." });
 
+  /**
+   * The second gate, and the one that actually spends the allowance.
+   *
+   * Extraction is walled first — see requireExtractionAllowance — so almost
+   * nobody reaches here blocked. This exists because extraction is not the
+   * only way a recipe arrives: the JSON hatch, a second device replaying a
+   * queued create, and any future import all land here. A gate at the door
+   * the recipe comes through beats a gate on one of the paths to it.
+   *
+   * The upsert below is idempotent by design (a create whose response was
+   * lost gets re-POSTed), so the allowance is spent only for a row that did
+   * not already exist — otherwise a retried request would charge twice for
+   * one recipe.
+   */
+  const access = await checkAccess(req, "save");
+  if (access.blocked) return subscriptionRequired(res, access.entitlement);
+
   const errors = validateRecipe(recipe);
   if (errors.length)
     return res.status(422).json({ error: "That recipe is not valid.", details: errors });
@@ -283,6 +302,34 @@ libraryRouter.post("/", async (req: Request, res: Response) => {
         },
       })
       .returning();
+
+    /**
+     * Spend the allowance only for a row that did not already exist.
+     *
+     * `version` defaults to 1 and the conflict branch above increments it, so
+     * `version === 1` is exactly "this INSERT actually inserted". That matters
+     * because the upsert is deliberately idempotent — a create whose response
+     * was lost gets re-POSTed — and charging on every POST would bill someone
+     * twice for one recipe because their connection dropped.
+     *
+     * Counted even while the wall is switched off. Otherwise every recipe
+     * saved during the shadow period is invisible to the counter, and turning
+     * the flag on would hand everyone a fresh free recipe on top of whatever
+     * they already have.
+     */
+    if (row?.version === 1) {
+      const userId = userIdOf(req);
+      if (userId) {
+        try {
+          await recordRecipeUsed(userId);
+        } catch (e) {
+          // The recipe is saved; only the meter failed. Under-counting is the
+          // safe direction — it can only ever give someone more than they are
+          // owed, never take a recipe they paid for.
+          console.error("[library:create] allowance not recorded:", (e as Error).message);
+        }
+      }
+    }
 
     return res.status(201).json({ entry: wireEntry(row) });
   } catch (e) {

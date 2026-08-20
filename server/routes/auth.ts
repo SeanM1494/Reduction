@@ -12,6 +12,7 @@
 import { Router, type Request, type Response } from "express";
 import { eq } from "drizzle-orm";
 import { getDb } from "../db";
+import { entitlementFor } from "../lib/billing/entitlement";
 import { users } from "../../shared/schema";
 import { clearCookie, serializeCookie } from "../lib/cookies";
 import {
@@ -69,8 +70,25 @@ authRouter.get("/me", async (req: Request, res: Response) => {
       clearSessionCookie(res);
       return res.json({ user: null });
     }
+    /**
+     * Entitlement rides along with the session, so the client can render the
+     * wall BEFORE someone types a search rather than after they submit one.
+     * The server gate is the enforcement; this is what stops the UI inviting
+     * work it is about to refuse.
+     */
+    let entitlement = null;
+    try {
+      entitlement = await entitlementFor(userId);
+    } catch (e) {
+      // Never fail /me over billing: a missing entitlement makes the client
+      // behave as it did before the paywall existed, which is the safe
+      // direction for a read the whole app boots from.
+      console.error("[auth:me] entitlement unavailable:", (e as Error).message);
+    }
+
     return res.json({
       user: { id: row.id, displayName: row.displayName, email: row.email },
+      entitlement,
     });
   } catch (e) {
     console.error("[auth:me]", e);

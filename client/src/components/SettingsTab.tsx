@@ -9,6 +9,7 @@
 import React from "react";
 import ThemeToggle from "./ThemeToggle";
 import NotificationSetting from "./NotificationSetting";
+import SubscriptionSetting from "./SubscriptionSetting";
 import type { ThemeMode } from "../lib/theme";
 import type { SessionUser } from "../lib/session";
 
@@ -42,6 +43,8 @@ export default function SettingsTab({
           Sign out
         </button>
       </div>
+
+      <SubscriptionSetting />
 
       <NotificationSetting />
 

@@ -14,6 +14,7 @@ import { libraryRouter } from "./routes/library";
 import { authRouter } from "./routes/auth";
 import { trialRouter } from "./routes/trial";
 import { pushRouter, timersRouter } from "./routes/push";
+import { billingRouter, stripeWebhookHandler } from "./routes/billing";
 import { attachSession } from "./middleware/session";
 import { startSessionSweep } from "./lib/sessions";
 import { startTimerDispatch } from "./lib/timerDispatch";
@@ -24,6 +25,21 @@ const isProd = process.env.NODE_ENV === "production";
 const PORT = isProd ? Number(process.env.PORT) || 5000 : 3001;
 
 const app = express();
+
+/**
+ * THE STRIPE WEBHOOK IS MOUNTED BEFORE express.json(), AND HAS TO BE.
+ *
+ * Stripe signs the RAW request body. Once express.json() has parsed and
+ * re-serialised it, the bytes no longer match the signature and
+ * constructEvent fails on every event, permanently, with an error that does
+ * not say why. Moving this line below the json() call is a one-character
+ * change that silently breaks all billing.
+ */
+app.post(
+  "/api/billing/webhook",
+  express.raw({ type: "application/json" }),
+  stripeWebhookHandler
+);
 
 // Base64 images arrive inline, so the default 100kb limit is far too small.
 app.use(express.json({ limit: "12mb" }));
@@ -42,6 +58,7 @@ app.use("/api/push", pushRouter);
 // The dispatch trigger. See server/lib/timerDispatch.ts: the work is a plain
 // function, and this route is only one of the three ways to reach it.
 app.use("/api/timers", timersRouter);
+app.use("/api/billing", billingRouter);
 
 if (isProd) {
   const clientDir = path.resolve(__dirname, "../dist/public");

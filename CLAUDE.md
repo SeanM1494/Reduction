@@ -36,26 +36,27 @@ them is the whole point:
 
 | result | meaning |
 |---|---|
-| ***n* pass, 41 skipped** | no `DATABASE_URL` at all. Fine on a machine with no Postgres. |
-| ***n*+41 pass, 0 skipped** | a local database with a current schema. This is the real gate — `npm run test:db` produces it. |
+| ***n* pass, 59 skipped** | no `DATABASE_URL` at all. Fine on a machine with no Postgres. |
+| ***n*+59 pass, 0 skipped** | a local database with a current schema. This is the real gate — `npm run test:db` produces it. |
 | **failures saying "Refusing to run database tests against …"** | `DATABASE_URL` in the shell points somewhere non-local — on Replit, that is production. Working as designed: use `npm run test:db`, which ignores the env var entirely. |
 | **failures naming a missing table** | a reachable local database whose schema is behind `shared/schema.ts`. `test:db` re-pushes on every start, so this means a hand-run database — push it or use the script. |
 
 The total grows as suites are added — pin your expectation to the **skip
 count**, not the pass count (an earlier version of this table hard-coded
 23/39 and went stale within a week, so treat the number above as needing an
-edit whenever a database-backed suite is added). The 41 are five suites:
+edit whenever a database-backed suite is added). The 59 are six suites:
 `claim.db.test.ts` (the anonymous library), `trial.db.test.ts` (the free
 extraction), `cache.db.test.ts` (the URL alias and the "Instant" badge),
-`extractionLog.test.ts` (the cost table) and `push.db.test.ts` (timer
-notifications). The first two are transactional guarantees — all-or-nothing
+`extractionLog.test.ts` (the cost table), `push.db.test.ts` (timer
+notifications) and `access.db.test.ts` (the paywall). The first two are transactional guarantees — all-or-nothing
 rollback, idempotent repeats, never taking another user's rows. The third is a
 promise about correctness: that a normalised URL never serves a different page.
 The fourth guards a denominator — a cache hit that recorded a `via` would
 silently corrupt every "what fraction" query the table exists to answer. The
 fifth guards a claim that has to be atomic: two dispatchers racing must not
-buzz one phone twice. **The full suite — 222 tests at the time of writing —
-has been run against a real Postgres and passes 222/0.**
+buzz one phone twice. The sixth guards the arithmetic that decides whether
+somebody can use the app at all. **The full suite — 246 tests at the time of
+writing — has been run against a real Postgres and passes 246/0.**
 
 **`npm test` must never be run against production.** It reads `DATABASE_URL`,
 which on a deployed host is the live database — so running the suite there
@@ -159,6 +160,76 @@ why `initPush()` runs from `main.tsx` at boot and never from the handler.
 the deployed site is unreachable from the agent proxy. What the suite proves
 is registration, the subscription round-trip, the claim/fan-out/prune logic
 and the config posture — not that a phone buzzes. That needs a real device.
+
+## The paywall: one recipe, and the rule about payment providers
+
+**ONLY `server/lib/billing/stripe.ts` MAY IMPORT THE STRIPE SDK OR NAME A
+STRIPE-SHAPED FIELD.** Everything else asks `entitlementFor(userId)` and
+branches on the answer. This is a rule, not a description of the current
+state, and it exists because the app is going to the App Store — where Apple
+requires IAP for a subscription unlocking in-app functionality — and probably
+to Play under the same category of rule.
+
+The thing people get wrong is assuming that means MIGRATING off Stripe. It
+does not: a subscription bought on the web has to keep working forever, so
+each store ADDS a provider. **Three live providers is the expected end state.**
+`subscriptions.provider` is an open string and `provider_ref` holds whatever
+that provider calls a subscription, so `google_play` is a new adapter file and
+a new value — no schema change, no migration. `access.db.test.ts` pins that by
+entitling an account through a provider no code mentions.
+
+The expensive failure is never the schema. It is provider vocabulary escaping
+into code that outlives the provider: a `current_period_end` in UI copy, a
+`cancel_at_period_end` behind a toggle, a `status === 'past_due'` in a
+middleware. Apple has no equivalent of any of them.
+
+**Grace is the provider's retry window, never a local timer.** Stripe's
+default dunning is 8 attempts over about two weeks and the end state is a
+Dashboard setting — both things the account owner can change. A local "grace
+lasts 14 days" constant would be a copy of a number living somewhere else,
+drifting silently in whichever direction hurts. `past_due` maps to `grace` and
+stays there until the provider says the subscription ended.
+
+**`recipes_used` is monotonic and must stay that way.** It counts recipes ever
+added, and is never decremented on delete — that is the whole difference
+between "one recipe ever" and "one at a time". Counting rows in `recipes`
+instead hands a slot back on every delete and turns the free tier into an
+unlimited carousel.
+
+**There is exactly ONE allowance system**, `account_access`. The `trials`
+table is not a second one: it is cookie-keyed, boolean, pre-account, and it
+feeds this counter through the signup claim. A "10 recipes free" coupon adds
+to `recipe_allowance`; a "3 months free" coupon is a Stripe promotion code and
+has no table here at all. Those are different mechanics and forcing them
+together makes both worse.
+
+**The claim spends a unit, in the same transaction that moves the recipe.**
+That is what makes ONE recipe mean one across the whole free experience rather
+than one before signup and another after — and it is what closes the sign-out
+loophole, where a fresh cookie, a second extraction and a sign-in would
+otherwise hand an already-full account another recipe. Three tests fail if you
+remove it.
+
+**The wall is off by default and must ship that way.** `PAYWALL_ENFORCED`
+gates it globally; `account_access.enforce_override` forces it per account in
+either direction. `checkAccess` computes the decision either way and always
+writes it to `access_events`, so `decision = 'would_block'` is the wall firing
+in a world where the flag is on. Watch that table before flipping anything:
+
+```sql
+select decision, reason, count(*) from access_events
+ where at > now() - interval '7 days' group by 1, 2;
+```
+
+**Saves are counted even while the wall is off.** Otherwise every recipe added
+during the shadow period is invisible to the counter, and flipping the flag
+hands everyone a fresh free recipe on top of what they already have.
+
+**The purchase button must never open a URL itself.** It calls
+`startPurchase()` in `client/src/lib/purchase.ts`. A native wrapper registers
+a StoreKit handler there and no caller changes; a component that does
+`location.href = url` has baked web checkout into its own definition of the
+verb and has to be reopened for the App Store build.
 
 ## This app is mobile-first
 

@@ -22,7 +22,8 @@ import { readPendingUrl, writePendingUrl, clearPendingUrl } from "./lib/pendingU
 import {
   claimIfNeeded,
   fetchProviders,
-  fetchSession,
+  fetchSessionState,
+  isWalled,
   logout as endSession,
   type SessionUser,
 } from "./lib/session";
@@ -40,6 +41,8 @@ interface AuthParams {
   authError: string | null;
   /** A recipe id from a notification tap (?open=). */
   openRecipe: string | null;
+  /** Returned from checkout. A hint to re-read entitlement, never a grant. */
+  subscribed: boolean;
 }
 
 /**
@@ -57,7 +60,13 @@ let cachedAuthParams: AuthParams | null = null;
 function takeAuthParams(): AuthParams {
   if (cachedAuthParams) return cachedAuthParams;
   if (typeof window === "undefined") {
-    return { signedIn: false, pending: null, authError: null, openRecipe: null };
+    return {
+      signedIn: false,
+      pending: null,
+      authError: null,
+      openRecipe: null,
+      subscribed: false,
+    };
   }
   const params = new URLSearchParams(window.location.search);
   const result: AuthParams = {
@@ -68,8 +77,18 @@ function takeAuthParams(): AuthParams {
     // the recipe here and it is consumed exactly like the auth params — read
     // once, then wiped from the URL so a reload does not reopen it.
     openRecipe: params.get("open"),
+    // Back from checkout. A HINT ONLY — the webhook is what actually granted
+    // anything, and this parameter is typeable. It triggers a re-read of
+    // entitlement, never a grant.
+    subscribed: params.get("subscribed") === "1",
   };
-  if (result.signedIn || result.pending || result.authError || result.openRecipe) {
+  if (
+    result.signedIn ||
+    result.pending ||
+    result.authError ||
+    result.openRecipe ||
+    result.subscribed
+  ) {
     window.history.replaceState({}, "", window.location.pathname);
   }
   cachedAuthParams = result;
@@ -82,6 +101,8 @@ import {
   fileToBase64,
 } from "./lib/api";
 import type { Recipe } from "../../shared/layout";
+import type { Entitlement } from "./lib/session";
+import Paywall from "./components/Paywall";
 
 export default function App() {
   const [library, setLibrary] = useState<Entry[]>([]);
@@ -113,6 +134,7 @@ export default function App() {
     setOpenId(authParams.openRecipe);
   }, [loaded, authParams.openRecipe]);
 
+
   useEffect(() => {
     if (typeof navigator === "undefined" || !("serviceWorker" in navigator)) return;
     const onMessage = (e: MessageEvent) => {
@@ -135,6 +157,51 @@ export default function App() {
     () => readPendingUrl() !== null || !!authParams.authError
   );
   const [user, setUser] = useState<SessionUser | null>(null);
+  const [entitlement, setEntitlement] = useState<Entitlement | null>(null);
+
+  /** Re-read entitlement without a reload: after redeeming a code, after a
+   *  claim, and on returning from checkout (where the webhook, not the
+   *  redirect, is what actually granted anything). */
+  const refreshEntitlement = useCallback(async () => {
+    try {
+      const state = await fetchSessionState();
+      setEntitlement(state.entitlement);
+    } catch (e) {
+      console.error("[entitlement]", e);
+    }
+  }, []);
+
+  /**
+   * Returning from checkout, entitlement is re-read rather than assumed.
+   *
+   * Stripe redirects the browser back as soon as the card clears, but the
+   * WEBHOOK is what writes the subscription, and the two race. A single fetch
+   * on return would often show the wall still up to somebody who has just
+   * paid — the worst possible moment to look broken. So: a few attempts over
+   * a few seconds, stopping as soon as it reports subscribed.
+   */
+  useEffect(() => {
+    if (!authParams.subscribed || !user) return;
+    let cancelled = false;
+    let attempts = 0;
+    const tick = async () => {
+      if (cancelled || attempts >= 5) return;
+      attempts++;
+      try {
+        const state = await fetchSessionState();
+        if (cancelled) return;
+        setEntitlement(state.entitlement);
+        if (state.entitlement?.subscribed) return;
+      } catch {
+        /* keep trying */
+      }
+      if (!cancelled) setTimeout(tick, 1500);
+    };
+    void tick();
+    return () => {
+      cancelled = true;
+    };
+  }, [authParams.subscribed, user]);
   const [providers, setProviders] = useState<{ google: boolean }>({ google: false });
   /** True when an anonymous library exists but could not be moved into the
    *  account. The rows are safe and still anonymous; this only means the move
@@ -176,9 +243,11 @@ export default function App() {
     (async () => {
       let signedIn: SessionUser | null = null;
       try {
-        signedIn = await fetchSession();
+        const state = await fetchSessionState();
+        signedIn = state.user;
         if (cancelled) return;
         setUser(signedIn);
+        setEntitlement(state.entitlement);
       } catch (e) {
         // An unanswerable /me is treated as signed out: the library still
         // loads anonymously, which is the state that shows the most rather
@@ -353,6 +422,13 @@ export default function App() {
         // fallback for a response that predates it.
         if (err.code === "trial_spent" || /free recipe/i.test(err.message)) {
           setTrialSpent(true);
+        }
+        // The account-level wall, as opposed to the pre-signup trial above.
+        // Reached only by a client whose entitlement was stale — the Find tab
+        // renders the wall instead of these controls — so its job is to get
+        // that client back in sync rather than to explain anything.
+        if (err.code === "subscription_required") {
+          void refreshEntitlement();
         }
         setError(err.message);
       } finally {
@@ -591,6 +667,19 @@ export default function App() {
             />
           </>
         ) : tab === "find" ? (
+          isWalled(entitlement) ? (
+            /* The wall REPLACES the controls rather than sitting over them.
+               A search box that accepts a query and then refuses it spends
+               someone's attention and our API budget to deliver a no — and
+               the server gate would refuse it anyway, so offering it is
+               inviting work we have already decided not to do. */
+            <Paywall
+              context="search"
+              recipeTitle={library[0]?.recipe?.title ?? null}
+              onOpenRecipe={library[0] ? () => setOpenId(library[0].id) : undefined}
+              onEntitlementChange={refreshEntitlement}
+            />
+          ) : (
           <>
             <div className="rd-find-search">
               <SearchBar
@@ -615,6 +704,7 @@ export default function App() {
               }
             />
           </>
+          )
         ) : tab === "recipes" ? (
           <MyRecipes library={library} onOpen={setOpenId} onFind={() => setTab("find")} />
         ) : user ? (

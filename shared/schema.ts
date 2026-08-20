@@ -417,3 +417,172 @@ export const timerNotifications = pgTable(
       .where(sql`notified_at is null`),
   ]
 );
+
+/**
+ * THE ONE ROW APP CODE READS TO DECIDE WHAT SOMEBODY MAY DO.
+ *
+ * Two separate things live here on purpose, because both are read at the same
+ * instant by the same gate and splitting them would buy a join and nothing
+ * else: the free tier's ALLOWANCE, and the per-account KILL SWITCH.
+ *
+ * `recipes_used` IS MONOTONIC. It counts recipes ever added to the account —
+ * incremented when one is created and when the pre-signup trial's recipe is
+ * claimed, and never decremented when one is deleted. That is the whole
+ * difference between "one recipe ever" and "one recipe at a time": counting
+ * rows in `recipes` would hand a slot back on every delete, which turns the
+ * free tier into an unlimited carousel.
+ *
+ * `recipe_allowance` starts at 1 and only ever goes up — a coupon adds to it.
+ * There is exactly ONE allowance system in this codebase and this is it. The
+ * `trials` table above is NOT a second one: it is cookie-keyed, boolean and
+ * pre-account, it feeds into this counter through the claim, and it does not
+ * change.
+ *
+ * `enforce_override` is the per-account half of the kill switch. NULL means
+ * follow the global flag; TRUE enforces for this account even while the
+ * global flag is off (so the owner can live on the paid tier before anyone
+ * else does); FALSE never enforces, which is how a comp is given.
+ */
+export const accountAccess = pgTable("account_access", {
+  userId: text("user_id")
+    .primaryKey()
+    .references(() => users.id, { onDelete: "cascade" }),
+  recipeAllowance: integer("recipe_allowance").notNull().default(1),
+  recipesUsed: integer("recipes_used").notNull().default(0),
+  enforceOverride: boolean("enforce_override"),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),
+});
+
+/**
+ * A subscription at a payment provider. Written ONLY by webhook and receipt
+ * handlers; app code never reads this table directly, it reads the
+ * entitlement derived from it.
+ *
+ * PROVIDER-AGNOSTIC BY CONSTRUCTION, AND THAT IS NOT SPECULATIVE. This app is
+ * going to the App Store, where Apple requires IAP for a subscription that
+ * unlocks functionality in-app, and likely to Play, where Google requires
+ * Play Billing under the same category of rule. The thing people get wrong is
+ * assuming that means MIGRATING off Stripe. It does not: a subscription
+ * bought on the web has to keep working forever, so each store adds a
+ * provider rather than replacing one. Three live providers is the expected
+ * end state, not a contingency.
+ *
+ * `provider` is therefore a plain string, not an enum, and `provider_ref` is
+ * whatever that provider calls its subscription — a `sub_...` id for Stripe,
+ * an `original_transaction_id` for Apple, a purchase token for Play. Adding
+ * Google later is a new adapter and a new value in this column: NO schema
+ * change, no migration, no new table.
+ *
+ * `status` is NORMALISED — 'active' | 'grace' | 'expired' — never the
+ * provider's own string. Stripe's `past_due` and Apple's billing-retry both
+ * mean the same thing to this app, and the mapping living in the adapter is
+ * the entire provider-agnostic bet. `raw` keeps the last payload so a
+ * surprising decision can be traced back to what the provider actually said.
+ */
+export const subscriptions = pgTable(
+  "subscriptions",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    /** 'stripe' | 'apple' | 'google_play' — open by design. */
+    provider: text("provider").notNull(),
+    provider_ref: text("provider_ref").notNull(),
+    /** Normalised: 'active' | 'grace' | 'expired'. Never a provider string. */
+    status: text("status").notNull(),
+    /** When access lapses if nothing renews it. Named for what it MEANS
+     *  rather than for Stripe's `current_period_end`: Apple calls the same
+     *  fact `expires_date` and Play `expiryTimeMillis`, and a column named
+     *  after one provider is the vocabulary leak this table exists to avoid. */
+    renewsAt: timestamp("renews_at", { withTimezone: true }),
+    /** Set when the subscription is running out on purpose — Stripe's
+     *  `cancel_at_period_end`, Apple's auto-renew-off. */
+    willNotRenew: boolean("will_not_renew").notNull().default(false),
+    raw: jsonb("raw"),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("subscriptions_provider_ref_idx").on(table.provider, table.provider_ref),
+    index("subscriptions_user_idx").on(table.userId),
+  ]
+);
+
+/**
+ * "N recipes free" codes.
+ *
+ * NOT "free months" — those are Stripe promotion codes, entered in Stripe
+ * Checkout's own field, and there is deliberately no table for them here.
+ * Mirroring Stripe's discount engine locally would be building a second
+ * billing system to do worse what the first already does. The two coupon
+ * mechanics stay separate because they genuinely are separate: one is a
+ * billing discount, the other is a usage grant, and only the second one is
+ * this app's business.
+ */
+export const coupons = pgTable("coupons", {
+  code: text("code").primaryKey(),
+  /** How many recipes this code adds to an account's allowance. */
+  recipes: integer("recipes").notNull(),
+  maxRedemptions: integer("max_redemptions"),
+  redeemedCount: integer("redeemed_count").notNull().default(0),
+  expiresAt: timestamp("expires_at", { withTimezone: true }),
+  active: boolean("active").notNull().default(true),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
+});
+
+export const couponRedemptions = pgTable(
+  "coupon_redemptions",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    code: text("code")
+      .notNull()
+      .references(() => coupons.code),
+    /** Frozen at redemption: what the code granted THEN, so later edits to
+     *  the coupon never rewrite history someone already spent. */
+    recipes: integer("recipes").notNull(),
+    redeemedAt: timestamp("redeemed_at", { withTimezone: true }).defaultNow(),
+  },
+  (table) => [uniqueIndex("coupon_redemptions_once_idx").on(table.userId, table.code)]
+);
+
+/**
+ * Every access decision, including the ones that did not bite.
+ *
+ * THIS IS WHAT MAKES THE PAYWALL SAFE TO SHIP TURNED OFF. The gate always
+ * computes the decision and always writes it here; `enforced` records whether
+ * it was allowed to act on it. A row with decision='would_block' is the wall
+ * firing in a world where the flag is on — so the logic can be watched
+ * against real traffic for as long as it takes to trust it, before it can
+ * turn a single person away.
+ *
+ * Deliberately the same shape and posture as `extraction_events`: written
+ * fire-and-forget on the way out, adding no latency, and swallowing its own
+ * errors — a logging failure must never be the reason a request fails.
+ *
+ * Operational, not behavioural: no recipe ids, no URLs, no titles. It answers
+ * "would the wall have fired, and why", which is the only question it exists
+ * for.
+ */
+export const accessEvents = pgTable(
+  "access_events",
+  {
+    id: bigserial("id", { mode: "number" }).primaryKey(),
+    at: timestamp("at", { withTimezone: true }).defaultNow(),
+    userId: text("user_id"),
+    /** 'extract' | 'search' | 'reextract' | 'save' | 'claim' */
+    action: text("action").notNull(),
+    /** 'allow' | 'block' | 'would_block' */
+    decision: text("decision").notNull(),
+    /** 'subscribed' | 'within_allowance' | 'exhausted' | 'no_account' */
+    reason: text("reason").notNull(),
+    allowance: integer("allowance"),
+    used: integer("used"),
+    enforced: boolean("enforced").notNull(),
+  },
+  (table) => [index("access_events_at_idx").on(table.at)]
+);

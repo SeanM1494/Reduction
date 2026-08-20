@@ -15,6 +15,38 @@ export interface SessionUser {
   email: string | null;
 }
 
+/**
+ * What the account may do, as the server computed it.
+ *
+ * PROVIDER-AGNOSTIC ALL THE WAY TO THE UI. There is no `stripeStatus` here
+ * and there must never be: `provider` is a label for a support screen, never
+ * something to branch behaviour on. When the App Store build adds StoreKit,
+ * this type does not change.
+ *
+ * `enforced` is the resolved kill switch. `allowed === false && enforced ===
+ * false` is the shadow state — the wall would have fired and did not — which
+ * the UI treats exactly as allowed, because it is.
+ */
+export interface Entitlement {
+  allowed: boolean;
+  reason: "subscribed" | "within_allowance" | "exhausted" | "no_account";
+  subscribed: boolean;
+  status: "active" | "grace" | "expired" | null;
+  provider: string | null;
+  allowance: number;
+  used: number;
+  enforced: boolean;
+}
+
+export interface SessionState {
+  user: SessionUser | null;
+  entitlement: Entitlement | null;
+}
+
+/** True only when the wall should actually be shown to this person. */
+export const isWalled = (e: Entitlement | null | undefined): boolean =>
+  !!e && !e.allowed && e.enforced;
+
 export interface ClaimResult {
   moved: number;
   rekeyed: number;
@@ -50,14 +82,20 @@ async function authApi(path: string, init?: RequestInit): Promise<any> {
  * one: it shows less than the user is entitled to, never more.
  */
 export async function fetchSession(): Promise<SessionUser | null> {
+  return (await fetchSessionState()).user;
+}
+
+/** Session and entitlement in one round trip, so the paywall can render on
+ *  first paint rather than after a second fetch resolves. */
+export async function fetchSessionState(): Promise<SessionState> {
   try {
     const body = await authApi("/me", { method: "GET" });
-    return body.user ?? null;
+    return { user: body.user ?? null, entitlement: body.entitlement ?? null };
   } catch (first) {
     await new Promise((resolve) => setTimeout(resolve, 400));
     try {
       const body = await authApi("/me", { method: "GET" });
-      return body.user ?? null;
+      return { user: body.user ?? null, entitlement: body.entitlement ?? null };
     } catch {
       // Rethrow the original: it is the one that describes what actually
       // started going wrong.
