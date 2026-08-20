@@ -52,8 +52,8 @@ guarantees — all-or-nothing rollback, idempotent repeats, never taking another
 user's rows. The third is a promise about correctness: that a normalised URL
 never serves a different page. The fourth guards a denominator — a cache hit
 that recorded a `via` would silently corrupt every "what fraction" query the
-table exists to answer. **The full suite — 180 tests at the time of writing —
-has been run against a real Postgres and passes 180/0.**
+table exists to answer. **The full suite — 205 tests at the time of writing —
+has been run against a real Postgres and passes 205/0.**
 
 **`npm test` must never be run against production.** It reads `DATABASE_URL`,
 which on a deployed host is the live database — so running the suite there
@@ -599,6 +599,30 @@ still looks right, and nothing reports it. Correcting `recipe.servings` clears `
 (`applyOp` in RecipeView): "8" expressed against a base of 4 meant double, and
 against a corrected base of 6 it silently means 1.33x, moving every amount on
 the page because of an edit to a different field.
+
+**Scaled amounts are rounded per unit, and `scale === 1` must stay an
+identity check.** `snapQty` in `shared/amounts.ts` snaps a scaled amount to
+the coarsest rung of its unit's ladder within 5% — `2.81 cup` becomes `2¾`,
+because no kitchen owns a 2.81-cup measure. It is keyed on the unit because a
+teaspoon, a cup and a gram want different granularity, and `formatQty` has no
+unit to key on.
+
+The rule that is easy to break is the guard, not the ladders: **an unscaled
+recipe must render exactly what was extracted**, glyph for glyph, so
+`formatAmount` snaps only when `scale !== 1` and tests that as an identity.
+A tolerance there would let a recipe at its own serving count drift, which is
+worse than any rounding error on a scaled one. `FROZEN_AT_SCALE_1` in
+`amounts.test.ts` is 324 rows generated from the pre-rounding implementation
+and pasted as literals — it cannot drift with the code it guards, and if you
+change rendering and it fails, regenerating it is almost never the answer.
+
+**Round for the diagram, stay exact in the editor.** The edit box uses
+`editableAmount(ing)`, which takes no scale and never snaps. It used to call
+`formatAmount({ ...ing, unit: null })`, nulling the unit only to drop the
+label — and that accident was the only thing keeping rounding out of the box.
+It would not have stayed harmless: a null unit selects the countable ladder,
+one of the two that snap unconditionally. If you add a caller that renders an
+amount, decide which of the two it is.
 
 **`minutes` and `tempF` are the only numbers in a stored recipe that
 `validateRecipe` has no opinion on**, and they are now typed by hand. Render

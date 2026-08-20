@@ -25,7 +25,7 @@
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { UNITS, validateRecipe, type Recipe, type Unit } from "../../../shared/layout";
-import { formatAmount } from "../../../shared/amounts";
+import { editableAmount } from "../../../shared/amounts";
 import {
   applyEdit,
   consumerOf,
@@ -250,9 +250,7 @@ function IngredientFieldsForm({
   // Seeded from the stored value, then owned by the field while it is focused
   // — a controlled input reset from props on every keystroke would fight the
   // caret. Commit happens on blur and on Enter.
-  const [amount, setAmount] = useState(() =>
-    ing.qty == null ? (ing.text ?? "") : formatAmount({ ...ing, unit: null })
-  );
+  const [amount, setAmount] = useState(() => editableAmount(ing));
   const [name, setName] = useState(ing.name ?? "");
   const [note, setNote] = useState(ing.note ?? "");
   // Keyed by field so the message can be rendered under the box that caused
