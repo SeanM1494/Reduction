@@ -984,11 +984,42 @@ and the text change carries the whole signal.
   cookie only, and `user_id IS NULL` in the WHERE closes the path the moment
   an account owns the row. The edits survive signup for free: `claimTrialRecipe`
   moves *that* row, so there is no second copy to reconcile.
-- **Reordering the step-by-step sequence.** A list view of collapsed
-  steps, drag to reorder. Note that card order is *derived*, not stored —
-  so a drag can only reorder branches that are genuinely interchangeable
-  (the salsa chain vs. the mash chain). Anything else would be a change to
-  the tree, which is what the diagram editor already does.
+- ~~**Reordering the step-by-step sequence.**~~ **Done** —
+  `client/src/components/ReorderView.tsx`, entered from a Reorder button in
+  steps mode. The model is a stored preference the walk consults
+  (`entry.order` / `recipes.card_order`, an `OrderPreference` from
+  `shared/sequence.ts`): section names ranked as a TIE-BREAK inside the same
+  topological sort that enforces name links, and branch orders applied by
+  building a candidate section and running the same `stepSequence` walk on it
+  — so the dependency guarantee is structural, never a promise the preference
+  has to keep. Stale entries are inert on read and pruned on write, in the
+  same transaction where `done` is reconciled, client and server both.
+
+  Measured before building: branch freedom is ~2^convergences and most
+  recipes have 0–1, so the payoff is at the SECTION level (three independent
+  sections = 6 orderings) — which is why sections group the list and drag as
+  units. It deliberately OVERLAPS the step sheet's Order list: same fact,
+  different scope — `reorderInputs` is a correction everyone inherits and it
+  moves the diagram rows; `entry.order` is how one person cooks tonight. The
+  third instance of the `recipe.servings` / `entry.servings` split.
+
+  Two interaction details worth keeping if this is ever reworked: **the grip
+  appears only on rows the walk can actually honour a move of**
+  (`branchChoices` / `freeSectionIndices`, from the same module as the walk —
+  the validMoveTargets single-authority rule), so movability is visible
+  before the gesture rather than discovered at the drop; and the **empty
+  state is a real answer** ("every step here depends on the one before it"),
+  because a linear or fully-linked recipe has exactly one valid order and a
+  list that refused every drag would be worse than saying so.
+
+  The drag is `useIngredientDrag` behind a `resolve` options bag whose
+  defaults reproduce the ingredient drag exactly — one implementation of the
+  non-passive-touchmove trick, not two. **Worth considering separately: the
+  grip-before-gesture pattern is better than the ingredient drag's
+  highlight-at-pickup** (movability visible before committing to a hold), and
+  the ingredient drag could adopt a subtle affordance in edit mode. Not done
+  in this pass; noted so the asymmetry reads as a queue item rather than an
+  accident.
 - **`Unit` and `UNITS` are two hand-maintained lists that must agree.**
   `shared/layout.ts` declares the union type at the top and the runtime set
   near `validateRecipe`, and nothing enforces that they match — a unit added

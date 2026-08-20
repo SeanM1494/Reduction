@@ -542,6 +542,18 @@ else in the app. When it temporarily means something else, the bar, the frame
 outline and the hint all say so — someone who wanders in and taps around must
 not be left wondering why nothing checks off.
 
+**Card order has two homes and the overlap is deliberate.** The step sheet's
+Order list (`reorderInputs`) rewrites `inputs` — a correction to the recipe
+that everyone inherits, and it moves the diagram rows because input order is
+what the diagram draws. The Reorder view in steps mode writes `entry.order`
+(`recipes.card_order`) — how one person cooks tonight, cards only. Same fact,
+different scope: the third instance of the `recipe.servings` /
+`entry.servings` split. The preference is ADVISORY: `cardSequence` treats it
+as a tie-break and a candidate-section rewrite through the same walk, so it
+cannot violate the cooking-order invariant, and it is pruned on write in the
+same transaction that reconciles `done`. If you make the walk trust it
+directly, you have re-created the cookie bug with extra steps.
+
 **No edit cascades.** Deleting an ingredient that is a step's only input
 leaves the step with no inputs and `validateRecipe` refuses it, with
 `deleteIngredientBlocker` turning that into a sentence that names the step

@@ -21,6 +21,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { type Ingredient, type Recipe, type Step } from "../../../shared/layout";
 import { cardSequence } from "../../../shared/sequence";
+import ReorderView from "./ReorderView";
 import { formatAmount, formatMinutes, stepMinutes } from "../../../shared/amounts";
 import type { Entry, StepTimer } from "../lib/storage";
 
@@ -78,9 +79,13 @@ interface Props {
   scale: number;
   onToggle: (id: string) => void;
   onUpdate: (entry: Entry) => void;
+  /** Offer the cooking-order view. Off for the landing demo, whose entry is
+   *  synthetic and whose onUpdate keeps only the timer — a reorder there
+   *  would look accepted and silently not stick. */
+  canReorder?: boolean;
 }
 
-export default function StepsMode({ recipe, entry, done, scale, onToggle, onUpdate }: Props) {
+export default function StepsMode({ recipe, entry, done, scale, onToggle, onUpdate, canReorder = false }: Props) {
   const { cards, totalActions } = useMemo(() => {
     const cards: StepCard[] = [];
     let actionNumber = 0;
@@ -114,7 +119,7 @@ export default function StepsMode({ recipe, entry, done, scale, onToggle, onUpda
       for (const n of section.nodes) byId.set(n.id, { step: n, section });
     });
 
-    for (const { sectionIndex, stepId } of cardSequence(recipe)) {
+    for (const { sectionIndex, stepId } of cardSequence(recipe, entry.order ?? undefined)) {
       const found = byId.get(stepId);
       if (!found) continue;
       const { step } = found;
@@ -143,7 +148,7 @@ export default function StepsMode({ recipe, entry, done, scale, onToggle, onUpda
     }
 
     return { cards, totalActions };
-  }, [recipe]);
+  }, [recipe, entry.order]);
 
   // Position in the sequence. Recomputed only at mount (this component is
   // unmounted whenever the Diagram is showing instead, and remounted keyed
@@ -157,6 +162,9 @@ export default function StepsMode({ recipe, entry, done, scale, onToggle, onUpda
   // Set when a parallel-work suggestion is followed, so "back to timer" is
   // always one tap regardless of how far the suggestion is browsed.
   const [returnIndex, setReturnIndex] = useState<number | null>(null);
+  // The full-page cooking-order list. State here rather than in RecipeView so
+  // the demo (which never sets canReorder) cannot reach it at all.
+  const [reordering, setReordering] = useState(false);
 
   const goTo = useCallback((i: number) => {
     setCardIndex(Math.max(0, Math.min(cards.length, i)));
@@ -347,8 +355,29 @@ export default function StepsMode({ recipe, entry, done, scale, onToggle, onUpda
   const exitClass =
     dir === "fwd" ? "rd-steps-slide-out-fwd" : "rd-steps-slide-out-back";
 
+  if (reordering) {
+    return (
+      <ReorderView
+        recipe={recipe}
+        entry={entry}
+        done={done}
+        onUpdate={onUpdate}
+        onClose={() => setReordering(false)}
+      />
+    );
+  }
+
   return (
     <div className="rd-steps">
+      {canReorder ? (
+        <button
+          className="rd-btn rd-steps-reorder no-print"
+          onClick={() => setReordering(true)}
+          title="Choose what to cook first, where the recipe allows it"
+        >
+          Reorder
+        </button>
+      ) : null}
       {returnIndex != null && cardIndex !== returnIndex ? (
         <button className="rd-steps-return" onClick={backToTimer}>
           &larr; Back to timer

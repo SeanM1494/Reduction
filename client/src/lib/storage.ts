@@ -16,6 +16,7 @@
  */
 
 import type { Recipe } from "../../../shared/layout";
+import type { OrderPreference } from "../../../shared/sequence";
 import { mergeEntry, type SyncableEntry } from "../../../shared/sync";
 
 /** Absolute end time (epoch ms), never a countdown — see StepsMode.tsx. */
@@ -40,6 +41,10 @@ export interface Entry {
   cooked?: number[];
   /** -1 would-not-repeat | 0 fine | 1 favourite | null unrated. */
   rating?: number | null;
+  /** How THIS entry wants its step-by-step cards ordered where the tree
+   *  leaves a choice. Entry-level twin of the editor's reorderInputs — same
+   *  split as servings. Advisory; see OrderPreference in shared/sequence. */
+  order?: OrderPreference | null;
   savedAt: number;
 }
 
@@ -298,6 +303,7 @@ function toEntry(row: any): Entry {
     timer: row.timer ?? null,
     cooked: Array.isArray(row.cooked) ? row.cooked : [],
     rating: typeof row.rating === "number" ? row.rating : null,
+    order: row.order ?? null,
     savedAt: row.savedAt ?? Date.now(),
   };
 }
@@ -408,6 +414,7 @@ const toSyncable = (e: Entry): SyncableEntry => ({
   timer: e.timer,
   cooked: e.cooked ?? [],
   rating: e.rating ?? null,
+  order: e.order ?? null,
 });
 
 /** What actually goes on the wire for an update: only the fields that
@@ -425,6 +432,7 @@ function buildPatch(base: Entry | null, entry: Entry): Record<string, unknown> |
   if (changed("timer")) body.timer = entry.timer;
   if (changed("cooked")) body.cooked = entry.cooked ?? [];
   if (changed("rating")) body.rating = entry.rating ?? null;
+  if (changed("order")) body.order = entry.order ?? null;
   if (Object.keys(body).length === 0) return null;
   const v = versions.get(entry.id);
   if (v !== undefined) body.ifVersion = v;
@@ -639,6 +647,7 @@ export function saveTrialRecipe(entry: Entry): void {
             timer: next.timer,
             cooked: next.cooked ?? [],
             rating: next.rating ?? null,
+            order: next.order ?? null,
           }),
         });
         const body = await res.json().catch(() => ({}));

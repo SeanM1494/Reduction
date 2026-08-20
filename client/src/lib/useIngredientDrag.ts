@@ -116,13 +116,56 @@ export interface IngredientDrag {
   cancel: () => void;
 }
 
+/**
+ * How a non-diagram surface reuses this gesture.
+ *
+ * The reorder view (ReorderView.tsx) needed the identical interaction —
+ * press-and-hold in a surface that scrolls, ghost, edge autoscroll, valid
+ * targets lit before anything moves — and a second implementation of this
+ * file would have been two copies of the one trick that must not drift (the
+ * non-passive touchmove attach, see the header). So the pieces that were
+ * ingredient-specific became these five knobs. Every default reproduces the
+ * ingredient drag byte for byte; existing callers pass nothing.
+ */
+export interface DragResolve {
+  /** What may `id` be dropped on. The ingredient default is validMoveTargets
+   *  — the real validator, not a parallel predicate — and any override owes
+   *  its caller the same single-authority guarantee. */
+  targetsFor: (recipe: Recipe, id: string) => string[];
+  /** Why nothing lit up, phrased for a person. */
+  blockedReason?: (recipe: Recipe, id: string) => string | null;
+  /** Attribute the hit-test looks for under the pointer. */
+  targetAttr?: string;
+  /** Where the ghost's label text comes from, relative to the pressed row. */
+  labelSelector?: string;
+  /** The horizontally scrolling ancestor for edge-autoscroll, or null when
+   *  the surface only scrolls the page. */
+  frameSelector?: string | null;
+}
+
 interface Options {
   recipe: Recipe;
   enabled: boolean;
   onMove: (ingredientId: string, toStepId: string) => void;
+  resolve?: DragResolve;
 }
 
-export function useIngredientDrag({ recipe, enabled, onMove }: Options): IngredientDrag {
+const INGREDIENT_RESOLVE: Required<DragResolve> = {
+  targetsFor: validMoveTargets,
+  blockedReason: noTargetsReason,
+  targetAttr: "data-step-id",
+  labelSelector: ".rd-name",
+  frameSelector: ".rd-frame",
+};
+
+export function useIngredientDrag({ recipe, enabled, onMove, resolve }: Options): IngredientDrag {
+  const r: Required<DragResolve> = {
+    ...INGREDIENT_RESOLVE,
+    ...(resolve ?? {}),
+    blockedReason: resolve?.blockedReason ?? (resolve ? () => null : noTargetsReason),
+  };
+  const resolveRef = useRef(r);
+  resolveRef.current = r;
   const [pressing, setPressing] = useState<string | null>(null);
   const [dragging, setDragging] = useState<string | null>(null);
   const [validTargets, setValidTargets] = useState<Set<string>>(() => new Set());
@@ -196,9 +239,11 @@ export function useIngredientDrag({ recipe, enabled, onMove }: Options): Ingredi
       if (!s.id) return;
       s.live = true;
 
-      const targets = validMoveTargets(recipeRef.current, s.id);
+      const targets = resolveRef.current.targetsFor(recipeRef.current, s.id);
       setValidTargets(new Set(targets));
-      setBlockedReason(targets.length ? null : noTargetsReason(recipeRef.current, s.id));
+      setBlockedReason(
+        targets.length ? null : resolveRef.current.blockedReason(recipeRef.current, s.id)
+      );
       setPressing(null);
       setDragging(s.id);
       const at = clampGhost(clientX, clientY, s.width);
@@ -240,8 +285,9 @@ export function useIngredientDrag({ recipe, enabled, onMove }: Options): Ingredi
       s.pointerType = e.pointerType;
       s.startX = e.clientX;
       s.startY = e.clientY;
-      s.frame = cell?.closest(".rd-frame") as HTMLElement | null;
-      s.label = cell?.querySelector(".rd-name")?.textContent?.trim() || "ingredient";
+      const { frameSelector, labelSelector } = resolveRef.current;
+      s.frame = frameSelector ? (cell?.closest(frameSelector) as HTMLElement | null) : null;
+      s.label = cell?.querySelector(labelSelector)?.textContent?.trim() || "ingredient";
       s.width = rect ? Math.min(rect.width, 200) : 140;
 
       if (e.pointerType === "mouse") {
@@ -286,8 +332,9 @@ export function useIngredientDrag({ recipe, enabled, onMove }: Options): Ingredi
 
       // The ghost is pointer-events:none, so this finds what is under it.
       const under = document.elementFromPoint(e.clientX, e.clientY);
-      const stepEl = under?.closest?.("[data-step-id]") as HTMLElement | null;
-      const stepId = stepEl?.dataset.stepId ?? null;
+      const attr = resolveRef.current.targetAttr;
+      const stepEl = under?.closest?.(`[${attr}]`) as HTMLElement | null;
+      const stepId = stepEl?.getAttribute(attr) ?? null;
       setHoverTarget((prev) => {
         const next = stepId && validTargets.has(stepId) ? stepId : null;
         return next === prev ? prev : next;

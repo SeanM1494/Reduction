@@ -32,6 +32,7 @@
 
 import type { Recipe } from "./layout";
 import { reconcileDone } from "./progress";
+import type { OrderPreference } from "./sequence";
 
 export interface SyncableEntry {
   recipe: Recipe;
@@ -43,6 +44,7 @@ export interface SyncableEntry {
   cooked?: number[];
   /** -1 | 0 | 1, or null when unrated. Last writer wins. */
   rating?: number | null;
+  order?: OrderPreference | null;
 }
 
 export interface MergeResult {
@@ -228,6 +230,11 @@ export function mergeEntry(
    * destroyed: the other rating was one tap and can be re-made in one tap.
    */
   const rating = pick("rating", () => mine.rating ?? null);
+  // Same rule and same reasoning as rating: a deliberate arrangement the
+  // person just made, nothing destroyed by losing the other one, and advisory
+  // besides — a stale winner is pruned on the next write and ignored by the
+  // walk meanwhile.
+  const order = pick("order", () => mine.order ?? null);
 
   // Whatever tree won: done is reconciled against it (no id the tree lost),
   // then closure-repaired (no done step with an undone input — see
@@ -235,7 +242,16 @@ export function mergeEntry(
   const reconciled = enforceClosure(recipe, reconcileDone(recipe, done).done);
 
   return {
-    merged: { recipe, done: reconciled, servings, mode, timer, cooked, rating: rating ?? null },
+    merged: {
+      recipe,
+      done: reconciled,
+      servings,
+      mode,
+      timer,
+      cooked,
+      rating: rating ?? null,
+      order: order ?? null,
+    },
     treeConflict,
   };
 }

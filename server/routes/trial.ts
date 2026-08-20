@@ -28,7 +28,9 @@ import { Router, type Request, type Response } from "express";
 import { and, eq, isNull } from "drizzle-orm";
 import { getDb } from "../db";
 import { recipes, trials } from "../../shared/schema";
-import { validateRecipe } from "../../shared/layout";
+import { validateRecipe, type Recipe } from "../../shared/layout";
+import { pruneOrderPreference } from "../../shared/sequence";
+import { isValidOrder } from "./library";
 import { sanitizeMealTypes } from "../../shared/mealTypes";
 import { reconcileDone } from "../../shared/progress";
 import { readTrialId, trialOwnerKey } from "../lib/trial";
@@ -58,7 +60,7 @@ trialRouter.patch("/recipe", async (req: Request, res: Response) => {
   const trialId = readTrialId(req);
   if (!trialId) return res.status(401).json({ error: "No trial on this browser." });
 
-  const { recipe, done, servings, mode, timer, cooked, rating } = req.body ?? {};
+  const { recipe, done, servings, mode, timer, cooked, rating, order } = req.body ?? {};
 
   if (recipe !== undefined) {
     const errors = validateRecipe(recipe);
@@ -80,6 +82,8 @@ trialRouter.patch("/recipe", async (req: Request, res: Response) => {
     return res.status(400).json({ error: "cooked must be an array of timestamps." });
   if (rating !== undefined && !isValidRating(rating))
     return res.status(400).json({ error: "rating must be -1, 0, 1, or null." });
+  if (order !== undefined && !isValidOrder(order))
+    return res.status(400).json({ error: "order must be {sections?, branches?} or null." });
 
   try {
     const db = getDb();
@@ -112,6 +116,13 @@ trialRouter.patch("/recipe", async (req: Request, res: Response) => {
       if (timer !== undefined) patch.timer = timer;
       if (cooked !== undefined) patch.cooked = cooked;
       if (rating !== undefined) patch.rating = rating;
+      if (order !== undefined || recipe !== undefined) {
+        // Pruned against whatever tree the row ends up with — the same
+        // guarantee, in the same place, as the done reconciliation above.
+        const tree = (recipe !== undefined ? recipe : current.recipe) as Recipe;
+        const raw = order !== undefined ? order : current.cardOrder;
+        patch.cardOrder = pruneOrderPreference(tree, raw ?? null);
+      }
 
       const [updated] = await tx.update(recipes).set(patch).where(where).returning();
       return updated ? { kind: "ok" as const, row: updated } : { kind: "missing" as const };
@@ -135,6 +146,7 @@ trialRouter.patch("/recipe", async (req: Request, res: Response) => {
         timer: row.timer,
         cooked: row.cooked ?? [],
         rating: row.rating ?? null,
+        order: row.cardOrder ?? null,
         savedAt: row.createdAt ? new Date(row.createdAt).getTime() : Date.now(),
       },
     });

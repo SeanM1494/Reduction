@@ -15,7 +15,8 @@ import { Router, type Request, type Response, type NextFunction } from "express"
 import { eq, and, desc, isNull, sql, type SQL } from "drizzle-orm";
 import { getDb } from "../db";
 import { recipes } from "../../shared/schema";
-import { validateRecipe } from "../../shared/layout";
+import { validateRecipe, type Recipe } from "../../shared/layout";
+import { pruneOrderPreference } from "../../shared/sequence";
 import { sanitizeMealTypes } from "../../shared/mealTypes";
 import { reconcileDone } from "../../shared/progress";
 import { userIdOf } from "../middleware/session";
@@ -91,6 +92,7 @@ function wireEntry(row: typeof recipes.$inferSelect) {
     timer: row.timer,
     cooked: row.cooked ?? [],
     rating: row.rating ?? null,
+    order: row.cardOrder ?? null,
     version: row.version ?? 1,
     savedAt: row.createdAt ? new Date(row.createdAt).getTime() : Date.now(),
   };
@@ -98,6 +100,49 @@ function wireEntry(row: typeof recipes.$inferSelect) {
 
 const isValidCooked = (v: unknown): v is number[] =>
   Array.isArray(v) && v.every((x) => typeof x === "number" && Number.isFinite(x));
+
+/**
+ * The card-order preference: null, or { sections?: string[], branches?:
+ * Record<string, string[]> } with everything a bounded string.
+ *
+ * SHAPE only, on purpose. Whether the ids and names still refer to anything
+ * is not this route's question — the walk in shared/sequence.ts ignores
+ * stale entries and the client prunes on write — but the shape and the
+ * BOUNDS are: this lands in a jsonb column, and without a cap a hostile
+ * client could stuff megabytes into a field every future read of the row
+ * pays for. The caps are far above anything a real recipe produces.
+ */
+export function isValidOrder(
+  v: unknown
+): v is import("../../shared/sequence").OrderPreference | null {
+  if (v === null) return true;
+  if (typeof v !== "object" || Array.isArray(v)) return false;
+  const o = v as { sections?: unknown; branches?: unknown };
+  if (o.sections !== undefined) {
+    if (
+      !Array.isArray(o.sections) ||
+      o.sections.length > 50 ||
+      !o.sections.every((x) => typeof x === "string" && x.length <= 200)
+    )
+      return false;
+  }
+  if (o.branches !== undefined) {
+    if (typeof o.branches !== "object" || o.branches === null || Array.isArray(o.branches))
+      return false;
+    const entries = Object.entries(o.branches as Record<string, unknown>);
+    if (entries.length > 100) return false;
+    for (const [k, ids] of entries) {
+      if (k.length > 200) return false;
+      if (
+        !Array.isArray(ids) ||
+        ids.length > 50 ||
+        !ids.every((x) => typeof x === "string" && x.length <= 200)
+      )
+        return false;
+    }
+  }
+  return true;
+}
 
 /** -1 | 0 | 1, or null for unrated. Three states, deliberately coarse — see
  *  the column comment in shared/schema.ts. */
@@ -188,19 +233,23 @@ libraryRouter.post("/", async (req: Request, res: Response) => {
 
 libraryRouter.patch("/:id", async (req: Request, res: Response) => {
   const id = String(req.params.id);
-  const { recipe, done, servings, mode, timer, cooked, rating, ifVersion } = req.body ?? {};
+  const { recipe, done, servings, mode, timer, cooked, rating, order, ifVersion } =
+    req.body ?? {};
   if (ifVersion !== undefined && typeof ifVersion !== "number")
     return res.status(400).json({ error: "ifVersion must be a number." });
   if (cooked !== undefined && !isValidCooked(cooked))
     return res.status(400).json({ error: "cooked must be an array of timestamps." });
   if (rating !== undefined && !isValidRating(rating))
     return res.status(400).json({ error: "rating must be -1, 0, 1, or null." });
+  if (order !== undefined && !isValidOrder(order))
+    return res.status(400).json({ error: "order must be {sections?, branches?} or null." });
   const patch: Partial<typeof recipes.$inferInsert> = {
     updatedAt: new Date(),
     version: sql`${recipes.version} + 1` as unknown as number,
   };
   if (cooked !== undefined) patch.cooked = cooked;
   if (rating !== undefined) patch.rating = rating;
+  if (order !== undefined) patch.cardOrder = order;
 
   /**
    * A replacement tree, from the JSON editor. Validated here and not merely
@@ -272,6 +321,20 @@ libraryRouter.patch("/:id", async (req: Request, res: Response) => {
       if (patch.recipe) {
         const nextDone = patch.done !== undefined ? patch.done : current.done;
         patch.done = reconcileDone(patch.recipe, nextDone).done;
+      }
+
+      /**
+       * The preference is pruned against whatever tree the row ends up
+       * holding — the same place, and for the same reason, that `done` is
+       * reconciled above: the stored value has to be correct even when the
+       * request did not come from our client. The walk would ignore stale
+       * entries anyway; pruning here keeps the column from accreting ids of
+       * steps that stopped existing three edits ago.
+       */
+      if (patch.cardOrder !== undefined || patch.recipe) {
+        const tree = (patch.recipe ?? current.recipe) as Recipe;
+        const raw = patch.cardOrder !== undefined ? patch.cardOrder : current.cardOrder;
+        patch.cardOrder = pruneOrderPreference(tree, raw ?? null);
       }
 
       const [updated] = await tx

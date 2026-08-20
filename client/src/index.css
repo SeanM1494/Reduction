@@ -2066,6 +2066,57 @@ button.rd-section-head:focus-visible {
   100% { opacity: .25; }
 }
 
+/* The cooking-order view. A full page rather than a sheet: it is a list the
+ * length of the recipe, it scrolls, and the drag needs the room. Rows are
+ * 44px, and ONLY rows with a grip are draggable — movability shown before the
+ * gesture, not discovered at the drop. */
+.rd-reorder { padding: 2px; }
+.rd-ro-head {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 10px; margin-bottom: 6px;
+}
+.rd-ro-title { margin: 0; font-size: 17px; }
+.rd-ro-hint { margin: 0 0 10px; font-size: 12.5px; line-height: 1.45; color: var(--muted); }
+.rd-ro-reset { margin-bottom: 10px; }
+.rd-ro-empty {
+  margin: 8px 0 12px; padding: 12px 14px; font-size: 13.5px; line-height: 1.5;
+  color: var(--muted); background: var(--ing-bg);
+  border: 1px dashed var(--line-strong); border-radius: 12px;
+}
+.rd-ro-list, .rd-ro-steps { list-style: none; margin: 0; padding: 0; }
+.rd-ro-section { margin-bottom: 10px; }
+.rd-ro-row {
+  display: flex; align-items: center; gap: 9px;
+  min-height: 44px; padding: 4px 8px; border-radius: 10px;
+  border: 1px solid transparent;
+  /* The gesture needs the press not to select text while it holds. */
+  user-select: none; -webkit-user-select: none;
+}
+.rd-ro-sec-row {
+  font-family: "Space Mono", ui-monospace, monospace;
+  font-size: 12px; letter-spacing: .07em; text-transform: uppercase;
+  color: var(--muted); border-bottom: 1px solid var(--line); border-radius: 0;
+}
+.rd-ro-step-row { font-size: 14.5px; color: var(--ink); }
+.rd-ro-row.is-movable { cursor: grab; background: var(--card); border-color: var(--line); }
+.rd-ro-sec-row.is-movable { border: 1px solid var(--line); border-radius: 10px; color: var(--ink); }
+.rd-ro-grip { flex: none; width: 18px; text-align: center; color: var(--faint); letter-spacing: -2px; }
+.rd-ro-grip-off { width: 18px; }
+.rd-ro-label { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rd-ro-done { color: var(--faint); }
+.rd-ro-branch, .rd-ro-pin {
+  flex: none; max-width: 40%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-size: 10.5px; color: var(--faint);
+  font-family: "Space Mono", ui-monospace, monospace;
+}
+/* Drag states reuse the diagram's vocabulary: lifted source, lit targets,
+ * dimmed everything-else. */
+.rd-ro-row.is-lifted { opacity: .45; }
+.rd-ro-row.is-drop-ok { border-color: var(--cool-line); background: var(--cool-bg); }
+.rd-ro-row.is-drop-over { outline: 2px solid var(--cool-line); outline-offset: 1px; }
+.rd-ro-row.is-drop-no { opacity: .4; }
+.rd-steps-reorder { margin-bottom: 10px; }
+
 .rd-field-anchor { position: relative; }
 .rd-field-error {
   position: absolute; z-index: 3; pointer-events: none;

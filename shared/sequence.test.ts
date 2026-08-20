@@ -12,7 +12,17 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { validateRecipe, type Recipe, type Section } from "./layout";
-import { cardSequence, componentLinks, sectionOrder, stepSequence } from "./sequence";
+import {
+  applyBranchPreference,
+  branchChoices,
+  cardSequence,
+  componentLinks,
+  freeSectionIndices,
+  pruneOrderPreference,
+  sectionOrder,
+  stepSequence,
+  type OrderPreference,
+} from "./sequence";
 
 // ------------------------------------------------------------- fixtures --
 
@@ -76,8 +86,8 @@ const SPLIT_COOKIE = (): Recipe => ({
 // ------------------------------------------------------------- checkers --
 
 /** Every violation of the invariant, both kinds, for one recipe. */
-function violations(recipe: Recipe): string[] {
-  const seq = cardSequence(recipe);
+function violations(recipe: Recipe, prefer?: OrderPreference): string[] {
+  const seq = cardSequence(recipe, prefer);
   const at = new Map(seq.map((s, i) => [s.stepId, i]));
   const sectionAt = new Map<number, number>();
   seq.forEach((s, i) => {
@@ -310,4 +320,216 @@ test("the invariant holds across randomly generated valid trees", () => {
     );
   }
   assert.ok(checked > 100, `expected a decent sample of valid trees, got ${checked}`);
+});
+
+
+// -------------------------------------------------------- order preference --
+
+/** Three sections with no name links between them: the shape where the cook
+ *  actually has section-order freedom. */
+const ROAST = (): Recipe => ({
+  title: "Roast dinner",
+  servings: 4,
+  sections: [
+    {
+      name: "Potatoes",
+      ingredients: [{ id: "p", qty: 1, unit: "kg", name: "potatoes" }],
+      nodes: [
+        { id: "p1", label: "parboil", inputs: ["p"] },
+        { id: "p2", label: "roast", inputs: ["p1"] },
+      ],
+      root: "p2",
+    },
+    {
+      name: "Greens",
+      ingredients: [{ id: "g", qty: 200, unit: "g", name: "greens" }],
+      nodes: [{ id: "g1", label: "steam", inputs: ["g"] }],
+      root: "g1",
+    },
+    {
+      name: "Gravy",
+      ingredients: [{ id: "st", qty: 1, unit: "cup", name: "stock" }],
+      nodes: [{ id: "s1", label: "reduce", inputs: ["st"] }],
+      root: "s1",
+    },
+  ],
+});
+
+test("no preference and an empty preference change nothing", () => {
+  for (const r of [one(GUAC()), SPLIT_COOKIE(), ROAST()]) {
+    const plain = cardSequence(r).map((c) => c.stepId);
+    assert.deepEqual(cardSequence(r, undefined).map((c) => c.stepId), plain);
+    assert.deepEqual(cardSequence(r, {}).map((c) => c.stepId), plain);
+    assert.deepEqual(
+      cardSequence(r, { sections: [], branches: {} }).map((c) => c.stepId),
+      plain
+    );
+  }
+});
+
+test("a branch preference flips which branch is cooked first", () => {
+  const r = one(GUAC());
+  const before = cardSequence(r).map((c) => c.stepId);
+  assert.ok(before.indexOf("d2") < before.indexOf("d3"));
+
+  const prefer: OrderPreference = { branches: { d4: ["d3", "d2"] } };
+  const after = cardSequence(r, prefer).map((c) => c.stepId);
+  assert.ok(after.indexOf("d3") < after.indexOf("d2"), JSON.stringify(after));
+  // Same steps, once each, and the invariant intact.
+  assert.deepEqual([...after].sort(), [...before].sort());
+  assert.deepEqual(violations(r, prefer), []);
+});
+
+test("a section preference reorders free sections", () => {
+  const r = ROAST();
+  assert.deepEqual(cardSequence(r).map((c) => c.stepId), ["p1", "p2", "g1", "s1"]);
+  const prefer: OrderPreference = { sections: ["Gravy", "Greens", "Potatoes"] };
+  assert.deepEqual(
+    cardSequence(r, prefer).map((c) => c.stepId),
+    ["s1", "g1", "p1", "p2"]
+  );
+  assert.deepEqual(violations(r, prefer), []);
+});
+
+test("a section preference cannot override a name link", () => {
+  // The cookie-bug fix outranks any preference: asking for Dough first still
+  // cooks Dry ingredients first, because the sort is topological and the
+  // preference is only a tie-break.
+  const r = SPLIT_COOKIE();
+  const prefer: OrderPreference = { sections: ["Dough", "Dry ingredients"] };
+  const seq = cardSequence(r, prefer).map((c) => c.stepId);
+  assert.ok(seq.indexOf("dry") < seq.indexOf("combine"), JSON.stringify(seq));
+  assert.deepEqual(violations(r, prefer), []);
+});
+
+test("section preference matches names the way componentLinks does", () => {
+  const r = ROAST();
+  const prefer: OrderPreference = { sections: ["  GRAVY  ", "potatoes"] };
+  const seq = cardSequence(r, prefer).map((c) => c.stepId);
+  assert.equal(seq[0], "s1");
+});
+
+test("applyBranchPreference leaves ingredient slots where they were", () => {
+  // The prompt's row convention — running mixture first, then additions — is
+  // carried by ingredient positions, and a branch swap must not disturb it.
+  const section: Section = {
+    name: "Mixed",
+    ingredients: [{ id: "x", qty: 1, unit: null, name: "x" }],
+    nodes: [
+      { id: "a1", label: "make a", inputs: [] as never },
+      { id: "b1", label: "make b", inputs: [] as never },
+      { id: "join", label: "join", inputs: ["a1", "x", "b1"] },
+    ],
+    root: "join",
+  };
+  const out = applyBranchPreference(section, { join: ["b1", "a1"] });
+  assert.deepEqual(out.nodes.find((n) => n.id === "join")!.inputs, ["b1", "x", "a1"]);
+  // And the input is untouched.
+  assert.deepEqual(section.nodes.find((n) => n.id === "join")!.inputs, ["a1", "x", "b1"]);
+});
+
+test("a stale branch preference is inert, never fatal", () => {
+  const r = one(GUAC());
+  const plain = cardSequence(r).map((c) => c.stepId);
+  // Unknown convergence id, and a preference naming a deleted step.
+  const cases: Record<string, string[]>[] = [
+    { nope: ["d3", "d2"] },
+    { d4: ["gone", "alsogone"] },
+  ];
+  for (const branches of cases) {
+    assert.deepEqual(cardSequence(r, { branches }).map((c) => c.stepId), plain);
+  }
+  // A half-stale one still applies what survives.
+  const half = cardSequence(r, { branches: { d4: ["d3", "gone"] } }).map((c) => c.stepId);
+  assert.ok(half.indexOf("d3") < half.indexOf("d2"));
+  assert.deepEqual(violations(r, { branches: { d4: ["d3", "gone"] } }), []);
+});
+
+test("branchChoices and freeSectionIndices report the real freedom", () => {
+  const guac = one(GUAC());
+  assert.deepEqual(branchChoices(guac), [
+    { sectionIndex: 0, stepId: "d4", branchRoots: ["d2", "d3"] },
+  ]);
+  assert.deepEqual([...freeSectionIndices(guac)], [0]);
+
+  const cookie = SPLIT_COOKIE();
+  assert.deepEqual(branchChoices(cookie), []);
+  // Both sections are in a name link, so neither is free to move.
+  assert.deepEqual([...freeSectionIndices(cookie)], []);
+
+  assert.deepEqual([...freeSectionIndices(ROAST())], [0, 1, 2]);
+});
+
+test("pruneOrderPreference drops what no longer exists and nulls out husks", () => {
+  const r = one(GUAC());
+  assert.equal(pruneOrderPreference(r, null), null);
+  assert.equal(pruneOrderPreference(r, {}), null);
+  assert.equal(
+    pruneOrderPreference(r, { sections: ["Salsa"], branches: { nope: ["a", "b"] } }),
+    null
+  );
+  // A branch entry reduced below two survivors says nothing and goes.
+  assert.equal(
+    pruneOrderPreference(r, { branches: { d4: ["d3", "gone"] } }),
+    null
+  );
+  assert.deepEqual(pruneOrderPreference(r, { branches: { d4: ["d3", "d2"] } }), {
+    branches: { d4: ["d3", "d2"] },
+  });
+  assert.deepEqual(pruneOrderPreference(ROAST(), { sections: ["Gravy", "Soup"] }), {
+    sections: ["Gravy"],
+  });
+});
+
+test("the invariant survives random preferences over random trees", () => {
+  let seed = 20260820;
+  const rnd = () => (seed = (seed * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff;
+
+  for (let iter = 0; iter < 500; iter++) {
+    // Two to three independent single-convergence sections, then shuffle-
+    // preference both levels at random.
+    const sections: Section[] = [];
+    const nSections = 2 + Math.floor(rnd() * 2);
+    for (let sIdx = 0; sIdx < nSections; sIdx++) {
+      const pre = `s${sIdx}`;
+      const nBranches = 2 + Math.floor(rnd() * 2);
+      const ingredients: Section["ingredients"] = [];
+      const nodes: Section["nodes"] = [];
+      const roots: string[] = [];
+      for (let b = 0; b < nBranches; b++) {
+        const ing = `${pre}i${b}`;
+        ingredients.push({ id: ing, qty: 1, unit: null, name: `ing ${ing}` });
+        const step = `${pre}b${b}`;
+        nodes.push({ id: step, label: `branch ${b}`, inputs: [ing] });
+        roots.push(step);
+      }
+      const rootId = `${pre}root`;
+      nodes.push({ id: rootId, label: "join", inputs: roots });
+      sections.push({ name: `Part ${sIdx}`, ingredients, nodes, root: rootId });
+    }
+    const recipe: Recipe = { title: "fuzz", servings: 1, sections };
+    assert.deepEqual(validateRecipe(recipe), [], JSON.stringify(recipe));
+
+    const shuffled = <T,>(xs: T[]): T[] =>
+      xs
+        .map((x) => [rnd(), x] as const)
+        .sort((a, b) => a[0] - b[0])
+        .map(([, x]) => x);
+
+    const prefer: OrderPreference = {
+      sections: shuffled(sections.map((s) => s.name)),
+      branches: Object.fromEntries(
+        branchChoices(recipe).map((c) => [c.stepId, shuffled(c.branchRoots)])
+      ),
+    };
+    assert.deepEqual(
+      violations(recipe, prefer),
+      [],
+      `preference broke the invariant: ${JSON.stringify(prefer)}`
+    );
+    // Every step still appears exactly once.
+    const seq = cardSequence(recipe, prefer).map((c) => c.stepId);
+    assert.equal(new Set(seq).size, seq.length);
+    assert.equal(seq.length, sections.reduce((n, s) => n + s.nodes.length, 0));
+  }
 });

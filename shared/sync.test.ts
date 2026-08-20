@@ -298,3 +298,33 @@ test("null base treats everything as mine-changed but still adopts their additio
   assert.deepEqual(merged.done.sort(), ["avocados", "onion"]);
   assert.equal(merged.servings, 4, "mine counts as changed against a null base");
 });
+
+// ------------------------------------------------------------------ order --
+
+test("order: one side arranged tonight's cooking, the arrangement is adopted", () => {
+  const base = entry();
+  const mine = entry();
+  const theirs = entry({ order: { sections: ["Gravy", "Potatoes"] } });
+  assert.deepEqual(mergeEntry(base, mine, theirs).merged.order, {
+    sections: ["Gravy", "Potatoes"],
+  });
+});
+
+test("order: both arranged, mine wins — same rule as rating, nothing destroyed", () => {
+  // Advisory besides: a stale winner is pruned on the next write and the
+  // walk ignores whatever slips through, so the losing arrangement costs one
+  // re-drag, not data.
+  const base = entry({ order: null });
+  const mine = entry({ order: { branches: { d4: ["d3", "d2"] } } });
+  const theirs = entry({ order: { sections: ["Greens"] } });
+  assert.deepEqual(mergeEntry(base, mine, theirs).merged.order, {
+    branches: { d4: ["d3", "d2"] },
+  });
+});
+
+test("order: clearing back to the recipe's own order is a change like any other", () => {
+  const base = entry({ order: { sections: ["Gravy"] } });
+  const mine = entry({ order: null });
+  const theirs = entry({ order: { sections: ["Gravy"] } });
+  assert.equal(mergeEntry(base, mine, theirs).merged.order, null);
+});

@@ -554,6 +554,7 @@ export default function RecipeView({
               scale={scale}
               onToggle={toggle}
               onUpdate={onUpdate}
+              canReorder={canEdit}
             />
           </div>
         ) : (

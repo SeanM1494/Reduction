@@ -87,6 +87,18 @@ export const recipes = pgTable(
      * already records.
      */
     rating: integer("rating"),
+    /**
+     * OrderPreference from shared/sequence.ts, or null. HOW THIS ENTRY wants
+     * its step-by-step cards ordered where the tree leaves a choice — the
+     * entry-level twin of the editor's `reorderInputs`, the same split as
+     * `servings` (this column) vs `recipe.servings` (in the tree). Advisory:
+     * the walk treats it as a tie-break and prunes what no longer exists, so
+     * nothing here can violate the cooking-order invariant or break a read.
+     */
+    cardOrder: jsonb("card_order").$type<{
+      sections?: string[];
+      branches?: Record<string, string[]>;
+    } | null>(),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),
   },
