@@ -12,7 +12,10 @@
     "check": "tsc --noEmit",
     "test": "node --import tsx --test '{server,shared}/**/*.test.ts'",
     "db:push": "drizzle-kit push",
-    "db:backfill-url-key": "tsx server/scripts/backfillUrlKey.ts"
+    "db:backfill-url-key": "tsx server/scripts/backfillUrlKey.ts",
+    "test:db": "bash scripts/test-db.sh run",
+    "test:db:stop": "bash scripts/test-db.sh stop",
+    "test:db:reset": "bash scripts/test-db.sh reset"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.65.0",

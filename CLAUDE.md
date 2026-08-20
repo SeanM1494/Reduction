@@ -18,8 +18,16 @@ workflow this repo used earlier is retired: it cost a round trip per change
 and, twice, merged a stale head — a pull request opened at one commit and
 merged at that same commit while later work sat unnoticed on the branch.
 
-**Run `npm run check` and `npm test` before every commit.** Both must pass
-first. Not after, not "it typechecked earlier" — before.
+**Run `npm run check` and `npm run test:db` before every commit.** Both must
+pass first. Not after, not "it typechecked earlier" — before. `test:db` is
+`npm test` pointed at a throwaway LOCAL Postgres (`scripts/test-db.sh`: data
+in `.pgtest/`, port 5433, schema re-pushed from `shared/schema.ts` on every
+start), so the database-backed suites actually run instead of skipping.
+First run does the initdb; after that it starts in a couple of seconds.
+`npm run test:db:stop` parks it, `npm run test:db:reset` wipes it — it is
+disposable by design, so reset beats debugging it. Plain `npm test` still
+works and still skips without a database; what it must never be given is
+production's `DATABASE_URL`, and the guard below enforces that.
 
 ### What the test counts mean
 
@@ -28,9 +36,10 @@ them is the whole point:
 
 | result | meaning |
 |---|---|
-| ***n* pass, 27 skipped** | no `DATABASE_URL`, or nothing listening. Fine. |
-| ***n*+27 pass, 0 skipped** | a database with a current schema. This is the real gate. |
-| **failures naming a missing table** | a reachable database whose schema is behind `shared/schema.ts`. Run `npm run db:push`. |
+| ***n* pass, 27 skipped** | no `DATABASE_URL` at all. Fine on a machine with no Postgres. |
+| ***n*+27 pass, 0 skipped** | a local database with a current schema. This is the real gate — `npm run test:db` produces it. |
+| **failures saying "Refusing to run database tests against …"** | `DATABASE_URL` in the shell points somewhere non-local — on Replit, that is production. Working as designed: use `npm run test:db`, which ignores the env var entirely. |
+| **failures naming a missing table** | a reachable local database whose schema is behind `shared/schema.ts`. `test:db` re-pushes on every start, so this means a hand-run database — push it or use the script. |
 
 The total grows as suites are added — pin your expectation to the **skip
 count**, not the pass count (an earlier version of this table hard-coded
@@ -55,7 +64,9 @@ what it made — but one test did leave a row behind, and "scoped" is not the
 same as "safe against production". `server/lib/testdb.ts` now refuses a
 non-local `DATABASE_URL` outright, before connecting, unless
 `ALLOW_REMOTE_TEST_DB=1` is set. It throws rather than skipping, for the same
-reason a missing table does.
+reason a missing table does. The database it SHOULD be given is the local one
+`npm run test:db` provides — nobody needs the override in normal work, and
+reaching for it should feel wrong.
 
 **A skip must only ever mean "there is no database".** It used to be able to
 mean "there is a database but it is missing the table I was about to test",

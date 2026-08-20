@@ -10,3 +10,4 @@ dist
 # the wrong place to keep either. Two were committed before this rule (both
 # happened to be schema-only, no rows), which is exactly how the habit starts.
 *.sql
+.pgtest/
