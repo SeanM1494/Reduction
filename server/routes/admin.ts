@@ -23,6 +23,7 @@ import { eq, or, sql } from "drizzle-orm";
 import { getDb } from "../db";
 import { accountAccess, identities, subscriptions, users } from "../../shared/schema";
 import { setEnforceOverrideAudited } from "../lib/billing/entitlement";
+import { APPLE_CALLBACK_PATH, appleConfig, clientSecret } from "../lib/apple";
 
 export const adminRouter = Router();
 
@@ -274,4 +275,89 @@ adminRouter.patch("/user", async (req: Request, res: Response) => {
     console.error("[admin:patch]", (e as Error).message);
     return res.status(500).json({ error: "Could not update that account." });
   }
+});
+
+/**
+ * GET /api/admin/preflight/apple
+ *
+ * WHY THIS EXISTS. Every way Sign in with Apple fails at the token exchange
+ * produces one indistinguishable outcome — `invalid_client`, with no detail —
+ * and reaching it costs a full round trip through Apple's sheet. Worse, the
+ * three things that cause it (a Key ID that does not match the key, a Team ID
+ * and Services ID the wrong way round, a key not configured for this Services
+ * ID) are all invisible locally: the JWT is well-formed in every one of them.
+ *
+ * So this reports what the RUNNING PROCESS actually holds, which is the
+ * question logs cannot answer: not "what did I put in Secrets" but "what did
+ * this deployment boot with". A stale deployment still running a rotated-away
+ * key looks identical to a misconfiguration until you can see the Key ID it
+ * is signing with.
+ *
+ * DISCLOSES NO SECRET. The private key is reported only as "does it parse",
+ * and the Team ID is fingerprinted rather than printed. The Services ID, Key
+ * ID and redirect URI are not secrets — the first two are visible in any
+ * authorize request, and the third is registered publicly with Apple.
+ */
+adminRouter.get("/preflight/apple", async (req: Request, res: Response) => {
+  if (!requireAdmin(req, res)) return;
+
+  const cfg = appleConfig();
+  if (!cfg) {
+    // Half-configured reads as unconfigured, so name which parts are missing —
+    // otherwise this is the same unhelpful answer it exists to replace.
+    const present = {
+      APPLE_CLIENT_ID: !!process.env.APPLE_CLIENT_ID?.trim(),
+      APPLE_TEAM_ID: !!process.env.APPLE_TEAM_ID?.trim(),
+      APPLE_KEY_ID: !!process.env.APPLE_KEY_ID?.trim(),
+      APPLE_PRIVATE_KEY: !!process.env.APPLE_PRIVATE_KEY,
+      PUBLIC_BASE_URL: !!process.env.PUBLIC_BASE_URL?.trim(),
+    };
+    return res.json({
+      configured: false,
+      missing: Object.entries(present)
+        .filter(([, v]) => !v)
+        .map(([k]) => k),
+      note: "With any of these unset the Apple button is hidden and the route 503s.",
+    });
+  }
+
+  const out: Record<string, unknown> = {
+    configured: true,
+    // The three values worth eyeballing against the console, none secret.
+    servicesId: cfg.clientId,
+    keyId: cfg.keyId,
+    redirectUri: cfg.redirectUri,
+    // Enough to tell two Team IDs apart without printing one.
+    teamIdLength: cfg.teamId.length,
+    teamIdLooksRight: /^[A-Z0-9]{10}$/.test(cfg.teamId),
+  };
+
+  try {
+    const jwt = clientSecret(cfg);
+    const [h, p, sig] = jwt.split(".");
+    const header = JSON.parse(Buffer.from(h, "base64url").toString("utf8"));
+    const payload = JSON.parse(Buffer.from(p, "base64url").toString("utf8"));
+    const sigBytes = Buffer.from(sig, "base64url").length;
+
+    out.clientSecret = {
+      alg: header.alg,
+      kid: header.kid,
+      // The swap that produces the other invalid_client. Reported as a
+      // boolean pair rather than the values, so it is checkable at a glance.
+      issIsTeamId: payload.iss === cfg.teamId,
+      subIsServicesId: payload.sub === cfg.clientId,
+      audience: payload.aud,
+      signatureBytes: sigBytes,
+      // 64 = IEEE P1363 (r||s), what JWS ES256 requires. ~70-72 = DER, which
+      // Apple rejects as invalid_client while looking perfectly well-formed.
+      signatureEncoding: sigBytes === 64 ? "p1363 (correct)" : "DER (Apple will reject)",
+      expiresInDays: Math.round((payload.exp - payload.iat) / 86400),
+    };
+    out.privateKeyParses = true;
+  } catch (e) {
+    out.privateKeyParses = false;
+    out.error = (e as Error).message;
+  }
+
+  return res.json(out);
 });

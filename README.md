@@ -107,6 +107,19 @@ cache is keyed on the Key ID.
 With any of the four missing the app runs normally and the Apple button shows
 as "Coming soon" rather than offering a sign-in that would fail.
 
+**To check what a deployment is actually running with** (needs `ADMIN_SECRET`):
+
+```
+curl -H "x-admin-secret: $ADMIN_SECRET" \
+  "https://<host>/api/admin/preflight/apple"
+```
+
+It reports the Services ID, Key ID and redirect URI the *running process*
+holds, whether the private key parses, and the client secret's shape —
+signature encoding, and whether `iss`/`sub` are the right way round. No secret
+is disclosed. This is the fastest way to tell a stale deployment apart from a
+misconfiguration, because both produce an identical `invalid_client`.
+
 ### Admin lookup
 
 `ADMIN_SECRET` enables `GET /api/admin/user?email=…`, which returns matching accounts' ids plus their allowance and subscriptions. Unset, the route 404s.
