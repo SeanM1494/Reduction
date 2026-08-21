@@ -20,6 +20,7 @@ import {
   appleConfig,
   buildAuthUrl,
   clientSecret,
+  describeKeyEnv,
   nonceForState,
   parseUserField,
   resetClientSecretCache,
@@ -236,5 +237,145 @@ test("a missing, empty or malformed user field costs nobody their sign-in", () =
   // an error, and must never throw.
   for (const bad of [undefined, null, "", "   ", "{", "[]", "{}", '{"name":{}}', 42, {}]) {
     assert.equal(parseUserField(bad), null, `${JSON.stringify(bad)} should be null`);
+  }
+});
+
+// ---------------------------------------------------------------------------
+// What actually lands in APPLE_PRIVATE_KEY.
+//
+// A .p8 makes a long journey to reach an env var — editor, clipboard, web
+// form, sometimes a shell — and each leg can damage it in a way that is
+// invisible when the value is read back. These are the manglings seen in the
+// wild; the ones that CAN be recovered are, and the ones that cannot are
+// named rather than reported as a generic parse failure.
+// ---------------------------------------------------------------------------
+
+const parses = (v: string) => describeKeyEnv(v).normalisedParses;
+const PEM_TRIM = PEM.trim();
+
+test("a pristine key parses, and its samples are boilerplate rather than key", () => {
+  const r = describeKeyEnv(PEM);
+  assert.equal(r.normalisedParses, true);
+  // The 15-character windows land on fixed PKCS#8 text in every key file, so
+  // they identify a mangled paste without disclosing anything.
+  assert.equal(r.first15, "-----BEGIN PRIV");
+  // Asserted loosely on purpose: whether the file ends with a newline shifts
+  // this window, and that variation is a thing the report should SHOW rather
+  // than something to pin. A trailing newline is harmless and common.
+  assert.match(r.last15, /KEY-----\n?$/);
+  assert.equal(describeKeyEnv(PEM_TRIM).last15, "RIVATE KEY-----");
+});
+
+test("recovers the manglings that are recoverable", () => {
+  assert.equal(parses(PEM_TRIM.replace(/\n/g, "\\n")), true, "literal backslash-n");
+  assert.equal(parses(PEM_TRIM.replace(/\n/g, "\r\n")), true, "CRLF");
+  assert.equal(parses("\uFEFF" + PEM_TRIM), true, "UTF-8 BOM");
+  assert.equal(parses(`"${PEM_TRIM}"`), true, "wrapped in double quotes");
+  assert.equal(parses(`'${PEM_TRIM}'`), true, "wrapped in single quotes");
+  assert.equal(parses(PEM_TRIM + "\n\n   \n"), true, "trailing blank lines");
+  // The nastiest one: several secret-management UIs "tidy" a pasted value by
+  // stripping newlines. Header and footer survive, so it reads back as
+  // completely correct — and OpenSSL refuses it. PEM line breaks are
+  // formatting rather than data, so the original is recoverable exactly.
+  assert.equal(parses(PEM_TRIM.replace(/\n/g, "")), true, "all newlines stripped");
+  assert.equal(parses(PEM_TRIM.replace(/\n/g, " ")), true, "newlines became spaces");
+});
+
+test("names the manglings that are NOT recoverable", () => {
+  // An editor turning ----- into an em-dash is genuinely invisible in most
+  // fonts, so it gets its own flag rather than a generic parse error.
+  const dashed = describeKeyEnv(PEM_TRIM.replace("-----BEGIN", "\u2014BEGIN"));
+  assert.equal(dashed.normalisedParses, false);
+  assert.equal(dashed.hasSmartPunctuation, true);
+  assert.equal(dashed.startsWithHeader, false);
+
+  const noHeader = describeKeyEnv(PEM_TRIM.split("\n").slice(1).join("\n"));
+  assert.equal(noHeader.normalisedParses, false);
+  assert.equal(noHeader.startsWithHeader, false);
+
+  const truncated = describeKeyEnv(PEM_TRIM.slice(0, PEM_TRIM.length - 40));
+  assert.equal(truncated.normalisedParses, false);
+  assert.equal(truncated.endsWithFooter, false);
+});
+
+test("distinguishes literal backslash-n from real newlines", () => {
+  // The single question the user could not answer from "privateKeyParses:
+  // false", and the two cases look identical when read back in a form field.
+  const literal = describeKeyEnv(PEM_TRIM.replace(/\n/g, "\\n"));
+  assert.equal(literal.hasLiteralBackslashN, true);
+  assert.equal(literal.hasRealNewlines, false);
+  assert.equal(literal.realNewlineCount, 0);
+
+  const real = describeKeyEnv(PEM);
+  assert.equal(real.hasLiteralBackslashN, false);
+  assert.equal(real.hasRealNewlines, true);
+  assert.ok(real.realNewlineCount >= 4);
+});
+
+test("counts characters and bytes separately, so non-ASCII shows up", () => {
+  const clean = describeKeyEnv(PEM_TRIM);
+  assert.equal(clean.chars, clean.bytes, "pure ASCII: the two agree");
+  assert.equal(clean.nonAsciiCount, 0);
+
+  const dirty = describeKeyEnv("\uFEFF" + PEM_TRIM);
+  // A BOM is one character and three bytes — which is how an invisible
+  // prefix becomes visible in a report.
+  assert.ok(dirty.bytes > dirty.chars);
+  assert.equal(dirty.hasBom, true);
+  assert.equal(dirty.firstCharCodes[0], 0xfeff);
+});
+
+test("an unset or empty value says so rather than looking like a bad key", () => {
+  for (const v of [undefined, ""]) {
+    const r = describeKeyEnv(v);
+    assert.equal(r.present, false);
+    assert.equal(r.normalisedParses, false);
+    assert.match(r.parseError!, /unset or empty/);
+  }
+});
+
+test("the report never contains the middle of the key", () => {
+  const r = describeKeyEnv(PEM);
+  const body = PEM_TRIM
+    .replace(/-----[A-Z ]+-----/g, "")
+    .replace(/\s+/g, "");
+  const middle = body.slice(20, body.length - 20);
+  const serialised = JSON.stringify(r);
+  // The private scalar lives well inside the body; the 15-character windows
+  // are deliberately short enough that neither reaches it.
+  for (let i = 0; i + 12 <= middle.length; i += 12) {
+    assert.equal(
+      serialised.includes(middle.slice(i, i + 12)),
+      false,
+      "a 12-character run from the key body leaked into the report"
+    );
+  }
+});
+
+test("config resolves for every recoverable paste, not just the pristine one", () => {
+  const saved = { ...process.env };
+  try {
+    for (const [name, value] of [
+      ["literal \\n", PEM_TRIM.replace(/\n/g, "\\n")],
+      ["newlines stripped", PEM_TRIM.replace(/\n/g, "")],
+      ["quoted", `"${PEM_TRIM}"`],
+      ["CRLF", PEM_TRIM.replace(/\n/g, "\r\n")],
+    ] as Array<[string, string]>) {
+      process.env = { ...saved };
+      process.env.APPLE_CLIENT_ID = CFG.clientId;
+      process.env.APPLE_TEAM_ID = CFG.teamId;
+      process.env.APPLE_KEY_ID = CFG.keyId;
+      process.env.APPLE_PRIVATE_KEY = value;
+      process.env.PUBLIC_BASE_URL = "https://example.test";
+      resetClientSecretCache();
+      const cfg = appleConfig();
+      assert.ok(cfg, `${name} should resolve`);
+      // And all the way through to a signature of the right shape.
+      const sig = Buffer.from(clientSecret(cfg!).split(".")[2], "base64url");
+      assert.equal(sig.length, 64, `${name} should still sign as P1363`);
+    }
+  } finally {
+    process.env = saved;
+    resetClientSecretCache();
   }
 });

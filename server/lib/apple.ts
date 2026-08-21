@@ -59,9 +59,168 @@ export interface AppleConfig {
  * looks present, `createPrivateKey` throws something opaque about ASN.1, and
  * the failure looks like a bad key rather than a bad paste.
  */
+const PEM_HEADER = "-----BEGIN PRIVATE KEY-----";
+const PEM_FOOTER = "-----END PRIVATE KEY-----";
+
+/**
+ * Rebuilds a PEM from whatever survived the paste.
+ *
+ * A .p8 makes a long journey to get here — a text editor, a clipboard, a web
+ * form, sometimes a shell — and each leg can damage it in a way that leaves it
+ * looking fine. Every transform below is for damage seen in the wild:
+ *
+ *  - a UTF-8 BOM prepended by a Windows editor, invisible everywhere
+ *  - the whole value wrapped in quotes, from copying a line out of a .env
+ *  - CRLF line endings, which OpenSSL will not accept inside the base64
+ *  - literal backslash-n, from anything that flattens a multiline value
+ *  - NEWLINES REMOVED ENTIRELY, which several secret-management UIs do to
+ *    "tidy" a pasted value. This is the nastiest one, because the header and
+ *    footer are still there and the value looks completely correct to a human
+ *    reading it back.
+ *
+ * The last case is why this reconstructs rather than merely cleans: given the
+ * header, the footer and the base64 between them, the original file is
+ * recoverable exactly — PEM line breaks are formatting, not data. So the
+ * body is extracted, stripped of all whitespace, and re-wrapped at 64
+ * characters.
+ *
+ * What it will NOT do is guess at a value with no PEM markers at all. A bare
+ * base64 blob might be a PKCS#8 key or might be half a file, and silently
+ * treating one as the other trades a clear failure for a confusing one.
+ */
 function normalisePem(raw: string): string {
-  const s = raw.trim();
-  return s.includes("\\n") ? s.replace(/\\n/g, "\n") : s;
+  let s = raw;
+
+  // BOM first: it hides in front of the header and defeats every startsWith.
+  if (s.charCodeAt(0) === 0xfeff) s = s.slice(1);
+
+  s = s.trim();
+
+  // A value copied out of a .env file or a JSON blob, quotes and all.
+  if (s.length > 1 && ((s.startsWith('"') && s.endsWith('"')) || (s.startsWith("'") && s.endsWith("'")))) {
+    s = s.slice(1, -1).trim();
+  }
+
+  if (s.includes("\\n")) s = s.replace(/\\n/g, "\n");
+  if (s.includes("\\r")) s = s.replace(/\\r/g, "");
+  s = s.replace(/\r\n?/g, "\n");
+
+  const start = s.indexOf(PEM_HEADER);
+  const end = s.indexOf(PEM_FOOTER);
+  if (start === -1 || end === -1 || end < start) return s;
+
+  const body = s.slice(start + PEM_HEADER.length, end).replace(/\s+/g, "");
+  const wrapped = body.match(/.{1,64}/g)?.join("\n") ?? "";
+  return `${PEM_HEADER}\n${wrapped}\n${PEM_FOOTER}\n`;
+}
+
+/**
+ * What actually landed in APPLE_PRIVATE_KEY, without disclosing it.
+ *
+ * Exists because "privateKeyParses: false" is the same unhelpful answer as the
+ * `invalid_client` it was meant to replace — it says the value is wrong
+ * without saying how, and a paste that looks right when read back can be
+ * wrong in half a dozen invisible ways. Every field here is chosen to be
+ * diagnostic without being useful to anyone who obtains it.
+ *
+ * The 15-character samples are the PEM's boilerplate: "-----BEGIN PRIV" and
+ * "E KEY-----" are fixed strings in every PKCS#8 file. If the markers are
+ * missing the sample instead shows the ASN.1 prefix, which is structure
+ * rather than key material — the private scalar sits well inside the body,
+ * far from either end.
+ */
+export interface KeyEnvReport {
+  present: boolean;
+  chars: number;
+  bytes: number;
+  first15: string;
+  last15: string;
+  hasLiteralBackslashN: boolean;
+  hasRealNewlines: boolean;
+  realNewlineCount: number;
+  hasCarriageReturns: boolean;
+  hasBom: boolean;
+  isQuoted: boolean;
+  startsWithHeader: boolean;
+  endsWithFooter: boolean;
+  /** An editor that "helpfully" turns ----- into an em-dash breaks the file
+   *  in a way that is genuinely invisible in most fonts. */
+  hasSmartPunctuation: boolean;
+  /** Anything outside printable ASCII, which a valid PEM never contains. */
+  nonAsciiCount: number;
+  /** Leading character codes, so an invisible character is nameable. */
+  firstCharCodes: number[];
+  normalisedParses: boolean;
+  parseError: string | null;
+  /** How the raw value differs from what is actually handed to OpenSSL. */
+  repairs: string[];
+}
+
+export function describeKeyEnv(raw: string | undefined): KeyEnvReport {
+  if (raw === undefined || raw === "") {
+    return {
+      present: false, chars: 0, bytes: 0, first15: "", last15: "",
+      hasLiteralBackslashN: false, hasRealNewlines: false, realNewlineCount: 0,
+      hasCarriageReturns: false, hasBom: false, isQuoted: false,
+      startsWithHeader: false, endsWithFooter: false, hasSmartPunctuation: false,
+      nonAsciiCount: 0, firstCharCodes: [], normalisedParses: false,
+      parseError: "APPLE_PRIVATE_KEY is unset or empty.", repairs: [],
+    };
+  }
+
+  const trimmed = raw.trim();
+  const repairs: string[] = [];
+  if (raw.charCodeAt(0) === 0xfeff) repairs.push("stripped a UTF-8 BOM");
+  if (raw !== trimmed) repairs.push("trimmed surrounding whitespace");
+  const isQuoted =
+    trimmed.length > 1 &&
+    ((trimmed.startsWith('"') && trimmed.endsWith('"')) ||
+      (trimmed.startsWith("'") && trimmed.endsWith("'")));
+  if (isQuoted) repairs.push("removed surrounding quotes");
+  if (raw.includes("\\n")) repairs.push("converted literal \\n to newlines");
+  if (/\r/.test(raw)) repairs.push("converted CRLF to LF");
+
+  const normalised = normalisePem(raw);
+  if (
+    raw.includes(PEM_HEADER) &&
+    !/\n/.test(raw.slice(raw.indexOf(PEM_HEADER) + PEM_HEADER.length, raw.indexOf(PEM_FOOTER) > 0 ? raw.indexOf(PEM_FOOTER) : undefined)) &&
+    !raw.includes("\\n")
+  ) {
+    repairs.push("re-wrapped a body that had no line breaks at all");
+  }
+
+  let normalisedParses = false;
+  let parseError: string | null = null;
+  try {
+    crypto.createPrivateKey(normalised);
+    normalisedParses = true;
+  } catch (e) {
+    parseError = (e as Error).message;
+  }
+
+  return {
+    present: true,
+    chars: raw.length,
+    // Differs from `chars` exactly when something non-ASCII crept in.
+    bytes: Buffer.byteLength(raw, "utf8"),
+    first15: raw.slice(0, 15),
+    last15: raw.slice(-15),
+    hasLiteralBackslashN: raw.includes("\\n"),
+    hasRealNewlines: raw.includes("\n"),
+    realNewlineCount: (raw.match(/\n/g) ?? []).length,
+    hasCarriageReturns: /\r/.test(raw),
+    hasBom: raw.charCodeAt(0) === 0xfeff,
+    isQuoted,
+    startsWithHeader: trimmed.replace(/^["']/, "").startsWith(PEM_HEADER),
+    endsWithFooter: trimmed.replace(/["']$/, "").endsWith(PEM_FOOTER),
+    // U+2013/2014 en and em dash, and the four curly quotes.
+    hasSmartPunctuation: /[\u2010-\u2015\u2018\u2019\u201c\u201d]/.test(raw),
+    nonAsciiCount: (raw.match(/[^\x20-\x7e\n\r\t]/g) ?? []).length,
+    firstCharCodes: [...raw.slice(0, 6)].map((c) => c.charCodeAt(0)),
+    normalisedParses,
+    parseError,
+    repairs,
+  };
 }
 
 /** null when Apple sign-in is not configured, so callers can 503 cleanly and

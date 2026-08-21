@@ -56,8 +56,8 @@ silently corrupt every "what fraction" query the table exists to answer. The
 fifth guards a claim that has to be atomic: two dispatchers racing must not
 buzz one phone twice. The sixth guards the arithmetic that decides whether
 somebody can use the app at all, and the seventh guards a route that reads
-other people's accounts. **The full suite — 257 tests at the time of writing —
-has been run against a real Postgres and passes 257/0.**
+other people's accounts. **The full suite — 291 tests at the time of writing —
+has been run against a real Postgres and passes 291/0.**
 
 **`npm test` must never be run against production.** It reads `DATABASE_URL`,
 which on a deployed host is the live database — so running the suite there
@@ -189,6 +189,17 @@ that ONE route and must stay that way: a global form parser would start
 accepting form bodies on every other route, which is a CSRF surface nothing
 else needs. Same reasoning as the Stripe webhook sitting before
 `express.json()`.
+
+**A pasted .p8 arrives damaged more often than not, and most of it is
+repairable.** `normalisePem` handles a BOM, surrounding quotes, CRLF, literal
+backslash-n, and — the nastiest — newlines stripped entirely, which some
+secrets UIs do while leaving header, footer and a human-readable value intact.
+PEM line breaks are formatting rather than data, so the body is re-wrapped at
+64 characters and the original is recovered exactly. What is NOT repairable is
+a corrupted marker (an editor turning the dashes into an em-dash is invisible
+in most fonts), a missing BEGIN line, or a truncated body. `describeKeyEnv`
+reports all of it without disclosing the key, and a test asserts that no
+12-character run from the key body can reach the report.
 
 **Apple's email may be a `@privaterelay.appleid.com` relay**, which is exactly
 the case `shared/schema.ts` cites for never looking accounts up by email.

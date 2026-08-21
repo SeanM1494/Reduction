@@ -23,7 +23,7 @@ import { eq, or, sql } from "drizzle-orm";
 import { getDb } from "../db";
 import { accountAccess, identities, subscriptions, users } from "../../shared/schema";
 import { setEnforceOverrideAudited } from "../lib/billing/entitlement";
-import { APPLE_CALLBACK_PATH, appleConfig, clientSecret } from "../lib/apple";
+import { appleConfig, clientSecret, describeKeyEnv } from "../lib/apple";
 
 export const adminRouter = Router();
 
@@ -301,6 +301,11 @@ adminRouter.patch("/user", async (req: Request, res: Response) => {
 adminRouter.get("/preflight/apple", async (req: Request, res: Response) => {
   if (!requireAdmin(req, res)) return;
 
+  // Reported in BOTH branches. When the key is the thing that is wrong, the
+  // config resolves fine and only the parse fails — so putting this behind
+  // `if (!cfg)` would hide it in exactly the case it was written for.
+  const keyEnv = describeKeyEnv(process.env.APPLE_PRIVATE_KEY);
+
   const cfg = appleConfig();
   if (!cfg) {
     // Half-configured reads as unconfigured, so name which parts are missing —
@@ -318,6 +323,7 @@ adminRouter.get("/preflight/apple", async (req: Request, res: Response) => {
         .filter(([, v]) => !v)
         .map(([k]) => k),
       note: "With any of these unset the Apple button is hidden and the route 503s.",
+      privateKeyEnv: keyEnv,
     });
   }
 
@@ -358,6 +364,17 @@ adminRouter.get("/preflight/apple", async (req: Request, res: Response) => {
     out.privateKeyParses = false;
     out.error = (e as Error).message;
   }
+
+  /**
+   * WHAT ACTUALLY LANDED IN THE ENV VAR.
+   *
+   * "privateKeyParses: false" is the same unhelpful answer as the
+   * invalid_client it replaced — it says the value is wrong without saying
+   * how, and a paste that reads back correctly can still be wrong in half a
+   * dozen invisible ways: a BOM, CRLF, smart dashes, surrounding quotes, or
+   * newlines stripped by the secrets UI.
+   */
+  out.privateKeyEnv = keyEnv;
 
   return res.json(out);
 });

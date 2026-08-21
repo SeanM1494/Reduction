@@ -120,6 +120,20 @@ signature encoding, and whether `iss`/`sub` are the right way round. No secret
 is disclosed. This is the fastest way to tell a stale deployment apart from a
 misconfiguration, because both produce an identical `invalid_client`.
 
+`privateKeyEnv` in that response describes what actually landed in
+`APPLE_PRIVATE_KEY` without disclosing it: character and byte counts (these
+differ exactly when something non-ASCII crept in), the first and last 15
+characters (fixed PEM boilerplate in a healthy key), literal backslash-n
+versus real newlines, and flags for a BOM, CRLF, surrounding quotes and smart
+punctuation. `repairs` lists what `normalisePem` had to fix.
+
+Most damage is now repaired automatically — literal backslash-n, CRLF, a BOM,
+surrounding quotes, and **newlines stripped entirely**, which some secrets UIs
+do while leaving the value looking perfectly correct. What cannot be repaired
+is a corrupted header (an editor turning the dashes into an em-dash), a
+missing BEGIN line, or a truncated body; each is flagged by name rather than
+reported as a generic parse failure.
+
 ### Admin lookup
 
 `ADMIN_SECRET` enables `GET /api/admin/user?email=…`, which returns matching accounts' ids plus their allowance and subscriptions. Unset, the route 404s.
