@@ -586,3 +586,56 @@ export const accessEvents = pgTable(
   },
   (table) => [index("access_events_at_idx").on(table.at)]
 );
+
+/**
+ * Privileged writes, and who made them.
+ *
+ * NOT access_events, and the three reasons are worth writing down because
+ * "just add a row to the log we already have" is the obvious move and it is
+ * wrong here.
+ *
+ *  1. IT WOULD CORRUPT THE QUERY THAT TABLE EXISTS FOR. Every column in
+ *     access_events answers "would the wall have fired": decision, reason,
+ *     allowance, used, enforced. An admin override has none of those
+ *     truthfully, so writing one means inventing values — and the query
+ *     CLAUDE.md documents as the go/no-go for switching the paywall on
+ *     (`select decision, reason, count(*) ... group by 1, 2`) would start
+ *     counting operator actions as access decisions. That is the same
+ *     denominator corruption the `via` column already taught this codebase
+ *     about once.
+ *  2. RETENTION PULLS THE TWO APART. access_events grows with every request
+ *     and will eventually be pruned. Pruning it must never be the thing that
+ *     deletes the record of who was comped and by whom.
+ *  3. DURABILITY DIFFERS, and this is the real one. access_events is written
+ *     fire-and-forget and swallows its own errors, which is correct for
+ *     observability and wrong for the audit trail of a privileged write. A
+ *     row here is written in the SAME TRANSACTION as the change it describes,
+ *     so an unrecorded override cannot happen: if the audit fails the write
+ *     rolls back with it.
+ *
+ * `before`/`after` are text, not booleans, because the value is a TRI-STATE —
+ * true, false, or null-meaning-follow-the-global-flag — and a nullable
+ * boolean column could not distinguish "was cleared" from "not recorded".
+ */
+export const adminEvents = pgTable(
+  "admin_events",
+  {
+    id: bigserial("id", { mode: "number" }).primaryKey(),
+    at: timestamp("at", { withTimezone: true }).defaultNow(),
+    /** 'set_enforce_override' — an open string, like subscriptions.provider. */
+    action: text("action").notNull(),
+    /** No FK on purpose: the audit record must outlive the account it is
+     *  about, or deleting a user erases the evidence of what was done to
+     *  them. */
+    targetUserId: text("target_user_id").notNull(),
+    /** 'true' | 'false' | 'null' — see the note above on why not a boolean. */
+    before: text("before"),
+    after: text("after"),
+    /** Best-effort attribution. There is one operator and one shared secret,
+     *  so this cannot identify a person — it distinguishes sessions and
+     *  locations, which is the most a shared secret can honestly support. */
+    actorIp: text("actor_ip"),
+    note: text("note"),
+  },
+  (table) => [index("admin_events_at_idx").on(table.at)]
+);

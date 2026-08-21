@@ -23,7 +23,7 @@
 
 import { and, desc, eq, sql } from "drizzle-orm";
 import { getDb } from "../../db";
-import { accountAccess, subscriptions } from "../../../shared/schema";
+import { accountAccess, adminEvents, subscriptions } from "../../../shared/schema";
 
 /** Normalised across providers. Never a provider's own string. */
 export type SubStatus = "active" | "grace" | "expired";
@@ -222,4 +222,54 @@ export async function setEnforceOverride(
     .update(accountAccess)
     .set({ enforceOverride: value, updatedAt: new Date() })
     .where(eq(accountAccess.userId, userId));
+}
+
+/**
+ * The same change, AUDITED, as one transaction.
+ *
+ * The audit row and the change commit together or not at all — an override
+ * that happened without a record of it happening is the one outcome this
+ * function exists to make impossible. That is also why the audit is written
+ * here rather than fire-and-forget at the route: a logging failure must be
+ * able to abort the write, which is the opposite of the posture
+ * access_events and extraction_events take.
+ *
+ * Returns the previous value so the caller can report what actually changed,
+ * and so a no-op override is visible as one rather than looking like a write.
+ */
+export async function setEnforceOverrideAudited(params: {
+  userId: string;
+  value: boolean | null;
+  actorIp?: string | null;
+  note?: string | null;
+}): Promise<{ before: boolean | null; after: boolean | null }> {
+  const { userId, value, actorIp = null, note = null } = params;
+  await ensureAccess(userId);
+
+  return getDb().transaction(async (tx) => {
+    // Read inside the transaction, so two operators racing the same account
+    // cannot both record the same `before`.
+    const [row] = await tx
+      .select({ enforceOverride: accountAccess.enforceOverride })
+      .from(accountAccess)
+      .where(eq(accountAccess.userId, userId));
+    const before = row?.enforceOverride ?? null;
+
+    await tx
+      .update(accountAccess)
+      .set({ enforceOverride: value, updatedAt: new Date() })
+      .where(eq(accountAccess.userId, userId));
+
+    await tx.insert(adminEvents).values({
+      action: "set_enforce_override",
+      targetUserId: userId,
+      // Stringified because the value is a tri-state; see the schema note.
+      before: String(before),
+      after: String(value),
+      actorIp,
+      note,
+    });
+
+    return { before, after: value };
+  });
 }

@@ -15,11 +15,11 @@ import express from "express";
 import { createServer, type Server } from "node:http";
 import { eq } from "drizzle-orm";
 import { getDb } from "../db";
-import { accountAccess, identities, users } from "../../shared/schema";
+import { accountAccess, adminEvents, identities, users } from "../../shared/schema";
 import { needsDatabase } from "../lib/testdb";
 import { adminRouter, resetAdminThrottle } from "./admin";
 
-const TABLES = ["users", "identities", "account_access"];
+const TABLES = ["users", "identities", "account_access", "admin_events"];
 const SECRET = "test-admin-secret-0123456789";
 
 let server: Server | null = null;
@@ -28,6 +28,7 @@ let base = "";
 async function listen(): Promise<string> {
   if (base) return base;
   const app = express();
+  app.use(express.json());
   app.use("/api/admin", adminRouter);
   server = createServer(app);
   await new Promise<void>((r) => server!.listen(0, "127.0.0.1", r));
@@ -60,6 +61,7 @@ after(async () => {
   if (minted.size) {
     const db = getDb();
     for (const id of minted) {
+      await db.delete(adminEvents).where(eq(adminEvents.targetUserId, id));
       await db.delete(identities).where(eq(identities.userId, id));
       await db.delete(accountAccess).where(eq(accountAccess.userId, id));
       await db.delete(users).where(eq(users.id, id));
@@ -237,6 +239,175 @@ test("a success clears earlier failures", async (t) => {
     assert.equal((await lookup(email, SECRET)).status, 200);
     for (let i = 0; i < 9; i++) await lookup(email, "wrong");
     assert.equal((await lookup(email, SECRET)).status, 200, "the counter was reset");
+  });
+  resetAdminThrottle();
+});
+
+// ---------------------------------------------------------------------------
+// PATCH: setting enforce_override.
+// ---------------------------------------------------------------------------
+
+async function patchUser(body: unknown, secret: string | null) {
+  const res = await fetch(`${await listen()}/api/admin/user`, {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+      ...(secret === null ? {} : { "x-admin-secret": secret }),
+    },
+    body: JSON.stringify(body),
+  });
+  return { status: res.status, body: await res.json().catch(() => ({})) };
+}
+
+const overrideOf = async (userId: string) => {
+  const [row] = await getDb()
+    .select({ v: accountAccess.enforceOverride })
+    .from(accountAccess)
+    .where(eq(accountAccess.userId, userId));
+  return row?.v ?? null;
+};
+
+const auditFor = (userId: string) =>
+  getDb().select().from(adminEvents).where(eq(adminEvents.targetUserId, userId));
+
+test("PATCH is gated exactly like GET", async (t) => {
+  if (!(await needsDatabase(t as TestContext, ...TABLES))) return;
+  resetAdminThrottle();
+  const id = await makeUser(`patchgate-${crypto.randomUUID()}@example.test`);
+  await withSecret(undefined, async () => {
+    assert.equal((await patchUser({ userId: id, enforceOverride: true }, "x")).status, 404);
+  });
+  resetAdminThrottle();
+  await withSecret(SECRET, async () => {
+    assert.equal((await patchUser({ userId: id, enforceOverride: true }, null)).status, 401);
+    assert.equal((await patchUser({ userId: id, enforceOverride: true }, "wrong")).status, 401);
+  });
+  // Nothing was written by any of the refused calls.
+  assert.equal(await overrideOf(id), null);
+  assert.equal((await auditFor(id)).length, 0);
+  resetAdminThrottle();
+});
+
+test("sets true, false, and clears back to null", async (t) => {
+  if (!(await needsDatabase(t as TestContext, ...TABLES))) return;
+  resetAdminThrottle();
+  const id = await makeUser(`tri-${crypto.randomUUID()}@example.test`);
+  await withSecret(SECRET, async () => {
+    let r = await patchUser({ userId: id, enforceOverride: true }, SECRET);
+    assert.equal(r.status, 200);
+    assert.deepEqual([r.body.before, r.body.after, r.body.changed], [null, true, true]);
+    assert.equal(await overrideOf(id), true);
+
+    r = await patchUser({ userId: id, enforceOverride: false }, SECRET);
+    assert.deepEqual([r.body.before, r.body.after], [true, false]);
+    assert.equal(await overrideOf(id), false);
+
+    // null is a VALUE here — "follow the global flag" — not an absent field.
+    r = await patchUser({ userId: id, enforceOverride: null }, SECRET);
+    assert.deepEqual([r.body.before, r.body.after], [false, null]);
+    assert.equal(await overrideOf(id), null);
+  });
+  resetAdminThrottle();
+});
+
+test("null clears rather than forcing off — the states are different", async (t) => {
+  if (!(await needsDatabase(t as TestContext, ...TABLES))) return;
+  resetAdminThrottle();
+  const id = await makeUser(`nullvsfalse-${crypto.randomUUID()}@example.test`);
+  await withSecret(SECRET, async () => {
+    await patchUser({ userId: id, enforceOverride: false }, SECRET);
+    assert.equal(await overrideOf(id), false, "false means never enforce");
+    await patchUser({ userId: id, enforceOverride: null }, SECRET);
+    // The bug this guards: `if (!body.enforceOverride)` collapses false, null
+    // and missing into one branch, so "clear it" silently becomes "force it
+    // off" — identical-looking until the global flag is switched on.
+    assert.equal(await overrideOf(id), null, "null means follow the global flag");
+  });
+  resetAdminThrottle();
+});
+
+test("a missing enforceOverride key is refused, and writes nothing", async (t) => {
+  if (!(await needsDatabase(t as TestContext, ...TABLES))) return;
+  resetAdminThrottle();
+  const id = await makeUser(`missing-${crypto.randomUUID()}@example.test`);
+  await withSecret(SECRET, async () => {
+    assert.equal((await patchUser({ userId: id }, SECRET)).status, 422);
+    for (const bad of ["true", 1, 0, "", "null", {}]) {
+      assert.equal(
+        (await patchUser({ userId: id, enforceOverride: bad }, SECRET)).status,
+        422,
+        `${JSON.stringify(bad)} is not a tri-state`
+      );
+    }
+    assert.equal((await patchUser({ enforceOverride: true }, SECRET)).status, 422);
+  });
+  assert.equal((await auditFor(id)).length, 0);
+  resetAdminThrottle();
+});
+
+test("an unknown user id is 404, not a 500 from the foreign key", async (t) => {
+  if (!(await needsDatabase(t as TestContext, ...TABLES))) return;
+  resetAdminThrottle();
+  await withSecret(SECRET, async () => {
+    const r = await patchUser(
+      { userId: crypto.randomUUID(), enforceOverride: true },
+      SECRET
+    );
+    assert.equal(r.status, 404, "a typo'd id must read as a wrong id");
+  });
+  resetAdminThrottle();
+});
+
+test("every change leaves an audit row with both sides of it", async (t) => {
+  if (!(await needsDatabase(t as TestContext, ...TABLES))) return;
+  resetAdminThrottle();
+  const id = await makeUser(`audit-${crypto.randomUUID()}@example.test`);
+  await withSecret(SECRET, async () => {
+    await patchUser({ userId: id, enforceOverride: true, note: "dogfooding" }, SECRET);
+    await patchUser({ userId: id, enforceOverride: null }, SECRET);
+  });
+  const rows = (await auditFor(id)).sort((a, b) => a.id - b.id);
+  assert.equal(rows.length, 2);
+  assert.deepEqual(
+    rows.map((r) => [r.action, r.before, r.after]),
+    [
+      ["set_enforce_override", "null", "true"],
+      ["set_enforce_override", "true", "null"],
+    ]
+  );
+  // Tri-state survives as text: "null" is distinguishable from a SQL NULL
+  // meaning "not recorded", which a nullable boolean column could not do.
+  assert.equal(rows[0].note, "dogfooding");
+  assert.ok(rows[0].actorIp, "the actor's address is recorded");
+  assert.ok(rows[0].at instanceof Date);
+  resetAdminThrottle();
+});
+
+test("a no-op override is recorded, and says it changed nothing", async (t) => {
+  if (!(await needsDatabase(t as TestContext, ...TABLES))) return;
+  resetAdminThrottle();
+  const id = await makeUser(`noop-${crypto.randomUUID()}@example.test`);
+  await withSecret(SECRET, async () => {
+    await patchUser({ userId: id, enforceOverride: true }, SECRET);
+    const r = await patchUser({ userId: id, enforceOverride: true }, SECRET);
+    assert.equal(r.body.changed, false);
+    assert.deepEqual([r.body.before, r.body.after], [true, true]);
+  });
+  // Still audited: "someone tried to set this again" is worth knowing, and an
+  // audit trail that omits attempts is not one.
+  assert.equal((await auditFor(id)).length, 2);
+  resetAdminThrottle();
+});
+
+test("the GET reports what the PATCH set, so the two agree", async (t) => {
+  if (!(await needsDatabase(t as TestContext, ...TABLES))) return;
+  resetAdminThrottle();
+  const email = `roundtrip-${crypto.randomUUID()}@example.test`;
+  const id = await makeUser(email);
+  await withSecret(SECRET, async () => {
+    await patchUser({ userId: id, enforceOverride: true }, SECRET);
+    const { body } = await lookup(email, SECRET);
+    assert.equal(body.users[0].access.enforceOverride, true);
   });
   resetAdminThrottle();
 });

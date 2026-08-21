@@ -22,6 +22,7 @@ import { createHash, timingSafeEqual } from "node:crypto";
 import { eq, or, sql } from "drizzle-orm";
 import { getDb } from "../db";
 import { accountAccess, identities, subscriptions, users } from "../../shared/schema";
+import { setEnforceOverrideAudited } from "../lib/billing/entitlement";
 
 export const adminRouter = Router();
 
@@ -192,5 +193,85 @@ adminRouter.get("/user", async (req: Request, res: Response) => {
   } catch (e) {
     console.error("[admin:user]", (e as Error).message);
     return res.status(500).json({ error: "Lookup failed." });
+  }
+});
+
+/**
+ * PATCH /api/admin/user
+ * body: { userId: string, enforceOverride: true | false | null }
+ *
+ * WHY A METHOD AND NOT A QUERY PARAM ON THE GET. A GET must stay safe and
+ * idempotent, and this is neither — it changes whether a person can use the
+ * app. Hanging it off the existing GET would put a live enforcement switch in
+ * every place a URL casually ends up: shell history, a browser's address bar
+ * and autocomplete, a prefetch, a copied support note. PATCH costs one more
+ * line at the call site and takes all of that off the table.
+ *
+ * ADDRESSED BY USER ID, NOT EMAIL, which is the deliberate complement to the
+ * GET. Email can legitimately match two accounts — that is why the GET
+ * returns every match — and a write that fans out to "everyone who shares
+ * this address" is a write nobody meant to make. So the GET finds the id, and
+ * this takes it.
+ */
+adminRouter.patch("/user", async (req: Request, res: Response) => {
+  if (!requireAdmin(req, res)) return;
+
+  const body = (req.body ?? {}) as Record<string, unknown>;
+  const userId = typeof body.userId === "string" ? body.userId.trim() : "";
+  if (!userId) return res.status(422).json({ error: "Pass userId." });
+
+  /**
+   * `null` IS A MEANINGFUL VALUE HERE, not an absent one — it clears the
+   * override back to "follow the global flag", which is one of the three
+   * states the caller can ask for. So this tests for the KEY, not the value:
+   * `if (!body.enforceOverride)` would collapse false, null and missing into
+   * one branch, and silently turn "clear it" into "force it off" — a
+   * different account state that looks identical until the global flag is
+   * switched on.
+   */
+  if (!Object.prototype.hasOwnProperty.call(body, "enforceOverride"))
+    return res
+      .status(422)
+      .json({ error: "Pass enforceOverride: true, false, or null." });
+
+  const value = body.enforceOverride;
+  if (value !== true && value !== false && value !== null)
+    return res
+      .status(422)
+      .json({ error: "enforceOverride must be true, false, or null." });
+
+  const note = typeof body.note === "string" ? body.note.slice(0, 500) : null;
+
+  try {
+    const db = getDb();
+    // Confirm the account exists before writing. Without this a typo'd id
+    // reaches the foreign key on account_access and surfaces as a 500, which
+    // reads like a broken route rather than a wrong id.
+    const [user] = await db
+      .select({ id: users.id })
+      .from(users)
+      .where(eq(users.id, userId));
+    if (!user) return res.status(404).json({ error: "No account with that id." });
+
+    const { before, after } = await setEnforceOverrideAudited({
+      userId,
+      value,
+      actorIp: req.ip ?? null,
+      note,
+    });
+
+    console.log(
+      `[admin] enforce_override ${userId}: ${String(before)} -> ${String(after)}`
+    );
+    return res.json({
+      userId,
+      before,
+      after,
+      // So a no-op reads as one rather than looking like a successful change.
+      changed: before !== after,
+    });
+  } catch (e) {
+    console.error("[admin:patch]", (e as Error).message);
+    return res.status(500).json({ error: "Could not update that account." });
   }
 });

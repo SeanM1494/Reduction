@@ -91,6 +91,16 @@ Matching is case-insensitive and covers both `users.email` and `identities.email
 
 Signed-in users can find their own id under Settings → Account ID, with a copy button.
 
+`PATCH /api/admin/user` sets `enforce_override` for one account — `true` forces the paywall on for them while it is off globally, `false` comps them while it is on, `null` clears back to following the global flag:
+
+```
+curl -X PATCH -H "x-admin-secret: $ADMIN_SECRET" -H 'Content-Type: application/json' \
+  -d '{"userId":"<id>","enforceOverride":true,"note":"dogfooding"}' \
+  "https://<host>/api/admin/user"
+```
+
+Addressed by user id, not email — email can match two accounts, and a write must not fan out. It answers with `{before, after, changed}`. Every call, including a no-op, writes a row to `admin_events` in the same transaction as the change.
+
 ### Subscriptions
 
 Off by default. With `STRIPE_SECRET_KEY` / `STRIPE_PRICE_ID` / `STRIPE_WEBHOOK_SECRET` unset the billing routes 404, the paywall UI hides its own Subscribe button, and nothing is enforced.

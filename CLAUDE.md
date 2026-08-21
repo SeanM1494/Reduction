@@ -36,15 +36,15 @@ them is the whole point:
 
 | result | meaning |
 |---|---|
-| ***n* pass, 70 skipped** | no `DATABASE_URL` at all. Fine on a machine with no Postgres. |
-| ***n*+70 pass, 0 skipped** | a local database with a current schema. This is the real gate — `npm run test:db` produces it. |
+| ***n* pass, 78 skipped** | no `DATABASE_URL` at all. Fine on a machine with no Postgres. |
+| ***n*+78 pass, 0 skipped** | a local database with a current schema. This is the real gate — `npm run test:db` produces it. |
 | **failures saying "Refusing to run database tests against …"** | `DATABASE_URL` in the shell points somewhere non-local — on Replit, that is production. Working as designed: use `npm run test:db`, which ignores the env var entirely. |
 | **failures naming a missing table** | a reachable local database whose schema is behind `shared/schema.ts`. `test:db` re-pushes on every start, so this means a hand-run database — push it or use the script. |
 
 The total grows as suites are added — pin your expectation to the **skip
 count**, not the pass count (an earlier version of this table hard-coded
 23/39 and went stale within a week, so treat the number above as needing an
-edit whenever a database-backed suite is added). The 70 are seven suites:
+edit whenever a database-backed suite is added). The 78 are seven suites:
 `claim.db.test.ts` (the anonymous library), `trial.db.test.ts` (the free
 extraction), `cache.db.test.ts` (the URL alias and the "Instant" badge),
 `extractionLog.test.ts` (the cost table), `push.db.test.ts` (timer
@@ -181,6 +181,32 @@ the case an operator most needs to see.
 one person the route exists for: an operator working a support queue does
 eleven lookups in a minute and gets locked out by a brake meant for somebody
 guessing. A success clears the counter.
+
+**The write is a PATCH, and the audit is not optional.** `enforce_override`
+is a TRI-STATE — true forces the wall on, false comps the account, null
+follows the global flag — so the handler tests for the KEY's presence, not the
+value's truthiness. `if (!body.enforceOverride)` collapses false, null and
+missing into one branch and silently turns "clear it" into "force it off",
+which looks identical until the global flag is switched on. Three tests fail
+if you write it that way.
+
+It is a PATCH rather than a query param on the GET because a GET must stay
+safe: hanging an enforcement switch off a URL puts it in shell history,
+address-bar autocomplete, prefetches and copied support notes. And it is
+addressed by user id, not email — email legitimately matches two accounts,
+which is why the GET returns all of them, and a write that fans out to
+everyone sharing an address is one nobody meant to make.
+
+**`admin_events` is not `access_events`, deliberately.** Three reasons, and
+the third is the real one: every column in `access_events` answers "would the
+wall have fired", so admin rows would need invented values and would corrupt
+the go/no-go query above; `access_events` grows with traffic and will be
+pruned, which must never delete the record of who was comped; and
+`access_events` is written fire-and-forget and swallows its errors, which is
+right for observability and wrong for the audit trail of a privileged write.
+The audit row commits in the SAME TRANSACTION as the change, so an
+unrecorded override cannot happen. `before`/`after` are text because a
+nullable boolean cannot distinguish "was cleared" from "not recorded".
 
 **`users.id` is a v4 UUID, not a short handle.** Settings exposes it with a
 copy button, which is what actually makes a 36-character string usable. A
