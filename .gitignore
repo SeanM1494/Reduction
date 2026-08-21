@@ -11,3 +11,10 @@ dist
 # happened to be schema-only, no rows), which is exactly how the habit starts.
 *.sql
 .pgtest/
+
+# Signing keys never belong in the repo. Apple's .p8 can mint client secrets
+# for the Services ID for as long as the key is valid, so a committed one is a
+# credential leak that no amount of later deletion undoes — git keeps it.
+*.p8
+*.pem
+*.key

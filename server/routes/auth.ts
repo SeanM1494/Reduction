@@ -9,7 +9,7 @@
  * cookie, so its flags live in exactly one spot.
  */
 
-import { Router, type Request, type Response } from "express";
+import express, { Router, type Request, type Response } from "express";
 import { eq } from "drizzle-orm";
 import { getDb } from "../db";
 import { entitlementFor } from "../lib/billing/entitlement";
@@ -23,6 +23,13 @@ import {
   SESSION_COOKIE,
 } from "../lib/sessions";
 import { buildAuthUrl, exchangeCode, googleConfig, newCodeVerifier } from "../lib/google";
+import {
+  APPLE_CALLBACK_PATH,
+  appleConfig,
+  buildAuthUrl as buildAppleAuthUrl,
+  exchangeCode as exchangeAppleCode,
+  parseUserField,
+} from "../lib/apple";
 import { userIdForIdentity } from "../lib/accounts";
 import { claimAnonymousLibrary } from "../lib/claim";
 import { claimTrialRecipe, readTrialId } from "../lib/trial";
@@ -123,7 +130,7 @@ authRouter.post("/logout", async (req: Request, res: Response) => {
  * than no button at all.
  */
 authRouter.get("/providers", (_req: Request, res: Response) => {
-  return res.json({ providers: { google: !!googleConfig() } });
+  return res.json({ providers: { google: !!googleConfig(), apple: !!appleConfig() } });
 });
 
 /**
@@ -249,6 +256,121 @@ authRouter.get("/google/callback", async (req: Request, res: Response) => {
     return res.redirect(appRedirect({ auth_error: "exchange_failed" }));
   }
 });
+
+// ------------------------------------------------------------------ apple --
+
+authRouter.get("/apple/start", async (req: Request, res: Response) => {
+  const cfg = appleConfig();
+  if (!cfg) {
+    return res
+      .status(503)
+      .json({ error: "Apple sign-in is not configured on this server." });
+  }
+
+  try {
+    /**
+     * No PKCE verifier. Apple's web flow does not support PKCE — the client
+     * secret JWT is what authenticates this app at the token endpoint, and
+     * the state/nonce pair is what binds the callback to this attempt. The
+     * column stays null rather than gaining a fake value, so a glance at
+     * auth_states says which provider a row came from.
+     */
+    const state = await createAuthState({
+      provider: "apple",
+      pkceVerifier: null,
+      pendingUrl: safePendingUrl(req.query.pendingUrl),
+      trialId: readTrialId(req),
+    });
+    return res.redirect(buildAppleAuthUrl(cfg, { state }));
+  } catch (e) {
+    console.error("[auth:apple:start]", e);
+    return res.redirect(appRedirect({ auth_error: "start_failed" }));
+  }
+});
+
+/**
+ * A POST, not a GET, and the one route in this app with a urlencoded body.
+ *
+ * Apple requires `response_mode=form_post` whenever the name or email scope
+ * is requested, so it POSTs a urlencoded form to this URL. express.json() —
+ * mounted globally in server/index.ts — does not touch that content type, so
+ * the parser is mounted HERE and nowhere else: a global urlencoded parser
+ * would start accepting form bodies on every other route in the app, which is
+ * a CSRF surface nothing else needs. Same reasoning as the Stripe webhook
+ * sitting before express.json().
+ *
+ * The 1kb cap is generous for {code, state, user} and small enough that this
+ * cannot be used to make the process parse something large.
+ */
+authRouter.post(
+  "/apple/callback",
+  express.urlencoded({ extended: false, limit: "1kb" }),
+  async (req: Request, res: Response) => {
+    const cfg = appleConfig();
+    if (!cfg) return res.redirect(appRedirect({ auth_error: "not_configured" }));
+
+    const body = (req.body ?? {}) as Record<string, unknown>;
+
+    // The visitor cancelled at Apple's sheet, or Apple refused outright.
+    if (typeof body.error === "string") {
+      return res.redirect(appRedirect({ auth_error: "declined" }));
+    }
+
+    const code = typeof body.code === "string" ? body.code : null;
+    const state = typeof body.state === "string" ? body.state : null;
+    if (!code || !state) return res.redirect(appRedirect({ auth_error: "bad_callback" }));
+
+    try {
+      const pending = await consumeAuthState(state, "apple");
+      if (!pending) return res.redirect(appRedirect({ auth_error: "expired" }));
+
+      const identity = await exchangeAppleCode(cfg, { code, state });
+
+      /**
+       * THE NAME ARRIVES HERE, ONCE, EVER.
+       *
+       * Apple puts it in the form body on the FIRST authorization only, never
+       * in the id_token, and never again for this Apple ID and Services ID —
+       * re-signing in does not bring it back unless the user first removes
+       * the app under Settings -> Apple ID -> Sign in with Apple. So this is
+       * the single opportunity to capture it, and dropping it is permanent.
+       *
+       * On every later sign-in this is null, and userIdForIdentity only
+       * patches displayName when it has one — so a returning user keeps the
+       * name captured the first time rather than having it overwritten with
+       * nothing.
+       */
+      const displayName = parseUserField(body.user);
+
+      const userId = await userIdForIdentity({
+        provider: "apple",
+        subject: identity.subject,
+        email: identity.email,
+        emailVerified: identity.emailVerified,
+        displayName,
+      });
+
+      const { token } = await createSession(userId);
+      setSessionCookie(res, token);
+
+      const trialId = pending.trialId ?? readTrialId(req);
+      if (trialId) {
+        try {
+          await claimTrialRecipe(userId, trialId);
+        } catch (e) {
+          console.error("[auth:trial-claim]", e);
+        }
+      }
+
+      return res.redirect(
+        appRedirect({ signed_in: "1", pending: pending.pendingUrl ?? undefined })
+      );
+    } catch (e) {
+      console.error("[auth:apple:callback]", e);
+      return res.redirect(appRedirect({ auth_error: "exchange_failed" }));
+    }
+  }
+);
 
 // ------------------------------------------------------------------ claim --
 

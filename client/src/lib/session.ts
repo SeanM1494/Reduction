@@ -105,14 +105,17 @@ export async function fetchSessionState(): Promise<SessionState> {
 }
 
 /** Which sign-in buttons are worth rendering. */
-export async function fetchProviders(): Promise<{ google: boolean }> {
+export async function fetchProviders(): Promise<{ google: boolean; apple: boolean }> {
   try {
     const body = await authApi("/providers", { method: "GET" });
-    return { google: !!body.providers?.google };
+    return {
+      google: !!body.providers?.google,
+      apple: !!body.providers?.apple,
+    };
   } catch {
     // A provider list we cannot fetch is a provider list we cannot trust —
     // offer nothing rather than a button that fails on click.
-    return { google: false };
+    return { google: false, apple: false };
   }
 }
 

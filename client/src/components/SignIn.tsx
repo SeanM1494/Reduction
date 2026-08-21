@@ -21,7 +21,7 @@ import React from "react";
 interface Props {
   /** A recipe URL carried over from the demo, if the visitor submitted one. */
   pendingUrl: string | null;
-  providers: { google: boolean };
+  providers: { google: boolean; apple: boolean };
   authError: string | null;
   onBack: () => void;
 }
@@ -52,9 +52,13 @@ const AppleMark = () => (
 );
 
 export default function SignIn({ pendingUrl, providers, authError, onBack }: Props) {
-  const startUrl = pendingUrl
-    ? `/api/auth/google/start?pendingUrl=${encodeURIComponent(pendingUrl)}`
-    : "/api/auth/google/start";
+  // One builder for both, so a provider added later cannot forget to carry
+  // the pending URL — the thing that makes "paste a link, then sign up, then
+  // find it already extracted" work.
+  const startUrl = (provider: string) =>
+    pendingUrl
+      ? `/api/auth/${provider}/start?pendingUrl=${encodeURIComponent(pendingUrl)}`
+      : `/api/auth/${provider}/start`;
 
   return (
     <div className="rd-root rd-landing">
@@ -89,24 +93,31 @@ export default function SignIn({ pendingUrl, providers, authError, onBack }: Pro
 
           <div className="rd-signin-providers">
             {providers.google ? (
-              <a className="rd-provider" href={startUrl}>
+              <a className="rd-provider" href={startUrl("google")}>
                 <GoogleMark />
                 <span>Continue with Google</span>
               </a>
             ) : null}
 
-            {/* Present rather than hidden, because someone who only signs in
-                with Apple should be able to see it is coming rather than
-                conclude this app will never support them. Disabled, because a
-                button that 503s is worse than no button. */}
-            <button className="rd-provider is-soon" disabled>
-              <AppleMark />
-              <span>Continue with Apple</span>
-              <span className="rd-provider-soon">Coming soon</span>
-            </button>
+            {providers.apple ? (
+              <a className="rd-provider" href={startUrl("apple")}>
+                <AppleMark />
+                <span>Continue with Apple</span>
+              </a>
+            ) : (
+              /* Present rather than hidden, because someone who only signs in
+                 with Apple should see it is coming rather than conclude this
+                 app will never support them. Disabled, because a button that
+                 503s is worse than no button. */
+              <button className="rd-provider is-soon" disabled>
+                <AppleMark />
+                <span>Continue with Apple</span>
+                <span className="rd-provider-soon">Coming soon</span>
+              </button>
+            )}
           </div>
 
-          {!providers.google ? (
+          {!providers.google && !providers.apple ? (
             <p className="rd-hint">
               Sign-in isn&rsquo;t configured on this server yet &mdash; the demo
               works without an account in the meantime.

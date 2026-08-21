@@ -202,7 +202,10 @@ export default function App() {
       cancelled = true;
     };
   }, [authParams.subscribed, user]);
-  const [providers, setProviders] = useState<{ google: boolean }>({ google: false });
+  const [providers, setProviders] = useState<{ google: boolean; apple: boolean }>({
+    google: false,
+    apple: false,
+  });
   /** True when an anonymous library exists but could not be moved into the
    *  account. The rows are safe and still anonymous; this only means the move
    *  has not happened yet. */

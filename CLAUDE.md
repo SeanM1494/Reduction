@@ -162,6 +162,42 @@ the deployed site is unreachable from the agent proxy. What the suite proves
 is registration, the subscription round-trip, the claim/fan-out/prune logic
 and the config posture — not that a phone buzzes. That needs a real device.
 
+## Sign in with Apple: four things that fail silently
+
+**The client secret is a JWT you sign, and `dsaEncoding: "ieee-p1363"` is the
+whole thing.** Node's default ECDSA output is DER — an ASN.1 SEQUENCE of two
+INTEGERs, ~70-72 bytes and variable length. JWS ES256 requires the raw r||s
+concatenation, fixed at 64 bytes. Omit the option and Node signs happily, the
+JWT is structurally perfect, every local check passes, and Apple returns
+`invalid_client` with no further explanation. `apple.test.ts` asserts the
+signature is exactly 64 bytes for this reason; two tests fail without it.
+
+**`iss` is the TEAM ID and `sub` is the SERVICES ID.** Swapping them is the
+other `invalid_client`, and neither is checkable locally.
+
+**The name arrives exactly once, ever.** Apple sends it in the form body of
+the FIRST authorization, never in the id_token, and never again for that Apple
+ID and Services ID — re-signing in does not bring it back unless the user
+first removes the app under Settings → Apple ID → Sign in with Apple. If it is
+not persisted on that first callback it is gone. `userIdForIdentity` only
+patches `displayName` when it has one, so later sign-ins passing null leave
+the captured name alone rather than blanking it.
+
+**The callback is a POST**, because `response_mode=form_post` is required
+whenever `name` or `email` is in scope. `express.urlencoded` is mounted on
+that ONE route and must stay that way: a global form parser would start
+accepting form bodies on every other route, which is a CSRF surface nothing
+else needs. Same reasoning as the Stripe webhook sitting before
+`express.json()`.
+
+**Apple's email may be a `@privaterelay.appleid.com` relay**, which is exactly
+the case `shared/schema.ts` cites for never looking accounts up by email.
+
+**Delivery cannot be verified here.** `appleid.apple.com` is blocked by the
+agent proxy, so the token exchange has never run in this container — what is
+proven is the JWT's shape and signature, the authorize URL, the callback's
+branches and the single-use state. The exchange itself needs a real sign-in.
+
 ## The admin lookup is a read, not an auth path
 
 `GET /api/admin/user?email=` searches BOTH email columns and returns every

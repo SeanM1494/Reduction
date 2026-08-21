@@ -78,6 +78,35 @@ client/src/
 
 Timer notifications need three more secrets (four with the external-cron path): `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` (a `mailto:` or `https:` contact — Apple rejects anything else) and `TIMER_DISPATCH_SECRET`. With the VAPID pair unset the app runs normally and hides the notifications toggle; with `TIMER_DISPATCH_SECRET` unset, `POST /api/timers/dispatch` 404s rather than running unauthenticated. Generate a pair with `node -e "console.log(require('web-push').generateVAPIDKeys())"`.
 
+### Sign in with Apple
+
+Four secrets, all from the Apple Developer console:
+
+| secret | value | where it comes from |
+|---|---|---|
+| `APPLE_CLIENT_ID` | the **Services ID** (`com.example.appservices`) | Identifiers → Services IDs. NOT the App ID or bundle id. |
+| `APPLE_TEAM_ID` | 10-character Team ID | top right of the console, or Membership |
+| `APPLE_KEY_ID` | 10-character Key ID | Keys → the Sign in with Apple key |
+| `APPLE_PRIVATE_KEY` | the whole `.p8` file's contents | downloaded once, at key creation |
+
+`APPLE_PRIVATE_KEY` takes the **file's text pasted directly**, including the
+`-----BEGIN PRIVATE KEY-----` and `-----END PRIVATE KEY-----` lines. No
+base64-wrapping, no path — the file itself is never deployed. A multiline
+paste is fine; a single-line paste with literal `\n` also works, because
+`normalisePem` in `server/lib/apple.ts` accepts both.
+
+`PUBLIC_BASE_URL` must match a redirect URI registered on the Services ID
+byte for byte — Apple compares exactly — and the callback path is
+`/api/auth/apple/callback`.
+
+The client secret is an ES256 JWT minted from the key on demand and cached
+until it nears expiry, never stored. Apple caps it at six months; this uses 90
+days. Rotating the key in Secrets takes effect on the next call, because the
+cache is keyed on the Key ID.
+
+With any of the four missing the app runs normally and the Apple button shows
+as "Coming soon" rather than offering a sign-in that would fail.
+
 ### Admin lookup
 
 `ADMIN_SECRET` enables `GET /api/admin/user?email=…`, which returns matching accounts' ids plus their allowance and subscriptions. Unset, the route 404s.
