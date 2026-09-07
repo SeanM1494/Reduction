@@ -56,8 +56,8 @@ silently corrupt every "what fraction" query the table exists to answer. The
 fifth guards a claim that has to be atomic: two dispatchers racing must not
 buzz one phone twice. The sixth guards the arithmetic that decides whether
 somebody can use the app at all, and the seventh guards a route that reads
-other people's accounts. **The full suite — 291 tests at the time of writing —
-has been run against a real Postgres and passes 291/0.**
+other people's accounts. **The full suite — 300 tests at the time of writing —
+has been run against a real Postgres and passes 300/0.**
 
 **`npm test` must never be run against production.** It reads `DATABASE_URL`,
 which on a deployed host is the live database — so running the suite there

@@ -146,20 +146,46 @@ export async function redemptionsFor(userId: string) {
     .where(eq(couponRedemptions.userId, userId));
 }
 
-/** Admin helper, used by tests and by hand-created codes. */
+/**
+ * Admin helper, used by the mint route and by tests.
+ *
+ * Returns whether a row was CREATED, because onConflictDoNothing is silent by
+ * design and silence is wrong here: an operator minting NEIGHBOR10 twice with
+ * different recipe counts would otherwise be told nothing while the old value
+ * quietly stayed live. A duplicate is a fact the caller reports, not an error
+ * — the existing code keeps working either way.
+ */
 export async function createCoupon(params: {
   code: string;
   recipes: number;
   maxRedemptions?: number | null;
   expiresAt?: Date | null;
-}) {
-  await getDb()
+}): Promise<{ created: boolean; code: string }> {
+  const code = normaliseCode(params.code);
+  const rows = await getDb()
     .insert(coupons)
     .values({
-      code: normaliseCode(params.code),
+      code,
       recipes: params.recipes,
       maxRedemptions: params.maxRedemptions ?? null,
       expiresAt: params.expiresAt ?? null,
     })
-    .onConflictDoNothing({ target: coupons.code });
+    .onConflictDoNothing({ target: coupons.code })
+    .returning({ code: coupons.code });
+  return { created: rows.length > 0, code };
+}
+
+/** The operator's view of every code: what it grants, and how used it is. */
+export async function listCoupons() {
+  return getDb()
+    .select({
+      code: coupons.code,
+      recipes: coupons.recipes,
+      maxRedemptions: coupons.maxRedemptions,
+      redeemedCount: coupons.redeemedCount,
+      active: coupons.active,
+      expiresAt: coupons.expiresAt,
+      createdAt: coupons.createdAt,
+    })
+    .from(coupons);
 }

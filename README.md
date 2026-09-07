@@ -147,6 +147,21 @@ Matching is case-insensitive and covers both `users.email` and `identities.email
 
 Signed-in users can find their own id under Settings → Account ID, with a copy button.
 
+`GET /api/admin/preflight/anthropic` tests the extraction pipeline's one
+external dependency with the deployment's own key, against the exact model
+extraction uses, and reports the API's verbatim answer — an expired key,
+exhausted credits and a retired model each named outright instead of the
+generic "Something went wrong reading that recipe" users see. Costs one output
+token, on demand only.
+
+`POST /api/admin/coupon` mints an "N recipes free" code without hand-written
+SQL — `{"code":"NEIGHBOR10","recipes":10,"maxRedemptions":1}`, optional
+`expiresAt`. Codes are normalised (case- and space-insensitive) the same way
+redemption normalises them; a duplicate is a loud 409 with the original left
+untouched. `GET /api/admin/coupons` lists every code with its redemption
+count. The redeeming side already exists: signed-in users enter codes under
+Settings → Subscription.
+
 `PATCH /api/admin/user` sets `enforce_override` for one account — `true` forces the paywall on for them while it is off globally, `false` comps them while it is on, `null` clears back to following the global flag:
 
 ```

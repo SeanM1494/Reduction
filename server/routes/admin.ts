@@ -23,7 +23,10 @@ import { eq, or, sql } from "drizzle-orm";
 import { getDb } from "../db";
 import { accountAccess, identities, subscriptions, users } from "../../shared/schema";
 import { setEnforceOverrideAudited } from "../lib/billing/entitlement";
+import { createCoupon, listCoupons, normaliseCode } from "../lib/billing/coupons";
 import { appleConfig, clientSecret, describeKeyEnv } from "../lib/apple";
+import Anthropic from "@anthropic-ai/sdk";
+import { MODEL as EXTRACTION_MODEL } from "../lib/structureRecipe";
 
 export const adminRouter = Router();
 
@@ -377,4 +380,168 @@ adminRouter.get("/preflight/apple", async (req: Request, res: Response) => {
   out.privateKeyEnv = keyEnv;
 
   return res.json(out);
+});
+
+/**
+ * GET /api/admin/preflight/anthropic
+ *
+ * The extraction pipeline's one external dependency, tested with the
+ * deployment's own key against the exact model extraction uses — and the
+ * API's verbatim answer reported instead of the "Something went wrong
+ * reading that recipe" every failure collapses into for users. An expired
+ * key, exhausted credits and a retired model are indistinguishable from the
+ * client and take three rounds of log-grepping to tell apart; each is named
+ * outright here.
+ *
+ * Costs a handful of input tokens and one output token, only when an
+ * operator asks. maxRetries 0 and a short timeout on purpose: a dead key
+ * should answer in milliseconds, and an overloaded API should say 529 rather
+ * than hang the diagnostic that exists to explain it.
+ */
+adminRouter.get("/preflight/anthropic", async (req: Request, res: Response) => {
+  if (!requireAdmin(req, res)) return;
+
+  const raw = process.env.ANTHROPIC_API_KEY;
+  const key = raw?.trim();
+  const report: Record<string, unknown> = {
+    keyPresent: !!key,
+    // The prefix is the same on every Anthropic key; with the length it
+    // distinguishes "wrong kind of string entirely" from "plausible key the
+    // API rejected" without disclosing anything.
+    keyPrefix: key ? key.slice(0, 10) : null,
+    keyLength: key?.length ?? 0,
+    keyHadWhitespace: raw != null && raw !== raw.trim(),
+    model: EXTRACTION_MODEL,
+  };
+  if (!key) {
+    return res.json({
+      ...report,
+      ok: false,
+      note: "ANTHROPIC_API_KEY is unset in this deployment. Extraction cannot work.",
+    });
+  }
+
+  const started = Date.now();
+  try {
+    // The SDK honours ANTHROPIC_BASE_URL from the environment, which is also
+    // what lets the test suite point this at a stub instead of the real API.
+    const client = new Anthropic({ apiKey: key, maxRetries: 0, timeout: 15_000 });
+    const answer = await client.messages.create({
+      model: EXTRACTION_MODEL,
+      max_tokens: 1,
+      messages: [{ role: "user", content: "ping" }],
+    });
+    return res.json({
+      ...report,
+      ok: true,
+      ms: Date.now() - started,
+      modelAnswered: answer.model,
+      note: "The key works and the model answered. Extraction failures are elsewhere.",
+    });
+  } catch (e) {
+    const err = e as Error & { status?: number };
+    return res.json({
+      ...report,
+      ok: false,
+      ms: Date.now() - started,
+      status: err.status ?? null,
+      // Verbatim on purpose. Anthropic's error strings name the actual
+      // problem — expired key, credit balance, unknown model — and contain
+      // no secret; paraphrasing them is how this app ended up with three
+      // rounds of diagnosis last time.
+      error: err.message,
+      hint:
+        err.status === 401
+          ? "The key is invalid, expired, or revoked. Replace it in the deployment's Secrets and republish."
+          : err.status === 400 && /credit/i.test(err.message)
+            ? "The key works but the account is out of credits."
+            : err.status === 404
+              ? "The model id is wrong or retired."
+              : err.status === 529
+                ? "The API is overloaded — transient, not a configuration problem."
+                : null,
+    });
+  }
+});
+
+/**
+ * POST /api/admin/coupon — mint an "N recipes free" code.
+ * body: { code: string, recipes: number, maxRedemptions?: number, expiresAt?: ISO string }
+ *
+ * The redemption side already exists end to end — the coupons table,
+ * POST /api/billing/coupon, and the box in Settings — and this is the missing
+ * quarter: creating a code meant an INSERT by hand, which is the same
+ * hand-written SQL the user lookup exists to avoid.
+ *
+ * NOT audited into admin_events, and deliberately: the coupons row IS the
+ * record. It carries created_at, what it grants, and a live redemption
+ * count, and unlike an enforce_override flip it destroys nothing when
+ * created — the audit table exists for writes whose history would otherwise
+ * be unrecoverable, and this one records itself.
+ */
+adminRouter.post("/coupon", async (req: Request, res: Response) => {
+  if (!requireAdmin(req, res)) return;
+
+  const body = (req.body ?? {}) as Record<string, unknown>;
+  const code = typeof body.code === "string" ? normaliseCode(body.code) : "";
+  if (!code || code.length > 64)
+    return res.status(422).json({ error: "Pass code: 1-64 characters." });
+
+  const recipes = body.recipes;
+  // Bounds, not vibes: 0 mints a code that does nothing, and six digits is
+  // past any real promotion and into typo territory.
+  if (typeof recipes !== "number" || !Number.isInteger(recipes) || recipes < 1 || recipes > 10_000)
+    return res.status(422).json({ error: "Pass recipes: a whole number from 1 to 10000." });
+
+  let maxRedemptions: number | null = null;
+  if (body.maxRedemptions !== undefined && body.maxRedemptions !== null) {
+    const m = body.maxRedemptions;
+    if (typeof m !== "number" || !Number.isInteger(m) || m < 1 || m > 1_000_000)
+      return res.status(422).json({ error: "maxRedemptions must be a whole number from 1 to 1000000." });
+    maxRedemptions = m;
+  }
+
+  let expiresAt: Date | null = null;
+  if (body.expiresAt !== undefined && body.expiresAt !== null) {
+    const d = new Date(String(body.expiresAt));
+    if (Number.isNaN(d.getTime()) || d.getTime() <= Date.now())
+      return res.status(422).json({ error: "expiresAt must be a future date." });
+    expiresAt = d;
+  }
+
+  try {
+    const out = await createCoupon({ code, recipes, maxRedemptions, expiresAt });
+    if (!out.created) {
+      // 409 rather than silence: the old code with its OLD values is still
+      // live, and an operator who meant to change it needs to know nothing
+      // changed.
+      return res.status(409).json({
+        error: `Code ${out.code} already exists and was left untouched.`,
+        code: out.code,
+      });
+    }
+    console.log(`[admin] minted coupon ${out.code}: ${recipes} recipe(s)`);
+    return res.json({
+      created: true,
+      code: out.code,
+      recipes,
+      maxRedemptions,
+      expiresAt,
+      redeemAt: "Settings → Subscription → coupon box, signed in.",
+    });
+  } catch (e) {
+    console.error("[admin:coupon]", (e as Error).message);
+    return res.status(500).json({ error: "Could not create that code." });
+  }
+});
+
+/** GET /api/admin/coupons — every code, what it grants, how used it is. */
+adminRouter.get("/coupons", async (req: Request, res: Response) => {
+  if (!requireAdmin(req, res)) return;
+  try {
+    return res.json({ coupons: await listCoupons() });
+  } catch (e) {
+    console.error("[admin:coupons]", (e as Error).message);
+    return res.status(500).json({ error: "Could not list codes." });
+  }
 });
