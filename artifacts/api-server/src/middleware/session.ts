@@ -27,6 +27,20 @@ declare global {
   }
 }
 
+/**
+ * The mobile app has no cookie jar shared with its own fetch calls (its
+ * sign-in happens in an in-app browser — see routes/auth.ts's "mobile"
+ * handshake), so it carries the same session token as `Authorization:
+ * Bearer <token>` instead. Checked only when no cookie was sent, so a
+ * browser request's behavior is completely unchanged.
+ */
+function bearerToken(req: Request): string | null {
+  const header = req.header("Authorization");
+  if (!header) return null;
+  const match = /^Bearer\s+(.+)$/i.exec(header.trim());
+  return match ? match[1] : null;
+}
+
 export async function attachSession(
   req: Request,
   _res: Response,
@@ -35,7 +49,7 @@ export async function attachSession(
   req.session = null;
   req.sessionToken = null;
 
-  const token = readCookie(req, SESSION_COOKIE);
+  const token = readCookie(req, SESSION_COOKIE) ?? bearerToken(req);
   if (!token) return next();
 
   req.sessionToken = token;

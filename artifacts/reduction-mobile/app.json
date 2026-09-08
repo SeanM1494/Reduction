@@ -8,9 +8,12 @@
     "scheme": "reduction-mobile",
     "userInterfaceStyle": "automatic",
     "ios": {
-      "supportsTablet": false
+      "supportsTablet": false,
+      "bundleIdentifier": "com.recipereduction.mobile"
     },
-    "android": {},
+    "android": {
+      "package": "com.recipereduction.mobile"
+    },
     "web": {
       "favicon": "./assets/images/icon.png"
     },

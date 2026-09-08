@@ -108,6 +108,9 @@ export async function createAuthState(input: {
    *  lands in the account being created — and survives finishing sign-up in
    *  another tab, which a cookie alone would not. */
   trialId?: string | null;
+  /** Mobile only: the caller's own validated deep link (see
+   *  isAllowedMobileRedirect in routes/auth.ts). Never set for a web state. */
+  redirectUri?: string | null;
 }): Promise<string> {
   const db = getDb();
   const state = newToken();
@@ -117,6 +120,7 @@ export async function createAuthState(input: {
     pkceVerifier: input.pkceVerifier ?? null,
     pendingUrl: input.pendingUrl ?? null,
     trialId: input.trialId ?? null,
+    redirectUri: input.redirectUri ?? null,
     expiresAt: new Date(Date.now() + AUTH_STATE_TTL_MS),
   });
   return state;
@@ -137,6 +141,7 @@ export async function consumeAuthState(
   pkceVerifier: string | null;
   pendingUrl: string | null;
   trialId: string | null;
+  redirectUri: string | null;
 } | null> {
   const db = getDb();
   const [row] = await db
@@ -149,6 +154,7 @@ export async function consumeAuthState(
     pkceVerifier: row.pkceVerifier,
     pendingUrl: row.pendingUrl,
     trialId: row.trialId,
+    redirectUri: row.redirectUri,
   };
 }
 

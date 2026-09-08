@@ -311,6 +311,13 @@ export const authStates = pgTable(
      *  survives finishing sign-up in another tab or on another device, which
      *  a cookie alone would not. */
     trialId: text("trial_id"),
+    /** Only set for a mobile ("<provider>-mobile") state: the deep link this
+     *  particular app instance asked to be sent back to, validated against
+     *  an allowlist before it was ever stored (see isAllowedMobileRedirect in
+     *  routes/auth.ts). Needed because Expo Go does not own the app's own
+     *  `reduction-mobile://` scheme in development — only a standalone/App
+     *  Store build does — so a single hardcoded redirect can't serve both. */
+    redirectUri: text("redirect_uri"),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
     expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
   },

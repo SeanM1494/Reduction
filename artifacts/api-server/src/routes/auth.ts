@@ -19,6 +19,7 @@ import {
   consumeAuthState,
   createAuthState,
   createSession,
+  newToken,
   revokeSession,
   SESSION_COOKIE,
 } from "../lib/sessions";
@@ -145,6 +146,114 @@ function appRedirect(params: Record<string, string | null | undefined>): string 
   return query ? `/?${query}` : "/";
 }
 
+/** The redirect a standalone/App Store build actually owns — see app.json's
+ *  `scheme`. Always the fallback, and the ONLY option ever used in
+ *  production (see isAllowedMobileRedirect below). */
+const DEFAULT_MOBILE_REDIRECT = "reduction-mobile://auth";
+
+/**
+ * Whether a client-supplied `redirect_uri` may be used for a mobile OAuth
+ * handshake, instead of the app's own fixed `reduction-mobile://auth`.
+ *
+ * This exists because Expo Go does not own the app's custom scheme in
+ * development — only a standalone/EAS build does. Inside Expo Go,
+ * `Linking.createURL('auth')` returns a link back to *that* Expo Go
+ * session's own host (an `exp://` or `exps://` URL under this Repl's dev
+ * domain), which is different every workspace and impossible to allowlist
+ * as a fixed string. So instead of trusting any redirect a caller names,
+ * this only ever accepts:
+ *   - the app's real scheme, exactly, in any environment; or
+ *   - an `exp:`/`exps:` URL whose host ends in this Repl's own dev domain,
+ *     and ONLY outside production.
+ * A production server never honors a client-supplied redirect at all — see
+ * the call sites below, which pass `undefined` in production regardless of
+ * what the request asked for. That keeps the one real trust decision
+ * (accepting a redirect the client names) scoped to development, where the
+ * worst case is redirecting a handoff code to another Expo Go session on the
+ * same dev domain, not to an attacker's own app in production.
+ */
+function isAllowedMobileRedirect(raw: string): boolean {
+  if (raw === DEFAULT_MOBILE_REDIRECT) return true;
+  if (isProd) return false;
+  try {
+    const u = new URL(raw);
+    if (u.protocol !== "exp:" && u.protocol !== "exps:") return false;
+    const devDomain = process.env.REPLIT_DEV_DOMAIN;
+    return !!devDomain && (u.hostname === devDomain || u.hostname.endsWith(`.${devDomain}`));
+  } catch {
+    return false;
+  }
+}
+
+/** The caller's redirect if it passes validation, else the app's own fixed
+ *  scheme — never nothing, so a rejected/missing redirect_uri degrades to
+ *  the always-safe default rather than failing the handshake outright. */
+function resolveMobileRedirect(raw: unknown): string {
+  if (typeof raw === "string" && raw.length <= 2000 && isAllowedMobileRedirect(raw)) {
+    return raw;
+  }
+  return DEFAULT_MOBILE_REDIRECT;
+}
+
+/**
+ * Where the mobile app is sent when its handshake ends — a deep link, not a
+ * path on this origin. `base` is whatever this attempt's auth_state row
+ * recorded (see resolveMobileRedirect at the /mobile/*\/start routes): the
+ * app's own `reduction-mobile` scheme in a standalone/App Store build, or a
+ * validated Expo Go dev-session link in development. Either way this is a
+ * deep link the OS delivers directly to the app, not a URL Google/Apple ever
+ * see — they only ever see this server's own callback (GOOGLE_CALLBACK_PATH
+ * / APPLE_CALLBACK_PATH), so nothing about their console configuration
+ * changes for the mobile handshake to exist.
+ */
+function mobileRedirect(
+  params: Record<string, string | null | undefined>,
+  base: string = DEFAULT_MOBILE_REDIRECT
+): string {
+  const qs = new URLSearchParams();
+  for (const [k, v] of Object.entries(params)) if (v) qs.set(k, v);
+  const query = qs.toString();
+  const sep = base.includes("?") ? "&" : "?";
+  return `${base}${query ? `${sep}${query}` : ""}`;
+}
+
+/**
+ * One-time codes standing in for a session token in a deep link.
+ *
+ * The token itself is never put in a URL: a deep link can end up in OS-level
+ * logs or a screenshot, and a session token is bearer credential for as long
+ * as it lives (90 days — see SESSION_TTL_MS). So the callback hands the app a
+ * short-lived, single-use code instead, and the app immediately trades it for
+ * the real token over a POST body (see /mobile/exchange below).
+ *
+ * In-memory and process-local, like the extraction rate limiter in
+ * routes/recipes.ts — a five-minute window is long gone by the time a
+ * redeploy would matter, and the cost of losing one in-flight handoff on a
+ * restart (the visitor retries sign-in) is far less than a database table
+ * earns its keep for.
+ */
+interface MobileHandoff {
+  token: string;
+  expiresAt: number;
+}
+const MOBILE_HANDOFF_TTL_MS = 5 * 60 * 1000;
+const mobileHandoffs = new Map<string, MobileHandoff>();
+
+function createMobileHandoff(token: string): string {
+  const now = Date.now();
+  for (const [k, v] of mobileHandoffs) if (v.expiresAt <= now) mobileHandoffs.delete(k);
+  const code = newToken();
+  mobileHandoffs.set(code, { token, expiresAt: now + MOBILE_HANDOFF_TTL_MS });
+  return code;
+}
+
+function consumeMobileHandoff(code: string): MobileHandoff | null {
+  const found = mobileHandoffs.get(code);
+  if (!found) return null;
+  mobileHandoffs.delete(code);
+  return found.expiresAt > Date.now() ? found : null;
+}
+
 /** A recipe URL is the only thing we will carry through a handshake, and only
  *  if it plausibly is one. Anything else is dropped rather than rejected —
  *  a malformed pending URL should not cost someone their sign-in. */
@@ -195,24 +304,40 @@ authRouter.get("/google/callback", async (req: Request, res: Response) => {
   const cfg = googleConfig();
   if (!cfg) return res.redirect(appRedirect({ auth_error: "not_configured" }));
 
-  // The visitor declined the consent screen, or Google refused outright.
-  if (typeof req.query.error === "string") {
-    return res.redirect(appRedirect({ auth_error: "declined" }));
-  }
-
+  const declined = typeof req.query.error === "string";
   const code = typeof req.query.code === "string" ? req.query.code : null;
   const state = typeof req.query.state === "string" ? req.query.state : null;
-  if (!code || !state) return res.redirect(appRedirect({ auth_error: "bad_callback" }));
+
+  // No state at all means there is nothing to consume and no way to tell
+  // which flavor of handshake this was — the web fallback is the safest
+  // guess for a callback this malformed.
+  if (!state) {
+    return res.redirect(appRedirect({ auth_error: declined ? "declined" : "bad_callback" }));
+  }
+
+  // Single-use: the read is a DELETE ... RETURNING, so a replayed state finds
+  // nothing and cannot re-trigger the extraction its pending URL would have
+  // started. Tried as "google" (the web start) first, then "google-mobile"
+  // (see /mobile/google/start below) — the two never collide, since state is
+  // 32 random bytes generated per attempt, so this only ever costs one extra
+  // lookup on the mobile path.
+  let pending = await consumeAuthState(state, "google");
+  let isMobile = false;
+  if (!pending) {
+    pending = await consumeAuthState(state, "google-mobile");
+    isMobile = pending !== null;
+  }
+  const redirect = (params: Record<string, string | null | undefined>) =>
+    res.redirect(
+      isMobile ? mobileRedirect(params, pending?.redirectUri ?? undefined) : appRedirect(params)
+    );
+
+  // The visitor declined the consent screen, or Google refused outright.
+  if (declined) return redirect({ auth_error: "declined" });
+  if (!code) return redirect({ auth_error: "bad_callback" });
+  if (!pending || !pending.pkceVerifier) return redirect({ auth_error: "expired" });
 
   try {
-    // Single-use: the read is a DELETE ... RETURNING, so a replayed state
-    // finds nothing and cannot re-trigger the extraction its pending URL
-    // would have started.
-    const pending = await consumeAuthState(state, "google");
-    if (!pending || !pending.pkceVerifier) {
-      return res.redirect(appRedirect({ auth_error: "expired" }));
-    }
-
     const identity = await exchangeCode(cfg, {
       code,
       codeVerifier: pending.pkceVerifier,
@@ -228,6 +353,17 @@ authRouter.get("/google/callback", async (req: Request, res: Response) => {
     });
 
     const { token } = await createSession(userId);
+
+    // The mobile app has no cookie jar of its own — it trades a one-time
+    // code for this same token over POST /mobile/exchange instead. No trial
+    // to claim here: the mobile handshake never carries one (its start route
+    // passes trialId: null), since the free extraction it would refer to
+    // happened, if at all, in the app's own fetch calls, not this browser.
+    if (isMobile) {
+      const handoffCode = createMobileHandoff(token);
+      return res.redirect(mobileRedirect({ code: handoffCode }, pending.redirectUri ?? undefined));
+    }
+
     setSessionCookie(res, token);
 
     /**
@@ -253,7 +389,39 @@ authRouter.get("/google/callback", async (req: Request, res: Response) => {
     );
   } catch (e) {
     console.error("[auth:google:callback]", e);
-    return res.redirect(appRedirect({ auth_error: "exchange_failed" }));
+    return redirect({ auth_error: "exchange_failed" });
+  }
+});
+
+/**
+ * Mirrors /google/start for the mobile app: same authorize URL, same
+ * registered redirect_uri (GOOGLE_CALLBACK_PATH — nothing about the Google
+ * Cloud console console changes), only the auth_state's provider tag differs
+ * so /google/callback above can tell the two attempts apart when Google
+ * redirects back.
+ */
+authRouter.get("/mobile/google/start", async (req: Request, res: Response) => {
+  const cfg = googleConfig();
+  if (!cfg) {
+    return res
+      .status(503)
+      .json({ error: "Google sign-in is not configured on this server." });
+  }
+
+  const redirectUri = resolveMobileRedirect(req.query.redirect_uri);
+  try {
+    const codeVerifier = newCodeVerifier();
+    const state = await createAuthState({
+      provider: "google-mobile",
+      pkceVerifier: codeVerifier,
+      pendingUrl: null,
+      trialId: null,
+      redirectUri,
+    });
+    return res.redirect(buildAuthUrl(cfg, { state, codeVerifier }));
+  } catch (e) {
+    console.error("[auth:google:start:mobile]", e);
+    return res.redirect(mobileRedirect({ auth_error: "start_failed" }, redirectUri));
   }
 });
 
@@ -312,18 +480,33 @@ authRouter.post(
     const body = (req.body ?? {}) as Record<string, unknown>;
 
     // The visitor cancelled at Apple's sheet, or Apple refused outright.
-    if (typeof body.error === "string") {
-      return res.redirect(appRedirect({ auth_error: "declined" }));
-    }
-
+    const declined = typeof body.error === "string";
     const code = typeof body.code === "string" ? body.code : null;
     const state = typeof body.state === "string" ? body.state : null;
-    if (!code || !state) return res.redirect(appRedirect({ auth_error: "bad_callback" }));
+
+    if (!state) {
+      return res.redirect(appRedirect({ auth_error: declined ? "declined" : "bad_callback" }));
+    }
+
+    // Tried as "apple" (the web start) first, then "apple-mobile" (see
+    // /mobile/apple/start below) — see the matching comment on the Google
+    // callback above for why the two never collide.
+    let pending = await consumeAuthState(state, "apple");
+    let isMobile = false;
+    if (!pending) {
+      pending = await consumeAuthState(state, "apple-mobile");
+      isMobile = pending !== null;
+    }
+    const redirect = (params: Record<string, string | null | undefined>) =>
+      res.redirect(
+        isMobile ? mobileRedirect(params, pending?.redirectUri ?? undefined) : appRedirect(params)
+      );
+
+    if (declined) return redirect({ auth_error: "declined" });
+    if (!code) return redirect({ auth_error: "bad_callback" });
+    if (!pending) return redirect({ auth_error: "expired" });
 
     try {
-      const pending = await consumeAuthState(state, "apple");
-      if (!pending) return res.redirect(appRedirect({ auth_error: "expired" }));
-
       const identity = await exchangeAppleCode(cfg, { code, state });
 
       /**
@@ -351,6 +534,14 @@ authRouter.post(
       });
 
       const { token } = await createSession(userId);
+
+      if (isMobile) {
+        const handoffCode = createMobileHandoff(token);
+        return res.redirect(
+          mobileRedirect({ code: handoffCode }, pending.redirectUri ?? undefined)
+        );
+      }
+
       setSessionCookie(res, token);
 
       const trialId = pending.trialId ?? readTrialId(req);
@@ -367,10 +558,56 @@ authRouter.post(
       );
     } catch (e) {
       console.error("[auth:apple:callback]", e);
-      return res.redirect(appRedirect({ auth_error: "exchange_failed" }));
+      return redirect({ auth_error: "exchange_failed" });
     }
   }
 );
+
+/** Mirrors /apple/start for the mobile app — see the comment on
+ *  /mobile/google/start above for why nothing about the Apple Services ID
+ *  configuration needs to change for this to exist. */
+authRouter.get("/mobile/apple/start", async (req: Request, res: Response) => {
+  const cfg = appleConfig();
+  if (!cfg) {
+    return res
+      .status(503)
+      .json({ error: "Apple sign-in is not configured on this server." });
+  }
+
+  const redirectUri = resolveMobileRedirect(req.query.redirect_uri);
+  try {
+    const state = await createAuthState({
+      provider: "apple-mobile",
+      pkceVerifier: null,
+      pendingUrl: null,
+      trialId: null,
+      redirectUri,
+    });
+    return res.redirect(buildAppleAuthUrl(cfg, { state }));
+  } catch (e) {
+    console.error("[auth:apple:start:mobile]", e);
+    return res.redirect(mobileRedirect({ auth_error: "start_failed" }, redirectUri));
+  }
+});
+
+/**
+ * The mobile app's other half of the handoff: trades the one-time code from
+ * the deep link (?code=...) for the real session token, which it then sends
+ * as `Authorization: Bearer <token>` on every request (see
+ * middleware/session.ts). Anyone who has the code can redeem it — that is
+ * fine, because it lived for at most five minutes in a redirect the OS
+ * delivered directly to this one app.
+ */
+authRouter.post("/mobile/exchange", (req: Request, res: Response) => {
+  const code = typeof req.body?.code === "string" ? req.body.code : null;
+  if (!code) return res.status(400).json({ error: "Missing code." });
+
+  const handoff = consumeMobileHandoff(code);
+  if (!handoff) {
+    return res.status(400).json({ error: "That sign-in attempt expired. Please try again." });
+  }
+  return res.json({ token: handoff.token });
+});
 
 // ------------------------------------------------------------------ claim --
 
