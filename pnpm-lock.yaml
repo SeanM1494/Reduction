@@ -557,6 +557,9 @@ importers:
       '@expo-google-fonts/space-mono':
         specifier: ^0.4.2
         version: 0.4.2
+      '@workspace/recipe-model':
+        specifier: workspace:*
+        version: link:../../lib/recipe-model
       expo-secure-store:
         specifier: ^57.0.3
         version: 57.0.3(expo@57.0.20)
@@ -579,6 +582,9 @@ importers:
       '@tanstack/react-query':
         specifier: 'catalog:'
         version: 5.101.4(react@19.2.3)
+      '@types/node':
+        specifier: 'catalog:'
+        version: 25.9.5
       '@types/react':
         specifier: ~19.2.2
         version: 19.2.18

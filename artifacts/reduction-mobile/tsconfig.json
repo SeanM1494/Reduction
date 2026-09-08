@@ -18,5 +18,8 @@
     {
       "path": "../../lib/api-client-react"
     }
+  ],
+  "exclude": [
+    "components/diagram/*.test.ts"
   ]
 }

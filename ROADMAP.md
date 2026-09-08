@@ -68,6 +68,17 @@ today), and the Apple IAP adapter (`billing/apple.ts` — App Store Server API
 + notifications endpoint), which was scoped in the App-Store research and
 deliberately deferred.
 
+**First-run decision — SETTLED (Sep 8): the mobile demo IS the web demo.**
+Same guacamole recipe, same DemoCoach flow, ported not redesigned, and fully
+explorable before sign-in — sign-in gates saving/persisting only, exactly as
+on the web. So DemoCoach and the guacamole fixture ARE ported (the earlier
+not-ported list was wrong to include them); only LandingPage's web chrome —
+marketing copy, the signed-out CTA layout — stays out. Depends on the Phase 0
+diagram spike, since DemoCoach renders through the same Diagram component.
+The fixture is already in the mobile artifact (`data/demoRecipe.ts`, ported
+verbatim for the spike), and the spike's auth-gate pass-through in
+_layout.tsx is the placeholder Phase 1 replaces with the real demo gate.
+
 Build order is risk-first: the diagram is Phase 0, a fixture-fed spike with
 kill criteria, before any easy screen. Its approach: `computeLayout` already
 answers WHERE every cell goes (row/col/rowSpan/colSpan) — the HTML table was

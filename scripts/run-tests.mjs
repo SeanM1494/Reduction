@@ -16,7 +16,14 @@ import { readdirSync } from "node:fs";
 import { join } from "node:path";
 import { spawnSync } from "node:child_process";
 
-const ROOTS = ["artifacts/api-server/src", "lib/recipe-model/src"];
+// reduction-mobile/components/diagram is PURE geometry (no react-native
+// import), which is what lets it run under plain node here. Anything in the
+// mobile artifact that imports react-native cannot join this list.
+const ROOTS = [
+  "artifacts/api-server/src",
+  "lib/recipe-model/src",
+  "artifacts/reduction-mobile/components/diagram",
+];
 
 function testFiles(dir) {
   const out = [];

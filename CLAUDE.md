@@ -97,8 +97,8 @@ silently corrupt every "what fraction" query the table exists to answer. The
 fifth guards a claim that has to be atomic: two dispatchers racing must not
 buzz one phone twice. The sixth guards the arithmetic that decides whether
 somebody can use the app at all, and the seventh guards a route that reads
-other people's accounts. **The full suite — 308 tests at the time of writing —
-has been run against a real Postgres and passes 308/0.**
+other people's accounts. **The full suite — 313 tests at the time of writing —
+has been run against a real Postgres and passes 313/0.**
 
 **`pnpm test` must never be run against production.** It reads `DATABASE_URL`,
 which on a deployed host is the live database — so running the suite there

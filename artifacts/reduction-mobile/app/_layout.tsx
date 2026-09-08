@@ -16,7 +16,7 @@ import {
   useFonts,
 } from '@expo-google-fonts/space-grotesk';
 import { SpaceMono_400Regular, SpaceMono_700Bold } from '@expo-google-fonts/space-mono';
-import { Stack } from 'expo-router';
+import { Stack, usePathname } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 
 // Prevent the splash screen from auto-hiding before asset loading is complete.
@@ -29,6 +29,7 @@ function RootLayoutNav() {
     <Stack screenOptions={{ headerBackTitle: 'Back' }}>
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
       <Stack.Screen name="recipe/[id]" options={{ title: '' }} />
+      <Stack.Screen name="spike" options={{ title: 'Diagram spike' }} />
     </Stack>
   );
 }
@@ -40,6 +41,19 @@ function RootLayoutNav() {
 function Gate() {
   const { loading, token } = useAuth();
   const colors = useColors();
+  const pathname = usePathname();
+
+  /**
+   * The Phase 0 diagram spike is fixture-fed and talks to no API, so it must
+   * be reachable without a token — it is how the renderer gets verified on a
+   * device before any signed-in screen exists. This is also a preview of the
+   * settled first-run decision (the demo is explorable before sign-in; see
+   * ROADMAP's mobile section): Phase 1 replaces this one-route exception
+   * with the real demo gate.
+   */
+  if (pathname === '/spike') {
+    return <RootLayoutNav />;
+  }
 
   if (loading) {
     return <View style={{ flex: 1, backgroundColor: colors.background }} />;
