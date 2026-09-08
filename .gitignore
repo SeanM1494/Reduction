@@ -1,20 +1,49 @@
-node_modules
+# See https://docs.github.com/en/get-started/getting-started-with-git/ignoring-files for more about ignoring files.
+
+# compiled output
 dist
-.env
-.env.local
-*.log
+tmp
+out-tsc
+*.tsbuildinfo
+.expo
+.expo-shared
+
+# dependencies
+node_modules
+
+# IDEs and editors
+/.idea
+.project
+.classpath
+.c9/
+*.launch
+.settings/
+*.sublime-workspace
+
+# IDE - VSCode
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+
+# misc
+/.sass-cache
+/connect.lock
+/coverage
+/libpeerconnection.log
+npm-debug.log
+yarn-error.log
+testem.log
+/typings
+
+# System Files
 .DS_Store
+Thumbs.db
 
-# Database snapshots. They belong outside the repo — a dump is a copy of
-# production user data, it goes stale the moment it is written, and a repo is
-# the wrong place to keep either. Two were committed before this rule (both
-# happened to be schema-only, no rows), which is exactly how the habit starts.
-*.sql
-.pgtest/
+.cursor/rules/nx-rules.mdc
+.github/instructions/nx.instructions.md
 
-# Signing keys never belong in the repo. Apple's .p8 can mint client secrets
-# for the Services ID for as long as the key is valid, so a committed one is a
-# credential leak that no amount of later deletion undoes — git keeps it.
-*.p8
-*.pem
-*.key
+# Replit
+.cache/
+.local/

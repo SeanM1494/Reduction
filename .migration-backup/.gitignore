@@ -1,0 +1,20 @@
+node_modules
+dist
+.env
+.env.local
+*.log
+.DS_Store
+
+# Database snapshots. They belong outside the repo — a dump is a copy of
+# production user data, it goes stale the moment it is written, and a repo is
+# the wrong place to keep either. Two were committed before this rule (both
+# happened to be schema-only, no rows), which is exactly how the habit starts.
+*.sql
+.pgtest/
+
+# Signing keys never belong in the repo. Apple's .p8 can mint client secrets
+# for the Services ID for as long as the key is valid, so a committed one is a
+# credential leak that no amount of later deletion undoes — git keeps it.
+*.p8
+*.pem
+*.key
