@@ -1,0 +1,66 @@
+Three visual passes. Files: client/src/index.css only, unless noted.
+
+1. ROUNDED CORNERS
+   - .rd-frame radius 10px → 14px. Because the table inside uses
+     border-collapse: separate with per-cell right/bottom borders, the
+     corner cells need their outer corners rounded to match, or the
+     square grid pokes through the rounded frame. Use :first-child /
+     :last-child selectors on the first and last rows.
+   - Chips and cards (.rd-fin, .rd-tucked, .rd-card, .rd-btn, .rd-go,
+     .rd-import, .rd-head) go up ~2-3px each, keeping the existing
+     hierarchy: containers rounder than the controls inside them.
+   - Do NOT add border-radius to .rd-cell or .rd-gap, and do not change
+     border-collapse. The sticky ingredient column depends on the
+     current border setup and radii on collapsed-adjacent cells render
+     as visible seams.
+
+2. SMOOTHER COLLAPSE AND FOLD
+   The table→collapsed swap currently cuts and fades in. Make the
+   transition read as a fold rather than a replacement:
+   - Animate height, not just opacity, so surrounding content moves
+     rather than jumping. Measure with a ref + scrollHeight in
+     Diagram.tsx and transition max-height, or use a grid-template-rows
+     0fr→1fr transition, whichever is cleaner. Target 260-320ms with
+     cubic-bezier(.2,.7,.3,1).
+   - Collapsing rows should feel like they gather upward into the
+     collapsed chip: pair the height change with a slight negative
+     translate and opacity on the way out.
+   - Stagger nothing. One motion, one duration.
+   - Keep the existing @media (prefers-reduced-motion: reduce) block
+     working — no height animation, instant swap.
+
+3. MAKE IT POP
+   The palette is warm sand with paprika (ready) and olive (done). The
+   problem is flatness, not colour. Prefer contrast and depth over more
+   saturation:
+   - Raise contrast between the card surface and the page background
+     slightly so the frames read as objects sitting on paper.
+   - Give .rd-frame, .rd-card, .rd-head a two-layer shadow (a tight
+     1px contact shadow plus a softer ambient one) instead of the
+     current single shadow. Keep them warm-tinted, not grey.
+   - Strengthen the ready state: it should be the most salient thing on
+     screen at any moment. Deepen the paprika border and add a subtle
+     warm glow, but keep the existing pulse timing.
+   - Done state should recede slightly more than it does now — it is
+     finished work, not competing for attention.
+   - Ingredient amounts in mono are currently very quiet; nudge them up
+     one notch in contrast so they scan while cooking.
+
+CONSTRAINTS
+- Do not change the token names in the :root block. Retune values only.
+- Do not touch layout.ts, RecipeView.tsx, or any interaction logic.
+- Keep the sticky column, its pin shadow, and the mobile edge-to-edge
+  frame working.
+- No new dependencies.
+
+ACCEPTANCE
+- Cookies and cheesecake both render with no seams, gaps, or misaligned
+  corners where the table meets the frame.
+- Collapsing a completed section animates height smoothly with no
+  content jump.
+- On a phone width, the frame still runs edge to edge and the
+  ingredient column still pins on horizontal scroll.
+- npm run check passes.
+
+Show me a screenshot or description of the corner treatment before
+applying the shadow changes.

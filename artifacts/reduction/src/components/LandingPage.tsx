@@ -1,0 +1,441 @@
+/**
+ * client/src/components/LandingPage.tsx — public landing page.
+ *
+ * Shown to a visitor with nothing saved yet (see App.tsx for the exact
+ * gate). Composes the existing Diagram and StepsMode components with its
+ * own local, ephemeral `done` state — this demo never touches the API, the
+ * library, or Postgres. Refreshing the page resets it; the "Reset" button
+ * lets a visitor replay it without refreshing.
+ *
+ * Deliberately does not fork Diagram.tsx/StepsMode.tsx/layout.ts — it drives
+ * the same completion rules (mark upstream done, undo clears downstream) with
+ * its own copy of that small bit of logic, same as RecipeView does for the
+ * real library. The teaching layer around it lives in DemoCoach.tsx and is
+ * likewise a wrapper: it reads the same `done` set and never reaches into
+ * either view's DOM.
+ *
+ * The Diagram/Steps toggle here is not RecipeView's chooser. RecipeView is a
+ * page shell around an Entry — back link, delete, clear progress, save as
+ * image — none of which mean anything for a demo with nothing to delete. So
+ * the toggle is local and the reuse happens one level down, at StepsMode,
+ * with a synthetic in-memory entry that never reaches storage.ts.
+ */
+
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { computeLayout } from "../shared/layout";
+import type { ThemeMode } from "../lib/theme";
+import type { Entry, StepTimer } from "../lib/storage";
+import Diagram from "./Diagram";
+import StepsMode from "./StepsMode";
+import ThemeToggle from "./ThemeToggle";
+import { DEMO_RECIPE, DEMO_PRECHECKED } from "../data/demo";
+import ExtractionProgress from "./ExtractionProgress";
+import {
+  buildDemoGraph,
+  useCoachStage,
+  useCoachTips,
+  useWatchPlayer,
+  CoachLine,
+  CoachTip,
+  CoachLegend,
+  DemoTag,
+} from "./DemoCoach";
+
+interface Props {
+  themeMode: ThemeMode;
+  onThemeChange: (mode: ThemeMode) => void;
+  onTryOwnRecipe: () => void;
+  /** A URL typed into the completed demo's inline CTA. Carried through
+   *  sign-up so extraction can run as soon as the account exists — see
+   *  lib/pendingUrl.ts. */
+  onSubmitUrl: (url: string) => void;
+  onSignIn: () => void;
+  /** Runs this browser's one free extraction. */
+  onExtractUrl: (url: string) => void;
+  /** The free extraction has been used. The box stays — it just routes to
+   *  sign-up instead, so a visitor who has typed a URL is never met with a
+   *  dead end. */
+  trialSpent: boolean;
+  busy: boolean;
+  /** This browser has had an account before — so it is signed out, not new,
+   *  and its saved recipes are behind sign-in rather than gone. Someone
+   *  arriving for the first time is told no such thing. */
+  returning: boolean;
+}
+
+type DemoMode = "diagram" | "steps";
+
+export default function LandingPage({
+  themeMode,
+  onThemeChange,
+  onTryOwnRecipe,
+  onSubmitUrl,
+  onSignIn,
+  onExtractUrl,
+  trialSpent,
+  busy,
+  returning,
+}: Props) {
+  const section = DEMO_RECIPE.sections[0];
+  const [done, setDone] = useState<Set<string>>(() => new Set(DEMO_PRECHECKED));
+  const [hovered, setHovered] = useState<string | null>(null);
+  const [mode, setMode] = useState<DemoMode>("diagram");
+  const [timer, setTimer] = useState<StepTimer | null>(null);
+  const [url, setUrl] = useState("");
+  /**
+   * The demo is opt-in. Collapsed, the page is a welcome line, an invitation
+   * and the account path — which fits any phone with room to spare, and
+   * retires the fold pressure that shaped every previous version of this page.
+   *
+   * The demo stays mounted while collapsed rather than unmounting, so
+   * `done` and the diagram's own collapse state survive a close and reopen:
+   * someone who checked off four ingredients, hid the demo and opened it
+   * again finds it where they left it.
+   */
+  const [demoOpen, setDemoOpen] = useState(false);
+  const inviteRef = useRef<HTMLElement>(null);
+
+  const { parents, inputs } = useMemo(() => {
+    const parents = new Map<string, string>();
+    const inputs = new Map<string, string[]>();
+    const layout = computeLayout(section);
+    layout.parentOf.forEach((v, k) => parents.set(k, v));
+    for (const n of section.nodes) inputs.set(n.id, n.inputs || []);
+    return { parents, inputs };
+  }, [section]);
+
+  const upstreamOf = useCallback(
+    (id: string) => {
+      const acc = new Set<string>();
+      (function walk(cur: string) {
+        if (acc.has(cur)) return;
+        acc.add(cur);
+        (inputs.get(cur) || []).forEach(walk);
+      })(id);
+      return acc;
+    },
+    [inputs]
+  );
+
+  const graph = useMemo(() => buildDemoGraph(section, DEMO_PRECHECKED), [section]);
+
+  /**
+   * Autoplay order: a post-order walk from the root, so every input is
+   * emitted before the step that consumes it. Derived from the recipe rather
+   * than written out, so editing demo.ts can't leave a stale sequence behind.
+   * Anything already checked at the start is dropped — it is part of the
+   * baseline the player replays from.
+   */
+  const watchOrder = useMemo(() => {
+    const start = new Set(DEMO_PRECHECKED);
+    const out: string[] = [];
+    const seen = new Set<string>();
+    (function walk(id: string) {
+      if (seen.has(id)) return;
+      seen.add(id);
+      (inputs.get(id) || []).forEach(walk);
+      if (!start.has(id)) out.push(id);
+    })(section.root);
+    return out;
+  }, [section, inputs]);
+
+  const { playing, line: narration, play, stop } = useWatchPlayer(
+    watchOrder,
+    DEMO_PRECHECKED,
+    setDone
+  );
+  const { stage, text: coachText } = useCoachStage(graph, done, DEMO_PRECHECKED, mode);
+  // Both tips describe the grid — amber cells, stepping rightwards — so they
+  // are held (not spent) while card mode is up, and while autoplay is driving.
+  const { text: tipText, resetTips } = useCoachTips(graph, done, {
+    suspended: playing || mode !== "diagram",
+  });
+
+  const toggle = useCallback(
+    (id: string) => {
+      stop();
+      setDone((prev) => {
+        const next = new Set(prev);
+        if (next.has(id)) {
+          let cur: string | undefined = id;
+          while (cur) {
+            next.delete(cur);
+            cur = parents.get(cur);
+          }
+        } else {
+          upstreamOf(id).forEach((u) => next.add(u));
+        }
+        return next;
+      });
+    },
+    [parents, upstreamOf, stop]
+  );
+
+  const preview = useMemo(() => {
+    if (!hovered || done.has(hovered)) return new Set<string>();
+    const up = upstreamOf(hovered);
+    done.forEach((d) => up.delete(d));
+    return up;
+  }, [hovered, done, upstreamOf]);
+
+  const reset = useCallback(() => {
+    stop();
+    resetTips();
+    setTimer(null);
+    setDone(new Set(DEMO_PRECHECKED));
+  }, [stop, resetTips]);
+
+  const pickMode = useCallback(
+    (m: DemoMode) => {
+      stop();
+      setMode(m);
+    },
+    [stop]
+  );
+
+  /**
+   * StepsMode reads `entry` only for its timer, and writes back through
+   * onUpdate for the same reason. Synthesising one here keeps card mode on a
+   * demo that has no Entry, without touching storage.ts — nothing built here
+   * is ever handed to saveLibrary.
+   */
+  const demoEntry: Entry = useMemo(
+    () => ({
+      id: "demo",
+      recipe: DEMO_RECIPE,
+      done: [...done],
+      servings: DEMO_RECIPE.servings,
+      mode,
+      timer,
+      savedAt: 0,
+    }),
+    [done, mode, timer]
+  );
+
+  /**
+   * Bring the demo into view on expand, so tapping does not leave someone
+   * looking at a heading while something grows off-screen below them. Scrolls
+   * to the invitation rather than the demo, keeping the control they just
+   * pressed on screen with the demo unfolding beneath it.
+   */
+  useEffect(() => {
+    if (!demoOpen) return;
+    const el = inviteRef.current;
+    if (!el) return;
+    const reduce =
+      typeof window !== "undefined" &&
+      !!window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    // After the frame that applies is-open, so the grid has started growing
+    // and the browser scrolls toward where things are heading.
+    const t = window.setTimeout(
+      () => el.scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "start" }),
+      reduce ? 0 : 60
+    );
+    return () => window.clearTimeout(t);
+  }, [demoOpen]);
+
+  const urlRef = useRef<HTMLInputElement>(null);
+  const submitUrl = useCallback(() => {
+    const trimmed = url.trim();
+    if (!trimmed) {
+      urlRef.current?.focus();
+      return;
+    }
+    // Spent, and the visitor has typed a URL anyway: carry it into sign-up
+    // rather than refusing it. The pending-URL funnel already exists for
+    // exactly this, and a dead end here would waste the strongest intent
+    // signal the page ever gets.
+    if (trialSpent) onSubmitUrl(trimmed);
+    else onExtractUrl(trimmed);
+  }, [url, onSubmitUrl, onExtractUrl, trialSpent]);
+
+  return (
+    <div className="rd-root rd-landing">
+      <nav className="rd-nav no-print">
+        <span className="rd-brand rd-brand-static">
+          <img
+            className="rd-logo"
+            src="/brand/reduction-icon-transparent.svg"
+            alt=""
+            aria-hidden="true"
+          />
+          <span className="rd-brand-word">Reduction</span>
+        </span>
+        <div className="rd-nav-right">
+          <button className="rd-btn rd-signin-nav" onClick={onSignIn}>
+            Sign in
+          </button>
+          <ThemeToggle mode={themeMode} onChange={onThemeChange} />
+        </div>
+      </nav>
+
+      <div className="rd-shell rd-landing-flow">
+        {/* State, not pitch. Only rendered for a returning or already-saving
+            visitor, so a first arrival pays nothing for it. */}
+        {returning ? (
+          <div className="rd-landing-notes">
+            <p className="rd-signed-out-note">
+              You&rsquo;re signed out &mdash;{" "}
+              <button className="rd-linkish" onClick={onSignIn}>
+                sign in to see your saved recipes
+              </button>
+              .
+            </p>
+          </div>
+        ) : null}
+
+        <div className="rd-welcome">
+          <h1 className="rd-welcome-title">Welcome to Reduction</h1>
+          <p className="rd-welcome-line">
+            The difficulty of recipes, simmered down.
+          </p>
+        </div>
+
+        <section className="rd-invite" ref={inviteRef}>
+          {/* An invitation, not a disclosure triangle. Most people will never
+              open a collapsed demo, so this has to be worth a tap on its own —
+              and "reduction" is doing double duty as the culinary verb and the
+              product name, which is the whole line. */}
+          <button
+            className={`rd-invite-btn ${demoOpen ? "is-open" : ""}`}
+            aria-expanded={demoOpen}
+            aria-controls="rd-demo-panel"
+            onClick={() => setDemoOpen((o) => !o)}
+          >
+            <span>See guacamole as a reduction (demo)</span>
+            <span className="rd-invite-arrow" aria-hidden="true">
+              &rarr;
+            </span>
+          </button>
+          {!demoOpen ? (
+            <p className="rd-invite-sub">
+              Tap an ingredient. The next step lights up.
+            </p>
+          ) : null}
+
+          <div
+            id="rd-demo-panel"
+            className={`rd-demo-panel ${demoOpen ? "is-open" : ""}`}
+          >
+            {/* The animated row. Height is interpolated by the grid rather
+                than by JavaScript measuring and writing inline styles — that
+                approach leaves a stale height behind whenever transitionend
+                does not fire, which is exactly how the diagram ended up
+                clipped inside its own card. */}
+            <div className="rd-demo-panel-inner">
+              <div className="rd-landing-demo">
+                <DemoTag />
+                <div className="rd-landing-demo-head">
+                  <div className="rd-demo-modes" role="group" aria-label="Demo view">
+                    <button
+                      className={`rd-seg ${mode === "diagram" ? "is-on" : ""}`}
+                      aria-pressed={mode === "diagram"}
+                      onClick={() => pickMode("diagram")}
+                    >
+                      Diagram
+                    </button>
+                    <button
+                      className={`rd-seg ${mode === "steps" ? "is-on" : ""}`}
+                      aria-pressed={mode === "steps"}
+                      onClick={() => pickMode("steps")}
+                    >
+                      Steps
+                    </button>
+                  </div>
+                  <div className="rd-demo-actions">
+                    <button
+                      className="rd-btn"
+                      onClick={playing ? stop : play}
+                      aria-live="off"
+                    >
+                      {playing ? "Stop" : "Watch it"}
+                    </button>
+                    <button className="rd-btn" onClick={reset}>
+                      Reset
+                    </button>
+                  </div>
+                </div>
+
+                {/* The narration stands in for the coach line while it is
+                    running, never alongside it. */}
+                <CoachLine text={narration ?? coachText} />
+                <CoachTip text={tipText} />
+
+                {mode === "diagram" ? (
+                  <>
+                    <Diagram
+                      section={section}
+                      index={0}
+                      done={done}
+                      preview={preview}
+                      scale={1}
+                      onToggle={toggle}
+                      onHover={setHovered}
+                    />
+                    <CoachLegend />
+                  </>
+                ) : (
+                  <div className="rd-demo-steps">
+                    <StepsMode
+                      recipe={DEMO_RECIPE}
+                      entry={demoEntry}
+                      done={done}
+                      scale={1}
+                      onToggle={toggle}
+                      onUpdate={(next) => setTimer(next.timer)}
+                    />
+                  </div>
+                )}
+              </div>
+
+              {/* Available, not prominent. */}
+              <button className="rd-demo-hide" onClick={() => setDemoOpen(false)}>
+                Hide the demo
+              </button>
+            </div>
+          </div>
+        </section>
+
+        <div className="rd-landing-cta">
+          <p className="rd-landing-cta-line">
+            {stage === "complete"
+              ? "Now do it with a recipe you actually want to cook."
+              : trialSpent
+                ? "You\u2019ve used your free recipe. An account keeps them all."
+                : "Paste any recipe link and get a diagram you can cook from \u2014 one free, no account."}
+          </p>
+          <form
+            className="rd-cta-form"
+            onSubmit={(e) => {
+              e.preventDefault();
+              submitUrl();
+            }}
+          >
+            <input
+              ref={urlRef}
+              className="rd-cta-input"
+              type="url"
+              inputMode="url"
+              placeholder="Paste a recipe link"
+              aria-label="Recipe URL"
+              value={url}
+              onChange={(e) => setUrl(e.target.value)}
+            />
+            <button className="rd-go" type="submit" disabled={busy}>
+              {busy ? "Reading\u2026" : trialSpent ? "Sign up to diagram it" : "Diagram it"}
+            </button>
+          </form>
+          {/* Rendered only while running. The landing page has +24px of
+              headroom on an iPhone SE (see CLAUDE.md) and a permanently
+              reserved slot would spend it; the line appearing at the START of
+              an extraction is not a shift "as the message changes", which is
+              the thing that must not move. */}
+          <ExtractionProgress active={busy} />
+          <button className="rd-go rd-cta-account" onClick={onTryOwnRecipe}>
+            Create an account or log in
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}

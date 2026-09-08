@@ -1,0 +1,62 @@
+Add a step-by-step cooking mode. New view, same data, same done state.
+
+TOGGLE
+Segmented control in the recipe header: "Diagram" / "Steps". Remembered
+per recipe. Both modes read and write the same `done` set, so switching
+mid-cook keeps your place.
+
+CARD SEQUENCE
+Order comes from the tree: depth-first, same order as the diagram's rows.
+For each step, in order:
+- If the step takes 2 OR MORE ingredient inputs, emit a PREP card first:
+  the ingredient names with scaled amounts and any notes ("softened"),
+  each individually checkable. "Ready" advances to the action card and
+  marks those ingredients done.
+- If it takes 0 or 1 ingredients, no prep card. Name the ingredient
+  inline on the action card.
+- Then the ACTION card: the step label, large. Which mixture it builds
+  on, quietly. Position ("Step 4 of 11").
+
+Buttons: Back and Done. Done marks the step complete and advances.
+Back steps to the previous card without unchecking anything.
+
+TIMERS — persistence via timestamps, not countdowns
+- Steps with `minutes` show a "Start timer" button.
+- Starting stores an absolute endsAt (epoch ms) on the recipe row in
+  Postgres, alongside the step id. NEVER drive state from setInterval.
+  The visible countdown is rendered from (endsAt - Date.now()); the
+  interval only re-renders.
+- On load, any stored timer with endsAt in the future resumes; one in
+  the past shows as elapsed.
+- A "Done" / "Next" button is ALWAYS available and never gated on the
+  timer, so someone using their oven timer or phone can just advance.
+- When a timer elapses while the app is open: in-page alert plus a Web
+  Notification if permission was granted. Request permission only when
+  the user first taps "Start timer", never on page load.
+- Do NOT build a service worker or Web Push in this pass. Closed-app
+  notifications are a separate phase.
+
+PARALLEL WORK
+When the current card is a waiting step (minutes set), look for steps in
+OTHER sections that are ready — all inputs already done. If any exist,
+show a secondary card below the timer: "While that bakes — start the
+filling", tapping it jumps to that step's card. Returning to the timer
+must be one tap. Only suggest steps from other sections; never suggest
+something downstream of the current step.
+
+CONSTRAINTS
+- Do not modify layout.ts, Diagram.tsx, or the toggle/cascade logic in
+  RecipeView.tsx. Card order is derived from computeLayout's existing
+  row order.
+- Reuse the existing palette tokens and the finish-strip chip styles.
+- No new dependencies.
+
+ACCEPTANCE
+- Cookies: the dry-ingredient step produces a prep card listing flour,
+  soda, powder, salt; the single-ingredient steps do not.
+- Marking steps done in card mode is reflected in the diagram, and vice
+  versa.
+- Start a 2-minute timer, close the browser entirely, reopen: the timer
+  shows correct remaining time.
+- During the crust bake, a card offers to start the filling.
+- npm run check passes.

@@ -1,10 +1,5 @@
-- [Monorepo artifact deployment can hijack the root app](artifact-deployment-routing.md) — a registered "runnable" (kind=api) artifact can silently become the only thing served in production, 404-ing the real site.
-- [Theming system (light/dark/colorblind)](theming-system.md) — data-attribute + CSS token cascade, colorblind as an overlay not a 4th base, pre-paint flash-prevention script duplication.
-- [Progressive-collapse sibling grouping](collapse-sibling-grouping.md) — group collapse-eligibility by shared parent, never by layout column (columns can coincide across unrelated branches).
-- [npm package-firewall transitive version block](npm-package-firewall-transitive-block.md) — a blocked transitive dep version (e.g. drizzle-kit's tsx range) needs its own pin, not just the direct dependency's.
-- [localStorage-to-API migration via diffing adapter](local-to-api-migration-diffing-adapter.md) — keep loadLibrary/saveLibrary's shape, diff against a lastSynced snapshot internally to avoid touching call sites.
-- [Anonymous owner-key seed collision](anonymous-owner-key-seed-collision.md) — a hardcoded demo-record id needs a composite (owner_key, id) PK, or the second-ever browser collides with the first's.
-- [Cooking-mode card sequence](cooking-mode-card-sequence.md) — derive linear order from computeLayout's own rows (sort by row,col) instead of re-deriving DFS; timers as absolute endsAt, not intervals.
-- [No-accounts-yet gating](no-accounts-gating.md) — with no auth system, "logged out" was approximated as "library has 0 saved recipes"; treat as provisional, to be replaced when real accounts ship.
-- [Prod data cleanup without prod DB write access](prod-cleanup-via-startup-check.md) — executeSql is read-only for production, so a data fix that must reach prod has to ship as an idempotent guarded startup check, not a one-off script.
-- [Headless browser unavailable in this sandbox](headless-browser-sandbox-limits.md) — Playwright/Chromium can't launch here (missing system shared libs like libglib); use the Screenshot tool or code-based/CSS reasoning for viewport checks instead.
+# Memory Index
+
+- [TS composite package dist shadowing](ts-composite-dist-shadowing.md) — a workspace package's stale `dist/*.d.ts` can shadow live source exports for referencing projects even when `exports` points at source.
+- [pnpm peer-dependency duplication](pnpm-peer-dependency-duplication.md) — divergent devDependency versions (e.g. `@types/pg`) across workspace packages sharing a peer-dependent lib can silently duplicate that lib and break structural typing.
+- [Multi-artifact copy script relative-path fixups](multi-artifact-copy-relative-paths.md) — the migrate-to-multi-artifact copy scripts don't fully fix nested relative imports; verify by depth and check inline `import("...")` type-only references separately.

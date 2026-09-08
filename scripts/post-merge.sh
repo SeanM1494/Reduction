@@ -1,4 +1,4 @@
 #!/bin/bash
 set -e
-
-npm install
+pnpm install --frozen-lockfile
+pnpm --filter db push

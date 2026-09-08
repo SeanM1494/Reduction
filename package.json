@@ -1,54 +1,24 @@
 {
-  "name": "reduction",
-  "version": "1.0.0",
-  "private": true,
-  "type": "module",
+  "name": "workspace",
+  "version": "0.0.0",
+  "license": "MIT",
   "scripts": {
-    "dev": "concurrently -k -n api,web -c yellow,cyan \"npm:dev:server\" \"npm:dev:client\"",
-    "dev:server": "tsx watch server/index.ts",
-    "dev:client": "vite",
-    "build": "NODE_ENV=production vite build",
-    "start": "NODE_ENV=production tsx server/index.ts",
-    "check": "tsc --noEmit",
-    "test": "node scripts/run-tests.mjs",
-    "db:push": "drizzle-kit push",
-    "db:backfill-url-key": "tsx server/scripts/backfillUrlKey.ts",
-    "test:db": "bash scripts/test-db.sh run",
-    "test:db:stop": "bash scripts/test-db.sh stop",
-    "test:db:reset": "bash scripts/test-db.sh reset"
+    "preinstall": "sh -c 'rm -f package-lock.json yarn.lock; case \"$npm_config_user_agent\" in pnpm/*) ;; *) echo \"Use pnpm instead\" >&2; exit 1 ;; esac'",
+    "build": "pnpm run typecheck && pnpm -r --if-present run build",
+    "typecheck:libs": "tsc --build",
+    "typecheck": "pnpm run typecheck:libs && pnpm -r --filter \"./artifacts/**\" --filter \"./scripts\" --if-present run typecheck"
   },
+  "private": true,
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.65.0",
-    "@types/pg": "^8.21.0",
-    "cheerio": "^1.0.0",
-    "drizzle-kit": "^0.31.10",
-    "drizzle-orm": "^0.45.2",
-    "express": "^4.21.2",
-    "html-to-image": "^1.11.13",
-    "pg": "^8.22.0",
-    "react": "^18.3.1",
-    "react-dom": "^18.3.1",
-    "stripe": "^22.5.0",
-    "web-push": "^3.6.7"
+    "@replit/connectors-sdk": "^0.4.1"
   },
   "devDependencies": {
-    "@types/express": "^5.0.0",
-    "@types/node": "^22.10.0",
-    "@types/react": "^18.3.12",
-    "@types/react-dom": "^18.3.1",
-    "@vitejs/plugin-react": "^4.3.4",
-    "concurrently": "^9.1.0",
-    "tsx": "^4.21.0",
-    "typescript": "^5.7.2",
-    "vite": "^6.0.5"
+    "prettier": "^3.9.6",
+    "typescript": "~5.9.3"
   },
-  "overrides": {
-    "tsx": {
-      "esbuild": "^0.28.1"
-    },
-    "@esbuild-kit/core-utils": {
-      "esbuild": "^0.28.1"
+  "pnpm": {
+    "overrides": {
+      "@types/pg": "8.20.3"
     }
-  },
-  "packageManager": "npm@11.19.0"
+  }
 }

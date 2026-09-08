@@ -1,0 +1,28 @@
+kind = "web"
+previewPath = "/"
+title = "Reduction"
+description = "Reduction turns any recipe—from a link, pasted text, or a photo—into a visual cooking diagram that shows what mixes into what, so home cooks can follow a dish without losing track of steps."
+version = "1.0.0"
+id = "artifacts/reduction"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 22216
+
+[services.development]
+run = "pnpm --filter @workspace/reduction run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/reduction", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/reduction/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "22216"
+BASE_PATH = "/"

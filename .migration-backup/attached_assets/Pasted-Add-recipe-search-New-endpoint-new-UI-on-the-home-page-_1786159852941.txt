@@ -1,0 +1,55 @@
+Add recipe search. New endpoint + new UI on the home page.
+
+BACKEND — server/routes/recipes.ts, new lib file
+1. server/lib/searchRecipes.ts
+   Export searchRecipes(query: string). Call the Messages API with the
+   web_search server tool:
+     tools: [{ type: "web_search_20250305", name: "web_search",
+               max_uses: 3 }]
+   Prompt Claude to find real recipe pages matching the query and return
+   ONLY a JSON array:
+     [{ "title": string, "url": string, "site": string,
+        "note": string }]
+   - 6 to 8 results, all distinct domains where possible.
+   - "note" is one short line on what distinguishes this version
+     (e.g. "brown butter, chilled overnight"). Under 12 words.
+   - Prefer pages that are a single recipe, not roundups or listicles.
+   - Every url must come from the search results. Do not construct URLs.
+   Reuse the existing unwrap() JSON-extraction helper pattern from
+   structureRecipe.ts. Validate: drop entries missing a url or with a
+   url that is not http(s).
+   Use the same lazy getClient() guard so a missing API key throws a
+   clear message instead of killing the server at import.
+
+2. POST /api/recipes/search  { query }
+   - Reject queries under 3 chars or over 200.
+   - Reuse the existing per-IP rate limiter and the sha256 cache
+     (key: "search:" + query), same 30-day TTL.
+   - Return { results }.
+   - Same 422-vs-500 error split the extract route uses.
+
+FRONTEND — client/src/components/Home.tsx, lib/api.ts
+3. Add a third tab beside "Link" and "Paste text", called "Search".
+   Text input, placeholder like "chocolate chip cookies". Enter submits.
+4. Results render as a list of cards: title, site name in mono, the
+   note line muted. Tapping a card calls the EXISTING extract flow with
+   that url — do not add a second extraction path.
+5. Show a spinner state on the tapped card only, not the whole list, so
+   the other results stay usable if extraction fails.
+6. If extraction of a chosen result fails, keep the results visible and
+   show the error inline on that card, so the user can try another.
+
+CONSTRAINTS
+- No new dependencies. No Google APIs, no SerpAPI, no scraping service.
+- Do not modify layout.ts, Diagram.tsx, or RecipeView.tsx.
+- Search results are NOT saved to the library. Only extracted recipes
+  are, exactly as today.
+
+ACCEPTANCE
+- Searching "chocolate chip cookies" returns 6-8 cards from distinct
+  sites within a few seconds.
+- Tapping one produces a diagram via the existing extract route.
+- Repeating the same search hits the cache and returns instantly.
+- With ANTHROPIC_API_KEY unset, /api/health still responds and search
+  returns a readable error.
+- npm run check passes.

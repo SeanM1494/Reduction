@@ -1,0 +1,56 @@
+Add progressive collapse to the recipe diagram. Files involved:
+shared/layout.ts, client/src/components/Diagram.tsx, client/src/index.css.
+
+THE IDEA
+Completion already cascades upstream — if a step is done, everything
+feeding it is done. So a completed step can be drawn as ONE row
+representing its entire subtree, which collapses its input rows upward
+and its columns leftward at the same time. Do not build two separate
+mechanisms.
+
+1. shared/layout.ts — computeLayout(section, opts?)
+   Add an optional second arg: { collapsed?: Set<string> }.
+   Any id in that set is treated as a LEAF: the DFS stops there, it
+   occupies exactly one row at column 0, and it emits a cell with
+   kind "collapsed" carrying the step's label and a count of how many
+   ingredients and steps are inside it.
+   Everything else about the function stays as it is. Do NOT change
+   validateRecipe or its behavior — the server imports it and depends
+   on current semantics. Called with no opts, output must be identical
+   to today.
+
+2. client/src/components/Diagram.tsx
+   Compute the collapse set from the `done` prop: a step collapses when
+   it is done AND its parent step is not done (or it is the root).
+   Ingredients that are done but whose consuming step is not done stay
+   as normal rows — they are already struck through.
+   Keep a local Set of manually expanded ids; ids in it are excluded
+   from the collapse set so a user can look back inside.
+
+3. Collapsed cell rendering
+   A compact chip in the ingredient column: checkmark, the step's label,
+   and a muted count like "6 items". Clicking it EXPANDS it — it must
+   not uncheck anything. Style it like the existing .rd-tucked bar
+   (cool-bg / cool-line / cool-ink tokens). Add an aria-label saying
+   it expands.
+
+4. Animation
+   Transition the swap with opacity and a small translate, matching the
+   existing .rd-swap keyframes. Respect prefers-reduced-motion.
+
+CONSTRAINTS — do not change these
+- The toggle/cascade logic in RecipeView.tsx.
+- The sticky ingredient column or the separate-borders table.
+- The finish-strip / tail handoff already in Diagram.tsx.
+- No new dependencies. No database.
+
+ACCEPTANCE
+- Cheesecake, nothing checked: diagram is exactly as it is today.
+- Check the crust's 3 ingredients through "press into pan": the crust
+  section becomes a single collapsed row reading "press into pan · 7 items".
+- The filling section is unaffected.
+- Clicking the collapsed row expands it; unchecking any step inside
+  restores it permanently.
+- npm run check passes.
+
+Report the diff before applying it.

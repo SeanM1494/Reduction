@@ -1,0 +1,57 @@
+Add a public landing page with a live demo diagram. Remove the
+cheesecake seed entirely.
+
+1. REMOVE THE CHEESECAKE
+   Delete client/src/data/seed.ts and the seeding logic in App.tsx that
+   writes it on first load. Also delete any cheesecake rows already in
+   the database — write a one-off script or a guarded startup check, and
+   tell me which you did. An empty library should render the existing
+   empty state, not a seeded recipe.
+
+2. NEW DEMO RECIPE — client/src/data/demo.ts
+   Scrambled eggs with a butter branch. Two branches so the diagram
+   shows convergence, not a straight line:
+     ingredients: 4 large eggs, 2 tbsp whole milk, 0.25 tsp salt,
+                  1 tbsp butter, black pepper (qty null, text "to taste")
+     steps:
+       d1 "beat until uniform"   inputs: eggs, milk, salt
+       d2 "melt over low heat"   inputs: butter
+       d3 "pour in and stir"     inputs: d1, d2
+       d4 "fold until just set"  inputs: d3, pepper    minutes: 3
+     root: d4
+   Follow the existing Recipe type exactly — qty/unit/name, unit null
+   for countable items. It must pass validateRecipe unchanged.
+
+3. LANDING PAGE — shown when the user has no account/session
+   Above the fold: the app name, one line on what it does, and the demo
+   diagram already rendered and fully interactive. Someone should be
+   able to click ingredients and watch steps unlock without signing up
+   or typing anything.
+   Below it: a short line prompting them to try their own recipe, which
+   leads to the sign-up flow (stub the destination for now — accounts
+   come next).
+
+4. DEMO STATE IS LOCAL AND EPHEMERAL
+   The demo's done set lives in component state only. It must NOT hit
+   the API, the library, or Postgres, and must not appear in saved
+   recipes. Refreshing resets it.
+   Add a small "Reset" control so a visitor can replay it.
+
+5. FIRST IMPRESSION
+   The demo should look inviting cold, before any interaction — the
+   whole diagram legible, no dimmed cells. Consider pre-checking the
+   first ingredient so one step is already amber and the mechanic is
+   visible without the visitor guessing. If you do that, make it obvious
+   it is a demo state, not saved progress.
+
+CONSTRAINTS
+- Do not modify layout.ts, Diagram.tsx, or RecipeView.tsx. The landing
+  page composes the existing components; it does not fork them.
+- No new dependencies.
+- Existing saved recipes must be unaffected.
+
+ACCEPTANCE
+- A logged-out visitor sees the eggs diagram and can check items off.
+- The demo never appears in the library and creates no database rows.
+- No cheesecake anywhere in dev or prod, including existing rows.
+- npm run check passes.
