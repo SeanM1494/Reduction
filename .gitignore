@@ -47,3 +47,23 @@ Thumbs.db
 # Replit
 .cache/
 .local/
+
+# --- rules restored from the pre-migration .gitignore (the migration replaced
+# --- this file with a generic template and lost every repo-specific rule) ---
+
+# The throwaway local test database (scripts/test-db.sh). A LIVE DATA
+# DIRECTORY: its files change whenever the database runs, its config is
+# machine-specific (the committed copy failed to even start off-Replit, locale
+# errors), and it is disposable by design. Never commit it.
+.pgtest/
+
+# Database snapshots are copies of production user data. They live outside the
+# repo, always.
+*.sql
+
+# Signing keys never belong in the repo. Apple's .p8 can mint client secrets
+# for the Services ID for as long as the key is valid, so a committed one is a
+# credential leak that no amount of later deletion undoes — git keeps it.
+*.p8
+*.pem
+*.key

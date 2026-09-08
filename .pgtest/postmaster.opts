@@ -1,1 +1,0 @@
-/nix/store/bgwr5i8jf8jpg75rr53rz3fqv5k8yrwp-postgresql-16.10/bin/postgres "-D" "/home/runner/workspace/.pgtest" "-p" "5433" "-c" "listen_addresses=127.0.0.1" "-k" "/home/runner/workspace/.pgtest"
