@@ -6,16 +6,8 @@
     "emitDeclarationOnly": true,
     "outDir": "dist",
     "rootDir": "src",
-    "types": [
-      "node"
-    ]
+    "types": ["node"]
   },
-  "include": [
-    "src"
-  ],
-  "references": [
-    {
-      "path": "../recipe-model"
-    }
-  ]
+  "include": ["src"],
+  "exclude": ["src/**/*.test.ts"]
 }

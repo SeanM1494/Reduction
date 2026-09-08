@@ -19,7 +19,9 @@ function getClient(): Anthropic {
   return _client;
 }
 
-const MODEL = "claude-sonnet-5";
+/** Exported so the admin preflight can test the exact model extraction uses,
+ *  rather than a model that happens to work while this one is retired. */
+export const MODEL = "claude-sonnet-5";
 const MAX_TOKENS = 8000;
 const MAX_ATTEMPTS = 2;
 

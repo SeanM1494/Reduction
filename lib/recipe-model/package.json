@@ -1,0 +1,22 @@
+{
+  "name": "@workspace/recipe-model",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./layout": "./src/layout.ts",
+    "./sequence": "./src/sequence.ts",
+    "./edits": "./src/edits.ts",
+    "./sync": "./src/sync.ts",
+    "./amounts": "./src/amounts.ts",
+    "./mealTypes": "./src/mealTypes.ts",
+    "./progress": "./src/progress.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:"
+  }
+}

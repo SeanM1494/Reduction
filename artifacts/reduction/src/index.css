@@ -569,9 +569,18 @@ input, select, textarea { font-size: 16px; }
    as a boundary between groups, not a continuation of the row above. */
 .rd-starts-branch { border-top: 2px solid var(--line-strong); }
 .rd-ing-body { display: flex; flex-direction: column; gap: 3px; }
+/* 13px, and 12.5px on phones — deliberately in step with what steps mode
+   already uses for the same data (.rd-steps-prep-row .rd-amount, 12.5px).
+   These were 11px and 10px, which made the amounts the smallest text in the
+   app on the device the app is for: a phone propped on a counter, read at
+   arm's length, usually with wet hands. "Legibility at arm's length beats
+   desktop density" is the house rule, and the quantity of an ingredient is
+   the single thing a cook mid-recipe most needs to read at a glance.
+   (Re-applied after the Sep 8 workspace migration ported a stale tree and
+   silently reverted it.) */
 .rd-amount {
   font-family: "Space Mono", ui-monospace, monospace;
-  font-size: 11px; color: color-mix(in srgb, var(--muted) 26%, var(--ink) 74%);
+  font-size: 13px; color: color-mix(in srgb, var(--muted) 26%, var(--ink) 74%);
   letter-spacing: -.01em;
 }
 .rd-name { font-size: 14px; line-height: 1.25; }
@@ -835,7 +844,7 @@ input, select, textarea { font-size: 16px; }
   .rd-cell { padding: 6px 6px; }
   .rd-ing { white-space: normal; min-width: 96px; max-width: 120px; }
   .rd-name { font-size: 13px; }
-  .rd-amount { font-size: 10px; }
+  .rd-amount { font-size: 12.5px; }
   .rd-op { min-width: 64px; }
   .rd-op-label { font-size: 12.5px; }
   /* Every row that pairs a text input with .rd-go stacks on a phone, because
