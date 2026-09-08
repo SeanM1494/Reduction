@@ -69,6 +69,17 @@ export default defineConfig({
     strictPort: true,
     host: '0.0.0.0',
     allowedHosts: true,
+    // Dev-only: the client fetches relative /api/... and the api-server is a
+    // separate process on 3001, so without this proxy every API call 404s in
+    // any environment that is not doing platform-side routing. Production
+    // does not use the vite server at all — the api-server serves the built
+    // frontend itself (see api-server/src/app.ts).
+    proxy: {
+      '/api': {
+        target: process.env.API_PROXY_TARGET || 'http://localhost:3001',
+        changeOrigin: true,
+      },
+    },
     fs: {
       strict: false,
     },

@@ -1,15 +1,34 @@
+# Restored after the Sep 8 workspace migration stripped the run and deployment
+# commands entirely ("Could not find run command" on publish). The serving
+# model is deliberately self-contained: in production the api-server serves
+# the built frontend from one port (see artifacts/api-server/src/app.ts), so
+# deployment needs no platform-side routing that lives outside this file.
+
 modules = ["nodejs-24", "python-base-3.13", "postgresql-16"]
 
+# The Run button: api on 3001, web on 5000, /api proxied (scripts/dev.sh).
+run = "bash scripts/dev.sh"
+
+[[ports]]
+localPort = 5000
+externalPort = 80
+
+[[ports]]
+localPort = 3001
+externalPort = 3001
+
 [deployment]
-router = "application"
 deploymentTarget = "autoscale"
+# Build the frontend first (BASE_PATH and a dummy PORT satisfy its vite
+# config's hard requirement — PORT is unused at build time), then the api.
+build = ["sh", "-c", "pnpm install --frozen-lockfile && BASE_PATH=/ PORT=5000 pnpm --filter ./artifacts/reduction run build && pnpm --filter @workspace/api-server run build"]
+# One process, one port: Replit injects PORT; NODE_ENV=production turns on
+# static serving + the SPA fallback in app.ts.
+run = ["sh", "-c", "NODE_ENV=production pnpm --filter @workspace/api-server run start"]
 
 [deployment.postBuild]
 args = ["pnpm", "store", "prune"]
 env = { "CI" = "true" }
-
-[workflows]
-runButton = "Project"
 
 [agent]
 stack = "PNPM_WORKSPACE"
