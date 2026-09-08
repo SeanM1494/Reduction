@@ -3,25 +3,38 @@
  * exists. See lib/auth-context.tsx for why mobile has no anonymous mode.
  */
 
-import React from 'react';
-import { ActivityIndicator, Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import React, { useState } from 'react';
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '@/lib/auth-context';
 import { useColors, type Colors } from '@/hooks/useColors';
 import { fonts } from '@/constants/colors';
+import { BrandLogo } from '@/components/BrandLogo';
+import { DemoScreen } from '@/components/DemoScreen';
 
 export function SignInScreen() {
   const { signIn, signingIn, signInError } = useAuth();
   const colors = useColors();
   const styles = makeStyles(colors);
+  const [demoOpen, setDemoOpen] = useState(false);
+
+  if (demoOpen) {
+    return <DemoScreen onClose={() => setDemoOpen(false)} />;
+  }
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
       <View style={styles.content}>
         <View style={styles.brand}>
+          <BrandLogo size={64} />
           <Text style={styles.wordmark}>Reduction</Text>
           <Text style={styles.tagline}>Recipes, boiled down to what matters.</Text>
         </View>
+
+        <Pressable style={styles.demoInvite} onPress={() => setDemoOpen(true)}>
+          <Text style={styles.demoInviteText}>See guacamole as a reduction (demo)</Text>
+          <Text style={styles.demoInviteArrow}>&rarr;</Text>
+        </Pressable>
 
         <View style={styles.buttons}>
           <Pressable
@@ -78,6 +91,28 @@ function makeStyles(colors: Colors) {
       fontSize: 15,
       color: colors.mutedForeground,
       textAlign: 'center',
+    },
+    demoInvite: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      backgroundColor: colors.card,
+      borderWidth: 1,
+      borderColor: colors.borderStrong,
+      borderRadius: colors.radius,
+      paddingVertical: 16,
+      paddingHorizontal: 18,
+    },
+    demoInviteText: {
+      flex: 1,
+      color: colors.foreground,
+      fontFamily: fonts.headingMedium,
+      fontSize: 15,
+    },
+    demoInviteArrow: {
+      color: colors.foreground,
+      fontSize: 16,
+      marginLeft: 8,
     },
     buttons: { gap: 12 },
     button: {
