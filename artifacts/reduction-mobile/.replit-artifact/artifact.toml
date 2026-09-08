@@ -1,0 +1,24 @@
+kind = "mobile"
+previewPath = "/reduction-mobile/"
+title = "Reduction Mobile"
+description = "A native companion app for Reduction, the recipe app that shows recipes as a dependency diagram of ingredients and steps instead of a wall of text. Lets users import recipes from a URL or pasted text, browse their saved recipe library, and cook through a recipe using either the visual diagram or a step-by-step card mode with built-in timers."
+version = "1.0.0"
+id = "artifacts/reduction-mobile"
+router = "expo-domain"
+
+[[services]]
+name = "expo"
+ensurePreviewReachable = "/status"
+paths = [ "/reduction-mobile/" ]
+localPort = 20274
+
+[services.development]
+run = "pnpm --filter @workspace/reduction-mobile run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/reduction-mobile", "run", "build" ]
+run = [ "pnpm", "--filter", "@workspace/reduction-mobile", "run", "serve" ]
+
+[services.env]
+PORT = "20274"
+BASE_PATH = "/reduction-mobile/"
