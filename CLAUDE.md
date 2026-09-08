@@ -29,8 +29,9 @@ suites guarding the model's invariants were orphaned with the backup — the
 package is what makes that impossible to repeat. It has NO runtime deps and
 NO env access on purpose: `@workspace/db` throws at import without
 DATABASE_URL, which is exactly why the frontend couldn't import it and the
-copies happened. (`artifacts/reduction-mobile` still holds its own copy — the
-scaffold is out of scope until the mobile app is real; fold it in then.)
+copies happened. (`artifacts/reduction-mobile` still holds its own copy. The native rebuild
+is now DECIDED — see ROADMAP's mobile section — and folding that copy into
+the package is the first act of real mobile work.)
 
 **Nothing may run `drizzle-kit push` at a non-local database.** In the Replit
 workspace, DATABASE_URL is PRODUCTION, and the scaffold's `post-merge.sh`
@@ -96,8 +97,8 @@ silently corrupt every "what fraction" query the table exists to answer. The
 fifth guards a claim that has to be atomic: two dispatchers racing must not
 buzz one phone twice. The sixth guards the arithmetic that decides whether
 somebody can use the app at all, and the seventh guards a route that reads
-other people's accounts. **The full suite — 300 tests at the time of writing —
-has been run against a real Postgres and passes 300/0.**
+other people's accounts. **The full suite — 308 tests at the time of writing —
+has been run against a real Postgres and passes 308/0.**
 
 **`pnpm test` must never be run against production.** It reads `DATABASE_URL`,
 which on a deployed host is the live database — so running the suite there

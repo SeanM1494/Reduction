@@ -50,6 +50,40 @@ to migrate — and why it is marked for removal rather than deleted (#7).
 
 ---
 
+## The mobile app: native React Native rebuild — DECIDED (Sep 8)
+
+Capacitor is out; Replit's generated Expo/React Native artifact
+(`artifacts/reduction-mobile`) is the delivery mechanism actually in use —
+settled by it being what runs in Expo Go today. That converts the earlier
+research's warning from hypothetical to work item: **the web component layer
+does not transfer; the model layer and server do.**
+
+What carries over untouched: `lib/recipe-model` (all seven modules and their
+suites — fold the mobile artifact's local `shared/` copy into the package as
+the first act of real mobile work), and the server (bearer auth + the mobile
+handshake exist; entitlement, sync endpoints, extraction are UI-agnostic).
+The two REAL server gaps for mobile parity, neither built: an APNs/Expo push
+delivery arm beside web-push (`push_subscriptions` stores web-push endpoints
+today), and the Apple IAP adapter (`billing/apple.ts` — App Store Server API
++ notifications endpoint), which was scoped in the App-Store research and
+deliberately deferred.
+
+Build order is risk-first: the diagram is Phase 0, a fixture-fed spike with
+kill criteria, before any easy screen. Its approach: `computeLayout` already
+answers WHERE every cell goes (row/col/rowSpan/colSpan) — the HTML table was
+only ever one renderer of that answer. RN renders the same answer with
+absolutely-positioned Views inside a horizontal scroller: fixed column
+widths (the web already constrains them), a measure pass for wrapped-text
+row heights, rowspan = sum of spanned rows, sticky ingredient column as a
+translateX-on-scroll overlay. Drag hit-testing gets EASIER than the DOM
+version: the layout pass owns every cell rectangle, so no elementFromPoint.
+
+Full inventory, sequencing and per-component fates: see the plan in the
+session record (Sep 8) — headline: rebuild Diagram, StepsMode, EditSheet
+family, drag, ReorderView, ServingsRow, paywall/coupon/settings surfaces;
+adapt storage.ts sync engine behind an AsyncStorage/AppState seam; skip the
+landing/demo and JSON hatch on mobile pending explicit decisions.
+
 ## 2. Global recipe search inside the app
 
 **Status:** partially built. The header search bar filters your own saved

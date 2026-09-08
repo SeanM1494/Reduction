@@ -172,14 +172,33 @@ const DEFAULT_MOBILE_REDIRECT = "reduction-mobile://auth";
  * worst case is redirecting a handoff code to another Expo Go session on the
  * same dev domain, not to an attacker's own app in production.
  */
-function isAllowedMobileRedirect(raw: string): boolean {
+export function isAllowedMobileRedirect(raw: string): boolean {
   if (raw === DEFAULT_MOBILE_REDIRECT) return true;
-  if (isProd) return false;
+  // Read at call time, not the module-level isProd const: the production
+  // refusal below is a security property, and a property a test cannot reach
+  // (the const is frozen at import) is a property that can regress silently.
+  if (process.env.NODE_ENV === "production") return false;
   try {
     const u = new URL(raw);
     if (u.protocol !== "exp:" && u.protocol !== "exps:") return false;
-    const devDomain = process.env.REPLIT_DEV_DOMAIN;
-    return !!devDomain && (u.hostname === devDomain || u.hostname.endsWith(`.${devDomain}`));
+    /**
+     * TWO dev domains, not one, and the second is the bug this fixed. The
+     * mobile artifact's dev script serves the Expo packager through
+     * $REPLIT_EXPO_DEV_DOMAIN (EXPO_PACKAGER_PROXY_URL) while pointing API
+     * calls at $REPLIT_DEV_DOMAIN — and Linking.createURL derives from the
+     * PACKAGER, so Expo Go's redirect arrives as exp://$REPLIT_EXPO_DEV_DOMAIN/--/auth.
+     * Checking only REPLIT_DEV_DOMAIN rejected every dev sign-in, and the
+     * silent fallback then redirected Safari to reduction-mobile:// — a
+     * scheme Expo Go does not own, surfacing as "Safari cannot open the page
+     * because the address is invalid" after the provider screen.
+     */
+    const allowedDomains = [
+      process.env.REPLIT_DEV_DOMAIN,
+      process.env.REPLIT_EXPO_DEV_DOMAIN,
+    ].filter((d): d is string => !!d);
+    return allowedDomains.some(
+      (d) => u.hostname === d || u.hostname.endsWith(`.${d}`)
+    );
   } catch {
     return false;
   }
@@ -188,9 +207,17 @@ function isAllowedMobileRedirect(raw: string): boolean {
 /** The caller's redirect if it passes validation, else the app's own fixed
  *  scheme — never nothing, so a rejected/missing redirect_uri degrades to
  *  the always-safe default rather than failing the handshake outright. */
-function resolveMobileRedirect(raw: unknown): string {
+export function resolveMobileRedirect(raw: unknown): string {
   if (typeof raw === "string" && raw.length <= 2000 && isAllowedMobileRedirect(raw)) {
     return raw;
+  }
+  // Say so when a real value was rejected. The fallback is the right failure
+  // mode (never break the handshake outright), but silent was how a domain
+  // mismatch spent a debugging session disguised as a malformed URL.
+  if (typeof raw === "string" && raw) {
+    console.warn(
+      `[auth:mobile] redirect_uri rejected, using ${DEFAULT_MOBILE_REDIRECT}: ${raw.slice(0, 120)}`
+    );
   }
   return DEFAULT_MOBILE_REDIRECT;
 }
