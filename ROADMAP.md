@@ -116,9 +116,14 @@ the measure pass and the sticky overlay; `app/spike.tsx` is reachable
 signed-out. Four kill criteria, three answered: structural identity
 (guacamole plus 100 random trees, in node), the sticky column (static
 overlay outside the scroller, measured scrolled), and the tap round-trip.
-**Criterion 2, 60fps on a real device, is instrumented (the on-screen
-FpsMeter and the 30-step stress fixture) and awaits the phone.** Nothing
-builds on the Diagram until that verdict. The mobile artifact's last local
+**Criterion 2, 60fps on a real device — PASSED (Sep 10, in Expo Go on an
+iPhone):** JS thread steady at 60fps and the native Perf Monitor at 60fps
+through a stress-fixture scroll with taps. Qualifier, accepted: 22 dropped
+frames and a 110ms worst frame over the run — single long frames at
+events (the first measure pass; a tap, which re-renders every cell because
+done state flows through the whole section), not scroll jank. **Phase 1
+polish, logged:** memoize cells so a tap re-renders the cells whose state
+changed rather than all 161. Phase 0 is closed; the Diagram is unblocked. The mobile artifact's last local
 model copy was folded into `lib/recipe-model` in this phase, so the
 "first act of real mobile work" above is done.
 
