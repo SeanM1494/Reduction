@@ -62,11 +62,29 @@ What carries over untouched: `lib/recipe-model` (all seven modules and their
 suites — fold the mobile artifact's local `shared/` copy into the package as
 the first act of real mobile work), and the server (bearer auth + the mobile
 handshake exist; entitlement, sync endpoints, extraction are UI-agnostic).
-The two REAL server gaps for mobile parity, neither built: an APNs/Expo push
-delivery arm beside web-push (`push_subscriptions` stores web-push endpoints
-today), and the Apple IAP adapter (`billing/apple.ts` — App Store Server API
-+ notifications endpoint), which was scoped in the App-Store research and
-deliberately deferred.
+The two server gaps for mobile parity are now BUILT (Sep 10, overnight),
+server side only — each has a client half that belongs to the phase below:
+
+- **Expo push arm** (`lib/push.ts`, commit ba7b5f0). `push_subscriptions`
+  holds an Expo push token in the same `endpoint` column as a web endpoint;
+  the token's shape picks the arm, the dispatcher no longer needs VAPID keys
+  to run, and `POST /api/push/subscribe` takes `{ expoPushToken }`. Relayed
+  through Expo's push service, not raw APNs, because Expo Go can only ever
+  produce an Expo token and the service needs no Apple key. Client half:
+  `expo-notifications` → `getExpoPushTokenAsync({ projectId })` → that
+  route, plus a tap handler reading `recipeId`/`stepId` from the payload.
+  Not verified: that a phone buzzes. The suite proves the request against a
+  loopback stub.
+- **App Store adapter** (`lib/billing/apple.ts`, `routes/billingApple.ts`,
+  commit fd15cbb). Verifies StoreKit 2 transactions and Server Notifications
+  V2 against Apple's roots, writes `provider = 'apple'` rows, refuses a
+  transaction that belongs to another account, and has a preflight that can
+  ask Apple for a TEST notification. Client half: a StoreKit purchase handler
+  registered through `setPurchaseHandler`, stamping `appAccountToken` = the
+  user's id and posting the `jwsRepresentation`s to `/verify`; plus App
+  Store Connect work (register the notifications URL, drop the root
+  certificates into Secrets). Not verified: a real Apple-signed payload —
+  Apple's hosts and certificates are unreachable from the container.
 
 **First-run decision — SETTLED (Sep 8): the mobile demo IS the web demo.**
 Same guacamole recipe, same DemoCoach flow, ported not redesigned, and fully
@@ -89,11 +107,59 @@ row heights, rowspan = sum of spanned rows, sticky ingredient column as a
 translateX-on-scroll overlay. Drag hit-testing gets EASIER than the DOM
 version: the layout pass owns every cell rectangle, so no elementFromPoint.
 
-Full inventory, sequencing and per-component fates: see the plan in the
-session record (Sep 8) — headline: rebuild Diagram, StepsMode, EditSheet
-family, drag, ReorderView, ServingsRow, paywall/coupon/settings surfaces;
-adapt storage.ts sync engine behind an AsyncStorage/AppState seam; skip the
-landing/demo and JSON hatch on mobile pending explicit decisions.
+### The phases, and where each stands (Sep 10)
+
+**Phase 0 — the diagram spike.** BUILT (commit 23ac9a7, made
+symlink-independent in 5c62604). `components/diagram/layoutRects.ts` is
+`computeLayout`'s second renderer, pure geometry; `DiagramView.tsx` does
+the measure pass and the sticky overlay; `app/spike.tsx` is reachable
+signed-out. Four kill criteria, three answered: structural identity
+(guacamole plus 100 random trees, in node), the sticky column (static
+overlay outside the scroller, measured scrolled), and the tap round-trip.
+**Criterion 2, 60fps on a real device, is instrumented (the on-screen
+FpsMeter and the 30-step stress fixture) and awaits the phone.** Nothing
+builds on the Diagram until that verdict. The mobile artifact's last local
+model copy was folded into `lib/recipe-model` in this phase, so the
+"first act of real mobile work" above is done.
+
+**Phase 1 — the read-only app.** Sign-in (exists) → library list →
+RecipeView with the proven diagram, StepsMode, servings and reorder →
+extraction (URL, text, photo). At the end of this phase the app is usable
+for cooking, which is the actual product. Also here, because it is the
+first thing anyone sees: the first-run demo (DemoCoach over the guacamole
+fixture, ported as decided above) and the real demo gate that replaces the
+spike's one-route pass-through in `_layout.tsx`.
+
+**Phase 2 — sync and editing.** Port the storage engine behind an
+AsyncStorage/AppState seam (the focus refetch becomes an AppState listener;
+the per-entry write queue and the 409 merge are unchanged); then the edit
+sheets and drag. Editing before sync would build on writes that can
+silently lose.
+
+**Phase 3 — monetization and notifications.** The server halves are done
+(above). What remains is client: the StoreKit purchase handler behind
+`setPurchaseHandler`, the paywall and coupon surfaces, the Settings
+timers card, and the Expo token registration. Parallelizable with late
+Phase 2, and the point where the app needs a standalone build rather than
+Expo Go (StoreKit does not run in Expo Go).
+
+**Phase 4 — store passage.** Icons, screenshots, privacy labels,
+TestFlight, review. The onboarding decision that used to sit here is
+settled (the demo).
+
+**Deliberately NOT ported** — each listed so it does not port by inertia:
+
+- `LandingPage`'s web chrome: the marketing copy, the signed-out CTA layout
+  and the fold measurements. The app's first screen is the demo, not a
+  landing page.
+- The JSON hatch. Its removal on the web is still an open decision; the
+  mobile app starts without it.
+- `lib/pendingUrl.ts`. It exists to carry a pasted URL across the sign-up
+  navigation in `sessionStorage`; on mobile sign-in is in-app and the value
+  lives in component state.
+- The service worker and everything web-push-specific in
+  `NotificationSetting` (install instructions, the Safari gesture rules).
+  Native push has none of those constraints; it has the Expo token instead.
 
 ## 2. Global recipe search inside the app
 
@@ -1138,6 +1204,13 @@ and the text change carries the whole signal.
   it verified against a stub push service over real TLS — sent, pruned on 410,
   retry bounded — and covered by `push.db.test.ts`.
 
+  **Since Sep 10, a second delivery arm for the native app** (see the mobile
+  section): an Expo push token in the same table, relayed through Expo's
+  push service, needing no configuration at all — so the dispatcher now
+  starts whether or not the VAPID keys are set. The wake-up problem below is
+  unchanged by it: the arm is how a due timer reaches a phone, not what makes
+  it due while the deployment sleeps.
+
   **What is wired today is a bandaid:** an in-process interval
   (`startTimerDispatch`, 30s, the shape of `startSessionSweep`) that runs only
   while the process happens to be alive. On Autoscale that means while the app
@@ -1197,10 +1270,11 @@ and the text change carries the whole signal.
   unaffected.
 
   **What could not be verified in the container**, and has to be checked by
-  hand on a real device: that an iPhone actually receives a push. WebKit is
-  not installed here and the deployed site is unreachable from the agent
-  proxy, so what is proven is registration, subscription round-trip, the
-  claim/fan-out/prune logic and the config posture — not delivery.
+  hand on a real device: that an iPhone actually receives a push, on either
+  arm. WebKit is not installed here, Expo's push service and the deployed
+  site are unreachable from the agent proxy, so what is proven is
+  registration, subscription round-trip, the claim/fan-out/prune logic, the
+  Expo request shape against a stub, and the config posture — not delivery.
 
 - **The subscription paywall: BUILT, SWITCHED OFF.** One recipe per free
   account, $1.99/mo unlimited. Every line of it ships inert: with
@@ -1270,10 +1344,17 @@ and the text change carries the whole signal.
   Stripe status translation. **Before switching anything on**, run a test-mode
   checkout end to end and confirm a webhook writes a `subscriptions` row.
 
-  **Still to build when the App Store build happens:** a StoreKit adapter
-  (`artifacts/api-server/src/lib/billing/apple.ts` plus a client purchase handler registered
-  through `setPurchaseHandler`), and receipt validation. Nothing else moves —
-  that is the point of the seam.
+  **The App Store adapter is now built** (Sep 10): `artifacts/api-server/src/lib/billing/apple.ts`
+  and `routes/billingApple.ts` — signed-transaction verification, Server
+  Notifications V2, the status translation (billing retry and grace period
+  are `grace`, Apple's window, never a timer here), and the account binding
+  through `appAccountToken`. What is still to build is the client purchase
+  handler registered through `setPurchaseHandler` (Phase 3 in the mobile
+  section) and the App Store Connect setup the README lists. Nothing else
+  moved — that was the point of the seam, and it held: not one line of
+  entitlement.ts changed. Unverified, and unverifiable from the container: a
+  real Apple-signed payload; the preflight's test notification is the first
+  exercise of that.
 
 ### Closed, kept for the record
 

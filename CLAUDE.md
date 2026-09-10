@@ -51,6 +51,58 @@ committed `.pgtest/`, the live test-database data dir, which could not even
 start on another machine. Build state and data directories describe one
 machine at one moment; git makes them lies on every other machine.
 
+## Verified here is not verified on Replit
+
+The container this work is done in differs from the Replit workspace and
+the deployment in ways that have each produced a "passes here, fails there"
+at least once. Say which of these applied when reporting something verified,
+and close the ones that can be closed:
+
+- **Node 22 here, Node 24 there** (`.replit` lists `nodejs-24`; nothing pins
+  `engines`). A Node 24 binary is one command away and the suite runs under
+  it unchanged — do this for anything touching the runtime, the bundle, or
+  `node --test`:
+
+  ```sh
+  N=$(npx -y node@24 -e 'console.log(process.execPath)' | tail -1)
+  DATABASE_URL=$(bash scripts/test-db.sh url) $N scripts/run-tests.mjs
+  ```
+
+- **The workspace links were made by THIS container's install.** Every
+  `workspace:*` dependency is a symlink `pnpm install` creates, and a merge
+  on Replit whose post-merge hook is cut short leaves them missing — the
+  mobile app crashed on load that way on Sep 9 while everything here
+  passed. `scripts/check-workspace-links.mjs` now runs before the test
+  runner and the dev server and names what is missing; the metro config
+  aliases the model package so the app boots regardless. If you add a
+  workspace dependency, the check covers it automatically.
+- **`DATABASE_URL` is set in this shell, to a non-local placeholder.** The
+  test guard refuses it (outcome three in the table below), which LOOKS like
+  the designed behaviour and hides a broken skip path — that is how
+  `@workspace/db`'s import-time throw went unnoticed. The skip path is
+  `env -u DATABASE_URL pnpm test`, and the skip count is the assertion.
+- **This shell is root; Replit's is not.** Postgres refuses to run as root,
+  so here the test database is `chown -R postgres .pgtest` and
+  `su postgres -c 'bash scripts/test-db.sh run'`. On Replit `pnpm run
+  test:db` is enough. The script resolves `pnpm` next to `node` for exactly
+  this case.
+- **The deployment build is a different command from anything the tests
+  run.** Run it verbatim before committing anything that touches
+  `.replit`, a build script, a package's `exports`, or a new dependency:
+  `pnpm install --frozen-lockfile && BASE_PATH=/ PORT=5000 pnpm --filter
+  ./artifacts/reduction run build && pnpm --filter @workspace/api-server run
+  build`, then boot `dist/index.mjs` with `NODE_ENV=production` and a `PORT`
+  and hit `/api/health`.
+- **The network is not the same network.** The agent proxy answers 403 to
+  the deployed site, Apple's hosts (`api.storekit.apple.com`, `apple.com`'s
+  certificate downloads, `appleid.apple.com`), Expo's push service and
+  Stripe. `developer.apple.com` and the npm registry are reachable. Anything
+  that talks to those services is proven here against a loopback stub and
+  has to be exercised from a deployment — the preflight routes exist for
+  that.
+- **No WebKit, no phone.** See the mobile section below; a Chromium
+  "iPhone 13" is a viewport, not Safari.
+
 ## How work gets committed
 
 **Commit directly to `main` and push.** Do not create a branch, and do not
@@ -166,6 +218,19 @@ an in-process interval, `POST /api/timers/dispatch` behind a shared secret, or
 a direct import from a job that runs a command. **Changing the trigger must
 never mean editing that file.**
 
+**There are two delivery arms and one table.** `push_subscriptions.endpoint`
+holds either a web push URL or an Expo push token (`ExponentPushToken[…]`),
+and the token's shape — `subscriptionKind` in `lib/push.ts` — picks the arm.
+Expo rows store empty strings in the NOT NULL key columns; there is no
+`kind` column to keep in step. The Expo arm needs no configuration, so
+`dispatchDueTimers` and `startTimerDispatch` are NOT gated on `pushConfig()`
+any more — a web target met without VAPID keys is "unconfigured", which is
+neither counted nor retried. `POST /api/push/subscribe` takes
+`{ expoPushToken }` with no VAPID gate and the web shape with one. Expo's
+service rather than APNs directly, because Expo Go can only produce an Expo
+token and the service needs no Apple key; a direct-APNs arm would be a third
+kind and a third branch, nothing more.
+
 What is wired is the first: `startTimerDispatch()`, a 30s interval in the
 shape of `startSessionSweep`, running only while the process happens to be
 alive. The published deployment is Autoscale, which scales to zero, so that
@@ -213,10 +278,12 @@ inside a user gesture that Safari has not seen an `await` spend; and the
 service worker registration must already exist when the tap lands, which is
 why `initPush()` runs from `main.tsx` at boot and never from the handler.
 
-**Delivery to an iPhone cannot be verified here.** WebKit is not installed and
-the deployed site is unreachable from the agent proxy. What the suite proves
-is registration, the subscription round-trip, the claim/fan-out/prune logic
-and the config posture — not that a phone buzzes. That needs a real device.
+**Delivery to an iPhone cannot be verified here, on either arm.** WebKit is
+not installed, and the deployed site and Expo's push service are unreachable
+from the agent proxy. What the suite proves is registration, the subscription
+round-trip, the claim/fan-out/prune logic, the Expo request shape and ticket
+handling against a loopback stub, and the config posture — not that a phone
+buzzes. That needs a real device.
 
 ## Sign in with Apple: four things that fail silently
 
