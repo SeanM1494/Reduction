@@ -17,9 +17,10 @@ import { users } from "@workspace/db";
 import { clearCookie, serializeCookie } from "../lib/cookies";
 import {
   consumeAuthState,
+  consumeMobileHandoff,
   createAuthState,
+  createMobileHandoff,
   createSession,
-  newToken,
   revokeSession,
   SESSION_COOKIE,
 } from "../lib/sessions";
@@ -245,41 +246,16 @@ function mobileRedirect(
 }
 
 /**
- * One-time codes standing in for a session token in a deep link.
+ * One-time codes standing in for a sign-in in a deep link.
  *
- * The token itself is never put in a URL: a deep link can end up in OS-level
- * logs or a screenshot, and a session token is bearer credential for as long
- * as it lives (90 days — see SESSION_TTL_MS). So the callback hands the app a
- * short-lived, single-use code instead, and the app immediately trades it for
- * the real token over a POST body (see /mobile/exchange below).
- *
- * In-memory and process-local, like the extraction rate limiter in
- * routes/recipes.ts — a five-minute window is long gone by the time a
- * redeploy would matter, and the cost of losing one in-flight handoff on a
- * restart (the visitor retries sign-in) is far less than a database table
- * earns its keep for.
+ * The session token itself is never put in a URL: a deep link can end up in
+ * OS-level logs or a screenshot, and a session token is a bearer credential
+ * for as long as it lives (90 days — see SESSION_TTL_MS). So the callback
+ * hands the app a short-lived, single-use code instead, and the app trades it
+ * for a real token over a POST body (see /mobile/exchange below). The code
+ * lives in the DATABASE — see createMobileHandoff in lib/sessions.ts for the
+ * Autoscale failure that the in-memory version of this produced.
  */
-interface MobileHandoff {
-  token: string;
-  expiresAt: number;
-}
-const MOBILE_HANDOFF_TTL_MS = 5 * 60 * 1000;
-const mobileHandoffs = new Map<string, MobileHandoff>();
-
-function createMobileHandoff(token: string): string {
-  const now = Date.now();
-  for (const [k, v] of mobileHandoffs) if (v.expiresAt <= now) mobileHandoffs.delete(k);
-  const code = newToken();
-  mobileHandoffs.set(code, { token, expiresAt: now + MOBILE_HANDOFF_TTL_MS });
-  return code;
-}
-
-function consumeMobileHandoff(code: string): MobileHandoff | null {
-  const found = mobileHandoffs.get(code);
-  if (!found) return null;
-  mobileHandoffs.delete(code);
-  return found.expiresAt > Date.now() ? found : null;
-}
 
 /** A recipe URL is the only thing we will carry through a handshake, and only
  *  if it plausibly is one. Anything else is dropped rather than rejected —
@@ -379,18 +355,19 @@ authRouter.get("/google/callback", async (req: Request, res: Response) => {
       displayName: identity.displayName,
     });
 
-    const { token } = await createSession(userId);
-
     // The mobile app has no cookie jar of its own — it trades a one-time
-    // code for this same token over POST /mobile/exchange instead. No trial
-    // to claim here: the mobile handshake never carries one (its start route
-    // passes trialId: null), since the free extraction it would refer to
-    // happened, if at all, in the app's own fetch calls, not this browser.
+    // code for a token over POST /mobile/exchange instead, and the session
+    // is minted THERE, not here, so nothing exists for a handoff nobody
+    // redeems. No trial to claim here: the mobile handshake never carries one
+    // (its start route passes trialId: null), since the free extraction it
+    // would refer to happened, if at all, in the app's own fetch calls, not
+    // this browser.
     if (isMobile) {
-      const handoffCode = createMobileHandoff(token);
+      const handoffCode = await createMobileHandoff(userId);
       return res.redirect(mobileRedirect({ code: handoffCode }, pending.redirectUri ?? undefined));
     }
 
+    const { token } = await createSession(userId);
     setSessionCookie(res, token);
 
     /**
@@ -560,15 +537,14 @@ authRouter.post(
         displayName,
       });
 
-      const { token } = await createSession(userId);
-
       if (isMobile) {
-        const handoffCode = createMobileHandoff(token);
+        const handoffCode = await createMobileHandoff(userId);
         return res.redirect(
           mobileRedirect({ code: handoffCode }, pending.redirectUri ?? undefined)
         );
       }
 
+      const { token } = await createSession(userId);
       setSessionCookie(res, token);
 
       const trialId = pending.trialId ?? readTrialId(req);
@@ -625,15 +601,22 @@ authRouter.get("/mobile/apple/start", async (req: Request, res: Response) => {
  * fine, because it lived for at most five minutes in a redirect the OS
  * delivered directly to this one app.
  */
-authRouter.post("/mobile/exchange", (req: Request, res: Response) => {
+authRouter.post("/mobile/exchange", async (req: Request, res: Response) => {
   const code = typeof req.body?.code === "string" ? req.body.code : null;
   if (!code) return res.status(400).json({ error: "Missing code." });
 
-  const handoff = consumeMobileHandoff(code);
-  if (!handoff) {
-    return res.status(400).json({ error: "That sign-in attempt expired. Please try again." });
+  try {
+    const handoff = await consumeMobileHandoff(code);
+    if (!handoff) {
+      return res.status(400).json({ error: "That sign-in attempt expired. Please try again." });
+    }
+    // Minted here, on redemption — see createMobileHandoff in lib/sessions.ts.
+    const { token } = await createSession(handoff.userId);
+    return res.json({ token });
+  } catch (e) {
+    console.error("[auth:mobile:exchange]", (e as Error).message);
+    return res.status(500).json({ error: "Could not complete sign-in." });
   }
-  return res.json({ token: handoff.token });
 });
 
 // ------------------------------------------------------------------ claim --

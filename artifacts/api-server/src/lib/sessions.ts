@@ -158,6 +158,60 @@ export async function consumeAuthState(
   };
 }
 
+// ---------------------------------------------------------- mobile handoff --
+
+/**
+ * One-time codes standing in for a sign-in in a deep link (the mobile app's
+ * OAuth handshake — see routes/auth.ts, /mobile/exchange).
+ *
+ * IN THE DATABASE, NOT IN PROCESS MEMORY, and that is the whole point. The
+ * first version kept these in a Map, reasoning that a five-minute window is
+ * gone long before a redeploy matters. It missed that the deployment is
+ * Autoscale: the callback (a browser GET that mints the code) and the
+ * exchange (the app's POST a second later) are two requests with no affinity,
+ * and when they land on different instances — or the only instance is
+ * recycled between them — the code was never seen by the process asked to
+ * redeem it. Every such sign-in ended in "That sign-in attempt expired", with
+ * nothing in any log, because nothing had gone wrong on either instance.
+ *
+ * Rows live in auth_states, which already has the property a handoff needs:
+ * `DELETE ... RETURNING` makes redemption single-use even when two requests
+ * race, and the sweep removes what nobody redeemed. The row carries the
+ * USER ID, not a session token — the session is minted only when the code is
+ * redeemed, so no bearer credential is ever stored raw (the sessions table
+ * holds only hashes, and this must not become the exception) and no session
+ * exists for a sign-in nobody completed. It rides in `pkce_verifier`, the
+ * column for the server-side secret half of a single-use handshake; a
+ * dedicated column is the tidier shape and is a one-line ALTER when the next
+ * schema change is hand-run anyway.
+ */
+export const MOBILE_HANDOFF_TTL_MS = 1000 * 60 * 5;
+const MOBILE_HANDOFF_PROVIDER = "mobile-handoff";
+
+export async function createMobileHandoff(userId: string): Promise<string> {
+  const code = newToken();
+  await getDb().insert(authStates).values({
+    state: code,
+    provider: MOBILE_HANDOFF_PROVIDER,
+    pkceVerifier: userId,
+    expiresAt: new Date(Date.now() + MOBILE_HANDOFF_TTL_MS),
+  });
+  return code;
+}
+
+/** Redeems a code exactly once. Null for unknown, already-redeemed, expired,
+ *  or a state row that is not a handoff at all (provider scoping means a
+ *  leaked OAuth `state` can never be traded for a session). */
+export async function consumeMobileHandoff(code: string): Promise<{ userId: string } | null> {
+  const [row] = await getDb()
+    .delete(authStates)
+    .where(and(eq(authStates.state, code), eq(authStates.provider, MOBILE_HANDOFF_PROVIDER)))
+    .returning();
+  if (!row || !row.pkceVerifier) return null;
+  if (new Date(row.expiresAt).getTime() <= Date.now()) return null;
+  return { userId: row.pkceVerifier };
+}
+
 // ------------------------------------------------------------------ sweep --
 
 /** Deletes everything already past its expiry. Safe to call at any time. */

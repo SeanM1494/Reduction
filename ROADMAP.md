@@ -122,6 +122,15 @@ builds on the Diagram until that verdict. The mobile artifact's last local
 model copy was folded into `lib/recipe-model` in this phase, so the
 "first act of real mobile work" above is done.
 
+**Sign-in on the deployment — FIXED (Sep 10).** The handshake's one-time
+handoff code lived in process memory on an Autoscale deployment, so the
+app's exchange request could land on an instance that never minted the
+code: "That sign-in attempt expired" on the phone, nothing in the logs. It
+is a database row now, and the session is minted when the code is redeemed
+(see CLAUDE.md, "Nothing that spans two requests may live in process
+memory"). Verified against Postgres through the real router; not yet
+verified on the deployment, which is the only place the bug reproduced.
+
 **Phase 1 — the read-only app.** Sign-in (exists) → library list →
 RecipeView with the proven diagram, StepsMode, servings and reorder →
 extraction (URL, text, photo). At the end of this phase the app is usable

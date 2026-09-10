@@ -107,6 +107,29 @@ and close the ones that can be closed:
 - **No WebKit, no phone.** See the mobile section below; a Chromium
   "iPhone 13" is a viewport, not Safari.
 
+## Nothing that spans two requests may live in process memory
+
+The published deployment is Autoscale: zero to several instances, no
+request affinity, any instance recyclable between one request and the next.
+The mobile sign-in handoff ignored that. The OAuth callback minted a one-time
+code into a `Map` and the app's `POST /mobile/exchange` a second later asked
+for it — and whenever the two requests landed on different instances, or the
+only instance had been replaced, the code had never existed where it was
+looked up. Every such sign-in ended in "That sign-in attempt expired", and
+nothing in any log said why, because nothing had gone wrong on either
+instance. It worked in every container and every single-instance test, which
+is the signature of this class. The handoff is now a row in `auth_states`
+(`createMobileHandoff`/`consumeMobileHandoff` in `lib/sessions.ts`), and the
+session is minted on redemption rather than stored.
+
+The rule: **if request B needs something request A produced, it goes in the
+database.** Process memory is acceptable only where a miss is harmless — the
+extraction rate limiter and the admin throttle are both per-instance on
+purpose, and both fail OPEN across instances, which is the only way process
+memory may fail here. If you add a `Map` that a later request reads, ask
+what happens when that request is served by a process that never saw the
+write.
+
 ## How work gets committed
 
 **Commit directly to `main` and push.** Do not create a branch, and do not
@@ -133,19 +156,19 @@ them is the whole point:
 
 | result | meaning |
 |---|---|
-| ***n* pass, 101 skipped** | no `DATABASE_URL` at all. Fine on a machine with no Postgres. |
-| ***n*+101 pass, 0 skipped** | a local database with a current schema. This is the real gate — `pnpm run test:db` produces it. |
+| ***n* pass, 106 skipped** | no `DATABASE_URL` at all. Fine on a machine with no Postgres. |
+| ***n*+106 pass, 0 skipped** | a local database with a current schema. This is the real gate — `pnpm run test:db` produces it. |
 | **failures saying "Refusing to run database tests against …"** | `DATABASE_URL` in the shell points somewhere non-local — on Replit, that is production. Working as designed: use `pnpm run test:db`, which ignores the env var entirely. |
 | **failures naming a missing table** | a reachable local database whose schema is behind `lib/db/src/schema/schema.ts`. `test:db` re-pushes on every start, so this means a hand-run database — push it or use the script. |
 
 The total grows as suites are added — pin your expectation to the **skip
 count**, not the pass count (an earlier version of this table hard-coded
 23/39 and went stale within a week, so treat the number above as needing an
-edit whenever a database-backed suite is added). The 101 are eight suites:
+edit whenever a database-backed suite is added). The 106 are nine suites:
 `claim.db.test.ts` (the anonymous library), `trial.db.test.ts` (the free
 extraction), `cache.db.test.ts` (the URL alias and the "Instant" badge),
 `extractionLog.test.ts` (the cost table), `push.db.test.ts` (timer
-notifications) `access.db.test.ts` (the paywall), `admin.db.test.ts` (the operator lookup) and `billingApple.db.test.ts` (the App Store routes). The first two are transactional guarantees — all-or-nothing
+notifications) `access.db.test.ts` (the paywall), `admin.db.test.ts` (the operator lookup), `billingApple.db.test.ts` (the App Store routes) and `mobileHandoff.db.test.ts` (the mobile sign-in handoff). The first two are transactional guarantees — all-or-nothing
 rollback, idempotent repeats, never taking another user's rows. The third is a
 promise about correctness: that a normalised URL never serves a different page.
 The fourth guards a denominator — a cache hit that recorded a `via` would
@@ -154,8 +177,10 @@ fifth guards a claim that has to be atomic: two dispatchers racing must not
 buzz one phone twice. The sixth guards the arithmetic that decides whether
 somebody can use the app at all, and the seventh guards a route that reads
 other people's accounts, and the eighth guards the second provider's write path
-with Apple's signature stubbed at the adapter's seam. **The full suite — 346 tests
-at the time of writing — has been run against a real Postgres and passes 346/0.**
+with Apple's signature stubbed at the adapter's seam, and the ninth guards the
+one-time code that a phone's sign-in rides on, which has to be redeemable by an
+instance that never minted it. **The full suite — 351 tests at the time of
+writing — has been run against a real Postgres and passes 351/0.**
 
 **The skip path has to actually skip, and it once silently stopped doing so.**
 The Sep 8 migration's `lib/db/src/index.ts` read `DATABASE_URL` at module load
