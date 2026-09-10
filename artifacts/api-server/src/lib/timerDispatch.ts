@@ -166,8 +166,11 @@ function payloadFor(t: ClaimedTimer): TimerPayload {
  * consumed rather than retried, because there is nobody to tell.
  */
 export async function dispatchDueTimers(): Promise<DispatchResult> {
-  if (!pushConfig()) return { ...EMPTY };
-
+  // NOT gated on pushConfig(). The Expo arm needs no configuration, so a
+  // deployment with no VAPID keys can still owe a buzz to a phone running
+  // the native app. A web target met without keys comes back "unconfigured",
+  // which is neither a delivery nor a transient failure, and so is neither
+  // counted nor retried — the same treatment as a user with no devices.
   const claimed = await claimDueTimers();
   if (!claimed.length) return { ...EMPTY };
 
@@ -298,14 +301,17 @@ const DISPATCH_EVERY_MS = 30_000;
  * matters more here, because on Autoscale holding the process open is
  * literally the thing that costs money.
  *
- * Does nothing when push is unconfigured, and says so once rather than
- * waking up every 30 seconds to discover it again.
+ * Always starts, because the native arm (Expo push tokens, see push.ts) needs
+ * no configuration: a deployment with no VAPID keys set still has phones to
+ * notify. It logs once which arms are live so a missing web-push key is
+ * visible at boot rather than discovered as a toggle that never appears.
  */
 export function startTimerDispatch(): () => void {
-  if (!pushConfig()) {
-    console.log("[timers] push is not configured — dispatch not started.");
-    return () => {};
-  }
+  console.log(
+    pushConfig()
+      ? "[timers] dispatch started — web push and Expo push arms live."
+      : "[timers] dispatch started — Expo push arm only (VAPID keys unset, so no web push)."
+  );
 
   const pass = async () => {
     try {

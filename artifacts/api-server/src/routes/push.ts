@@ -12,6 +12,7 @@ import { Router, type Request, type Response } from "express";
 import { createHash, timingSafeEqual } from "node:crypto";
 import {
   deleteSubscription,
+  isExpoPushToken,
   pushConfig,
   saveSubscription,
 } from "../lib/push";
@@ -31,13 +32,46 @@ pushRouter.get("/config", (_req: Request, res: Response) => {
   res.json({ vapidPublicKey: cfg?.publicKey ?? null });
 });
 
+/**
+ * Two body shapes, one row.
+ *
+ *   web:    { endpoint: "https://…", keys: { p256dh, auth }, userAgent? }
+ *           — PushSubscription.toJSON(), needs the VAPID keys to be set.
+ *   native: { expoPushToken: "ExponentPushToken[…]", userAgent? }
+ *           — from expo-notifications' getExpoPushTokenAsync(), which needs
+ *           the EAS projectId in app.json and a physical device (the iOS
+ *           simulator cannot produce one). Needs NO server configuration.
+ *
+ * The token goes in the `endpoint` column and the key columns are stored
+ * empty; push.ts's `subscriptionKind` tells the two apart at send time. The
+ * VAPID gate applies to the web shape only — an Expo-only deployment must not
+ * 503 the phone because nobody generated web keys.
+ */
 pushRouter.post("/subscribe", async (req: Request, res: Response) => {
   const userId = req.session?.userId;
   if (!userId) return res.status(401).json({ error: "Sign in first." });
+
+  const { endpoint, keys, userAgent, expoPushToken } = req.body ?? {};
+  const ua = typeof userAgent === "string" ? userAgent.slice(0, 256) : null;
+
+  if (expoPushToken !== undefined) {
+    // Strict shape check: Expo's service rejects anything else, and it would
+    // do so much later, on a timer nobody is watching fail.
+    if (typeof expoPushToken !== "string" || !isExpoPushToken(expoPushToken)) {
+      return res.status(422).json({ error: "Malformed Expo push token." });
+    }
+    try {
+      await saveSubscription({ userId, endpoint: expoPushToken, p256dh: "", auth: "", userAgent: ua });
+      return res.json({ ok: true });
+    } catch (e) {
+      console.error("[push] expo subscribe failed:", (e as Error).message);
+      return res.status(500).json({ error: "Could not save the subscription." });
+    }
+  }
+
   if (!pushConfig())
     return res.status(503).json({ error: "Push is not configured." });
 
-  const { endpoint, keys, userAgent } = req.body ?? {};
   const p256dh = keys?.p256dh;
   const auth = keys?.auth;
 
@@ -55,13 +89,7 @@ pushRouter.post("/subscribe", async (req: Request, res: Response) => {
   }
 
   try {
-    await saveSubscription({
-      userId,
-      endpoint,
-      p256dh,
-      auth,
-      userAgent: typeof userAgent === "string" ? userAgent.slice(0, 256) : null,
-    });
+    await saveSubscription({ userId, endpoint, p256dh, auth, userAgent: ua });
     return res.json({ ok: true });
   } catch (e) {
     console.error("[push] subscribe failed:", (e as Error).message);

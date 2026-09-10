@@ -346,11 +346,21 @@ export const authStates = pgTable(
 export const pushSubscriptions = pgTable(
   "push_subscriptions",
   {
+    /**
+     * The address a notification is delivered to, and the row's identity.
+     * Either a web push endpoint (an https URL at the browser vendor's push
+     * service) or an Expo push token (`ExponentPushToken[…]`) from the
+     * native app. The shape discriminates the delivery arm — see
+     * `subscriptionKind` in api-server's lib/push.ts — so there is
+     * deliberately no `kind` column to keep in step with it.
+     */
     endpoint: text("endpoint").primaryKey(),
     userId: text("user_id")
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
-    /** The client's public key and auth secret, from PushSubscription.toJSON(). */
+    /** The client's public key and auth secret, from PushSubscription.toJSON().
+     *  Empty strings on an Expo row: Expo's service encrypts on its side, and
+     *  NOT NULL is kept so the web arm can never be handed a null key. */
     p256dh: text("p256dh").notNull(),
     auth: text("auth").notNull(),
     /** Display only — "iPhone, added 3 May" in Settings. Never matched on. */

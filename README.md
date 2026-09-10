@@ -78,6 +78,17 @@ artifacts/reduction/src/
 
 Timer notifications need three more secrets (four with the external-cron path): `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` (a `mailto:` or `https:` contact — Apple rejects anything else) and `TIMER_DISPATCH_SECRET`. With the VAPID pair unset the app runs normally and hides the notifications toggle; with `TIMER_DISPATCH_SECRET` unset, `POST /api/timers/dispatch` 404s rather than running unauthenticated. Generate a pair with `node -e "console.log(require('web-push').generateVAPIDKeys())"`.
 
+**Native (Expo) push needs no secrets.** The dispatcher has a second delivery
+arm for Expo push tokens, relayed through Expo's push service to APNs/FCM, and
+it runs whether or not the VAPID pair is set. The mobile app registers with
+`POST /api/push/subscribe` and a body of `{ "expoPushToken": "ExponentPushToken[…]" }`
+(from `expo-notifications`' `getExpoPushTokenAsync({ projectId })` — the EAS
+project id must be in `app.json`, and the iOS simulator cannot mint a token).
+Two optional variables: `EXPO_ACCESS_TOKEN` (an Expo access token; raises the
+service's per-token rate limits, sent as a bearer header when set) and
+`EXPO_PUSH_URL` (the test suite points it at a loopback stub; leave unset in
+production).
+
 ### Sign in with Apple
 
 Four secrets, all from the Apple Developer console:

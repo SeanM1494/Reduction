@@ -70,6 +70,107 @@ export interface TimerPayload {
 
 export type SendOutcome = "sent" | "gone" | "failed" | "unconfigured";
 
+// ---------------------------------------------------------------- native ---
+
+/**
+ * TWO DELIVERY ARMS SHARE ONE TABLE, and the `endpoint` column tells them
+ * apart. A web push endpoint is an https URL at the browser vendor's push
+ * service. A native subscription from the Expo app is an Expo push token —
+ * `ExponentPushToken[...]` — which is not a URL at all; it is stored in the
+ * same column because it plays the same role: the address a notification is
+ * delivered to, and the row's identity. Its `p256dh`/`auth` are empty
+ * strings, because Expo's service does the encryption on its side and the
+ * columns are NOT NULL. No schema change; a `kind` column would only restate
+ * what the endpoint's shape already says.
+ *
+ * WHY EXPO'S PUSH SERVICE AND NOT APNs DIRECTLY. The mobile app is an Expo
+ * app and is being tested in Expo Go, and Expo Go can only ever hand the app
+ * an Expo token — raw APNs device tokens exist only in a standalone build.
+ * Expo's service relays to APNs and FCM, needs no Apple key on this server,
+ * and is what expo-notifications produces. A direct-APNs arm is a third
+ * `subscriptionKind` and a third branch in sendPush if it is ever wanted; it
+ * would not change this table or the dispatcher.
+ */
+export type SubscriptionKind = "web" | "expo";
+
+const EXPO_TOKEN_RE = /^Expo(nent)?PushToken\[[A-Za-z0-9_-]+\]$/;
+
+export function isExpoPushToken(s: string): boolean {
+  return EXPO_TOKEN_RE.test(s);
+}
+
+export function subscriptionKind(endpoint: string): SubscriptionKind {
+  return isExpoPushToken(endpoint) ? "expo" : "web";
+}
+
+const EXPO_PUSH_URL_DEFAULT = "https://exp.host/--/api/v2/push/send";
+
+/** Overridable so the suite can point this at a local stub, the same way
+ *  ANTHROPIC_BASE_URL does for the preflight. */
+function expoPushUrl(): string {
+  return process.env.EXPO_PUSH_URL?.trim() || EXPO_PUSH_URL_DEFAULT;
+}
+
+/**
+ * One push to one Expo token.
+ *
+ * Expo answers every message with a "ticket": status ok, or status error with
+ * a `details.error` code. `DeviceNotRegistered` is the native equivalent of a
+ * web push 410 — the app was uninstalled or the token rotated — and is the
+ * only code that means "stop sending"; everything else is transient or a bug
+ * in the payload, and either way not a reason to delete the row.
+ *
+ * Needs no configuration: the service is public and rate-limited per token.
+ * EXPO_ACCESS_TOKEN raises those limits and is optional.
+ */
+async function sendExpo(target: PushTarget, payload: TimerPayload): Promise<SendOutcome> {
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    Accept: "application/json",
+  };
+  const accessToken = process.env.EXPO_ACCESS_TOKEN?.trim();
+  if (accessToken) headers.Authorization = `Bearer ${accessToken}`;
+
+  try {
+    const res = await fetch(expoPushUrl(), {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        to: target.endpoint,
+        title: payload.title,
+        body: payload.body,
+        // The whole payload rides in `data`, so the app's tap handler gets
+        // the same recipeId/stepId the web service worker does.
+        data: payload,
+        sound: "default",
+        priority: "high",
+        // Same reasoning as the web TTL: a cooking timer is worthless late.
+        ttl: 180,
+      }),
+      signal: AbortSignal.timeout(10_000),
+    });
+    const body = (await res.json().catch(() => ({}))) as {
+      data?: { status?: string; message?: string; details?: { error?: string } };
+      errors?: Array<{ code?: string; message?: string }>;
+    };
+    if (!res.ok || body.errors?.length) {
+      console.error(
+        `[push:expo] request failed (${res.status}):`,
+        body.errors?.[0]?.message ?? "no detail"
+      );
+      return "failed";
+    }
+    const ticket = body.data;
+    if (ticket?.status === "ok") return "sent";
+    if (ticket?.details?.error === "DeviceNotRegistered") return "gone";
+    console.error("[push:expo] ticket error:", ticket?.details?.error ?? ticket?.message ?? "unknown");
+    return "failed";
+  } catch (e) {
+    console.error("[push:expo] send failed:", (e as Error).message);
+    return "failed";
+  }
+}
+
 /**
  * One push to one device.
  *
@@ -83,6 +184,10 @@ export async function sendPush(
   target: PushTarget,
   payload: TimerPayload
 ): Promise<SendOutcome> {
+  // The native arm needs no VAPID keys, so it is checked BEFORE the config
+  // gate: an Expo-only deployment with no web push set up still delivers.
+  if (subscriptionKind(target.endpoint) === "expo") return sendExpo(target, payload);
+
   const cfg = pushConfig();
   if (!cfg) return "unconfigured";
   try {

@@ -20,9 +20,11 @@
  * hand on a real device — see CLAUDE.md.
  */
 
-import test from "node:test";
+import test, { after } from "node:test";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
+import express from "express";
+import { createServer, type Server } from "node:http";
 import { eq, inArray } from "drizzle-orm";
 import { getDb } from "../db";
 import { pushSubscriptions, timerNotifications, users } from "@workspace/db";
@@ -30,9 +32,12 @@ import { needsDatabase } from "./testdb";
 import {
   deleteSubscription,
   dropDeadSubscription,
+  resetPushConfigCache,
   saveSubscription,
+  subscriptionKind,
   subscriptionsFor,
 } from "./push";
+import { pushRouter } from "../routes/push";
 import { cancelTimer, claimDueTimers, scheduleTimer, sweepDispatchedTimers } from "./timerDispatch";
 
 const TABLES = ["users", "push_subscriptions", "timer_notifications"];
@@ -338,6 +343,132 @@ test("the sweep removes dispatched rows and leaves pending ones", async (t) => {
     assert.equal(left.length, 1, "a pending timer is never swept");
     assert.equal(left[0].recipeId, "pending");
   } finally {
+    await cleanup(userId);
+  }
+});
+
+// ------------------------------------------------------------- native arm ---
+
+const expoSub = (userId: string, n: number) => ({
+  userId,
+  endpoint: `ExponentPushToken[dbtest${n}${userId.replace(/[^A-Za-z0-9]/g, "").slice(0, 12)}]`,
+  p256dh: "",
+  auth: "",
+});
+
+test("an Expo token is stored in the same table and fans out beside web rows", async (t) => {
+  if (!(await needsDatabase(t, ...TABLES))) return;
+  const userId = await makeUser();
+  try {
+    // A phone running the native app and a laptop with the web app, one
+    // account: the timer is owed to both, and the dispatcher gets them in
+    // one query with no join and no kind column to keep in step.
+    await saveSubscription(sub(userId, 1));
+    await saveSubscription(expoSub(userId, 1));
+    await saveSubscription(expoSub(userId, 1)); // reopen the app: same row
+
+    const targets = await subscriptionsFor(userId);
+    assert.equal(targets.length, 2);
+    const kinds = targets.map((x) => subscriptionKind(x.endpoint)).sort();
+    assert.deepEqual(kinds, ["expo", "web"]);
+
+    // The key columns are NOT NULL and the Expo row satisfies that with
+    // empty strings — so a web target can never be handed a null key, and
+    // the Expo row never reaches web-push at all (sendPush branches first).
+    const expo = targets.find((x) => subscriptionKind(x.endpoint) === "expo")!;
+    assert.equal(expo.p256dh, "");
+    assert.equal(expo.auth, "");
+
+    // "gone" pruning works for a token exactly as for a URL.
+    await dropDeadSubscription(expo.endpoint);
+    assert.equal((await subscriptionsFor(userId)).length, 1);
+  } finally {
+    await cleanup(userId);
+  }
+});
+
+/**
+ * The route, driven through real Express with a stand-in for the session
+ * middleware: `req.session` is set from a header so each request can say who
+ * it is without minting cookies. What is under test is the gate — the web
+ * shape is refused without VAPID keys and the Expo shape is not.
+ */
+let routeServer: Server | null = null;
+let routeBase = "";
+async function listenPush(): Promise<string> {
+  if (routeBase) return routeBase;
+  const app = express();
+  app.use(express.json());
+  app.use((req, _res, next) => {
+    const u = req.header("x-test-user");
+    req.session = u ? { userId: u } : null;
+    next();
+  });
+  app.use("/api/push", pushRouter);
+  routeServer = createServer(app);
+  await new Promise<void>((r) => routeServer!.listen(0, "127.0.0.1", r));
+  const addr = routeServer.address();
+  routeBase = `http://127.0.0.1:${typeof addr === "object" && addr ? addr.port : 0}`;
+  return routeBase;
+}
+after(() => routeServer?.close());
+
+async function subscribe(userId: string | null, body: unknown) {
+  const res = await fetch(`${await listenPush()}/api/push/subscribe`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...(userId ? { "x-test-user": userId } : {}) },
+    body: JSON.stringify(body),
+  });
+  return { status: res.status, body: (await res.json().catch(() => ({}))) as Record<string, any> };
+}
+
+test("POST /subscribe takes an Expo token with no VAPID keys set, and still refuses the web shape", async (t) => {
+  if (!(await needsDatabase(t, ...TABLES))) return;
+  const userId = await makeUser();
+  const saved = {
+    VAPID_PUBLIC_KEY: process.env.VAPID_PUBLIC_KEY,
+    VAPID_PRIVATE_KEY: process.env.VAPID_PRIVATE_KEY,
+    VAPID_SUBJECT: process.env.VAPID_SUBJECT,
+  };
+  delete process.env.VAPID_PUBLIC_KEY;
+  delete process.env.VAPID_PRIVATE_KEY;
+  delete process.env.VAPID_SUBJECT;
+  resetPushConfigCache();
+  try {
+    const token = expoSub(userId, 7).endpoint;
+
+    // Signed out: a push subscription is a standing permission to interrupt
+    // someone, and owner_key is a browser, not a person. Same rule both arms.
+    assert.equal((await subscribe(null, { expoPushToken: token })).status, 401);
+
+    // The web shape needs keys the server does not have — 503, as before.
+    const web = await subscribe(userId, {
+      endpoint: "https://push-test.invalid/x",
+      keys: { p256dh: "a", auth: "b" },
+    });
+    assert.equal(web.status, 503);
+
+    // The Expo shape needs nothing from the server.
+    const ok = await subscribe(userId, { expoPushToken: token, userAgent: "iPhone15,2" });
+    assert.equal(ok.status, 200, JSON.stringify(ok.body));
+    const rows = await subscriptionsFor(userId);
+    assert.equal(rows.length, 1);
+    assert.equal(rows[0].endpoint, token);
+    assert.equal(subscriptionKind(rows[0].endpoint), "expo");
+
+    // Anything that is not a token is refused up front rather than stored
+    // for Expo to reject on a timer nobody is watching.
+    for (const bad of ["", "not-a-token", "https://push-test.invalid/y", 42, null, "ExponentPushToken[]"]) {
+      const r = await subscribe(userId, { expoPushToken: bad });
+      assert.equal(r.status, 422, `expected 422 for ${JSON.stringify(bad)}`);
+    }
+    assert.equal((await subscriptionsFor(userId)).length, 1, "nothing malformed got stored");
+  } finally {
+    for (const [k, v] of Object.entries(saved)) {
+      if (v === undefined) delete process.env[k];
+      else process.env[k] = v;
+    }
+    resetPushConfigCache();
     await cleanup(userId);
   }
 });
