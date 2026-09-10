@@ -21,6 +21,8 @@ import { useColors, type Colors } from '@/hooks/useColors';
 import { fonts } from '@/constants/colors';
 import type { StepTimer } from '@/lib/api';
 
+const PERF_STRIP = __DEV__ || process.env.EXPO_PUBLIC_PERF_STRIP === '1';
+
 export function DemoScreen({ onClose }: { onClose: () => void }) {
   const colors = useColors();
   const styles = makeStyles(colors);
@@ -28,12 +30,15 @@ export function DemoScreen({ onClose }: { onClose: () => void }) {
   // the web landing page, one step visibly ready before any interaction.
   const [done, setDone] = useState<string[]>(['avocados']);
   const [timer, setTimer] = useState<StepTimer | null>(null);
-  // DEV ONLY: the Phase 0 kill-criterion read, taken in the real demo rather
-  // than on the spike route (which Expo Go could not be deep-linked into).
-  // The stress fixture and the frame meter ship in no build — __DEV__ is
-  // false in a release bundle and the branch is dead-code-eliminated.
+  // The Phase 0 kill-criterion read, taken in the real demo rather than on
+  // the spike route (which Expo Go could not be deep-linked into). The stress
+  // fixture and the frame meter show in a dev bundle, or in a release bundle
+  // built with EXPO_PUBLIC_PERF_STRIP=1 — the flag is inlined at build time,
+  // so a normal release build dead-code-eliminates the whole branch. The
+  // flag exists for exactly one purpose: a minified web export the phone can
+  // open in Safari to answer criterion 2 while Expo Go is walled off.
   const [stress, setStress] = useState(false);
-  const recipe = __DEV__ && stress ? STRESS_RECIPE : DEMO_RECIPE;
+  const recipe = PERF_STRIP && stress ? STRESS_RECIPE : DEMO_RECIPE;
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
@@ -42,7 +47,7 @@ export function DemoScreen({ onClose }: { onClose: () => void }) {
           <Text style={styles.backText}>‹ Back</Text>
         </Pressable>
         <Text style={styles.headerTitle}>Demo</Text>
-        {__DEV__ ? (
+        {PERF_STRIP ? (
           <Pressable
             style={styles.back}
             testID="demo-stress-toggle"
@@ -60,7 +65,7 @@ export function DemoScreen({ onClose }: { onClose: () => void }) {
       </View>
       {/* The meter positions itself top-right of its container; give it a
           strip of its own so it never covers the header's controls. */}
-      {__DEV__ ? (
+      {PERF_STRIP ? (
         <View style={{ height: 36 }}>
           <FpsMeter />
         </View>

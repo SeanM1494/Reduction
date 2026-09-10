@@ -138,7 +138,12 @@ one-step-at-a-time view, stays). The spike route stopped being reachable
 from Expo Go by deep link, so the Phase 0 device read moved into the real
 demo: in a dev bundle only, the demo header carries a "stress" toggle (the
 30-step fixture) and the frame meter sits under it. `__DEV__` guards both,
-so no release build ships them; remove them outright once criterion 2 is
+so no release build ships them, and a release build made with
+`EXPO_PUBLIC_PERF_STRIP=1` keeps them — that is how the phone got its read
+while Expo Go was walled off: `EXPO_PUBLIC_PERF_STRIP=1 npx expo export
+--platform web`, the bundle inlined into one HTML file and published as a
+Claude artifact, opened in mobile Safari (fonts fall back; nothing else
+differs). Remove the flag, the toggle and the meter once criterion 2 is
 recorded. `app/spike.tsx` and the `/spike` pass-through in `_layout.tsx`
 are now redundant and go with them. Verified in the RN-web export at three
 phone profiles (cells render, an op tap moves progress, the sticky column
