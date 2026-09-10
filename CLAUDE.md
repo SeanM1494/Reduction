@@ -68,6 +68,10 @@ and close the ones that can be closed:
   DATABASE_URL=$(bash scripts/test-db.sh url) $N scripts/run-tests.mjs
   ```
 
+  (`test-db.sh url` names the user that started the database — in this
+  container that is `postgres`, so run that line with `su postgres -c`
+  or paste `postgres://postgres@127.0.0.1:5433/reduction_test`.)
+
 - **The workspace links were made by THIS container's install.** Every
   `workspace:*` dependency is a symlink `pnpm install` creates, and a merge
   on Replit whose post-merge hook is cut short leaves them missing — the
