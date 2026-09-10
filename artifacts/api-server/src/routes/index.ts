@@ -1,5 +1,6 @@
 import { Router, type IRouter } from "express";
 import healthRouter from "./health";
+import { BUILD_COMMIT } from "../lib/buildInfo";
 import { authRouter } from "./auth";
 import { recipesRouter } from "./recipes";
 import { libraryRouter } from "./library";
@@ -12,7 +13,9 @@ import { adminRouter } from "./admin";
 const router: IRouter = Router();
 
 router.use(healthRouter);
-router.get("/health", (_req, res) => res.json({ ok: true }));
+// `commit` is the one fact that tells two deployments apart from outside —
+// see lib/buildInfo.ts for the sign-in trace that needed it.
+router.get("/health", (_req, res) => res.json({ ok: true, commit: BUILD_COMMIT }));
 
 router.use("/auth", authRouter);
 router.use("/recipes", recipesRouter);

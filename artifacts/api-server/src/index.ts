@@ -1,3 +1,4 @@
+import { BUILD_COMMIT } from "./lib/buildInfo";
 import app from "./app";
 import { logger } from "./lib/logger";
 import { startSessionSweep } from "./lib/sessions";
@@ -24,7 +25,7 @@ app.listen(port, (err) => {
     process.exit(1);
   }
 
-  logger.info({ port }, "Server listening");
+  logger.info({ port, commit: BUILD_COMMIT }, "Server listening");
 });
 
 void cleanupSeedRecipes();

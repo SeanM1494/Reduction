@@ -35,6 +35,7 @@ import {
 import { userIdForIdentity } from "../lib/accounts";
 import { claimAnonymousLibrary } from "../lib/claim";
 import { claimTrialRecipe, readTrialId } from "../lib/trial";
+import { BUILD_COMMIT } from "../lib/buildInfo";
 
 export const authRouter = Router();
 
@@ -234,6 +235,21 @@ export function resolveMobileRedirect(raw: unknown): string {
  * / APPLE_CALLBACK_PATH), so nothing about their console configuration
  * changes for the mobile handshake to exist.
  */
+/** One line per minted handoff, so a deployment log shows which server did
+ *  the callback and where it sent the phone — never the code itself. */
+function logMobileHandoff(provider: string, userId: string, redirectUri: string | null | undefined): void {
+  let target = DEFAULT_MOBILE_REDIRECT;
+  try {
+    const u = new URL(redirectUri ?? DEFAULT_MOBILE_REDIRECT);
+    target = `${u.protocol}//${u.host}${u.pathname}`;
+  } catch {
+    /* keep the default */
+  }
+  console.log(
+    `[auth:mobile] ${provider} callback on ${BUILD_COMMIT}: handoff minted for user ${userId.slice(0, 8)}… → ${target}`
+  );
+}
+
 function mobileRedirect(
   params: Record<string, string | null | undefined>,
   base: string = DEFAULT_MOBILE_REDIRECT
@@ -364,6 +380,7 @@ authRouter.get("/google/callback", async (req: Request, res: Response) => {
     // this browser.
     if (isMobile) {
       const handoffCode = await createMobileHandoff(userId);
+      logMobileHandoff("google", userId, pending.redirectUri);
       return res.redirect(mobileRedirect({ code: handoffCode }, pending.redirectUri ?? undefined));
     }
 
@@ -539,6 +556,7 @@ authRouter.post(
 
       if (isMobile) {
         const handoffCode = await createMobileHandoff(userId);
+        logMobileHandoff("apple", userId, pending.redirectUri);
         return res.redirect(
           mobileRedirect({ code: handoffCode }, pending.redirectUri ?? undefined)
         );
@@ -608,10 +626,18 @@ authRouter.post("/mobile/exchange", async (req: Request, res: Response) => {
   try {
     const handoff = await consumeMobileHandoff(code);
     if (!handoff) {
+      // The one line to look for when a phone reports "expired". A code that
+      // was minted seconds ago by a callback on ANOTHER server (Google calls
+      // back to PUBLIC_BASE_URL, which is the deployment, while the app talks
+      // to whichever server EXPO_PUBLIC_DOMAIN names) is only visible here if
+      // that server also runs the database-backed handoff — check both
+      // /api/health commits before suspecting the clock.
+      console.warn(`[auth:mobile] exchange refused on ${BUILD_COMMIT}: no live handoff for that code`);
       return res.status(400).json({ error: "That sign-in attempt expired. Please try again." });
     }
     // Minted here, on redemption — see createMobileHandoff in lib/sessions.ts.
     const { token } = await createSession(handoff.userId);
+    console.log(`[auth:mobile] exchange ok on ${BUILD_COMMIT}: session minted for user ${handoff.userId.slice(0, 8)}…`);
     return res.json({ token });
   } catch (e) {
     console.error("[auth:mobile:exchange]", (e as Error).message);

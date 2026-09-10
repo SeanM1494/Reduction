@@ -158,6 +158,23 @@ is the signature of this class. The handoff is now a row in `auth_states`
 (`createMobileHandoff`/`consumeMobileHandoff` in `lib/sessions.ts`), and the
 session is minted on redemption rather than stored.
 
+**A phone's sign-in touches THREE servers, and that is why "it works in
+the workspace" proved nothing.** The app talks to whichever host
+`EXPO_PUBLIC_DOMAIN` names (the workspace dev server, in development).
+Google calls back to `PUBLIC_BASE_URL`, which is the deployment — the
+redirect URI registered in Google's console, shared by workspace and
+deployment through the same secrets. The app then redeems its code on the
+first server again. So: start on dev, callback on production, exchange on
+dev, and the handoff has to cross from production's process to dev's.
+The in-memory version could never do that, whatever the instance count.
+Traced on Sep 11 with two api-server builds sharing one database and a
+stand-in Google: both on the fixed commit → signed in in 134ms; both on
+the old commit → "That sign-in attempt expired"; dev fixed and production
+old → "expired" just the same. **A fix in this path is not deployed until
+BOTH servers run it.** `GET /api/health` reports `commit` for exactly this
+question, and the `[auth:mobile]` log lines carry it, so a trace across
+two deployments names the one that is behind.
+
 The rule: **if request B needs something request A produced, it goes in the
 database.** Process memory is acceptable only where a miss is harmless — the
 extraction rate limiter and the admin throttle are both per-instance on

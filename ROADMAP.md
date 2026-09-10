@@ -133,8 +133,16 @@ app's exchange request could land on an instance that never minted the
 code: "That sign-in attempt expired" on the phone, nothing in the logs. It
 is a database row now, and the session is minted when the code is redeemed
 (see CLAUDE.md, "Nothing that spans two requests may live in process
-memory"). Verified against Postgres through the real router; not yet
-verified on the deployment, which is the only place the bug reproduced.
+memory"). Sep 11: reproduced and traced end to end with two api-server
+builds on one database and a stand-in Google — the real topology is start
+on the workspace dev server, callback on the DEPLOYMENT (Google calls back
+to `PUBLIC_BASE_URL`), exchange on the dev server. Both old → "expired";
+both fixed → signed in; dev fixed but deployment old → still "expired".
+So the fix is live only once the deployment is republished on a commit
+≥ 5bbed83; `GET /api/health` now reports `commit` on both hosts so that
+can be checked rather than assumed. The expiry windows are not a factor:
+the auth state lives 10 minutes and the handoff 5, against a round trip
+measured in seconds.
 
 **Phase 1, first slice — SHIPPED (Sep 10): the diagram is the Overview.**
 `RecipeScreen`'s Overview tab renders `DiagramView` for the demo and for a
