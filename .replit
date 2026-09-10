@@ -57,7 +57,13 @@ expertMode = true
 
 [postMerge]
 path = "scripts/post-merge.sh"
-timeoutMs = 20000
+# 120s, the pre-migration value. The migration cut it to 20s, which is not
+# enough for `pnpm install --frozen-lockfile` to finish linking a workspace
+# package on a cold merge — the mobile app then crashed on load because
+# node_modules/@workspace/recipe-model was never created. (metro.config.js
+# now aliases that package so the app boots either way; this is so the
+# install actually completes for everything else.)
+timeoutMs = 120000
 
 [nix]
 channel = "stable-25_05"
