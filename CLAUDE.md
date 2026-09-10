@@ -116,6 +116,33 @@ and close the ones that can be closed:
   port (`fuser 8090/tcp`, then the pid), wait until the port is free, and
   check the new log has no "another window" line before trusting a bundle.
 
+## Expo Go refuses a dev server that cannot sign for it
+
+"There was a problem running the requested project. You're signed in to Expo
+Go as replit-private-…, but not signed in to Expo CLI." is not an app error;
+no line of the app has run. A signed-in Expo Go asks the dev server for a
+SIGNED manifest (`expo-expect-signature`), and the server can only sign with a
+development certificate fetched for the account it is logged in as, for an
+EAS project id. Two things therefore have to be true, and the scaffold made
+neither visible:
+
+- **Expo CLI must be logged in as the same account.** The scaffold did this
+  with `create-launch login --session "$REPLIT_EXPO_SESSION_SECRET" || true`
+  — a network call whose failure was swallowed, so an unset variable, an
+  expired secret or a missing binary all produced a server that started fine
+  and a phone that could not open it. `scripts/expo-session.mjs` now writes
+  the session the way Expo CLI stores it (no network), asks `expo whoami`,
+  and prints who the server is — or exactly what to do when it is nobody.
+- **`app.json` needs `extra.eas.projectId`.** Without one the CLI's
+  codesigning path returns null with a debug-level note and the manifest goes
+  out unsigned, however well the CLI is logged in. It has none today, and the
+  script says so at every start.
+
+Until both hold, the way to open the app is with **Expo Go signed out**
+(Profile → Sign out, then scan the QR again): a signed-out Expo Go does not
+ask for a signature. Replit's QR flow signs the phone in, which is how a
+working setup turns into this error overnight without a code change.
+
 ## Nothing that spans two requests may live in process memory
 
 The published deployment is Autoscale: zero to several instances, no

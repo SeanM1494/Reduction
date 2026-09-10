@@ -89,6 +89,21 @@ service's per-token rate limits, sent as a bearer header when set) and
 `EXPO_PUSH_URL` (the test suite points it at a loopback stub; leave unset in
 production).
 
+### Running the mobile app in Expo Go
+
+`pnpm --filter ./artifacts/reduction-mobile run dev` is what Replit's mobile
+workflow runs. It starts with `scripts/expo-session.mjs`, which signs Expo CLI
+in from `REPLIT_EXPO_SESSION_SECRET` and prints who the server is, then
+starts Metro through Replit's packager proxy.
+
+**If the phone shows "signed in to Expo Go as replit-private-…, but not
+signed in to Expo CLI", no line of the app has run.** A signed-in Expo Go
+demands a signed manifest, and signing needs both a logged-in CLI and an EAS
+project id in `app.json` (`extra.eas.projectId`), which this app does not
+have yet. Until it does, open the app with Expo Go **signed out**
+(Profile → Sign out, scan the QR again). The Metro log says at every start
+which of the two conditions is missing.
+
 ### Sign in with Apple
 
 Four secrets, all from the Apple Developer console:
