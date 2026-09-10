@@ -77,15 +77,15 @@ them is the whole point:
 
 | result | meaning |
 |---|---|
-| ***n* pass, 78 skipped** | no `DATABASE_URL` at all. Fine on a machine with no Postgres. |
-| ***n*+78 pass, 0 skipped** | a local database with a current schema. This is the real gate — `pnpm run test:db` produces it. |
+| ***n* pass, 89 skipped** | no `DATABASE_URL` at all. Fine on a machine with no Postgres. |
+| ***n*+89 pass, 0 skipped** | a local database with a current schema. This is the real gate — `pnpm run test:db` produces it. |
 | **failures saying "Refusing to run database tests against …"** | `DATABASE_URL` in the shell points somewhere non-local — on Replit, that is production. Working as designed: use `pnpm run test:db`, which ignores the env var entirely. |
 | **failures naming a missing table** | a reachable local database whose schema is behind `lib/db/src/schema/schema.ts`. `test:db` re-pushes on every start, so this means a hand-run database — push it or use the script. |
 
 The total grows as suites are added — pin your expectation to the **skip
 count**, not the pass count (an earlier version of this table hard-coded
 23/39 and went stale within a week, so treat the number above as needing an
-edit whenever a database-backed suite is added). The 78 are seven suites:
+edit whenever a database-backed suite is added). The 89 are seven suites:
 `claim.db.test.ts` (the anonymous library), `trial.db.test.ts` (the free
 extraction), `cache.db.test.ts` (the URL alias and the "Instant" badge),
 `extractionLog.test.ts` (the cost table), `push.db.test.ts` (timer
@@ -97,8 +97,22 @@ silently corrupt every "what fraction" query the table exists to answer. The
 fifth guards a claim that has to be atomic: two dispatchers racing must not
 buzz one phone twice. The sixth guards the arithmetic that decides whether
 somebody can use the app at all, and the seventh guards a route that reads
-other people's accounts. **The full suite — 313 tests at the time of writing —
-has been run against a real Postgres and passes 313/0.**
+other people's accounts. **The full suite — 320 tests at the time of writing —
+has been run against a real Postgres and passes 320/0.**
+
+**The skip path has to actually skip, and it once silently stopped doing so.**
+The Sep 8 migration's `lib/db/src/index.ts` read `DATABASE_URL` at module load
+and threw when it was unset — so every file importing a *table* from
+`@workspace/db`, which is every route, library and test suite in the
+api-server, failed at import on a machine with no database. Eleven suites
+went from "skipped" to "failed to load", including ones with no database
+tests in them at all (`push.test.ts` imports `push.ts`, which imports the
+table). Nobody saw it for two days because every shell here has
+`DATABASE_URL` set — to a non-local placeholder, which the guard refuses with
+outcome three above, and outcome three looks like "working as designed". The
+package now creates its pool lazily (`getPool()`/`getDb()`), and importing a
+table costs nothing. If you touch that file, run `env -u DATABASE_URL pnpm
+test` once: the skip count above is the assertion.
 
 **`pnpm test` must never be run against production.** It reads `DATABASE_URL`,
 which on a deployed host is the live database — so running the suite there
