@@ -6,6 +6,10 @@ set -e
 cleanup() { kill 0 2>/dev/null; }
 trap cleanup EXIT INT TERM
 
+# Fail here, with the fix in the message, rather than in whichever server
+# first imports a workspace package that pnpm never got to link.
+node scripts/check-workspace-links.mjs
+
 PORT=3001 pnpm --filter @workspace/api-server run dev &
 PORT=5000 BASE_PATH=/ pnpm --filter ./artifacts/reduction run dev &
 wait -n

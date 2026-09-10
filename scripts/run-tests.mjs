@@ -15,6 +15,18 @@
 import { readdirSync } from "node:fs";
 import { join } from "node:path";
 import { spawnSync } from "node:child_process";
+import { checkWorkspaceLinks, reportMissing } from "./check-workspace-links.mjs";
+
+// Before anything else: an unlinked workspace fails inside the first test
+// file with "Cannot find package '@workspace/db'", which reads as a bug in
+// that file. Say what it actually is, and what fixes it.
+{
+  const missing = checkWorkspaceLinks();
+  if (missing.length) {
+    reportMissing(missing);
+    process.exit(1);
+  }
+}
 
 // reduction-mobile/components/diagram is PURE geometry (no react-native
 // import), which is what lets it run under plain node here. Anything in the
