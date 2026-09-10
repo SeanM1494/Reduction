@@ -77,19 +77,19 @@ them is the whole point:
 
 | result | meaning |
 |---|---|
-| ***n* pass, 89 skipped** | no `DATABASE_URL` at all. Fine on a machine with no Postgres. |
-| ***n*+89 pass, 0 skipped** | a local database with a current schema. This is the real gate — `pnpm run test:db` produces it. |
+| ***n* pass, 101 skipped** | no `DATABASE_URL` at all. Fine on a machine with no Postgres. |
+| ***n*+101 pass, 0 skipped** | a local database with a current schema. This is the real gate — `pnpm run test:db` produces it. |
 | **failures saying "Refusing to run database tests against …"** | `DATABASE_URL` in the shell points somewhere non-local — on Replit, that is production. Working as designed: use `pnpm run test:db`, which ignores the env var entirely. |
 | **failures naming a missing table** | a reachable local database whose schema is behind `lib/db/src/schema/schema.ts`. `test:db` re-pushes on every start, so this means a hand-run database — push it or use the script. |
 
 The total grows as suites are added — pin your expectation to the **skip
 count**, not the pass count (an earlier version of this table hard-coded
 23/39 and went stale within a week, so treat the number above as needing an
-edit whenever a database-backed suite is added). The 89 are seven suites:
+edit whenever a database-backed suite is added). The 101 are eight suites:
 `claim.db.test.ts` (the anonymous library), `trial.db.test.ts` (the free
 extraction), `cache.db.test.ts` (the URL alias and the "Instant" badge),
 `extractionLog.test.ts` (the cost table), `push.db.test.ts` (timer
-notifications) `access.db.test.ts` (the paywall) and `admin.db.test.ts` (the operator lookup). The first two are transactional guarantees — all-or-nothing
+notifications) `access.db.test.ts` (the paywall), `admin.db.test.ts` (the operator lookup) and `billingApple.db.test.ts` (the App Store routes). The first two are transactional guarantees — all-or-nothing
 rollback, idempotent repeats, never taking another user's rows. The third is a
 promise about correctness: that a normalised URL never serves a different page.
 The fourth guards a denominator — a cache hit that recorded a `via` would
@@ -97,8 +97,9 @@ silently corrupt every "what fraction" query the table exists to answer. The
 fifth guards a claim that has to be atomic: two dispatchers racing must not
 buzz one phone twice. The sixth guards the arithmetic that decides whether
 somebody can use the app at all, and the seventh guards a route that reads
-other people's accounts. **The full suite — 320 tests at the time of writing —
-has been run against a real Postgres and passes 320/0.**
+other people's accounts, and the eighth guards the second provider's write path
+with Apple's signature stubbed at the adapter's seam. **The full suite — 346 tests
+at the time of writing — has been run against a real Postgres and passes 346/0.**
 
 **The skip path has to actually skip, and it once silently stopped doing so.**
 The Sep 8 migration's `lib/db/src/index.ts` read `DATABASE_URL` at module load
@@ -318,7 +319,9 @@ collisions — and nothing needs one.
 ## The paywall: one recipe, and the rule about payment providers
 
 **ONLY `artifacts/api-server/src/lib/billing/stripe.ts` MAY IMPORT THE STRIPE SDK OR NAME A
-STRIPE-SHAPED FIELD.** Everything else asks `entitlementFor(userId)` and
+STRIPE-SHAPED FIELD, and only `artifacts/api-server/src/lib/billing/apple.ts` may import
+`@apple/app-store-server-library` or name an Apple one** (`originalTransactionId`,
+`autoRenewStatus`, a `BILLING_RETRY`). Everything else asks `entitlementFor(userId)` and
 branches on the answer. This is a rule, not a description of the current
 state, and it exists because the app is going to the App Store — where Apple
 requires IAP for a subscription unlocking in-app functionality — and probably
@@ -330,7 +333,17 @@ each store ADDS a provider. **Three live providers is the expected end state.**
 `subscriptions.provider` is an open string and `provider_ref` holds whatever
 that provider calls a subscription, so `google_play` is a new adapter file and
 a new value — no schema change, no migration. `access.db.test.ts` pins that by
-entitling an account through a provider no code mentions.
+entitling an account through a provider no code mentions. The second adapter
+now exists: `billing/apple.ts` writes `provider = 'apple'` with
+`provider_ref` = the original transaction id, from two routes in
+`routes/billingApple.ts` — the app's verify call and Apple's notifications —
+both signature-verified against Apple's root CAs (no shared secret exists; the
+JWS is the proof, which is why the notifications route 404s when the roots are
+not configured). **No real Apple-signed payload has ever been through it.**
+The suite stubs the verifier at the `AppleVerifier` seam and proves everything
+on this side of the signature; Apple's hosts and root certificates are both
+unreachable from the container. The preflight route's test notification is the
+first real exercise, and it has to be run from a deployment.
 
 The expensive failure is never the schema. It is provider vocabulary escaping
 into code that outlives the provider: a `current_period_end` in UI copy, a

@@ -88,7 +88,7 @@ const PEM_FOOTER = "-----END PRIVATE KEY-----";
  * base64 blob might be a PKCS#8 key or might be half a file, and silently
  * treating one as the other trades a clear failure for a confusing one.
  */
-function normalisePem(raw: string): string {
+export function normalisePem(raw: string): string {
   let s = raw;
 
   // BOM first: it hides in front of the header and defeats every startsWith.

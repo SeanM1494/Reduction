@@ -25,6 +25,7 @@ import { accountAccess, identities, subscriptions, users } from "@workspace/db";
 import { setEnforceOverrideAudited } from "../lib/billing/entitlement";
 import { createCoupon, listCoupons, normaliseCode } from "../lib/billing/coupons";
 import { appleConfig, clientSecret, describeKeyEnv } from "../lib/apple";
+import { appleIapConfig, describeAppleIapEnv, requestAppleTestNotification } from "../lib/billing/apple";
 import Anthropic from "@anthropic-ai/sdk";
 import { MODEL as EXTRACTION_MODEL } from "../lib/structureRecipe";
 
@@ -544,4 +545,38 @@ adminRouter.get("/coupons", async (req: Request, res: Response) => {
     console.error("[admin:coupons]", (e as Error).message);
     return res.status(500).json({ error: "Could not list codes." });
   }
+});
+
+/**
+ * GET /api/admin/preflight/apple-iap
+ *
+ * The App Store adapter's counterpart to /preflight/apple, for the same
+ * reason: every way it can be misconfigured produces one silent outcome — a
+ * notification Apple marks as failed in App Store Connect, with no detail
+ * reaching this side. So this reports what the RUNNING PROCESS holds: which
+ * root certificates parsed (subject and expiry, which are public), which
+ * environment it will accept, whether the Server API key parses, and the
+ * exact URL to register with Apple. Nothing secret is disclosed.
+ */
+adminRouter.get("/preflight/apple-iap", (req: Request, res: Response) => {
+  if (!requireAdmin(req, res)) return;
+  res.json(describeAppleIapEnv());
+});
+
+/**
+ * POST /api/admin/preflight/apple-iap/test-notification
+ *
+ * Asks Apple to send a TEST notification to the registered URL. This is the
+ * one check that proves the whole path from Apple's side — URL registered,
+ * reachable, and a real Apple-signed payload verifying against the roots this
+ * process holds — and it cannot be run from anywhere but a deployment Apple
+ * can reach. Look for "TEST acknowledged" in the logs afterwards.
+ */
+adminRouter.post("/preflight/apple-iap/test-notification", async (req: Request, res: Response) => {
+  if (!requireAdmin(req, res)) return;
+  const cfg = appleIapConfig();
+  if (!cfg) return res.status(409).json({ error: "The App Store adapter is not configured.", report: describeAppleIapEnv() });
+  const out = await requestAppleTestNotification(cfg);
+  if (!out.ok) return res.status(502).json({ error: "Apple refused the request.", ...out });
+  return res.json({ ok: true, testNotificationToken: out.token, next: "Watch the deployment logs for 'TEST acknowledged'." });
 });

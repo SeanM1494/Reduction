@@ -145,6 +145,47 @@ is a corrupted header (an editor turning the dashes into an em-dash), a
 missing BEGIN line, or a truncated body; each is flagged by name rather than
 reported as a generic parse failure.
 
+
+### App Store subscriptions (IAP)
+
+The App Store adapter (`artifacts/api-server/src/lib/billing/apple.ts`) verifies
+StoreKit 2 transactions and App Store Server Notifications V2, and writes them
+to the same provider-agnostic `subscriptions` table as Stripe, as
+`provider = 'apple'`. It is off until configured, and fails closed.
+
+| secret | value | required |
+|---|---|---|
+| `APPLE_BUNDLE_ID` | the app's bundle id (`com.example.reduction`) | yes |
+| `APPLE_ROOT_CERTS` | base64 of Apple's root CA `.cer` files (DER), comma-separated — from https://www.apple.com/certificateauthority/ ("Apple Root CA - G3" signs App Store payloads; add G2 too). Or `APPLE_ROOT_CA_DIR`, a directory of `.cer` files. | yes |
+| `APPLE_IAP_ENVIRONMENT` | `Production` (default) or `Sandbox` — TestFlight and sandbox testers are Sandbox | for testing |
+| `APPLE_APP_APPLE_ID` | the numeric App Store id, from App Store Connect → App Information | Production only |
+| `APPLE_IAP_KEY_ID`, `APPLE_IAP_ISSUER_ID`, `APPLE_IAP_PRIVATE_KEY` | an **In-App Purchase** key (App Store Connect → Users and Access → Integrations → In-App Purchase) — a different key from the Sign in with Apple one; the `.p8` pastes the same way as `APPLE_PRIVATE_KEY` | optional |
+| `APPLE_IAP_OFFLINE` | `1` disables OCSP revocation checks against Apple | no |
+
+Without the three API credentials the app's `POST /api/billing/apple/verify`
+still works from the signed transaction alone; with them the server also asks
+Apple for the current status on each verify, and the admin route below can
+request a test notification.
+
+Register `PUBLIC_BASE_URL` + `/api/billing/apple/notifications` in App Store
+Connect → App → App Information → App Store Server Notifications (V2), for the
+environment this server is configured for. The route 404s until the adapter is
+configured and answers 400 to anything that does not verify, so Apple stops
+retrying it.
+
+The app stamps `appAccountToken` = the user's id (a UUID) on the purchase;
+that is how a notification names an account with no lookup table. It sends
+`{ signedTransactionInfo, signedRenewalInfo }` (StoreKit 2's
+`jwsRepresentation`s) to the verify route after a purchase or restore.
+
+Preflight (needs `ADMIN_SECRET`): `GET /api/admin/preflight/apple-iap` reports
+which roots parsed, the environment, the API key's posture and the exact URL
+to register; `POST /api/admin/preflight/apple-iap/test-notification` asks
+Apple to send a TEST notification, and "TEST acknowledged" in the logs is the
+end-to-end proof. **Nothing in the test suite has seen a real Apple-signed
+payload** — the signature check is the library's, and the test notification
+is how it gets exercised for the first time.
+
 ### Admin lookup
 
 `ADMIN_SECRET` enables `GET /api/admin/user?email=…`, which returns matching accounts' ids plus their allowance and subscriptions. Unset, the route 404s.
