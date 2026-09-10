@@ -14,7 +14,9 @@ import React, { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { RecipeScreen } from '@/components/RecipeScreen';
-import { DEMO_RECIPE } from '@/lib/demo-recipe';
+import { DEMO_RECIPE } from '@/data/demoRecipe';
+import { STRESS_RECIPE } from '@/components/diagram/stressFixture';
+import { FpsMeter } from '@/components/diagram/FpsMeter';
 import { useColors, type Colors } from '@/hooks/useColors';
 import { fonts } from '@/constants/colors';
 import type { StepTimer } from '@/lib/api';
@@ -26,6 +28,12 @@ export function DemoScreen({ onClose }: { onClose: () => void }) {
   // the web landing page, one step visibly ready before any interaction.
   const [done, setDone] = useState<string[]>(['avocados']);
   const [timer, setTimer] = useState<StepTimer | null>(null);
+  // DEV ONLY: the Phase 0 kill-criterion read, taken in the real demo rather
+  // than on the spike route (which Expo Go could not be deep-linked into).
+  // The stress fixture and the frame meter ship in no build — __DEV__ is
+  // false in a release bundle and the branch is dead-code-eliminated.
+  const [stress, setStress] = useState(false);
+  const recipe = __DEV__ && stress ? STRESS_RECIPE : DEMO_RECIPE;
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
@@ -34,12 +42,33 @@ export function DemoScreen({ onClose }: { onClose: () => void }) {
           <Text style={styles.backText}>‹ Back</Text>
         </Pressable>
         <Text style={styles.headerTitle}>Demo</Text>
-        <View style={styles.backSpacer} />
+        {__DEV__ ? (
+          <Pressable
+            style={styles.back}
+            testID="demo-stress-toggle"
+            onPress={() => {
+              setStress((v) => !v);
+              setDone([]);
+            }}
+            hitSlop={12}
+          >
+            <Text style={[styles.backText, { textAlign: 'right' }]}>{stress ? 'demo' : 'stress'}</Text>
+          </Pressable>
+        ) : (
+          <View style={styles.backSpacer} />
+        )}
       </View>
+      {/* The meter positions itself top-right of its container; give it a
+          strip of its own so it never covers the header's controls. */}
+      {__DEV__ ? (
+        <View style={{ height: 36 }}>
+          <FpsMeter />
+        </View>
+      ) : null}
       <RecipeScreen
-        recipe={DEMO_RECIPE}
+        recipe={recipe}
         done={done}
-        servings={DEMO_RECIPE.servings}
+        servings={recipe.servings}
         timer={timer}
         onToggleDone={setDone}
         onSetTimer={setTimer}

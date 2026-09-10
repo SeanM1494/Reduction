@@ -106,6 +106,15 @@ and close the ones that can be closed:
   that.
 - **No WebKit, no phone.** See the mobile section below; a Chromium
   "iPhone 13" is a viewport, not Safari.
+- **Metro's process is not called what you started.** `npx expo start`
+  execs `node …/expo/bin/cli start …`, so a kill loop matching `expo start`
+  never finds it. The next `expo start` on the same port then prints "Port
+  8090 is running this app in another window", skips its dev server, and
+  the OLD server keeps answering — in CI mode with no file watching, so it
+  serves the bundle it built before your edit, indefinitely. Half an hour
+  went into "why does the bundle not contain my change" on Sep 10. Kill by
+  port (`fuser 8090/tcp`, then the pid), wait until the port is free, and
+  check the new log has no "another window" line before trusting a bundle.
 
 ## Nothing that spans two requests may live in process memory
 

@@ -1,21 +1,23 @@
 /**
  * components/RecipeScreen.tsx — renders one recipe.
  *
- * Scope-reduced from the web app on purpose: the web app draws recipes as a
- * 2D dependency diagram (shared/layout.ts's computeLayout, a full table
- * renderer). Reproducing that on a phone screen is its own project, so V1
- * ships two simpler views instead, both driven by the same shared/sequence.ts
- * ordering logic the web app uses for its own step-by-step mode:
+ * Two views, both driven by the same shared model the web app uses:
  *
- *  - Overview: every section's ingredients and steps, in reading order.
- *  - Cook: one step at a time, in dependency-safe cook order, with an
- *    optional foreground timer for steps that have a duration.
+ *  - Overview: the dependency DIAGRAM — components/diagram/DiagramView, the
+ *    Phase 0 renderer of computeLayout's grid (see ROADMAP's mobile section).
+ *    It replaced the scaffold's flat checklist on Sep 10 as the first slice of
+ *    Phase 1; this is the same renderer for the demo and for a saved recipe.
+ *  - Cook: one step at a time, in dependency-safe cook order
+ *    (shared/sequence.ts), with an optional foreground timer for steps that
+ *    have a duration.
  *
- * This is a disclosed gap, not an oversight — full diagram parity is a
- * tracked follow-up.
+ * `done` is an upstream-closed array of ids (see toggleDone); the diagram
+ * takes a Set and toggles op cells by step id, so the two agree without any
+ * translation beyond the Set.
  */
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { DiagramView } from '@/components/diagram/DiagramView';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import type { Ingredient, Recipe, Step } from '@/shared/layout';
@@ -114,6 +116,7 @@ export function RecipeScreen({
   const scale = servings && recipe.servings ? servings / recipe.servings : 1;
 
   const toggle = (id: string) => onToggleDone(toggleDone(recipe, done, id));
+  const doneSet = useMemo(() => new Set(done), [done]);
 
   return (
     <View style={styles.container}>
@@ -140,7 +143,9 @@ export function RecipeScreen({
       </View>
 
       {view === 'overview' ? (
-        <Overview recipe={recipe} done={done} scale={scale} onToggle={toggle} colors={colors} />
+        <ScrollView contentContainerStyle={styles.scrollContent} testID="recipe-overview">
+          <DiagramView recipe={recipe} done={doneSet} onToggle={toggle} scale={scale} />
+        </ScrollView>
       ) : (
         <CookMode
           recipe={recipe}
@@ -192,88 +197,12 @@ const styles2 = StyleSheet.create({
   tab: { flex: 1, paddingVertical: 10, borderRadius: 10, alignItems: 'center', borderWidth: 1 },
 });
 
-// ------------------------------------------------------------- overview ----
-
-function Overview({
-  recipe,
-  done,
-  scale,
-  onToggle,
-  colors,
-}: {
-  recipe: Recipe;
-  done: string[];
-  scale: number;
-  onToggle: (id: string) => void;
-  colors: Colors;
-}) {
-  const doneSet = new Set(done);
-  const styles = makeStyles(colors);
-  return (
-    <ScrollView contentContainerStyle={styles.scrollContent}>
-      {recipe.sections.map((section, i) => (
-        <View key={`${section.name}-${i}`} style={styles.section}>
-          <Text style={styles.sectionTitle}>{section.name}</Text>
-          {section.header ? <Text style={styles.sectionHeader}>{section.header}</Text> : null}
-
-          {section.ingredients.map((ing) => (
-            <CheckRow
-              key={ing.id}
-              label={ingredientLabel(ing, scale)}
-              done={doneSet.has(ing.id)}
-              onPress={() => onToggle(ing.id)}
-              colors={colors}
-            />
-          ))}
-
-          {section.nodes.map((step) => (
-            <CheckRow
-              key={step.id}
-              label={stepLabel(step)}
-              done={doneSet.has(step.id)}
-              onPress={() => onToggle(step.id)}
-              colors={colors}
-            />
-          ))}
-        </View>
-      ))}
-    </ScrollView>
-  );
-}
+// ------------------------------------------------------------- helpers -----
 
 function ingredientLabel(ing: Ingredient, scale: number): string {
   const amount = formatAmount(ing, scale);
   const note = ing.note ? ` (${ing.note})` : '';
   return amount ? `${amount} ${ing.name}${note}` : `${ing.name}${note}`;
-}
-
-function stepLabel(step: Step): string {
-  const time = formatMinutes(step.minutes);
-  const temp = step.tempF ? `${step.tempF}°F` : '';
-  const suffix = [temp, time].filter(Boolean).join(', ');
-  return suffix ? `${step.label} (${suffix})` : step.label;
-}
-
-function CheckRow({
-  label,
-  done,
-  onPress,
-  colors,
-}: {
-  label: string;
-  done: boolean;
-  onPress: () => void;
-  colors: Colors;
-}) {
-  const styles = makeStyles(colors);
-  return (
-    <Pressable style={styles.row} onPress={onPress}>
-      <View style={[styles.checkbox, done && styles.checkboxDone]}>
-        {done ? <Text style={styles.checkmark}>✓</Text> : null}
-      </View>
-      <Text style={[styles.rowLabel, done && styles.rowLabelDone]}>{label}</Text>
-    </Pressable>
-  );
 }
 
 // ---------------------------------------------------------------- cook -----

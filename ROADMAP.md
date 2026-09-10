@@ -131,6 +131,20 @@ is a database row now, and the session is minted when the code is redeemed
 memory"). Verified against Postgres through the real router; not yet
 verified on the deployment, which is the only place the bug reproduced.
 
+**Phase 1, first slice — SHIPPED (Sep 10): the diagram is the Overview.**
+`RecipeScreen`'s Overview tab renders `DiagramView` for the demo and for a
+saved recipe alike; the scaffold's flat checklist is gone (Cook mode, the
+one-step-at-a-time view, stays). The spike route stopped being reachable
+from Expo Go by deep link, so the Phase 0 device read moved into the real
+demo: in a dev bundle only, the demo header carries a "stress" toggle (the
+30-step fixture) and the frame meter sits under it. `__DEV__` guards both,
+so no release build ships them; remove them outright once criterion 2 is
+recorded. `app/spike.tsx` and the `/spike` pass-through in `_layout.tsx`
+are now redundant and go with them. Verified in the RN-web export at three
+phone profiles (cells render, an op tap moves progress, the sticky column
+holds under scroll, no page overflow, the stress fixture renders, Cook
+still works); the device number is still the phone's to give.
+
 **Phase 1 — the read-only app.** Sign-in (exists) → library list →
 RecipeView with the proven diagram, StepsMode, servings and reorder →
 extraction (URL, text, photo). At the end of this phase the app is usable
