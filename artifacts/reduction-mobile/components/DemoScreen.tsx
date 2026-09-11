@@ -30,6 +30,7 @@ export function DemoScreen({ onClose }: { onClose: () => void }) {
   // the web landing page, one step visibly ready before any interaction.
   const [done, setDone] = useState<string[]>(['avocados']);
   const [timer, setTimer] = useState<StepTimer | null>(null);
+  const [servings, setServings] = useState<number | null>(null);
   // The Phase 0 kill-criterion read, taken in the real demo rather than on
   // the spike route (which Expo Go could not be deep-linked into). The stress
   // fixture and the frame meter show in a dev bundle, or in a release bundle
@@ -70,13 +71,23 @@ export function DemoScreen({ onClose }: { onClose: () => void }) {
           <FpsMeter />
         </View>
       ) : null}
+      {/* A synthetic in-memory entry: done, servings and the timer live in
+          component state and die with it (CLAUDE.md, "Demo state never
+          persists"). canEdit off keeps rating and tagging out of the demo. */}
       <RecipeScreen
         recipe={recipe}
         done={done}
-        servings={recipe.servings}
+        servings={servings}
         timer={timer}
-        onToggleDone={setDone}
-        onSetTimer={setTimer}
+        cooked={[]}
+        rating={null}
+        mode="diagram"
+        canEdit={false}
+        onUpdate={(patch) => {
+          if (patch.done) setDone(patch.done);
+          if ('servings' in patch) setServings(patch.servings ?? null);
+          if ('timer' in patch) setTimer(patch.timer ?? null);
+        }}
       />
     </SafeAreaView>
   );
