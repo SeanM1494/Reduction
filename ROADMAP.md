@@ -208,10 +208,20 @@ a 30-step walk before, zero after). Verified in Chromium with every write
 checked in the database. Not ported: the sweep animation between cards, and
 the Reorder view that WRITES `entry.order` (it needs a drag list).
 
-**Next slices, in order:** (a) The Reorder view (`ReorderView.tsx`, a drag
-list over `branchChoices`/`freeSectionIndices`, writing `entry.order`
-through `pruneOrderPreference`) — the last piece of StepsMode parity, and
-the card sweep animation if it earns its place on a phone. (b) DONE (Sep
+**Next slices, in order:** (a) DONE (Sep 12) — the Reorder view
+(`components/recipe/ReorderView.tsx`), reached from Cook mode's Reorder
+button: rows from `sectionOrder`/`stepSequence` under the current
+preference, a grip only where `branchChoices`/`freeSectionIndices` say the
+walk can honour a move, a press-and-hold drag (gesture-handler's Pan
+activated after 250ms, so the list still scrolls) with a ghost, lit
+targets, hit-testing by rows measured in window space at pickup, and edge
+auto-scroll so a section can cross a 30-step list; writes `entry.order`
+through `pruneOrderPreference`. Verified in Chromium with the row's
+database column checked: a branch swap, a section move across a screen of
+steps, Reset, and a fixed row refusing to lift. Not verified: the
+long-press feel on a real phone, and gesture-handler inside a native
+Modal (the view is inline, not in one, for that reason). The card sweep
+animation stays unported unless it earns its place on a phone. (b) DONE (Sep
 12) — the demo gate: the guacamole demo with DemoCoach is the signed-out
 entry point (`DemoScreen` first, `SignInScreen` one tap away and the demo
 kept mounted behind it), the spike and the perf strip are removed.

@@ -24,9 +24,8 @@
  * downstream of the current step — and "Back to timer" is one tap however
  * far the suggestion is browsed.
  *
- * Not ported yet: the sweep animation between cards, and the Reorder view
- * (`entry.order` is honoured when present; writing it needs a drag list —
- * see ROADMAP's next slices).
+ * Not ported: the sweep animation between cards. The Reorder view
+ * (components/recipe/ReorderView.tsx) writes `entry.order`.
  */
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -36,6 +35,7 @@ import type { Ingredient, Recipe, Step } from '@/shared/layout';
 import { cardSequence, type OrderPreference } from '@/shared/sequence';
 import { formatAmount, formatMinutes, stepMinutes } from '@/shared/amounts';
 import { SheetButton } from '@/components/Sheet';
+import { ReorderView } from '@/components/recipe/ReorderView';
 import { useColors, type Colors } from '@/hooks/useColors';
 import { cardShadow, fonts } from '@/constants/colors';
 import type { StepTimer } from '@/lib/api';
@@ -99,9 +99,14 @@ interface Props {
    *  write. Two back-to-back updates would race their own ifVersion and pay
    *  a 409-merge-retry on the most common tap in the kitchen. */
   onMarkDone: (stepId: string) => void;
+  /** Offer the cooking-order view. Off for the demo, whose entry is
+   *  synthetic — a reorder there would look accepted and silently not
+   *  stick — and for the draft, which has no row yet. */
+  canReorder?: boolean;
+  onSetOrder?: (next: OrderPreference | null) => void;
 }
 
-export function StepsMode({ recipe, done, order, timer, scale, onToggle, onSetTimer, onMarkDone }: Props) {
+export function StepsMode({ recipe, done, order, timer, scale, onToggle, onSetTimer, onMarkDone, canReorder = false, onSetOrder }: Props) {
   const colors = useColors();
   const styles = makeStyles(colors);
   const { cards, totalActions } = useMemo(() => buildCards(recipe, order), [recipe, order]);
@@ -114,6 +119,9 @@ export function StepsMode({ recipe, done, order, timer, scale, onToggle, onSetTi
     return first === -1 ? cards.length : first;
   });
   const [returnIndex, setReturnIndex] = useState<number | null>(null);
+  // The full-page cooking-order list. State here rather than in RecipeScreen
+  // so the demo (which never sets canReorder) cannot reach it at all.
+  const [reordering, setReordering] = useState(false);
   const goTo = useCallback((i: number) => setCardIndex(Math.max(0, Math.min(cards.length, i))), [cards.length]);
   const card: StepCard | null = cardIndex < cards.length ? cards[cardIndex] : null;
 
@@ -178,8 +186,18 @@ export function StepsMode({ recipe, done, order, timer, scale, onToggle, onSetTi
     );
   }
 
+  if (reordering && onSetOrder) {
+    // ReorderView owns its ScrollView: the drag has to scroll it.
+    return <ReorderView recipe={recipe} order={order} done={done} onSetOrder={onSetOrder} onClose={() => setReordering(false)} />;
+  }
+
   return (
     <ScrollView contentContainerStyle={styles.wrap} testID="recipe-cook">
+      {canReorder && onSetOrder ? (
+        <View style={styles.reorderRow}>
+          <SheetButton label="Reorder" onPress={() => setReordering(true)} testID="cook-reorder" />
+        </View>
+      ) : null}
       {returnIndex != null && cardIndex !== returnIndex ? (
         <Pressable accessibilityRole="button" onPress={backToTimer} style={styles.returnBtn} testID="cook-return">
           <Text style={styles.returnText}>← Back to timer</Text>
@@ -275,6 +293,7 @@ export function StepsMode({ recipe, done, order, timer, scale, onToggle, onSetTi
 function makeStyles(colors: Colors) {
   return StyleSheet.create({
     wrap: { paddingHorizontal: 20, paddingBottom: 100, gap: 12 },
+    reorderRow: { flexDirection: 'row' },
     empty: { padding: 20 },
     emptyText: { fontSize: 14, color: colors.mutedForeground },
     returnBtn: {

@@ -301,6 +301,8 @@ export function RecipeScreen({
           onToggle={toggle}
           onSetTimer={(t) => onUpdate({ timer: t })}
           onMarkDone={markDone}
+          canReorder={canEdit && !isDraft}
+          onSetOrder={(next) => onUpdate({ order: next })}
         />
       )}
 
