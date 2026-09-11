@@ -219,8 +219,15 @@ kept mounted behind it), the spike and the perf strip are removed.
 line, two tips, legend, "Watch it" with narration — wrapping RecipeScreen
 through two slots (`above`, `overviewFooter`) and never reaching into it.
 (c) Photo extraction (`extractFromFile` exists in `lib/api.ts`; the Find
-tab does URL and text). (d) Memoize DiagramView cells (the tap re-render
-logged under Phase 0). (e) The cosmetic pass on Settings, the paywall and
+tab does URL and text). (d) DONE (Sep 12) — DiagramView cells are
+memoised: `DiagramCell` takes the three state booleans and stable
+references instead of the `done` set, and the library context keeps the
+recipe object's identity across the server's echo of a write (a fresh parse
+was rebuilding the layout on every round trip). Measured in the RN-web
+build on the 30-step fixture: 540 cell renders per tap before, 3 for an
+ingredient and 8 for a step after; a horizontal scroll renders nothing.
+The device number (the 110ms worst frame) is still the phone's to give.
+(e) The cosmetic pass on Settings, the paywall and
 the Find screen, now that the real screens exist to judge them against.
 
 **Phase 2 — sync and editing.** Port the storage engine behind an

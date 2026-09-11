@@ -34,7 +34,7 @@
  * changes there, change it here.
  */
 
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   AccessibilityInfo,
   Animated,
@@ -51,6 +51,7 @@ import { useColors, type Colors } from "@/hooks/useColors";
 import {
   diagramRects,
   type DiagramMetrics,
+  type CellRect,
   colWidth,
 } from "./layoutRects";
 
@@ -153,6 +154,125 @@ function cellContent(
   );
 }
 
+interface DiagramCellProps {
+  cell: Cell;
+  /** Null for the invisible measuring copy (pass 1). */
+  rect: CellRect | null;
+  isDone: boolean;
+  ready: boolean;
+  ownerDone: boolean;
+  scale: number;
+  colors: Colors;
+  doneBg: string;
+  pulse: Animated.Value;
+  onToggle: (id: string) => void;
+  onMeasure: ((key: string) => (e: LayoutChangeEvent) => void) | null;
+}
+
+/**
+ * One cell, memoised. The Phase 0 device read found that a tap re-rendered
+ * every copy of every cell (540 renders per tap on the 30-step fixture,
+ * measured in the RN-web build) because the cells were closures over the
+ * section's `done` set. This component takes the three booleans `stateOf`
+ * derives instead of the set, plus references that hold their identity
+ * across renders — the layout's Cell, the solved rect, the memoised colour
+ * object, the shared pulse value and a ref-backed toggle — so React's
+ * shallow compare skips every cell whose state did not move.
+ */
+const DiagramCell = memo(function DiagramCell({
+  cell: c,
+  rect,
+  isDone,
+  ready,
+  ownerDone,
+  scale,
+  colors,
+  doneBg,
+  pulse,
+  onToggle,
+  onMeasure,
+}: DiagramCellProps) {
+  const st: CellState = { isDone, ready, ownerDone };
+  const tappable = c.kind !== "gap";
+  if (onMeasure) {
+    return (
+      <View
+        style={{
+          position: "absolute",
+          width:
+            colWidth(c.col, c.colSpan, METRICS) -
+            CELL_PAD_H * 2 -
+            (c.kind === "ingredient" ? ING_RULE : 0),
+          opacity: 0,
+        }}
+        pointerEvents="none"
+      >
+        <View onLayout={onMeasure(c.key)}>{cellContent(c, scale, colors, st, true)}</View>
+      </View>
+    );
+  }
+  const isIng = c.kind === "ingredient";
+  const background =
+    c.kind === "gap"
+      ? ownerDone
+        ? colors.coolBg
+        : colors.card
+      : isIng
+        ? isDone
+          ? doneBg
+          : colors.muted
+        : isDone
+          ? doneBg
+          : ready
+            ? colors.warmBg
+            : colors.card;
+  return (
+    <Pressable
+      testID={`cell-${c.kind}-${c.key}`}
+      disabled={!tappable}
+      onPress={tappable ? () => onToggle(c.key) : undefined}
+      style={{
+        position: "absolute",
+        left: rect!.x,
+        top: rect!.y,
+        width: rect!.width,
+        height: rect!.height,
+        paddingVertical: CELL_PAD_V,
+        paddingHorizontal: CELL_PAD_H,
+        justifyContent: "center",
+        backgroundColor: background,
+        borderColor: colors.border,
+        borderRightWidth: StyleSheet.hairlineWidth,
+        borderBottomWidth: StyleSheet.hairlineWidth,
+        // The first row of a branch that merges with a sibling gets a
+        // heavier top rule, so the merge reads as a boundary.
+        borderTopWidth: c.startsBranch ? BRANCH_RULE : 0,
+        borderTopColor: colors.borderStrong,
+        // The ingredient column's rule: strong by default, cool when done.
+        borderLeftWidth: isIng ? ING_RULE : 0,
+        borderLeftColor: isDone ? colors.coolLine : colors.borderStrong,
+      }}
+    >
+      {cellContent(c, scale, colors, st, false)}
+      {ready ? (
+        <>
+          <View
+            pointerEvents="none"
+            style={[StyleSheet.absoluteFill, { borderWidth: 2, borderColor: colors.warmLine }]}
+          />
+          <Animated.View
+            pointerEvents="none"
+            style={[styles.halo, { borderColor: colors.warmLine, opacity: pulse }]}
+          />
+        </>
+      ) : null}
+      {isDone && c.kind !== "gap" ? (
+        <Text style={[styles.mark, { color: colors.coolInk }]}>✓</Text>
+      ) : null}
+    </Pressable>
+  );
+});
+
 /** .rd-cell.is-done: color-mix(in srgb, var(--cool-bg) 52%, var(--card)).
  *  Exported so the demo's legend paints "done" with the same value. */
 export const doneBackground = (colors: Colors): string => mix(colors.coolBg, colors.card, 0.52);
@@ -222,93 +342,35 @@ export function SectionDiagram({ section, done, onToggle, scale = 1 }: SectionDi
     };
   }, [pulse]);
 
+  // Each cell is a memoised component fed only primitives and stable
+  // references, so a tap re-renders the cells whose STATE changed rather
+  // than every copy of every cell (see DiagramCell).
+  const rectByKey = useMemo(() => {
+    const m = new Map<string, CellRect>();
+    for (const r of geometry.rects) m.set(r.cell.key, r);
+    return m;
+  }, [geometry]);
+  const onToggleRef = useRef(onToggle);
+  onToggleRef.current = onToggle;
+  const stableToggle = useCallback((id: string) => onToggleRef.current(id), []);
+
   const renderCell = (c: Cell, opts: { measuring?: boolean; overlay?: boolean } = {}) => {
-    const rect = opts.measuring
-      ? null
-      : geometry.rects.find((r) => r.cell.key === c.key)!;
     const st = stateOf(c, done);
-    const tappable = c.kind !== "gap";
-    if (opts.measuring) {
-      return (
-        <View
-          key={c.key}
-          style={{
-            position: "absolute",
-            width:
-              colWidth(c.col, c.colSpan, METRICS) -
-              CELL_PAD_H * 2 -
-              (c.kind === "ingredient" ? ING_RULE : 0),
-            opacity: 0,
-          }}
-          pointerEvents="none"
-        >
-          <View onLayout={onMeasure(c.key)}>{cellContent(c, scale, colors, st, true)}</View>
-        </View>
-      );
-    }
-    const isIng = c.kind === "ingredient";
-    const background =
-      c.kind === "gap"
-        ? st.ownerDone
-          ? colors.coolBg
-          : colors.card
-        : isIng
-          ? st.isDone
-            ? doneBg
-            : colors.muted
-          : st.isDone
-            ? doneBg
-            : st.ready
-              ? colors.warmBg
-              : colors.card;
     return (
-      <Pressable
+      <DiagramCell
         key={c.key}
-        testID={`cell-${c.kind}-${c.key}`}
-        disabled={!tappable}
-        onPress={tappable ? () => onToggle(c.key) : undefined}
-        style={{
-          position: "absolute",
-          left: rect!.x,
-          top: rect!.y,
-          width: rect!.width,
-          height: rect!.height,
-          paddingVertical: CELL_PAD_V,
-          paddingHorizontal: CELL_PAD_H,
-          justifyContent: "center",
-          backgroundColor: background,
-          borderColor: colors.border,
-          borderRightWidth: StyleSheet.hairlineWidth,
-          borderBottomWidth: StyleSheet.hairlineWidth,
-          // The first row of a branch that merges with a sibling gets a
-          // heavier top rule, so the merge reads as a boundary.
-          borderTopWidth: c.startsBranch ? BRANCH_RULE : 0,
-          borderTopColor: colors.borderStrong,
-          // The ingredient column's rule: strong by default, cool when done.
-          borderLeftWidth: isIng ? ING_RULE : 0,
-          borderLeftColor: st.isDone ? colors.coolLine : colors.borderStrong,
-        }}
-      >
-        {cellContent(c, scale, colors, st, false)}
-        {st.ready ? (
-          <>
-            <View
-              pointerEvents="none"
-              style={[StyleSheet.absoluteFill, { borderWidth: 2, borderColor: colors.warmLine }]}
-            />
-            <Animated.View
-              pointerEvents="none"
-              style={[
-                styles.halo,
-                { borderColor: colors.warmLine, opacity: pulse },
-              ]}
-            />
-          </>
-        ) : null}
-        {st.isDone && c.kind !== "gap" ? (
-          <Text style={[styles.mark, { color: colors.coolInk }]}>✓</Text>
-        ) : null}
-      </Pressable>
+        cell={c}
+        rect={opts.measuring ? null : rectByKey.get(c.key)!}
+        isDone={st.isDone}
+        ready={st.ready}
+        ownerDone={st.ownerDone}
+        scale={scale}
+        colors={colors}
+        doneBg={doneBg}
+        pulse={pulse}
+        onToggle={stableToggle}
+        onMeasure={opts.measuring ? onMeasure : null}
+      />
     );
   };
 

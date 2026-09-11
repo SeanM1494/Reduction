@@ -35,6 +35,19 @@ export type EntryPatch = Partial<{
   order: OrderPreference | null;
 }>;
 
+/**
+ * The server echoes the whole row after every write, as a fresh parse. If
+ * that parse replaced `recipe` on the entry, every consumer keyed on the
+ * recipe's identity — DiagramView's layout, cells and rects — would rebuild
+ * on every tap, and its cell memoisation would be defeated on the round
+ * trip (measured: 273 cell renders per tap instead of 5). So an unchanged
+ * recipe keeps the object the device already holds.
+ */
+function keepRecipeIdentity(prev: Entry | undefined, next: Entry): Entry {
+  if (!prev || prev.recipe === next.recipe) return next;
+  return JSON.stringify(prev.recipe) === JSON.stringify(next.recipe) ? { ...next, recipe: prev.recipe } : next;
+}
+
 const toSyncable = (e: Entry): SyncableEntry => ({
   recipe: e.recipe,
   done: e.done,
@@ -113,7 +126,7 @@ export function LibraryProvider({ children }: { children: React.ReactNode }) {
       while (true) {
         try {
           const { entry } = await apiPatchEntry(id, body);
-          setEntries((prev) => prev.map((e) => (e.id === id ? entry : e)));
+          setEntries((prev) => prev.map((e) => (e.id === id ? keepRecipeIdentity(e, entry) : e)));
           return;
         } catch (e) {
           const err = e as ApiError;
@@ -122,7 +135,7 @@ export function LibraryProvider({ children }: { children: React.ReactNode }) {
             const theirs = err.entry as Entry;
             const { merged } = mergeEntry(baseSyncable, mine, toSyncable(theirs), new Set());
             mine = merged; // carry the merged intent forward as "mine" for any further retry
-            setEntries((prev) => prev.map((e) => (e.id === id ? { ...theirs, ...merged } : e)));
+            setEntries((prev) => prev.map((e) => (e.id === id ? keepRecipeIdentity(e, { ...theirs, ...merged }) : e)));
             // Resubmit against the version the server just told us about —
             // the whole point of the retry — not the version we started with.
             body = { ...merged, ifVersion: theirs.version };
