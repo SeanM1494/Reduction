@@ -6,14 +6,16 @@
 
 import React from 'react';
 import { Alert, Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@/lib/auth-context';
 import { useColors, type Colors } from '@/hooks/useColors';
-import { fonts } from '@/constants/colors';
+import { cardShadow, fonts } from '@/constants/colors';
 
 export default function SettingsScreen() {
   const colors = useColors();
   const styles = makeStyles(colors);
   const { user, entitlement, webUrl, signOut } = useAuth();
+  const insets = useSafeAreaInsets();
 
   const confirmSignOut = () => {
     Alert.alert('Sign out?', undefined, [
@@ -31,7 +33,7 @@ export default function SettingsScreen() {
         : '—';
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+    <ScrollView style={styles.container} contentContainerStyle={[styles.content, { paddingBottom: 84 + insets.bottom + 24 }]}>
       <View style={styles.section}>
         <Text style={styles.label}>Account</Text>
         <Text style={styles.value}>{user?.name || user?.email || 'Signed in'}</Text>
@@ -58,7 +60,14 @@ export default function SettingsScreen() {
         ) : null}
       </View>
 
-      <Pressable style={styles.signOutButton} onPress={confirmSignOut}>
+      {/* .rd-btn-danger: a real button on the card colour, not a transparent
+          box whose only edge is a line within a shade of the page. */}
+      <Pressable
+        accessibilityRole="button"
+        style={({ pressed }) => [styles.signOutButton, pressed && styles.signOutPressed]}
+        onPress={confirmSignOut}
+        testID="settings-sign-out"
+      >
         <Text style={styles.signOutText}>Sign out</Text>
       </Pressable>
     </ScrollView>
@@ -68,27 +77,42 @@ export default function SettingsScreen() {
 function makeStyles(colors: Colors) {
   return StyleSheet.create({
     container: { flex: 1, backgroundColor: colors.background },
-    content: { padding: 20, gap: 24 },
+    content: { padding: 20, gap: 16 },
+    // .rd-settings-card: card colour, hairline in `border`, 15px radius and
+    // the card shadow — on parchment the shadow is what draws the edge.
     section: {
       backgroundColor: colors.card,
-      borderRadius: colors.radius,
+      borderRadius: colors.radiusCard,
       borderWidth: 1,
       borderColor: colors.border,
-      padding: 16,
+      paddingVertical: 16,
+      paddingHorizontal: 18,
       gap: 4,
+      ...cardShadow,
     },
-    label: { fontSize: 12, color: colors.mutedForeground, textTransform: 'uppercase', letterSpacing: 0.5 },
+    // The meta label in the app's mono, tracked and faint — the same voice
+    // as .rd-card-meta and .rd-lib-count, not the system sans.
+    label: { fontFamily: fonts.mono, fontSize: 11, letterSpacing: 0.44, color: colors.faint, textTransform: 'uppercase' },
     value: { fontFamily: fonts.headingMedium, fontSize: 17, color: colors.foreground, marginTop: 2 },
     subvalue: { fontSize: 13, color: colors.mutedForeground },
-    linkRow: { marginTop: 10 },
-    link: { fontSize: 14, color: colors.coolInk, fontFamily: fonts.headingMedium },
+    linkRow: { marginTop: 6, minHeight: 44, justifyContent: 'center' },
+    link: { fontSize: 14, color: colors.coolInk, fontFamily: fonts.headingMedium, textDecorationLine: 'underline' },
     signOutButton: {
+      minHeight: 48,
+      backgroundColor: colors.card,
       borderWidth: 1,
-      borderColor: colors.dangerLine,
+      borderColor: colors.border,
       borderRadius: colors.radius,
-      paddingVertical: 14,
+      paddingVertical: 12,
       alignItems: 'center',
+      justifyContent: 'center',
+      shadowColor: '#3a2418',
+      shadowOpacity: 0.07,
+      shadowRadius: 2,
+      shadowOffset: { width: 0, height: 1 },
+      elevation: 1,
     },
+    signOutPressed: { borderColor: colors.borderStrong },
     signOutText: { color: colors.dangerInk, fontFamily: fonts.headingMedium, fontSize: 15 },
   });
 }

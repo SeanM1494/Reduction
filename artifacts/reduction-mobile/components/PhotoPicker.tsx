@@ -14,7 +14,7 @@ import { SheetButton } from '@/components/Sheet';
 import { openSettings, PhotoError, takePhoto, type PhotoSource, type PreparedPhoto } from '@/lib/photo';
 import { formatBytes } from '@/lib/photoSize';
 import { useColors, type Colors } from '@/hooks/useColors';
-import { fonts } from '@/constants/colors';
+import { cardShadow, fonts } from '@/constants/colors';
 
 interface Props {
   photo: PreparedPhoto | null;
@@ -128,7 +128,7 @@ function makeStyles(colors: Colors) {
       gap: 8,
       minHeight: 48,
       paddingHorizontal: 12,
-      borderRadius: colors.radius,
+      borderRadius: colors.radiusButton,
       backgroundColor: colors.card,
       borderWidth: 1,
       borderColor: colors.borderStrong,
@@ -141,10 +141,11 @@ function makeStyles(colors: Colors) {
       alignItems: 'center',
       gap: 12,
       padding: 10,
-      borderRadius: colors.radius,
+      borderRadius: colors.radiusCard,
       backgroundColor: colors.card,
       borderWidth: 1,
       borderColor: colors.border,
+      ...cardShadow,
     },
     thumb: { width: 72, height: 72, borderRadius: 8, backgroundColor: colors.muted },
     previewText: { flex: 1, gap: 6 },

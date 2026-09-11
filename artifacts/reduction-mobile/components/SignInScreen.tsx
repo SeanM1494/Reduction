@@ -11,7 +11,7 @@ import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-nati
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '@/lib/auth-context';
 import { useColors, type Colors } from '@/hooks/useColors';
-import { fonts } from '@/constants/colors';
+import { cardShadow, fonts } from '@/constants/colors';
 import { BrandLogo } from '@/components/BrandLogo';
 
 export function SignInScreen({ onBack }: { onBack: () => void }) {
@@ -95,8 +95,9 @@ function makeStyles(colors: Colors) {
       justifyContent: 'space-between',
       backgroundColor: colors.card,
       borderWidth: 1,
-      borderColor: colors.borderStrong,
-      borderRadius: colors.radius,
+      borderColor: colors.border,
+      borderRadius: colors.radiusCard,
+      ...cardShadow,
       paddingVertical: 16,
       paddingHorizontal: 18,
     },
@@ -114,7 +115,7 @@ function makeStyles(colors: Colors) {
     buttons: { gap: 12 },
     button: {
       height: 52,
-      borderRadius: colors.radius,
+      borderRadius: colors.radiusButton,
       alignItems: 'center',
       justifyContent: 'center',
     },
@@ -135,12 +136,15 @@ function makeStyles(colors: Colors) {
       fontSize: 16,
     },
     error: {
-      color: colors.destructiveForeground,
-      backgroundColor: colors.destructive,
-      padding: 10,
-      borderRadius: colors.radius,
+      color: colors.dangerInk,
+      backgroundColor: colors.dangerBg,
+      borderWidth: 1,
+      borderColor: colors.dangerLine,
+      padding: 12,
+      borderRadius: 9,
       textAlign: 'center',
-      fontSize: 13,
+      fontSize: 13.5,
+      lineHeight: 19,
     },
     fineprint: {
       textAlign: 'center',

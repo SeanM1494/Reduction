@@ -267,8 +267,21 @@ was rebuilding the layout on every round trip). Measured in the RN-web
 build on the 30-step fixture: 540 cell renders per tap before, 3 for an
 ingredient and 8 for a step after; a horizontal scroll renders nothing.
 The device number (the 110ms worst frame) is still the phone's to give.
-(e) The cosmetic pass on Settings, the paywall and
-the Find screen, now that the real screens exist to judge them against.
+(e) DONE (Sep 12) — the cosmetic pass on Settings, the paywall and Find,
+against the Phase 0 audit: Settings' meta labels are Space Mono 11 tracked
+and faint, its cards carry radiusCard and the card shadow, and Sign out is
+a real .rd-btn-danger (card colour, hairline, light shadow) rather than a
+transparent box; the paywall carries the card shadow with the web's 20px
+title and 15px body; Find's paste box has a strong edge and the shadow,
+its buttons radiusButton, its error the danger tokens rather than the
+scaffold's solid red; the sign-in screen's invitation and buttons follow;
+and every tab screen pads past the absolutely positioned tab bar. Verified
+by computed style and screenshot in Chromium at an iPhone 13 profile in
+BOTH schemes: in dark the hairline `border` (#3b352c on #131110) does
+carry the card edge on its own, so the shadow's invisibility there costs
+nothing, and the library, recipe, cook and reorder screens built earlier
+read correctly in dark too. Nothing here needs a device; the one thing a
+phone would add is Android's elevation rendering of the shadow.
 
 **Phase 2 — sync and editing.** Port the storage engine behind an
 AsyncStorage/AppState seam (the focus refetch becomes an AppState listener;

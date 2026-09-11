@@ -17,7 +17,7 @@
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { useColors, type Colors } from '@/hooks/useColors';
-import { fonts } from '@/constants/colors';
+import { cardShadow, fonts } from '@/constants/colors';
 
 interface Props {
   recipeTitle?: string | null;
@@ -56,23 +56,29 @@ export function Paywall({ recipeTitle, context = 'generic' }: Props) {
 
 function makeStyles(colors: Colors) {
   return StyleSheet.create({
+    // A card that has to carry itself: the web's .rd-paywall-offer radius
+    // and the card shadow, so it does not float as a borderless block.
     container: {
       backgroundColor: colors.card,
-      borderRadius: colors.radius,
+      borderRadius: colors.radiusCard,
       borderWidth: 1,
       borderColor: colors.border,
-      padding: 20,
-      gap: 14,
+      paddingVertical: 22,
+      paddingHorizontal: 20,
+      gap: 12,
       alignItems: 'center',
+      ...cardShadow,
     },
+    // .rd-paywall-title: 20px; .rd-paywall-keep: 15px on muted.
     title: {
-      fontFamily: fonts.headingMedium,
-      fontSize: 18,
+      fontFamily: fonts.heading,
+      fontSize: 20,
+      lineHeight: 26,
       color: colors.foreground,
       textAlign: 'center',
     },
-    keep: { fontSize: 14, color: colors.mutedForeground, textAlign: 'center' },
+    keep: { fontSize: 15, lineHeight: 22, color: colors.mutedForeground, textAlign: 'center' },
     keepStrong: { color: colors.foreground, fontFamily: fonts.headingMedium },
-    fineprint: { fontSize: 13, color: colors.faint, textAlign: 'center' },
+    fineprint: { fontSize: 13.5, lineHeight: 19, color: colors.mutedForeground, textAlign: 'center' },
   });
 }

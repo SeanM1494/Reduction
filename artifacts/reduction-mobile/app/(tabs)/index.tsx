@@ -23,7 +23,7 @@ import type { PreparedPhoto } from '@/lib/photo';
 import type { Recipe } from '@/shared/layout';
 import { Paywall } from '@/components/Paywall';
 import { useColors, type Colors } from '@/hooks/useColors';
-import { fonts } from '@/constants/colors';
+import { cardShadow, fonts } from '@/constants/colors';
 
 export default function FindScreen() {
   const colors = useColors();
@@ -147,10 +147,12 @@ function makeStyles(colors: Colors) {
     content: { padding: 20, gap: 14 },
     heading: { fontFamily: fonts.headingBold, fontSize: 26, color: colors.foreground },
     hint: { fontSize: 14, color: colors.mutedForeground, marginBottom: 8 },
+    // The paste box: a strong edge (the hairline `border` is within a shade
+    // of the page) and the card shadow, so it reads as the thing to tap.
     input: {
       backgroundColor: colors.card,
       borderWidth: 1,
-      borderColor: colors.border,
+      borderColor: colors.borderStrong,
       borderRadius: colors.radius,
       padding: 14,
       // 16px is the input floor: iOS Safari zooms toward any focused input
@@ -159,21 +161,29 @@ function makeStyles(colors: Colors) {
       color: colors.foreground,
       minHeight: 110,
       textAlignVertical: 'top',
+      ...cardShadow,
     },
+    // .rd-go: ink on 12px radius, 44px minimum.
     button: {
       backgroundColor: colors.primary,
-      borderRadius: colors.radius,
+      borderRadius: colors.radiusButton,
+      minHeight: 48,
       paddingVertical: 14,
       alignItems: 'center',
+      justifyContent: 'center',
     },
     buttonDisabled: { opacity: 0.5 },
     buttonText: { color: colors.primaryForeground, fontFamily: fonts.headingMedium, fontSize: 16 },
+    // .rd-alert: the danger tokens, not the scaffold's solid red block.
     error: {
-      color: colors.destructiveForeground,
-      backgroundColor: colors.destructive,
-      padding: 10,
-      borderRadius: colors.radius,
-      fontSize: 13,
+      color: colors.dangerInk,
+      backgroundColor: colors.dangerBg,
+      borderWidth: 1,
+      borderColor: colors.dangerLine,
+      padding: 12,
+      borderRadius: 9,
+      fontSize: 13.5,
+      lineHeight: 19,
     },
   });
 }
