@@ -228,8 +228,38 @@ kept mounted behind it), the spike and the perf strip are removed.
 `components/demo/DemoCoach.tsx` is the web's teaching layer ported — stage
 line, two tips, legend, "Watch it" with narration — wrapping RecipeScreen
 through two slots (`above`, `overviewFooter`) and never reaching into it.
-(c) Photo extraction (`extractFromFile` exists in `lib/api.ts`; the Find
-tab does URL and text). (d) DONE (Sep 12) — DiagramView cells are
+(c) DONE (Sep 12) — photo extraction on the Find tab: "Take a photo" and
+"Choose a photo" (expo-image-picker) feed the SAME `{ file: { data,
+mediaType } }` body the web upload sends, so the server needed nothing.
+The one genuine mobile difference: the route accepts 8 MB and hands the
+image straight to the model, which refuses over 5 MB or 8000px a side and
+downscales past 1568px anyway, while a phone camera makes 12–24 megapixel
+JPEGs — so the phone shrinks first (`lib/photo.ts`, expo-image-manipulator:
+long edge 1568, JPEG 0.8, the numbers and reasons in `lib/photoSize.ts`
+under a node test). Permissions are asked at the tap with purpose strings
+in app.json's expo-image-picker plugin config; a refusal the OS will not
+re-ask gets an "Open Settings" button, a device with no camera (a
+simulator) is told to choose a photo instead, an unreadable page (the
+route's 422) gets advice about the shot rather than the validator's
+sentence. Verified in Chromium against the local API with the model
+stubbed on loopback: a 4032×3024 photo became 1568×1176 at 24 KB, reached
+the stub as image/jpeg, came back as a recipe, opened as the draft and
+saved as a row; a 4×4 smudge produced the 422 and the advice; the camera
+button opens a capture chooser on web. NOT verified: a real camera capture,
+the OS permission prompts and their wording (Expo Go shows its own generic
+strings; only a development or store build shows ours), HEIC handling on
+a real iPhone (the picker re-encodes, the manipulator emits JPEG), and the
+simulator's no-camera error text. Found on the way and fixed: the Find
+tab's content never padded past the absolutely positioned tab bar, so
+anything below the fold there was unreachable.
+
+**Two web-side gaps the photo work exposed, not fixed here:** the server's
+8 MB bound sits above the model's 5 MB one, so a 5–8 MB web upload passes
+the route and fails at the model as a 500 "Something went wrong"; and a
+photo whose base64 exceeds express.json's 12 MB limit gets an HTML 413
+rather than the route's JSON one, which the clients render as "Request
+failed (413)". A server-side shrink (sharp) or a lower bound with the
+web's own resize would close both. (d) DONE (Sep 12) — DiagramView cells are
 memoised: `DiagramCell` takes the three state booleans and stable
 references instead of the `done` set, and the library context keeps the
 recipe object's identity across the server's echo of a write (a fresh parse

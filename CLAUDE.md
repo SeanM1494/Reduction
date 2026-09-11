@@ -232,10 +232,11 @@ somebody can use the app at all, and the seventh guards a route that reads
 other people's accounts, and the eighth guards the second provider's write path
 with Apple's signature stubbed at the adapter's seam, and the ninth guards the
 one-time code that a phone's sign-in rides on, which has to be redeemable by an
-instance that never minted it. **The full suite — 356 tests at the time of
-writing — has been run against a real Postgres and passes 356/0.** The five
+instance that never minted it. **The full suite — 359 tests at the time of
+writing — has been run against a real Postgres and passes 359/0.** The eight
 that are not api-server or model tests are the mobile library's filter and
-sort (`artifacts/reduction-mobile/lib/libraryView.test.ts`): the runner walks
+sort (`artifacts/reduction-mobile/lib/libraryView.test.ts`) and the photo
+size bounds (`photoSize.test.ts`): the runner walks
 `reduction-mobile/components/diagram` and `reduction-mobile/lib` because
 both hold PURE modules — no react-native import, no `@/` alias — and a test
 there that imports either will fail to load under node rather than skip.

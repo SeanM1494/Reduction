@@ -17,7 +17,16 @@
     "web": {
       "favicon": "./assets/images/icon.png"
     },
-    "plugins": ["expo-router"],
+    "plugins": [
+      "expo-router",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Reduction reads the photo you pick to turn a recipe page or card into a cooking diagram. It is sent for extraction and not kept.",
+          "cameraPermission": "Reduction uses the camera to photograph a recipe page or card so it can be turned into a cooking diagram."
+        }
+      ]
+    ],
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
