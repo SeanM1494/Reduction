@@ -157,8 +157,9 @@ while Expo Go was walled off: `EXPO_PUBLIC_PERF_STRIP=1 npx expo export
 --platform web`, the bundle inlined into one HTML file and published as a
 Claude artifact, opened in mobile Safari (fonts fall back; nothing else
 differs). Remove the flag, the toggle and the meter once criterion 2 is
-recorded. `app/spike.tsx` and the `/spike` pass-through in `_layout.tsx`
-are now redundant and go with them. Verified in the RN-web export at three
+recorded — DONE (Sep 12): the spike route, its pass-through, the toggle,
+the meter and the `EXPO_PUBLIC_PERF_STRIP` flag are all gone; the 30-step
+fixture (`components/diagram/stressFixture.ts`) stays as a fixture. Verified in the RN-web export at three
 phone profiles (cells render, an op tap moves progress, the sticky column
 holds under scroll, no page overflow, the stress fixture renders, Cook
 still works); the device number is still the phone's to give.
@@ -210,9 +211,13 @@ the Reorder view that WRITES `entry.order` (it needs a drag list).
 **Next slices, in order:** (a) The Reorder view (`ReorderView.tsx`, a drag
 list over `branchChoices`/`freeSectionIndices`, writing `entry.order`
 through `pruneOrderPreference`) — the last piece of StepsMode parity, and
-the card sweep animation if it earns its place on a phone. (b) The first-run
-demo gate replacing the `/spike` pass-through, and removing `app/spike.tsx`
-plus the PERF_STRIP toggle and meter now that criterion 2 is recorded.
+the card sweep animation if it earns its place on a phone. (b) DONE (Sep
+12) — the demo gate: the guacamole demo with DemoCoach is the signed-out
+entry point (`DemoScreen` first, `SignInScreen` one tap away and the demo
+kept mounted behind it), the spike and the perf strip are removed.
+`components/demo/DemoCoach.tsx` is the web's teaching layer ported — stage
+line, two tips, legend, "Watch it" with narration — wrapping RecipeScreen
+through two slots (`above`, `overviewFooter`) and never reaching into it.
 (c) Photo extraction (`extractFromFile` exists in `lib/api.ts`; the Find
 tab does URL and text). (d) Memoize DiagramView cells (the tap re-render
 logged under Phase 0). (e) The cosmetic pass on Settings, the paywall and

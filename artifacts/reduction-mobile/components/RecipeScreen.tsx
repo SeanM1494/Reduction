@@ -141,6 +141,15 @@ interface RecipeScreenProps {
   isDraft?: boolean;
   onSave?: () => void;
   saving?: boolean;
+  /** Rendered under the mode tabs in both views — the demo's coach line
+   *  and tips live here, so the teaching layer wraps this screen without
+   *  reaching into it (CLAUDE.md, "The demo teaches through a wrapper"). */
+  above?: React.ReactNode;
+  /** Replaces the Overview hint below the diagram (the demo's legend). */
+  overviewFooter?: React.ReactNode;
+  /** The demo hides the stepper: it is about tonight, and nobody is cooking
+   *  the demo — and the small phone needs the 80px above the diagram. */
+  showServings?: boolean;
 }
 
 type ViewMode = 'overview' | 'cook';
@@ -162,6 +171,9 @@ export function RecipeScreen({
   isDraft,
   onSave,
   saving,
+  above,
+  overviewFooter,
+  showServings = true,
 }: RecipeScreenProps) {
   const colors = useColors();
   const styles = makeStyles(colors);
@@ -218,6 +230,8 @@ export function RecipeScreen({
         </View>
       </View>
 
+      {above ? <View style={styles.above}>{above}</View> : null}
+
       {notice ? (
         <View style={styles.notice} accessibilityRole="alert">
           <Text style={styles.noticeText}>{notice}</Text>
@@ -246,17 +260,21 @@ export function RecipeScreen({
               </Pressable>
             </View>
           ) : null}
-          <ServingsRow
-            base={recipe.servings}
-            entryServings={servings}
-            yieldText={recipe.yieldText}
-            onChange={(next) => onUpdate({ servings: next })}
-          />
+          {showServings ? (
+            <ServingsRow
+              base={recipe.servings}
+              entryServings={servings}
+              yieldText={recipe.yieldText}
+              onChange={(next) => onUpdate({ servings: next })}
+            />
+          ) : null}
           <DiagramView recipe={recipe} done={doneSet} onToggle={toggle} scale={scale} />
-          <Text style={styles.hint}>
-            Amber means you can do it now. Tap any step further right to jump ahead — everything it depends on gets
-            marked done with it.
-          </Text>
+          {overviewFooter ?? (
+            <Text style={styles.hint}>
+              Amber means you can do it now. Tap any step further right to jump ahead — everything it depends on gets
+              marked done with it.
+            </Text>
+          )}
           {/* A 44px row rather than an inline link: the web's 12px anchor is
               a mouse target, and this one is tapped. */}
           {recipe.sourceUrl ? (
@@ -341,6 +359,7 @@ function makeStyles(colors: Colors) {
     progressFill: { height: '100%', borderRadius: 99 },
     progressCount: { fontFamily: fonts.mono, fontSize: 11, color: colors.mutedForeground },
     modeSwitch: { flexDirection: 'row', gap: 8 },
+    above: { paddingHorizontal: 20 },
     notice: {
       marginHorizontal: 20,
       marginBottom: 12,

@@ -1,93 +1,114 @@
 /**
- * components/DemoScreen.tsx — the guacamole demo, reachable before sign-in.
+ * components/DemoScreen.tsx — the guacamole demo, the app's first screen.
  *
- * Rendered directly by SignInScreen instead of through expo-router: while
- * there is no token, `app/_layout.tsx`'s Gate mounts SignInScreen in place
- * of the whole navigator (see its header comment), so there is no Stack to
- * push a route onto yet. RecipeScreen itself needs nothing from that
- * navigator — it's a pure props-in component — so it renders here with
- * local, in-memory `done`/`timer` state and its own minimal header, the same
- * "never persists" shape as the web landing page's demo.
+ * The first-run decision (ROADMAP, mobile section): the demo IS the entry
+ * point, fully explorable before sign-in, and sign-in gates saving only.
+ * `app/_layout.tsx`'s Gate renders this in place of the whole navigator
+ * while there is no token, so there is no Stack here; RecipeScreen needs
+ * nothing from one. "Sign in" in the header hands over to SignInScreen.
+ *
+ * It is the web landing demo ported, teaching layer included: the coach
+ * line, the two tips, the legend and "Watch it" come from
+ * components/demo/DemoCoach.tsx, which wraps RecipeScreen through its two
+ * slots and never reaches into it. Everything lives in component state and
+ * dies with it — no API calls, no rows (CLAUDE.md, "Demo state never
+ * persists").
  */
 
-import React, { useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { RecipeScreen } from '@/components/RecipeScreen';
-import { DEMO_RECIPE } from '@/data/demoRecipe';
-import { STRESS_RECIPE } from '@/components/diagram/stressFixture';
-import { FpsMeter } from '@/components/diagram/FpsMeter';
+import { SheetButton } from '@/components/Sheet';
+import {
+  buildDemoGraph,
+  CoachLegend,
+  CoachLine,
+  CoachTip,
+  DemoTag,
+  useCoachStage,
+  useCoachTips,
+  useWatchPlayer,
+  watchOrder,
+} from '@/components/demo/DemoCoach';
+import { DEMO_PRECHECKED, DEMO_RECIPE } from '@/data/demoRecipe';
 import { useColors, type Colors } from '@/hooks/useColors';
 import { fonts } from '@/constants/colors';
 import type { StepTimer } from '@/lib/api';
 
-const PERF_STRIP = __DEV__ || process.env.EXPO_PUBLIC_PERF_STRIP === '1';
-
-export function DemoScreen({ onClose }: { onClose: () => void }) {
+export function DemoScreen({ onSignIn }: { onSignIn: () => void }) {
   const colors = useColors();
   const styles = makeStyles(colors);
-  // Pre-checked so the demo never opens flat — mirrors DEMO_PRECHECKED on
-  // the web landing page, one step visibly ready before any interaction.
-  const [done, setDone] = useState<string[]>(['avocados']);
+  const section = DEMO_RECIPE.sections[0];
+  // Pre-checked so the demo never opens flat — one step visibly ready
+  // before any interaction, as on the web landing page.
+  const [done, setDone] = useState<string[]>(DEMO_PRECHECKED);
   const [timer, setTimer] = useState<StepTimer | null>(null);
   const [servings, setServings] = useState<number | null>(null);
-  // The Phase 0 kill-criterion read, taken in the real demo rather than on
-  // the spike route (which Expo Go could not be deep-linked into). The stress
-  // fixture and the frame meter show in a dev bundle, or in a release bundle
-  // built with EXPO_PUBLIC_PERF_STRIP=1 — the flag is inlined at build time,
-  // so a normal release build dead-code-eliminates the whole branch. The
-  // flag exists for exactly one purpose: a minified web export the phone can
-  // open in Safari to answer criterion 2 while Expo Go is walled off.
-  const [stress, setStress] = useState(false);
-  const recipe = PERF_STRIP && stress ? STRESS_RECIPE : DEMO_RECIPE;
+  const [mode, setMode] = useState<'diagram' | 'steps'>('diagram');
+
+  const doneSet = useMemo(() => new Set(done), [done]);
+  const graph = useMemo(() => buildDemoGraph(section, DEMO_PRECHECKED), [section]);
+  const order = useMemo(() => watchOrder(section, DEMO_PRECHECKED), [section]);
+  const { playing, line: narration, play, stop } = useWatchPlayer(order, DEMO_PRECHECKED, setDone);
+  const { text: coachText } = useCoachStage(graph, doneSet, DEMO_PRECHECKED, mode);
+  // Both tips describe the grid, so they are held (not spent) while Cook
+  // mode is up, and while autoplay is driving.
+  const { text: tipText, resetTips } = useCoachTips(graph, doneSet, { suspended: playing || mode !== 'diagram' });
+
+  const reset = useCallback(() => {
+    stop();
+    resetTips();
+    setTimer(null);
+    setServings(null);
+    setDone(DEMO_PRECHECKED);
+  }, [stop, resetTips]);
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
       <View style={styles.header}>
-        <Pressable style={styles.back} onPress={onClose} hitSlop={12}>
-          <Text style={styles.backText}>‹ Back</Text>
+        <DemoTag />
+        <Text style={styles.title} numberOfLines={1}>
+          {DEMO_RECIPE.title}
+        </Text>
+        <Pressable accessibilityRole="button" onPress={onSignIn} style={styles.signIn} testID="demo-sign-in">
+          <Text style={styles.signInText}>Sign in →</Text>
         </Pressable>
-        <Text style={styles.headerTitle}>Demo</Text>
-        {PERF_STRIP ? (
-          <Pressable
-            style={styles.back}
-            testID="demo-stress-toggle"
-            onPress={() => {
-              setStress((v) => !v);
-              setDone([]);
-            }}
-            hitSlop={12}
-          >
-            <Text style={[styles.backText, { textAlign: 'right' }]}>{stress ? 'demo' : 'stress'}</Text>
-          </Pressable>
-        ) : (
-          <View style={styles.backSpacer} />
-        )}
       </View>
-      {/* The meter positions itself top-right of its container; give it a
-          strip of its own so it never covers the header's controls. */}
-      {PERF_STRIP ? (
-        <View style={{ height: 36 }}>
-          <FpsMeter />
-        </View>
-      ) : null}
-      {/* A synthetic in-memory entry: done, servings and the timer live in
-          component state and die with it (CLAUDE.md, "Demo state never
-          persists"). canEdit off keeps rating and tagging out of the demo. */}
       <RecipeScreen
-        recipe={recipe}
+        recipe={DEMO_RECIPE}
         done={done}
         servings={servings}
         timer={timer}
         cooked={[]}
         rating={null}
-        mode="diagram"
+        mode={mode}
         canEdit={false}
         onUpdate={(patch) => {
-          if (patch.done) setDone(patch.done);
+          // Any interaction stops autoplay and keeps the progress it made.
+          if (patch.done) {
+            stop();
+            setDone(patch.done);
+          }
           if ('servings' in patch) setServings(patch.servings ?? null);
           if ('timer' in patch) setTimer(patch.timer ?? null);
+          if (patch.mode) {
+            stop();
+            setMode(patch.mode);
+          }
         }}
+        above={
+          <View>
+            <View style={styles.actions}>
+              <SheetButton label={playing ? 'Stop' : 'Watch it'} onPress={playing ? stop : play} testID="demo-watch" />
+              <SheetButton label="Reset" onPress={reset} testID="demo-reset" />
+            </View>
+            <CoachLine text={narration ?? coachText} />
+            <CoachTip text={tipText} />
+          </View>
+        }
+        overviewFooter={<CoachLegend />}
+        showServings={false}
       />
     </SafeAreaView>
   );
@@ -99,13 +120,15 @@ function makeStyles(colors: Colors) {
     header: {
       flexDirection: 'row',
       alignItems: 'center',
-      justifyContent: 'space-between',
-      paddingHorizontal: 16,
-      paddingBottom: 8,
+      gap: 10,
+      paddingLeft: 20,
+      paddingRight: 12,
+      paddingTop: 4,
+      minHeight: 48,
     },
-    back: { minWidth: 60 },
-    backText: { color: colors.foreground, fontFamily: fonts.headingMedium, fontSize: 16 },
-    backSpacer: { minWidth: 60 },
-    headerTitle: { color: colors.foreground, fontFamily: fonts.headingMedium, fontSize: 16 },
+    title: { flex: 1, fontFamily: fonts.heading, fontSize: 17, color: colors.foreground },
+    signIn: { minHeight: 44, justifyContent: 'center', paddingHorizontal: 8 },
+    signInText: { fontFamily: fonts.heading, fontSize: 15, color: colors.foreground },
+    actions: { flexDirection: 'row', gap: 8, marginBottom: 10 },
   });
 }

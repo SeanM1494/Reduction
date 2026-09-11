@@ -1,26 +1,23 @@
 /**
- * components/SignInScreen.tsx — the only thing rendered before a token
- * exists. See lib/auth-context.tsx for why mobile has no anonymous mode.
+ * components/SignInScreen.tsx — the account path, reached from the demo.
+ *
+ * The demo is the first screen (see DemoScreen); this is where its "Sign in"
+ * leads, and the way back is one tap. See lib/auth-context.tsx for why
+ * mobile has no anonymous mode.
  */
 
-import React, { useState } from 'react';
+import React from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '@/lib/auth-context';
 import { useColors, type Colors } from '@/hooks/useColors';
 import { fonts } from '@/constants/colors';
 import { BrandLogo } from '@/components/BrandLogo';
-import { DemoScreen } from '@/components/DemoScreen';
 
-export function SignInScreen() {
+export function SignInScreen({ onBack }: { onBack: () => void }) {
   const { signIn, signingIn, signInError } = useAuth();
   const colors = useColors();
   const styles = makeStyles(colors);
-  const [demoOpen, setDemoOpen] = useState(false);
-
-  if (demoOpen) {
-    return <DemoScreen onClose={() => setDemoOpen(false)} />;
-  }
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
@@ -31,9 +28,9 @@ export function SignInScreen() {
           <Text style={styles.tagline}>Recipes, boiled down to what matters.</Text>
         </View>
 
-        <Pressable style={styles.demoInvite} onPress={() => setDemoOpen(true)}>
-          <Text style={styles.demoInviteText}>See guacamole as a reduction (demo)</Text>
-          <Text style={styles.demoInviteArrow}>&rarr;</Text>
+        <Pressable style={styles.demoInvite} onPress={onBack} accessibilityRole="button" testID="signin-back">
+          <Text style={styles.demoInviteArrow}>&larr;</Text>
+          <Text style={styles.demoInviteText}>Back to the guacamole demo</Text>
         </Pressable>
 
         <View style={styles.buttons}>
@@ -112,7 +109,7 @@ function makeStyles(colors: Colors) {
     demoInviteArrow: {
       color: colors.foreground,
       fontSize: 16,
-      marginLeft: 8,
+      marginRight: 10,
     },
     buttons: { gap: 12 },
     button: {

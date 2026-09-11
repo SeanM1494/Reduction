@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { KeyboardProvider } from 'react-native-keyboard-controller';
@@ -8,6 +8,7 @@ import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { AuthProvider, useAuth } from '@/lib/auth-context';
 import { LibraryProvider } from '@/lib/library-context';
 import { SignInScreen } from '@/components/SignInScreen';
+import { DemoScreen } from '@/components/DemoScreen';
 import { useColors } from '@/hooks/useColors';
 import { fonts } from '@/constants/colors';
 import {
@@ -17,7 +18,7 @@ import {
   useFonts,
 } from '@expo-google-fonts/space-grotesk';
 import { SpaceMono_400Regular, SpaceMono_700Bold } from '@expo-google-fonts/space-mono';
-import { Stack, usePathname } from 'expo-router';
+import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 
 // Prevent the splash screen from auto-hiding before asset loading is complete.
@@ -42,37 +43,37 @@ function RootLayoutNav() {
     >
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
       <Stack.Screen name="recipe/[id]" options={{ title: '' }} />
-      <Stack.Screen name="spike" options={{ title: 'Diagram spike' }} />
     </Stack>
   );
 }
 
-/** Gates the whole app on sign-in: no anonymous mode exists on mobile (see
- *  lib/auth-context.tsx for why). Shows a blank frame while the stored token
- *  is being checked, the sign-in screen when there is none, and the real app
- *  once a token is present. */
+/**
+ * The demo gate. No token: the guacamole demo is the first screen, fully
+ * explorable, with sign-in one tap away — the settled first-run decision
+ * (ROADMAP, mobile section), which replaced the Phase 0 spike's one-route
+ * pass-through here. A token: the real app. No anonymous mode exists on
+ * mobile (see lib/auth-context.tsx for why), so the demo talks to no API.
+ */
 function Gate() {
   const { loading, token } = useAuth();
   const colors = useColors();
-  const pathname = usePathname();
-
-  /**
-   * The Phase 0 diagram spike is fixture-fed and talks to no API, so it must
-   * be reachable without a token — it is how the renderer gets verified on a
-   * device before any signed-in screen exists. This is also a preview of the
-   * settled first-run decision (the demo is explorable before sign-in; see
-   * ROADMAP's mobile section): Phase 1 replaces this one-route exception
-   * with the real demo gate.
-   */
-  if (pathname === '/spike') {
-    return <RootLayoutNav />;
-  }
+  const [signingIn, setSigningIn] = useState(false);
 
   if (loading) {
     return <View style={{ flex: 1, backgroundColor: colors.background }} />;
   }
   if (!token) {
-    return <SignInScreen />;
+    // The demo stays mounted behind the sign-in screen rather than
+    // unmounting, so someone who checked off four ingredients, went to look
+    // at sign-in and came back finds it where they left it.
+    return (
+      <>
+        <View style={{ flex: 1, display: signingIn ? 'none' : 'flex' }}>
+          <DemoScreen onSignIn={() => setSigningIn(true)} />
+        </View>
+        {signingIn ? <SignInScreen onBack={() => setSigningIn(false)} /> : null}
+      </>
+    );
   }
   return (
     <LibraryProvider>

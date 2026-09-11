@@ -153,12 +153,15 @@ function cellContent(
   );
 }
 
+/** .rd-cell.is-done: color-mix(in srgb, var(--cool-bg) 52%, var(--card)).
+ *  Exported so the demo's legend paints "done" with the same value. */
+export const doneBackground = (colors: Colors): string => mix(colors.coolBg, colors.card, 0.52);
+
 export function SectionDiagram({ section, done, onToggle, scale = 1 }: SectionDiagramProps) {
   const colors = useColors();
   const layout = useMemo(() => computeLayout(section), [section]);
   const cells = useMemo(() => layout.rows.flat(), [layout]);
-  // .rd-cell.is-done: color-mix(in srgb, var(--cool-bg) 52%, var(--card))
-  const doneBg = useMemo(() => mix(colors.coolBg, colors.card, 0.52), [colors]);
+  const doneBg = useMemo(() => doneBackground(colors), [colors]);
 
   // key -> measured natural height. A plain object in a ref plus a version
   // counter, so one hundred onLayout callbacks cause one hundred cheap ref
