@@ -232,8 +232,15 @@ somebody can use the app at all, and the seventh guards a route that reads
 other people's accounts, and the eighth guards the second provider's write path
 with Apple's signature stubbed at the adapter's seam, and the ninth guards the
 one-time code that a phone's sign-in rides on, which has to be redeemable by an
-instance that never minted it. **The full suite — 351 tests at the time of
-writing — has been run against a real Postgres and passes 351/0.**
+instance that never minted it. **The full suite — 356 tests at the time of
+writing — has been run against a real Postgres and passes 356/0.** The five
+that are not api-server or model tests are the mobile library's filter and
+sort (`artifacts/reduction-mobile/lib/libraryView.test.ts`): the runner walks
+`reduction-mobile/components/diagram` and `reduction-mobile/lib` because
+both hold PURE modules — no react-native import, no `@/` alias — and a test
+there that imports either will fail to load under node rather than skip.
+The Expo tsconfig excludes those node tests, so `pnpm run typecheck` does
+not need `@types/node` in the mobile artifact.
 
 **The skip path has to actually skip, and it once silently stopped doing so.**
 The Sep 8 migration's `lib/db/src/index.ts` read `DATABASE_URL` at module load

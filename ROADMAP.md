@@ -171,6 +171,41 @@ first thing anyone sees: the first-run demo (DemoCoach over the guacamole
 fixture, ported as decided above) and the real demo gate that replaces the
 spike's one-route pass-through in `_layout.tsx`.
 
+**Phase 1, second and third slices — SHIPPED (Sep 11): the library and
+RecipeView on signed-in data.** The Library tab is MyRecipes.tsx ported
+(filter chips, a sort sheet, the web card token for token; the logic in
+`lib/libraryView.ts` under a node test). The recipe route owns the header
+— title once, a ⋮ menu with Meal types / Clear progress / Delete — and
+RecipeScreen carries the web's standing facts (rating once cooked, the
+meal-type badge), the servings stepper (writes `entry.servings` only, steps
+by base/8), the diagram, and a 44px source row; Cook mode scales its
+amounts; every write is a partial entry through `useLibrary().update`, and
+the cooked stamp is taken on the completing tap. Verified in Chromium at
+three phone profiles with each write checked in the database; not on a
+device, in WebKit, or on production. Three calls were made in the port that
+the web does differently, each cheap to reverse — **veto any of them**:
+(1) delete is confirmed in a sheet (the web deletes on click; a thumb
+reaches Delete more easily than a mouse); (2) the recipe opens on its
+stored `mode` tab instead of the web's Diagram / Step-by-step chooser, and
+tapping a tab writes `mode`; (3) the list shows a sort control and a count
+where the web shows a "My Recipes" title, because the tab header already
+says Library. Also: `update` in the mobile context is not yet serialized
+per entry, so two fast cooking taps can race their own `ifVersion` and pay
+a 409-merge-retry — correct, but it is the Phase 2 write queue's job to
+make it free.
+
+**Next slices, in order:** (a) Cook mode parity with the web's StepsMode —
+checkable ingredients on the card ("In a bowl, add: … then mix"), the
+"builds on" line, the parallel-step suggestion while a timer runs, the
+finished state, and card reorder (`entry.order`); the current CookMode has
+the step, its inputs as bullets, the timer and back/next. (b) The first-run
+demo gate replacing the `/spike` pass-through, and removing `app/spike.tsx`
+plus the PERF_STRIP toggle and meter now that criterion 2 is recorded.
+(c) Photo extraction (`extractFromFile` exists in `lib/api.ts`; the Find
+tab does URL and text). (d) Memoize DiagramView cells (the tap re-render
+logged under Phase 0). (e) The cosmetic pass on Settings, the paywall and
+the Find screen, now that the real screens exist to judge them against.
+
 **Phase 2 — sync and editing.** Port the storage engine behind an
 AsyncStorage/AppState seam (the focus refetch becomes an AppState listener;
 the per-entry write queue and the 409 merge are unchanged); then the edit
