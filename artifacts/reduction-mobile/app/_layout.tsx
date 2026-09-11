@@ -9,6 +9,7 @@ import { AuthProvider, useAuth } from '@/lib/auth-context';
 import { LibraryProvider } from '@/lib/library-context';
 import { SignInScreen } from '@/components/SignInScreen';
 import { useColors } from '@/hooks/useColors';
+import { fonts } from '@/constants/colors';
 import {
   SpaceGrotesk_500Medium,
   SpaceGrotesk_600SemiBold,
@@ -25,8 +26,20 @@ SplashScreen.preventAutoHideAsync();
 const queryClient = new QueryClient();
 
 function RootLayoutNav() {
+  const colors = useColors();
   return (
-    <Stack screenOptions={{ headerBackTitle: 'Back' }}>
+    <Stack
+      screenOptions={{
+        headerBackTitle: 'Back',
+        // The navigator's default header is a white bar with the system
+        // font — nothing on the web is white. Set once here; every pushed
+        // screen inherits it, including the ones not written yet.
+        headerStyle: { backgroundColor: colors.background },
+        headerTintColor: colors.foreground,
+        headerTitleStyle: { fontFamily: fonts.heading, color: colors.foreground, fontSize: 17 },
+        headerShadowVisible: false,
+      }}
+    >
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
       <Stack.Screen name="recipe/[id]" options={{ title: '' }} />
       <Stack.Screen name="spike" options={{ title: 'Diagram spike' }} />

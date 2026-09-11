@@ -108,7 +108,9 @@ function makeStyles(colors: Colors) {
       borderColor: colors.border,
       borderRadius: colors.radius,
       padding: 14,
-      fontSize: 15,
+      // 16px is the input floor: iOS Safari zooms toward any focused input
+      // below it (the web export), and it is the house rule regardless.
+      fontSize: 16,
       color: colors.foreground,
       minHeight: 110,
       textAlignVertical: 'top',

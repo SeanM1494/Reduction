@@ -19,7 +19,12 @@ const palettes: Record<string, Palette> = colors as unknown as Record<string, Pa
 export function useColors() {
   const scheme = useColorScheme();
   const palette = scheme === 'dark' && palettes.dark ? palettes.dark : colors.light;
-  return { ...palette, radius: colors.radius };
+  return {
+    ...palette,
+    radius: colors.radius,
+    radiusButton: colors.radiusButton,
+    radiusCard: colors.radiusCard,
+  };
 }
 
 export type Colors = ReturnType<typeof useColors>;

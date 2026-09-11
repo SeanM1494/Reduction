@@ -105,9 +105,13 @@ const colors = {
     dangerInk: '#ff9c85',
   },
 
-  // Border radius (in px), synced from the web app's --radius-ish button
-  // rounding (.rd-btn uses 11px).
+  // Border radii (px), synced from the web app, which draws three: small
+  // buttons at 11 (.rd-btn), the primary action at 12 (.rd-go), and cards at
+  // 15 (.rd-card; the diagram frame is 14). One radius for everything is how
+  // the scaffold's screens came to look stamped from a single die.
   radius: 11,
+  radiusButton: 12,
+  radiusCard: 15,
 };
 
 export default colors;
@@ -121,3 +125,19 @@ export const fonts = {
   mono: 'SpaceMono_400Regular',
   monoBold: 'SpaceMono_700Bold',
 };
+
+/**
+ * The web card's shadow (.rd-card: 0 1px 2px .18 + 0 9px 22px -11px .34),
+ * folded into the one shadow React Native draws. Spread onto any card-like
+ * surface. It matters more here than on the web: `border` is within a shade
+ * of the page colour, so on parchment a card with no shadow has no edge at
+ * all (see DiagramView's header for the same finding on the diagram).
+ * Android ignores the shadow props and uses `elevation`.
+ */
+export const cardShadow = {
+  shadowColor: '#3a2418',
+  shadowOpacity: 0.18,
+  shadowRadius: 11,
+  shadowOffset: { width: 0, height: 5 },
+  elevation: 3,
+} as const;

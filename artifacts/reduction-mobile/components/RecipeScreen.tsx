@@ -194,7 +194,9 @@ function ModeTab({
   );
 }
 const styles2 = StyleSheet.create({
-  tab: { flex: 1, paddingVertical: 10, borderRadius: 10, alignItems: 'center', borderWidth: 1 },
+  // 44px is the touch-target floor (CLAUDE.md); the scaffold's 40px tab was
+  // a desktop button that happened to be on a phone.
+  tab: { flex: 1, minHeight: 44, paddingVertical: 10, borderRadius: 10, alignItems: 'center', justifyContent: 'center', borderWidth: 1 },
 });
 
 // ------------------------------------------------------------- helpers -----
