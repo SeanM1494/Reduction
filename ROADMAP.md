@@ -194,11 +194,23 @@ per entry, so two fast cooking taps can race their own `ifVersion` and pay
 a 409-merge-retry — correct, but it is the Phase 2 write queue's job to
 make it free.
 
-**Next slices, in order:** (a) Cook mode parity with the web's StepsMode —
-checkable ingredients on the card ("In a bowl, add: … then mix"), the
-"builds on" line, the parallel-step suggestion while a timer runs, the
-finished state, and card reorder (`entry.order`); the current CookMode has
-the step, its inputs as bullets, the timer and back/next. (b) The first-run
+**Phase 1, fourth slice — SHIPPED (Sep 11): Cook mode is the web's
+StepsMode.** `components/recipe/StepsMode.tsx`: one card per step from
+`cardSequence` (honouring `entry.order` when present), ingredients as
+checkable rows on the card framed "Add: … Then <step>.", the "builds on"
+line, a persisted timer with the parallel-work suggestion from another
+section and a one-tap "Back to timer", the finished card, and the cooked
+stamp on the completing tap. "Next Step" writes done and the cleared timer
+as ONE patch, because two back-to-back writes raced their own `ifVersion`
+and paid a 409-merge-retry on the most common tap (measured: four 409s over
+a 30-step walk before, zero after). Verified in Chromium with every write
+checked in the database. Not ported: the sweep animation between cards, and
+the Reorder view that WRITES `entry.order` (it needs a drag list).
+
+**Next slices, in order:** (a) The Reorder view (`ReorderView.tsx`, a drag
+list over `branchChoices`/`freeSectionIndices`, writing `entry.order`
+through `pruneOrderPreference`) — the last piece of StepsMode parity, and
+the card sweep animation if it earns its place on a phone. (b) The first-run
 demo gate replacing the `/spike` pass-through, and removing `app/spike.tsx`
 plus the PERF_STRIP toggle and meter now that criterion 2 is recorded.
 (c) Photo extraction (`extractFromFile` exists in `lib/api.ts`; the Find

@@ -10,9 +10,10 @@
  *    the recipe above it (rating once cooked, the meal-type badge) and the
  *    servings stepper, which is about tonight and changes every number in the
  *    tables (see ServingsRow's header for the rule about the two numbers).
- *  - Cook: one step at a time, in dependency-safe cook order
- *    (shared/sequence.ts), with an optional foreground timer for steps that
- *    have a duration. Amounts there are scaled the same way.
+ *  - Cook: components/recipe/StepsMode — one card at a time in dependency-
+ *    safe cook order (shared/sequence.ts), ingredients checkable on the
+ *    card, a persisted timer, and parallel-work suggestions while it runs.
+ *    Amounts there are scaled the same way.
  *
  * The screen owns no title: the Stack header shows it (app/recipe/[id].tsx),
  * along with the overflow menu. What is left up here is the progress bar and
@@ -26,18 +27,18 @@
  * rating.
  */
 
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import * as Haptics from 'expo-haptics';
 import { DiagramView } from '@/components/diagram/DiagramView';
 import { ServingsRow } from '@/components/recipe/ServingsRow';
 import { RatingControl } from '@/components/recipe/RatingControl';
+import { StepsMode } from '@/components/recipe/StepsMode';
 import { SheetButton } from '@/components/Sheet';
-import type { Ingredient, Recipe } from '@/shared/layout';
-import { cardSequence } from '@/shared/sequence';
+import type { Recipe } from '@/shared/layout';
+import type { OrderPreference } from '@/shared/sequence';
 import { MEAL_TYPE_LABELS, sanitizeMealTypes } from '@/shared/mealTypes';
-import { countAll, formatAmount, formatMinutes, stepMinutes } from '@/shared/amounts';
+import { countAll } from '@/shared/amounts';
 import { useColors, type Colors } from '@/hooks/useColors';
 import { fonts } from '@/constants/colors';
 import type { StepTimer } from '@/lib/api';
@@ -119,6 +120,10 @@ interface RecipeScreenProps {
   cooked: number[];
   rating: number | null;
   mode: 'diagram' | 'steps';
+  /** Tonight's card-order preference (entry.order), advisory — see
+   *  shared/sequence.ts. Honoured here; written by the Reorder view, which
+   *  is not ported yet. */
+  order?: OrderPreference | null;
   /** Every write goes through here as a partial entry — the same shape
    *  useLibrary().update takes, so app/recipe/[id].tsx passes it straight
    *  through and the draft screen can keep what it wants locally. */
@@ -148,6 +153,7 @@ export function RecipeScreen({
   cooked,
   rating,
   mode,
+  order = null,
   onUpdate,
   onEditMealTypes,
   canEdit = true,
@@ -176,6 +182,16 @@ export function RecipeScreen({
     const next = toggleDone(recipe, done, id);
     const stamped = stampCooked(cooked, done.length, next.length, total);
     onUpdate(stamped === cooked ? { done: next } : { done: next, cooked: stamped });
+  };
+  /** Cook mode's "Next Step": done (if not already) and the step's timer
+   *  cleared, as one write — see StepsMode's onMarkDone. */
+  const markDone = (stepId: string) => {
+    const next = doneSet.has(stepId) ? done : toggleDone(recipe, done, stepId);
+    const stamped = stampCooked(cooked, done.length, next.length, total);
+    const patch: EntryPatch = { done: next };
+    if (stamped !== cooked) patch.cooked = stamped;
+    if (timer?.stepId === stepId) patch.timer = null;
+    onUpdate(patch);
   };
   const doneSet = useMemo(() => new Set(done), [done]);
   const types = sanitizeMealTypes(recipe.mealTypes);
@@ -258,14 +274,15 @@ export function RecipeScreen({
           ) : null}
         </ScrollView>
       ) : (
-        <CookMode
+        <StepsMode
           recipe={recipe}
-          done={done}
+          done={doneSet}
+          order={order}
           timer={timer}
           scale={scale}
           onToggle={toggle}
           onSetTimer={(t) => onUpdate({ timer: t })}
-          colors={colors}
+          onMarkDone={markDone}
         />
       )}
 
@@ -313,149 +330,6 @@ const styles2 = StyleSheet.create({
   tab: { flex: 1, minHeight: 44, paddingVertical: 10, borderRadius: 99, alignItems: 'center', justifyContent: 'center', borderWidth: 1 },
 });
 
-// ------------------------------------------------------------- helpers -----
-
-function ingredientLabel(ing: Ingredient, scale: number): string {
-  const amount = formatAmount(ing, scale);
-  const note = ing.note ? ` (${ing.note})` : '';
-  return amount ? `${amount} ${ing.name}${note}` : `${ing.name}${note}`;
-}
-
-// ---------------------------------------------------------------- cook -----
-
-function CookMode({
-  recipe,
-  done,
-  timer,
-  scale,
-  onToggle,
-  onSetTimer,
-  colors,
-}: {
-  recipe: Recipe;
-  done: string[];
-  timer: StepTimer | null;
-  scale: number;
-  onToggle: (id: string) => void;
-  onSetTimer: (timer: StepTimer | null) => void;
-  colors: Colors;
-}) {
-  const styles = makeStyles(colors);
-  const sequence = useMemo(() => cardSequence(recipe), [recipe]);
-  const doneSet = new Set(done);
-  const firstUndone = sequence.findIndex((s) => !doneSet.has(s.stepId));
-  const [cursor, setCursor] = useState(firstUndone === -1 ? Math.max(sequence.length - 1, 0) : firstUndone);
-  const [now, setNow] = useState(Date.now());
-  const tickRef = useRef<ReturnType<typeof setInterval> | null>(null);
-
-  useEffect(() => {
-    if (timer) {
-      tickRef.current = setInterval(() => setNow(Date.now()), 1000);
-      return () => {
-        if (tickRef.current) clearInterval(tickRef.current);
-      };
-    }
-  }, [timer?.endsAt, timer?.stepId]);
-
-  if (sequence.length === 0) {
-    return (
-      <View style={styles.cookEmpty}>
-        <Text style={styles.rowLabel}>This recipe has no steps to cook through.</Text>
-      </View>
-    );
-  }
-
-  const safeCursor = Math.min(cursor, sequence.length - 1);
-  const current = sequence[safeCursor];
-  const section = recipe.sections[current.sectionIndex];
-  const step = section.nodes.find((n) => n.id === current.stepId);
-  if (!step) return null;
-
-  const idToLabel = (id: string): string => {
-    const ing = section.ingredients.find((i) => i.id === id);
-    if (ing) return ingredientLabel(ing, scale);
-    const node = section.nodes.find((n) => n.id === id);
-    return node ? `from: ${node.label}` : id;
-  };
-
-  const minutes = stepMinutes(step.minutes);
-  const remainingMs = timer && timer.stepId === step.id ? timer.endsAt - now : null;
-  const remainingSec = remainingMs != null ? Math.max(0, Math.ceil(remainingMs / 1000)) : null;
-  const timeUp = remainingSec === 0;
-
-  useEffect(() => {
-    if (timeUp) Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
-  }, [timeUp]);
-
-  const isDone = doneSet.has(step.id);
-  const isLast = safeCursor === sequence.length - 1;
-
-  const markDoneAndAdvance = () => {
-    if (!isDone) onToggle(step.id);
-    if (timer?.stepId === step.id) onSetTimer(null);
-    if (!isLast) setCursor(safeCursor + 1);
-  };
-
-  return (
-    <View style={styles.cookContainer}>
-      <Text style={styles.cookProgress}>
-        Step {safeCursor + 1} of {sequence.length} · {section.name}
-      </Text>
-
-      <View style={styles.cookCard}>
-        <Text style={styles.cookLabel}>{step.label}</Text>
-        {step.tempF ? <Text style={styles.cookMeta}>{step.tempF}°F</Text> : null}
-
-        {step.inputs.length > 0 ? (
-          <View style={styles.cookInputs}>
-            {step.inputs.map((id) => (
-              <Text key={id} style={styles.cookInputItem}>
-                • {idToLabel(id)}
-              </Text>
-            ))}
-          </View>
-        ) : null}
-
-        {minutes ? (
-          <View style={styles.timerBlock}>
-            {remainingSec != null ? (
-              <Text style={[styles.timerText, timeUp && styles.timerDone]}>
-                {timeUp ? "Time's up" : formatCountdown(remainingSec)}
-              </Text>
-            ) : (
-              <Pressable
-                style={styles.timerButton}
-                onPress={() => onSetTimer({ stepId: step.id, endsAt: Date.now() + minutes * 60_000 })}
-              >
-                <Text style={styles.timerButtonText}>Start {formatMinutes(minutes)} timer</Text>
-              </Pressable>
-            )}
-          </View>
-        ) : null}
-      </View>
-
-      <View style={styles.cookNav}>
-        <Pressable
-          style={[styles.navButton, safeCursor === 0 && styles.navButtonDisabled]}
-          disabled={safeCursor === 0}
-          onPress={() => setCursor(Math.max(0, safeCursor - 1))}
-        >
-          <Text style={styles.navButtonText}>Back</Text>
-        </Pressable>
-        <Pressable style={[styles.navButton, styles.navButtonPrimary]} onPress={markDoneAndAdvance}>
-          <Text style={styles.navButtonPrimaryText}>{isLast ? 'Done cooking' : 'Done → next'}</Text>
-        </Pressable>
-      </View>
-    </View>
-  );
-}
-
-function formatCountdown(totalSeconds: number): string {
-  const m = Math.floor(totalSeconds / 60);
-  const s = totalSeconds % 60;
-  return `${m}:${String(s).padStart(2, '0')}`;
-}
-
 // ---------------------------------------------------------------- styles ---
 
 function makeStyles(colors: Colors) {
@@ -498,7 +372,6 @@ function makeStyles(colors: Colors) {
     source: { minHeight: 44, justifyContent: 'center', marginBottom: 8 },
     sourceText: { fontSize: 12, color: colors.faint },
     sourceLink: { color: colors.mutedForeground, textDecorationLine: 'underline' },
-    rowLabel: { flex: 1, fontSize: 15, color: colors.foreground },
     saveBar: {
       position: 'absolute',
       bottom: 0,
@@ -518,44 +391,5 @@ function makeStyles(colors: Colors) {
     },
     saveButtonText: { color: colors.primaryForeground, fontFamily: fonts.headingMedium, fontSize: 16 },
 
-    cookEmpty: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 },
-    cookContainer: { flex: 1, paddingHorizontal: 20, gap: 16 },
-    cookProgress: { fontSize: 13, color: colors.mutedForeground, textAlign: 'center' },
-    cookCard: {
-      backgroundColor: colors.card,
-      borderRadius: colors.radius,
-      borderWidth: 1,
-      borderColor: colors.border,
-      padding: 20,
-      gap: 12,
-    },
-    cookLabel: { fontFamily: fonts.headingMedium, fontSize: 20, color: colors.foreground },
-    cookMeta: { fontSize: 14, color: colors.warmInk, fontFamily: fonts.mono },
-    cookInputs: { gap: 4, marginTop: 4 },
-    cookInputItem: { fontSize: 14, color: colors.mutedForeground },
-    timerBlock: { marginTop: 8, alignItems: 'center' },
-    timerButton: {
-      backgroundColor: colors.warmBg,
-      borderRadius: colors.radius,
-      paddingVertical: 10,
-      paddingHorizontal: 16,
-    },
-    timerButtonText: { color: colors.warmInk, fontFamily: fonts.headingMedium, fontSize: 14 },
-    timerText: { fontFamily: fonts.mono, fontSize: 36, color: colors.foreground },
-    timerDone: { color: colors.warmInk },
-    cookNav: { flexDirection: 'row', gap: 12 },
-    navButton: {
-      flex: 1,
-      paddingVertical: 14,
-      borderRadius: colors.radius,
-      alignItems: 'center',
-      backgroundColor: colors.card,
-      borderWidth: 1,
-      borderColor: colors.border,
-    },
-    navButtonDisabled: { opacity: 0.4 },
-    navButtonText: { color: colors.foreground, fontFamily: fonts.headingMedium, fontSize: 15 },
-    navButtonPrimary: { backgroundColor: colors.primary, borderColor: colors.primary },
-    navButtonPrimaryText: { color: colors.primaryForeground, fontFamily: fonts.headingMedium, fontSize: 15 },
   });
 }

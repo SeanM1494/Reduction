@@ -134,6 +134,7 @@ export default function RecipeDetailScreen() {
         cooked={entry.cooked ?? []}
         rating={entry.rating ?? null}
         mode={entry.mode}
+        order={entry.order ?? null}
         onUpdate={write}
         onEditMealTypes={() => setMealSheetOpen(true)}
         notice={syncError}
