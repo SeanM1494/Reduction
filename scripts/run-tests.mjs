@@ -35,6 +35,7 @@ const ROOTS = [
   "artifacts/api-server/src",
   "lib/recipe-model/src",
   "artifacts/reduction-mobile/components/diagram",
+  "artifacts/reduction-mobile/lib",
 ];
 
 function testFiles(dir) {

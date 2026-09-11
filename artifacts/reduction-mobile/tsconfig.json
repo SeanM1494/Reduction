@@ -20,6 +20,7 @@
     }
   ],
   "exclude": [
-    "components/diagram/*.test.ts"
+    "components/diagram/*.test.ts",
+    "lib/*.test.ts"
   ]
 }
