@@ -108,11 +108,24 @@ function stateOf(c: Cell, done: Set<string>): CellState {
   return { isDone, ready, ownerDone: false };
 }
 
+/**
+ * Edit mode: a tap opens a sheet instead of marking done, and the frame says
+ * so with a cool outline — tapping a cell means "mark done" everywhere else,
+ * so the mode must never be quiet (CLAUDE.md, "Edit mode must never be
+ * quiet"). The drag (press-and-hold to move an ingredient) is not here yet;
+ * the sheet's "Used in" list is the move for now.
+ */
+export interface DiagramEdit {
+  onTapCell: (id: string) => void;
+  onTapSection: (index: number) => void;
+}
+
 interface SectionDiagramProps {
   section: Section;
   done: Set<string>;
   onToggle: (id: string) => void;
   scale?: number;
+  edit?: DiagramEdit | null;
 }
 
 function cellContent(
@@ -277,7 +290,7 @@ const DiagramCell = memo(function DiagramCell({
  *  Exported so the demo's legend paints "done" with the same value. */
 export const doneBackground = (colors: Colors): string => mix(colors.coolBg, colors.card, 0.52);
 
-export function SectionDiagram({ section, done, onToggle, scale = 1 }: SectionDiagramProps) {
+export function SectionDiagram({ section, done, onToggle, scale = 1, edit = null }: SectionDiagramProps) {
   const colors = useColors();
   const layout = useMemo(() => computeLayout(section), [section]);
   const cells = useMemo(() => layout.rows.flat(), [layout]);
@@ -350,9 +363,11 @@ export function SectionDiagram({ section, done, onToggle, scale = 1 }: SectionDi
     for (const r of geometry.rects) m.set(r.cell.key, r);
     return m;
   }, [geometry]);
-  const onToggleRef = useRef(onToggle);
-  onToggleRef.current = onToggle;
-  const stableToggle = useCallback((id: string) => onToggleRef.current(id), []);
+  // In edit mode a tap opens the sheet; the ref keeps the cells' callback
+  // identity stable across renders either way, which the memo depends on.
+  const onTapRef = useRef<(id: string) => void>(onToggle);
+  onTapRef.current = edit ? edit.onTapCell : onToggle;
+  const stableToggle = useCallback((id: string) => onTapRef.current(id), []);
 
   const renderCell = (c: Cell, opts: { measuring?: boolean; overlay?: boolean } = {}) => {
     const st = stateOf(c, done);
@@ -381,7 +396,7 @@ export function SectionDiagram({ section, done, onToggle, scale = 1 }: SectionDi
     // Two views because iOS drops a shadow from any view that clips: the
     // outer one casts, the inner one clips to the radius.
     <View style={styles.frameShadow}>
-      <View style={[styles.frame, { borderColor: colors.borderStrong, backgroundColor: colors.card }]}>
+      <View style={[styles.frame, { borderColor: edit ? colors.coolLine : colors.borderStrong, borderWidth: edit ? 2 : 1, backgroundColor: colors.card }]}>
         <View style={{ height: bodyH }}>
           {/* Pass 1: the invisible measuring tree. Stays mounted so content
               changes re-measure; costs nothing visible. */}
@@ -440,19 +455,34 @@ interface DiagramViewProps {
   done: Set<string>;
   onToggle: (id: string) => void;
   scale?: number;
+  edit?: DiagramEdit | null;
 }
 
-/** All sections, stacked — the web app renders one table per section. */
-export function DiagramView({ recipe, done, onToggle, scale }: DiagramViewProps) {
+/** All sections, stacked — the web app renders one table per section. In
+ *  edit mode every section shows its title as a 44px button (the web's
+ *  .rd-section-head), because a section has no cell of its own to tap. */
+export function DiagramView({ recipe, done, onToggle, scale, edit = null }: DiagramViewProps) {
   const colors = useColors();
   return (
     <View>
       {recipe.sections.map((s, i) => (
         <View key={`${s.name}-${i}`} style={{ marginBottom: 24 }}>
-          {recipe.sections.length > 1 ? (
+          {edit ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={`Edit section ${s.name}`}
+              onPress={() => edit.onTapSection(i)}
+              style={[styles.sectionHead, { borderColor: colors.coolLine, backgroundColor: colors.coolBg }]}
+              testID={`section-head-${i}`}
+            >
+              <Text style={[styles.sectionName, { color: colors.coolInk, marginBottom: 0 }]}>{s.name}</Text>
+              <Text style={[styles.sectionEditHint, { color: colors.coolInk }]}>Edit</Text>
+            </Pressable>
+          ) : recipe.sections.length > 1 ? (
             <Text style={[styles.sectionName, { color: colors.text }]}>{s.name}</Text>
           ) : null}
-          <SectionDiagram section={s} done={done} onToggle={onToggle} scale={scale} />
+          {s.header ? <Text style={[styles.sectionHeader, { color: colors.mutedForeground }]}>{s.header}</Text> : null}
+          <SectionDiagram section={s} done={done} onToggle={onToggle} scale={scale} edit={edit} />
         </View>
       ))}
     </View>
@@ -479,4 +509,16 @@ const styles = StyleSheet.create({
   halo: { position: "absolute", top: -3, left: -3, right: -3, bottom: -3, borderWidth: 3 },
   mark: { position: "absolute", top: 3, right: 6, fontSize: 11, fontWeight: "700" },
   sectionName: { fontSize: 16, fontWeight: "600", marginBottom: 8 },
+  sectionHead: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    minHeight: 44,
+    paddingHorizontal: 12,
+    marginBottom: 8,
+    borderRadius: 10,
+    borderWidth: 1,
+  },
+  sectionEditHint: { fontSize: 13, fontWeight: "600" },
+  sectionHeader: { fontSize: 13, fontStyle: "italic", marginBottom: 8 },
 });

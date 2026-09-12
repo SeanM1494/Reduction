@@ -12,7 +12,7 @@
  */
 
 import React from 'react';
-import { Modal, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import { KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useColors, type Colors } from '@/hooks/useColors';
 import { fonts } from '@/constants/colors';
@@ -23,17 +23,19 @@ interface Props {
   onClose: () => void;
   /** Label of the head's one action; it always closes. */
   closeLabel?: string;
+  /** A sheet with text fields rises above the keyboard. */
+  avoidKeyboard?: boolean;
   children: React.ReactNode;
 }
 
-export function Sheet({ open, title, onClose, closeLabel = 'Done', children }: Props) {
+export function Sheet({ open, title, onClose, closeLabel = 'Done', avoidKeyboard, children }: Props) {
   const colors = useColors();
   const styles = makeStyles(colors);
   const insets = useSafeAreaInsets();
   const { height } = useWindowDimensions();
   return (
     <Modal visible={open} transparent animationType="slide" onRequestClose={onClose}>
-      <View style={styles.scrim}>
+      <KeyboardAvoidingView style={styles.scrim} behavior={avoidKeyboard && Platform.OS === 'ios' ? 'padding' : undefined} enabled={!!avoidKeyboard}>
         <Pressable style={StyleSheet.absoluteFill} onPress={onClose} accessibilityLabel="Close" />
         <View style={[styles.sheet, { maxHeight: height * 0.86, paddingBottom: 18 + insets.bottom }]}>
           <View style={styles.grab} />
@@ -45,7 +47,7 @@ export function Sheet({ open, title, onClose, closeLabel = 'Done', children }: P
             {children}
           </ScrollView>
         </View>
-      </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }

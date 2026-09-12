@@ -318,6 +318,35 @@ showed all three recipes from the cache and opened one. Not verified: the
 AppState transition on a real phone (Chromium's visibilitychange stands in
 for it).
 
+**Phase 2, second slice — SHIPPED (Sep 12): the edit sheets.**
+`components/edit/EditSheet.tsx` is the web's EditSheet ported over the
+Sheet shell: the ingredient form (one amount field — `parseAmount`
+decides — a unit picker from the validator's own set, name with the
+link-consequence warning, note, "Used in" from `validMoveTargets`, delete
+with `deleteIngredientBlocker`'s sentence), the step form (label, time
+and temperature, input order by up/down, add an ingredient, split, add
+step after, merge into next, delete), the recipe form (title, serves —
+`recipe.servings`, which clears `entry.servings` on commit — yield,
+source, link, add a section) and the section form (name with the
+warning, standing note, delete behind a confirm that carries the
+consequence). Every op is validated against the candidate tree before
+it is applied and a field's problem is drawn absolutely, so nothing in
+the sheet moves under a tap. RecipeScreen owns edit mode: an Edit
+button in the facts row, the persistent cool edit bar with Recipe…,
+Undo (50 deep) and Done, the diagram's cool outline and 44px section
+titles, and `applyOp` — apply, validate, reconcile done, push undo,
+write through the sync engine. Verified against real writes in Chromium
+with each read back from the row: a tap in edit mode opens the sheet
+and does not toggle; amount, name, unit, note, a move between steps,
+step label and minutes, add step after, undo, serves (and the entry's
+servings clearing), and a section rename all landed; an empty name
+showed the validator's sentence under its field with the Done button
+moving 0px and nothing written; a delete that the tree forbids is
+disabled with its reason; thirteen writes, all 200, none conflicting.
+Not ported yet: the press-and-hold drag to move an ingredient (the
+sheet's "Used in" list is the move for now), and the keyboard's
+behaviour over the sheet on a real phone — Chromium has no soft keyboard.
+
 **Open question — an offline WRITE queue.** The cache makes the library
 readable on dead wifi; a tap made there still fails and rolls back, with
 a notice. Queuing writes to replay on reconnect is the next step and a

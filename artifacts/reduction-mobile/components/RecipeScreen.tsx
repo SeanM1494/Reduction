@@ -27,15 +27,18 @@
  * rating.
  */
 
-import React, { useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import { Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { DiagramView } from '@/components/diagram/DiagramView';
 import { ServingsRow } from '@/components/recipe/ServingsRow';
 import { RatingControl } from '@/components/recipe/RatingControl';
 import { StepsMode } from '@/components/recipe/StepsMode';
+import { EditSheet, type EditTarget } from '@/components/edit/EditSheet';
 import { SheetButton } from '@/components/Sheet';
-import type { Recipe } from '@/shared/layout';
+import { validateRecipe, type Recipe } from '@/shared/layout';
+import { applyEdit, type EditOp } from '@/shared/edits';
+import { reconcileDone } from '@/shared/progress';
 import type { OrderPreference } from '@/shared/sequence';
 import { MEAL_TYPE_LABELS, sanitizeMealTypes } from '@/shared/mealTypes';
 import { countAll } from '@/shared/amounts';
@@ -154,6 +157,10 @@ interface RecipeScreenProps {
 
 type ViewMode = 'overview' | 'cook';
 
+/** Deep enough that undo is a real safety net, bounded so a long editing
+ *  session cannot grow without limit. */
+const UNDO_LIMIT = 50;
+
 export function RecipeScreen({
   recipe,
   done,
@@ -182,8 +189,21 @@ export function RecipeScreen({
   const [view, setView] = useState<ViewMode>(mode === 'steps' ? 'cook' : 'overview');
   const pickView = (v: ViewMode) => {
     setView(v);
+    if (v === 'cook') stopEditing();
     if (!isDraft && v !== (mode === 'steps' ? 'cook' : 'overview')) onUpdate({ mode: v === 'cook' ? 'steps' : 'diagram' });
   };
+
+  /**
+   * Edit mode. Ephemeral like `view`: opening another recipe lands back in
+   * cooking mode, which is the mode someone opening a recipe is nearly
+   * always in. Undo is multi-level because it costs almost nothing — every
+   * edit already produces a whole new Recipe, so the stack is just the
+   * previous ones — bounded so a long session cannot grow without limit.
+   */
+  const [editing, setEditing] = useState(false);
+  const [sheetFor, setSheetFor] = useState<EditTarget | null>(null);
+  const [undoStack, setUndoStack] = useState<Array<{ recipe: Recipe; done: string[] }>>([]);
+  const [editError, setEditError] = useState<string | null>(null);
 
   const doneCount = done.length;
   const total = countAll(recipe);
@@ -207,6 +227,61 @@ export function RecipeScreen({
   };
   const doneSet = useMemo(() => new Set(done), [done]);
   const types = sanitizeMealTypes(recipe.mealTypes);
+
+  /**
+   * Applies one edit, immediately. No Save button: the change is the save.
+   * The candidate is validated before it is kept, the previous tree goes on
+   * the undo stack, and a server rejection rolls back through the sync
+   * engine's notice. `done` is reconciled through shared/progress.ts, so
+   * an op that deletes something can never leave a stale id behind.
+   * Correcting what the recipe MAKES clears tonight's servings: "8" against
+   * a base of 4 meant double, and against a corrected base of 6 it would
+   * silently mean 1.33x — every amount moving because of an edit to a
+   * different field.
+   */
+  const applyOp = useCallback(
+    (op: EditOp) => {
+      let next: Recipe;
+      try {
+        next = applyEdit(recipe, op);
+      } catch (e) {
+        setEditError((e as Error).message);
+        return;
+      }
+      const problems = validateRecipe(next);
+      if (problems.length) {
+        // The sheet checks before calling, so reaching here means something
+        // upstream is wrong rather than that the user typed something odd.
+        setEditError(problems[0]);
+        return;
+      }
+      const reconciled = reconcileDone(next, done);
+      setUndoStack((prev) => [...prev, { recipe, done }].slice(-UNDO_LIMIT));
+      const clearsServings = op.type === 'setRecipeFields' && 'servings' in op.fields;
+      const patch: EntryPatch = { recipe: next, done: reconciled.done };
+      if (clearsServings) patch.servings = null;
+      onUpdate(patch);
+      // Structural ops close the sheet: a section index or a deleted id must
+      // not outlive the tree it came from.
+      if (op.type !== 'setIngredientFields' && op.type !== 'setStepFields' && op.type !== 'setRecipeFields' && op.type !== 'setSectionFields' && op.type !== 'reorderInputs') {
+        setSheetFor(null);
+      }
+    },
+    [recipe, done, onUpdate]
+  );
+
+  const undo = useCallback(() => {
+    const last = undoStack[undoStack.length - 1];
+    if (!last) return;
+    setUndoStack((prev) => prev.slice(0, -1));
+    onUpdate({ recipe: last.recipe, done: last.done });
+  }, [undoStack, onUpdate]);
+
+  const stopEditing = () => {
+    setEditing(false);
+    setSheetFor(null);
+    setEditError(null);
+  };
 
   return (
     <View style={styles.container}>
@@ -245,7 +320,7 @@ export function RecipeScreen({
               recipe rather than about this cooking session. The rating only
               appears once the recipe has actually been cooked — before that
               it would collect an opinion about a web page. */}
-          {canEdit ? (
+          {canEdit && !editing ? (
             <View style={styles.factsRow}>
               {cooked.length > 0 ? <RatingControl rating={rating} onChange={(r) => onUpdate({ rating: r })} /> : null}
               <Pressable
@@ -258,6 +333,31 @@ export function RecipeScreen({
                 <Text style={styles.tagText}>{types.length ? MEAL_TYPE_LABELS[types[0]].toUpperCase() : 'TAG MEAL TYPE'}</Text>
                 {types.length > 1 ? <Text style={styles.tagMore}>+{types.length - 1}</Text> : null}
               </Pressable>
+              <View style={styles.factsSpacer} />
+              <SheetButton label="Edit" onPress={() => setEditing(true)} testID="recipe-edit" />
+            </View>
+          ) : null}
+          {/* The mode has to announce itself. Someone who wanders into edit
+              mode and taps around must not be left wondering why nothing
+              checks off — so the bar is persistent, not a toast. The
+              recipe's own fields have no cell to tap, so they live here. */}
+          {editing ? (
+            <View style={styles.editBar} accessibilityRole="summary" testID="edit-bar">
+              <View style={styles.editDot} />
+              <Text style={styles.editText}>
+                <Text style={styles.editStrong}>Editing.</Text> Tap a cell or a section title to change it. Nothing is being checked off.
+              </Text>
+              <View style={styles.editActions}>
+                <SheetButton label="Recipe…" onPress={() => setSheetFor({ kind: 'recipe' })} testID="edit-recipe" />
+                <SheetButton label="Undo" disabled={undoStack.length === 0} onPress={undo} testID="edit-undo" />
+                <SheetButton label="Done" onPress={stopEditing} testID="edit-done" />
+              </View>
+            </View>
+          ) : null}
+          {editError ? (
+            <View style={styles.notice} accessibilityRole="alert">
+              <Text style={styles.noticeText}>{editError}</Text>
+              <SheetButton label="Dismiss" onPress={() => setEditError(null)} />
             </View>
           ) : null}
           {showServings ? (
@@ -268,11 +368,18 @@ export function RecipeScreen({
               onChange={(next) => onUpdate({ servings: next })}
             />
           ) : null}
-          <DiagramView recipe={recipe} done={doneSet} onToggle={toggle} scale={scale} />
+          <DiagramView
+            recipe={recipe}
+            done={doneSet}
+            onToggle={toggle}
+            scale={scale}
+            edit={editing ? { onTapCell: (id) => setSheetFor({ kind: 'node', id }), onTapSection: (index) => setSheetFor({ kind: 'section', index }) } : null}
+          />
           {overviewFooter ?? (
             <Text style={styles.hint}>
-              Amber means you can do it now. Tap any step further right to jump ahead — everything it depends on gets
-              marked done with it.
+              {editing
+                ? 'Changes save as you make them. Undo reverses the last one.'
+                : 'Amber means you can do it now. Tap any step further right to jump ahead — everything it depends on gets marked done with it.'}
             </Text>
           )}
           {/* A 44px row rather than an inline link: the web's 12px anchor is
@@ -305,6 +412,8 @@ export function RecipeScreen({
           onSetOrder={(next) => onUpdate({ order: next })}
         />
       )}
+
+      {editing ? <EditSheet recipe={recipe} target={sheetFor} onApply={applyOp} onClose={() => setSheetFor(null)} /> : null}
 
       {isDraft ? (
         <View style={styles.saveBar}>
@@ -375,6 +484,25 @@ function makeStyles(colors: Colors) {
     noticeText: { fontSize: 13.5, lineHeight: 19, color: colors.dangerInk },
     scrollContent: { paddingHorizontal: 20, paddingBottom: 100 },
     factsRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 8, marginBottom: 10 },
+    factsSpacer: { flex: 1 },
+    // .rd-editbar: cool tint, cool line, persistent.
+    editBar: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      alignItems: 'center',
+      gap: 10,
+      backgroundColor: colors.coolBg,
+      borderWidth: 1,
+      borderColor: colors.coolLine,
+      borderRadius: colors.radiusButton,
+      paddingVertical: 10,
+      paddingHorizontal: 12,
+      marginBottom: 14,
+    },
+    editDot: { width: 9, height: 9, borderRadius: 5, backgroundColor: colors.coolInk },
+    editText: { flex: 1, minWidth: 200, fontSize: 13.5, lineHeight: 19, color: colors.coolInk },
+    editStrong: { fontWeight: '700' },
+    editActions: { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
     tagBadge: {
       flexDirection: 'row',
       alignItems: 'center',
