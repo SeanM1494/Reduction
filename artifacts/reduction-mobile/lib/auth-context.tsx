@@ -28,11 +28,16 @@ import {
   setAuthToken,
   signOutServer,
 } from './api';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { deleteSecureItem, getSecureItem, setSecureItem } from './secure-storage';
 
 WebBrowser.maybeCompleteAuthSession();
 
 const TOKEN_KEY = 'reduction_session_token';
+/** The account behind the token, remembered so a launch with no network
+ *  still knows who is signed in — which is what lets the library's disk
+ *  cache (lib/libraryCache.ts, keyed by user) be read at all. */
+const USER_KEY = 'reduction_session_user';
 
 export interface AuthUser {
   id: string;
@@ -72,6 +77,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
    *  instead of returning them to sign-in. */
   const forgetSession = useCallback(async () => {
     await deleteSecureItem(TOKEN_KEY).catch(() => {});
+    await AsyncStorage.removeItem(USER_KEY).catch(() => {});
     setAuthToken(null);
     setToken(null);
     setUser(null);
@@ -91,16 +97,30 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         await forgetSession();
         return;
       }
-      setUser({
+      const next: AuthUser = {
         id: (me.user as any).id,
         email: (me.user as any).email ?? null,
         name: (me.user as any).displayName ?? (me.user as any).name ?? null,
-      });
+      };
+      setUser(next);
       setEntitlement(billing.entitlement ?? null);
+      await AsyncStorage.setItem(USER_KEY, JSON.stringify(next)).catch(() => {});
     } catch {
       // A failed *network* refresh leaves the previous state in place rather
       // than signing someone out over a flaky connection — only an explicit
-      // "no user" response above is treated as an invalid session.
+      // "no user" response above is treated as an invalid session. At a cold
+      // launch there is no previous state in memory, so it comes from disk:
+      // the account the token was last confirmed for.
+      setUser((cur) => cur ?? null);
+      const remembered = await AsyncStorage.getItem(USER_KEY).catch(() => null);
+      if (remembered) {
+        try {
+          const parsed = JSON.parse(remembered) as AuthUser;
+          if (parsed?.id) setUser((cur) => cur ?? parsed);
+        } catch {
+          // A damaged record is no record.
+        }
+      }
     }
   }, [forgetSession]);
 

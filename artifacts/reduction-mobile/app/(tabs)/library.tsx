@@ -36,7 +36,7 @@ import { fonts } from '@/constants/colors';
 export default function LibraryScreen() {
   const colors = useColors();
   const styles = makeStyles(colors);
-  const { entries, loading, error, refresh } = useLibrary();
+  const { entries, loading, error, refresh, notice, clearNotice } = useLibrary();
   const [filter, setFilter] = useState<Filter>('all');
   const [sort, setSort] = useState<SortKey>('added');
   const [sortOpen, setSortOpen] = useState(false);
@@ -106,6 +106,7 @@ export default function LibraryScreen() {
         ListHeaderComponent={
           <View style={styles.head}>
             {error ? <ErrorBox message={error} onRetry={refresh} colors={colors} /> : null}
+            {notice?.kind === 'failure' ? <NoticeBox message={notice.message} onDismiss={clearNotice} colors={colors} /> : null}
             <View style={styles.sortRow}>
               <Pressable
                 accessibilityRole="button"
@@ -155,6 +156,16 @@ export default function LibraryScreen() {
         renderItem={({ item }) => <RecipeCard entry={item} onPress={() => router.push(`/recipe/${item.id}`)} />}
       />
       <SortSheet open={sortOpen} value={sort} onPick={setSort} onClose={() => setSortOpen(false)} />
+    </View>
+  );
+}
+
+function NoticeBox({ message, onDismiss, colors }: { message: string; onDismiss: () => void; colors: Colors }) {
+  const styles = makeStyles(colors);
+  return (
+    <View style={styles.error} accessibilityRole="alert" testID="library-notice">
+      <Text style={styles.errorText}>{message}</Text>
+      <SheetButton label="Dismiss" onPress={onDismiss} />
     </View>
   );
 }

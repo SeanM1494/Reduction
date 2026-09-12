@@ -12,8 +12,9 @@
  * menu reaches — meal types, the delete confirmation — because the same
  * meal-type sheet is also opened from the badge inside RecipeScreen.
  *
- * A write the server refused is rolled back by the context and shown here
- * until dismissed: an edit that silently vanishes is the worst thing this
+ * A write the server refused is rolled back by the sync engine and shown
+ * here as a notice until dismissed — as is a conflict it resolved against
+ * another device: an edit that silently vanishes is the worst thing this
  * screen can produce (see the web's "Writes are confirmed, not assumed").
  */
 
@@ -31,7 +32,7 @@ export default function RecipeDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const colors = useColors();
   const styles = makeStyles(colors);
-  const { draft, setDraft, getEntry, update, remove, saveRecipe } = useLibrary();
+  const { draft, setDraft, getEntry, update, remove, saveRecipe, notice, clearNotice } = useLibrary();
   const [saving, setSaving] = useState(false);
   const [draftServings, setDraftServings] = useState<number | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -44,15 +45,15 @@ export default function RecipeDetailScreen() {
   const entry = isDraft ? null : getEntry(id);
   const recipeTitle = (isDraft ? draft?.recipe.title : entry?.recipe.title) || 'Recipe';
 
+  // Writes go through the sync engine (lib/library-context.tsx); a refused
+  // one comes back as a notice for this entry, with the rollback done.
   const write = useCallback(
     (patch: EntryPatch) => {
-      if (!entry) return;
-      update(entry.id, patch).catch((e: unknown) => {
-        setSyncError(`That change could not be saved (${(e as Error).message || 'unknown error'}). It has been undone.`);
-      });
+      if (entry) update(entry.id, patch);
     },
     [entry, update]
   );
+  const entryNotice = !isDraft && notice && notice.id === id ? notice.message : null;
 
   if (isDraft) {
     if (!draft) {
@@ -137,8 +138,11 @@ export default function RecipeDetailScreen() {
         order={entry.order ?? null}
         onUpdate={write}
         onEditMealTypes={() => setMealSheetOpen(true)}
-        notice={syncError}
-        onDismissNotice={() => setSyncError(null)}
+        notice={syncError ?? entryNotice}
+        onDismissNotice={() => {
+          setSyncError(null);
+          clearNotice();
+        }}
       />
 
       <Sheet open={menuOpen} title={recipeTitle} closeLabel="Close" onClose={() => setMenuOpen(false)}>
@@ -195,16 +199,12 @@ export default function RecipeDetailScreen() {
             testID="recipe-delete-confirm"
             onPress={async () => {
               setDeleting(true);
-              try {
-                await remove(entry.id);
-                setConfirmDelete(false);
-                router.back();
-              } catch (e) {
-                setConfirmDelete(false);
-                setSyncError(`Could not delete that recipe (${(e as Error).message || 'unknown error'}).`);
-              } finally {
-                setDeleting(false);
-              }
+              // Optimistic: the row is gone from the list now; a failed
+              // delete brings it back with a notice on the library.
+              await remove(entry.id);
+              setConfirmDelete(false);
+              setDeleting(false);
+              router.back();
             }}
           />
         </View>

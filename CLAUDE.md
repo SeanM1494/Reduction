@@ -232,11 +232,14 @@ somebody can use the app at all, and the seventh guards a route that reads
 other people's accounts, and the eighth guards the second provider's write path
 with Apple's signature stubbed at the adapter's seam, and the ninth guards the
 one-time code that a phone's sign-in rides on, which has to be redeemable by an
-instance that never minted it. **The full suite — 359 tests at the time of
-writing — has been run against a real Postgres and passes 359/0.** The eight
-that are not api-server or model tests are the mobile library's filter and
-sort (`artifacts/reduction-mobile/lib/libraryView.test.ts`) and the photo
-size bounds (`photoSize.test.ts`): the runner walks
+instance that never minted it. **The full suite — 371 tests at the time of
+writing — has been run against a real Postgres and passes 371/0.** The
+twenty that are not api-server or model tests are the mobile library's
+filter and sort (`artifacts/reduction-mobile/lib/libraryView.test.ts`), the
+photo size bounds (`photoSize.test.ts`) and the sync engine
+(`syncEngine.test.ts`, against an in-memory model of the library route —
+the per-entry queue, the 409 merge and the refresh reconciliation are
+proven there, not only in the browser): the runner walks
 `reduction-mobile/components/diagram` and `reduction-mobile/lib` because
 both hold PURE modules — no react-native import, no `@/` alias — and a test
 there that imports either will fail to load under node rather than skip.
@@ -941,6 +944,9 @@ proofs. The rules that must survive any refactor:
   Plain union was tried first and resurrection of un-checks is why it lost.
 - **Writes are serialized per entry** (one in flight, newest queued), or
   cooking taps race their own `ifVersion` and pay a pointless 409 each.
+  On mobile that is `lib/syncEngine.ts`, the same engine behind a
+  transport seam; `lib/library-context.tsx` must stay a thin layer over
+  it and never grow a second write path.
 - **A tree conflict is never quiet.** Mine-wins is the rule, but it is the
   one rule that can discard real work, so both devices are told: the winner
   at merge time, the loser at its next focus refetch (`onSyncNotice`).

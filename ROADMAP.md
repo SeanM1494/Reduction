@@ -289,6 +289,42 @@ the per-entry write queue and the 409 merge are unchanged); then the edit
 sheets and drag. Editing before sync would build on writes that can
 silently lose.
 
+**Phase 2, first slice — SHIPPED (Sep 12): the sync engine.**
+`lib/syncEngine.ts` is the web storage.ts's write path, pure and behind
+two seams (a transport, and events for the screen), under twelve node
+tests against an in-memory model of the route's version check and 409
+body. It keeps every rule in CLAUDE.md's sync section: diff-only PATCH
+with ifVersion from `lastSynced`; one write in flight per entry with the
+newest queued (a create queues too, so an edit made before the row exists
+waits and then diffs against it); the 409 three-way merge with the
+un-check tombstones; tree conflicts reported to the winner at merge and
+to the loser at refresh; refused writes rolled back to the last accepted
+state and said so. `lib/library-context.tsx` is now a thin layer over it:
+the focus refetch is an AppState listener, and `notice` carries what the
+sync path had to say to the screen it concerns. `lib/libraryCache.ts`
+persists `lastSynced` per user to AsyncStorage — a READ cache: the
+library shows on launch before the network answers and is still readable
+with the API down (the account is remembered on disk for that, in
+auth-context), and hydrating the engine from it is sound because a
+cached ack is an ack. Verified against the real API with two Chromium
+"devices" on one account, every step read back from the row: three fast
+taps went out as three sequential PATCHes with climbing ifVersions and no
+409; a stale device's tap 409'd once, merged to the union and showed it;
+foregrounding adopted the other device's work with no write; meal types
+edited on both without a refetch between kept the later editor's and told
+it so, then told the first at its next foreground; a 422 rolled the tap
+back with the server's own sentence; a cold launch with the API blocked
+showed all three recipes from the cache and opened one. Not verified: the
+AppState transition on a real phone (Chromium's visibilitychange stands in
+for it).
+
+**Open question — an offline WRITE queue.** The cache makes the library
+readable on dead wifi; a tap made there still fails and rolls back, with
+a notice. Queuing writes to replay on reconnect is the next step and a
+real product decision: it means progress that looks saved is not, for an
+unbounded time, and a replay that lands after the laptop moved on has to
+merge blind. The web has no such queue either. Decide before Phase 3.
+
 **Phase 3 — monetization and notifications.** The server halves are done
 (above). What remains is client: the StoreKit purchase handler behind
 `setPurchaseHandler`, the paywall and coupon surfaces, the Settings
