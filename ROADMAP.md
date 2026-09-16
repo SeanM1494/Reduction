@@ -343,9 +343,44 @@ servings clearing), and a section rename all landed; an empty name
 showed the validator's sentence under its field with the Done button
 moving 0px and nothing written; a delete that the tree forbids is
 disabled with its reason; thirteen writes, all 200, none conflicting.
-Not ported yet: the press-and-hold drag to move an ingredient (the
-sheet's "Used in" list is the move for now), and the keyboard's
-behaviour over the sheet on a real phone — Chromium has no soft keyboard.
+Not verified: the keyboard's behaviour over the sheet on a real phone —
+Chromium has no soft keyboard.
+
+**The press-and-hold drag — ported (Sep 16).** In edit mode, holding an
+ingredient in the sticky column for 350ms lifts it (the web's hold; a
+cell here is also a tap target, so the hold has to be clearly longer
+than a slow tap), the steps it may legally join light up from
+`validMoveTargets` — the validator's own answer, never a re-derived
+predicate — a ghost of its name rides under the fingertip, the step
+under the finger takes the cool fill and heavier ring, and release
+applies `moveIngredient` through the same validate-undo-write path as
+the sheet's "Used in" list, which stays as the move for anyone who
+cannot drag. A pickup with nowhere to go (the only input of a step) is
+refused before anything moves, with the reason in the edit notice and a
+warning haptic; a hold that was refused does not open the sheet on
+release either. gesture-handler's Pan activated after the long press,
+as in the Reorder view, so a tap stays a tap and a swipe scrolls. The
+grid never reflows during a drag. Hit-testing is arithmetic against the
+solved rects (`components/diagram/dragMath.ts`, pure and tested): the
+finger's window point, the frame's window origin measured once at
+pickup, the scroller's offset and how far the page has scrolled since.
+Both scrollers scroll themselves while the finger loiters near an edge
+— the frame sideways so a step off to the right is reachable, the page
+vertically so the next step down is — because on a phone the next step
+is already off screen when an ingredient is centred (the web measured
+it on an SE; the geometry is the same here). Verified in Chromium at
+iPhone 13 against real writes, the row read back after each: a tap in
+edit mode still opens the sheet; lime held, lifted with two steps lit
+and its own step dimmed, dropped on "halve and scoop" (PATCH 200, the
+row's nodes moved); Undo put it back (200); avocados refused with
+"“halve and scoop” would be left with nothing" and no sheet on release;
+a release over nothing changed nothing; lime parked at the frame's
+right edge scrolled the frame 190px and was dropped on "fold together"
+once it came into view (200, row moved); salt parked at the window's
+bottom scrolled the page to its limit with the ghost still under the
+finger. Not verified: the hold's feel and the haptics on a real phone,
+and the drag over a native Modal (the sheet closes before any drag can
+start, so none is attempted there).
 
 **The offline write queue — built (Sep 16), as a five-minute window
 and nothing more.** Decided against a general offline system. A write

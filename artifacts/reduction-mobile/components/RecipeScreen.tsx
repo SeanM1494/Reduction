@@ -27,7 +27,7 @@
  * rating.
  */
 
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useRef, useState } from 'react';
 import { Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { DiagramView } from '@/components/diagram/DiagramView';
@@ -209,6 +209,24 @@ export function RecipeScreen({
   const [undoStack, setUndoStack] = useState<Array<{ recipe: Recipe; done: string[] }>>([]);
   const [editError, setEditError] = useState<string | null>(null);
 
+  // The diagram's press-and-hold drag: the page must not scroll under it,
+  // and it scrolls the page itself while the finger is near an edge. The
+  // offsets are refs because a drag reads them on every tick.
+  const [dragging, setDragging] = useState(false);
+  const overviewRef = useRef<ScrollView>(null);
+  const pageY = useRef(0);
+  const pageContentH = useRef(0);
+  const pageViewH = useRef(0);
+  const scrollPageBy = (dy: number): number => {
+    const max = Math.max(0, pageContentH.current - pageViewH.current);
+    const next = Math.min(max, Math.max(0, pageY.current + dy));
+    const moved = next - pageY.current;
+    if (moved === 0) return 0;
+    overviewRef.current?.scrollTo({ y: next, animated: false });
+    pageY.current = next;
+    return moved;
+  };
+
   const doneCount = done.length;
   const total = countAll(recipe);
   const pct = total ? Math.round((doneCount / total) * 100) : 0;
@@ -325,7 +343,22 @@ export function RecipeScreen({
       ) : null}
 
       {view === 'overview' ? (
-        <ScrollView contentContainerStyle={styles.scrollContent} testID="recipe-overview">
+        <ScrollView
+          ref={overviewRef}
+          contentContainerStyle={styles.scrollContent}
+          scrollEnabled={!dragging}
+          onScroll={(e) => {
+            pageY.current = e.nativeEvent.contentOffset.y;
+          }}
+          scrollEventThrottle={16}
+          onContentSizeChange={(_w, h) => {
+            pageContentH.current = h;
+          }}
+          onLayout={(e) => {
+            pageViewH.current = e.nativeEvent.layout.height;
+          }}
+          testID="recipe-overview"
+        >
           {/* Tag and rating share a row: both are standing facts about the
               recipe rather than about this cooking session. The rating only
               appears once the recipe has actually been cooked — before that
@@ -383,12 +416,23 @@ export function RecipeScreen({
             done={doneSet}
             onToggle={toggle}
             scale={scale}
-            edit={editing ? { onTapCell: (id) => setSheetFor({ kind: 'node', id }), onTapSection: (index) => setSheetFor({ kind: 'section', index }) } : null}
+            edit={
+              editing
+                ? {
+                    onTapCell: (id) => setSheetFor({ kind: 'node', id }),
+                    onTapSection: (index) => setSheetFor({ kind: 'section', index }),
+                    onMove: (ingredientId, toStepId) => applyOp({ type: 'moveIngredient', ingredientId, toStepId }),
+                    onBlocked: setEditError,
+                    onDragChange: setDragging,
+                    scrollPageBy,
+                  }
+                : null
+            }
           />
           {overviewFooter ?? (
             <Text style={styles.hint}>
               {editing
-                ? 'Changes save as you make them. Undo reverses the last one.'
+                ? 'Changes save as you make them. Press and hold an ingredient to move it to another step. Undo reverses the last one.'
                 : 'Amber means you can do it now. Tap any step further right to jump ahead — everything it depends on gets marked done with it.'}
             </Text>
           )}
