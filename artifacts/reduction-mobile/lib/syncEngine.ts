@@ -28,6 +28,19 @@
  *  - `refresh` (the focus refetch, an AppState change here) is
  *    load-bearing: it is what makes most conflicts never exist.
  *
+ * THE OFFLINE WINDOW. A write that fails because the network is unreachable
+ * — the request threw with no HTTP status, or timed out — is not a refusal.
+ * It is deferred: the optimistic state stays on screen, the newest state
+ * for that entry waits in `pending`, and `retry()` (which the screen calls
+ * on foreground and on a short interval) sends it again. A write that
+ * cannot get through within OFFLINE_WINDOW_MS of its first failure gives up
+ * the way an immediate failure does: rollback and `onFailure`. A deferred
+ * write that finally lands after the server has moved on takes the SAME
+ * path as any stale write — a 409 with the row, the three-way merge against
+ * `lastSynced`, a retry — because nothing in that path knows or cares how
+ * long the write waited. Deletes are not deferred; they fail at once and
+ * the row comes back. The queue lives in memory only (see ROADMAP).
+ *
  * `lastSynced` is the record of what the server has actually accepted, so it
  * advances per entry only when that entry's write resolves. It may be
  * hydrated from a cache of itself at launch (lib/libraryCache.ts): a cached
@@ -85,7 +98,26 @@ export interface EngineEvents<E extends SyncEntry> {
   onNotice(notice: SyncNotice<E>): void;
   /** `lastSynced` changed; the caller may persist it. */
   onSyncedChange?(entries: E[]): void;
+  /** The set of entries with a write waiting for the network changed. */
+  onDeferredChange?(ids: string[]): void;
 }
+
+export interface EngineOptions {
+  /** How long a write may wait for the network before it is given up. */
+  offlineWindowMs?: number;
+  /** The clock, for tests. */
+  now?: () => number;
+}
+
+/** Five minutes: long enough to cross the kitchen's dead spot, short
+ *  enough that what the screen shows is never far from what is stored. */
+export const OFFLINE_WINDOW_MS = 5 * 60 * 1000;
+
+/** A failure the network caused, not the server: the request never got an
+ *  HTTP status. lib/api.ts throws ApiError (with a status) for every reply
+ *  the server made, and a bare Error for a refused connection or a timeout. */
+export const isNetworkFailure = (e: unknown): boolean =>
+  typeof (e as { status?: unknown })?.status !== 'number';
 
 const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
 
@@ -124,9 +156,14 @@ const MAX_CONFLICT_RETRIES = 3;
 const TREE_CONFLICT = 'This recipe was edited on another device at the same time. Your edit was kept.';
 const REMOTE_UPDATE = 'This recipe was changed on another device.';
 
-export function createSyncEngine<E extends SyncEntry>(api: EngineApi<E>, events: EngineEvents<E>) {
+export function createSyncEngine<E extends SyncEntry>(api: EngineApi<E>, events: EngineEvents<E>, options: EngineOptions = {}) {
+  const windowMs = options.offlineWindowMs ?? OFFLINE_WINDOW_MS;
+  const now = options.now ?? Date.now;
   /** What the server last acknowledged, per entry. */
   const lastSynced = new Map<string, E>();
+  /** Entries whose write is waiting for the network, by when it first
+   *  failed. Their newest state is in `pending`. */
+  const deferred = new Map<string, number>();
   /** Ids this device un-checked since its last successful sync — see
    *  sync.ts for the one merge question they answer. Session-local. */
   const recentUnclears = new Map<string, Set<string>>();
@@ -157,22 +194,48 @@ export function createSyncEngine<E extends SyncEntry>(api: EngineApi<E>, events:
     if (set) for (const t of [...set]) if (now.has(t)) set.delete(t);
   };
 
+  const deferredChanged = () => events.onDeferredChange?.([...deferred.keys()]);
+
   const fail = (id: string, kind: SyncFailure<E>['kind'], accepted: E | null, e: unknown) => {
+    if (deferred.delete(id)) deferredChanged();
     const err = e as Error & { details?: string[] };
     events.onFailure({ id, kind, message: err?.message || 'Could not save that change.', details: err?.details, accepted });
   };
 
-  async function pushCreate(entry: E): Promise<void> {
+  /**
+   * A network failure inside the window keeps the write: the newest state
+   * stays queued and the screen keeps showing it. True when deferred, false
+   * when the window has closed and the caller should fail it instead.
+   */
+  const deferIfOffline = (id: string, entry: E, e: unknown): boolean => {
+    if (!isNetworkFailure(e)) return false;
+    const since = deferred.get(id) ?? now();
+    if (now() - since > windowMs) return false;
+    if (!deferred.has(id)) {
+      deferred.set(id, since);
+      deferredChanged();
+    }
+    // A newer state may have arrived while this one was failing; it wins.
+    if (!pending.has(id)) pending.set(id, entry);
+    return true;
+  };
+
+  /** True when the queue should stop for this entry (deferred or failed). */
+  async function pushCreate(entry: E): Promise<boolean> {
     try {
       const acked = await api.create(entry);
       creating.delete(entry.id);
+      if (deferred.delete(entry.id)) deferredChanged();
       ack(acked);
+      return false;
     } catch (e) {
+      if (deferIfOffline(entry.id, entry, e)) return true;
       creating.delete(entry.id);
       // Anything queued behind the failed create must not run as a PATCH
       // against a row that does not exist.
       pending.delete(entry.id);
       fail(entry.id, 'create', null, e);
+      return true;
     }
   }
 
@@ -186,6 +249,7 @@ export function createSyncEngine<E extends SyncEntry>(api: EngineApi<E>, events:
       if (body === null) return;
       try {
         const acked = await api.patch(id, body);
+        if (deferred.delete(id)) deferredChanged();
         ack(acked);
         // The server now knows about the unchecks; the tombstones have done
         // their job for everything the ack covers.
@@ -224,12 +288,13 @@ export function createSyncEngine<E extends SyncEntry>(api: EngineApi<E>, events:
         const next = pending.get(id)!;
         pending.delete(id);
         if (creating.has(id)) {
-          await pushCreate(next);
+          if (await pushCreate(next)) break;
           continue;
         }
         try {
           await pushUpdate(id, next);
         } catch (e) {
+          if (deferIfOffline(id, next, e)) break;
           fail(id, 'update', lastAccepted(id), e);
         }
       }
@@ -322,6 +387,9 @@ export function createSyncEngine<E extends SyncEntry>(api: EngineApi<E>, events:
         lastSynced.set(local.id, theirs);
         const adopted = { ...local, ...merged, version: theirs.version } as E;
         out.push(adopted);
+        // A write waiting for the network now carries the merge, so what it
+        // sends is what the screen shows.
+        if (deferred.has(local.id)) pending.set(local.id, adopted);
         if (treeConflict) events.onNotice({ id: local.id, kind: 'tree_conflict', message: TREE_CONFLICT, entry: adopted });
       }
       // Rows on the server and not here: created on another device.
@@ -335,6 +403,37 @@ export function createSyncEngine<E extends SyncEntry>(api: EngineApi<E>, events:
 
     lastAccepted,
 
+    /** Sends every write that is waiting for the network, once each. The
+     *  screen calls this on foreground and on a short interval while
+     *  anything is deferred; a write past its window fails here. */
+    retry(): void {
+      for (const id of [...deferred.keys()]) {
+        if (inFlight.has(id)) continue;
+        const entry = pending.get(id);
+        if (!entry) {
+          deferred.delete(id);
+          deferredChanged();
+          continue;
+        }
+        if (now() - (deferred.get(id) ?? now()) > windowMs) {
+          pending.delete(id);
+          if (creating.has(id)) {
+            creating.delete(id);
+            fail(id, 'create', null, new Error('No connection.'));
+          } else {
+            fail(id, 'update', lastAccepted(id), new Error('No connection.'));
+          }
+          continue;
+        }
+        enqueue(id, entry);
+      }
+    },
+
+    /** Ids with a write waiting for the network. */
+    deferredIds(): string[] {
+      return [...deferred.keys()];
+    },
+
     /** Resolves when every queued write has settled. For tests, and for a
      *  sign-out that should not leave a write in the air. */
     async idle(): Promise<void> {
@@ -347,6 +446,10 @@ export function createSyncEngine<E extends SyncEntry>(api: EngineApi<E>, events:
       recentUnclears.clear();
       pending.clear();
       creating.clear();
+      if (deferred.size) {
+        deferred.clear();
+        deferredChanged();
+      }
     },
   };
 }

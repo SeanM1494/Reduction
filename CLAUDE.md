@@ -232,14 +232,14 @@ somebody can use the app at all, and the seventh guards a route that reads
 other people's accounts, and the eighth guards the second provider's write path
 with Apple's signature stubbed at the adapter's seam, and the ninth guards the
 one-time code that a phone's sign-in rides on, which has to be redeemable by an
-instance that never minted it. **The full suite — 371 tests at the time of
-writing — has been run against a real Postgres and passes 371/0.** The
-twenty that are not api-server or model tests are the mobile library's
+instance that never minted it. **The full suite — 379 tests at the time of
+writing — has been run against a real Postgres and passes 379/0.** The
+twenty-eight that are not api-server or model tests are the mobile library's
 filter and sort (`artifacts/reduction-mobile/lib/libraryView.test.ts`), the
 photo size bounds (`photoSize.test.ts`) and the sync engine
 (`syncEngine.test.ts`, against an in-memory model of the library route —
-the per-entry queue, the 409 merge and the refresh reconciliation are
-proven there, not only in the browser): the runner walks
+the per-entry queue, the 409 merge, the refresh reconciliation and the
+offline window are proven there, not only in the browser): the runner walks
 `reduction-mobile/components/diagram` and `reduction-mobile/lib` because
 both hold PURE modules — no react-native import, no `@/` alias — and a test
 there that imports either will fail to load under node rather than skip.
@@ -947,6 +947,17 @@ proofs. The rules that must survive any refactor:
   On mobile that is `lib/syncEngine.ts`, the same engine behind a
   transport seam; `lib/library-context.tsx` must stay a thin layer over
   it and never grow a second write path.
+- **Offline is a window, not a mode** (mobile only). A write that fails
+  with no HTTP status — the network unreachable, or the 15s request
+  timeout in `lib/api.ts` — is deferred, not rolled back: the optimistic
+  state stays, the engine retries on foreground and every 10s, and after
+  `OFFLINE_WINDOW_MS` (5 minutes) it gives up exactly the way an immediate
+  refusal does. A real refusal (any status) never waits. The queue is
+  memory only — it must not grow a disk half without the decision in
+  ROADMAP — and deletes are never deferred. Keep `isNetworkFailure` the
+  single test of "was that the network"; a transport that throws a status
+  for a network error would silently turn every dead-wifi tap back into
+  an instant rollback.
 - **A tree conflict is never quiet.** Mine-wins is the rule, but it is the
   one rule that can discard real work, so both devices are told: the winner
   at merge time, the loser at its next focus refetch (`onSyncNotice`).

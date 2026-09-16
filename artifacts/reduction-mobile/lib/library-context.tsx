@@ -16,7 +16,10 @@
  * WRITES ARE CONFIRMED, NOT ASSUMED. A failure rolls the entry back to the
  * last version the server accepted (or drops it, for a create that never
  * landed) and sets `notice`, which the recipe screen shows until dismissed.
- * Nothing here ever pretends a write happened.
+ * Nothing here ever pretends a write happened — except, deliberately, for
+ * the engine's offline window: a write the NETWORK refused stays on screen
+ * as `queued` and is retried on foreground and on an interval, and only
+ * past the window does it roll back like any other failure.
  *
  * There is no anonymous X-Owner-Key library on mobile (sign-in is required
  * before any save), so there is nothing to migrate and nothing to claim.
@@ -56,6 +59,11 @@ export interface LibraryNotice {
   message: string;
 }
 
+/** How often a write waiting for the network is tried again, on top of
+ *  the foreground retry. Short enough to feel automatic across the
+ *  kitchen's dead spot; the engine's window bounds how long it goes on. */
+const OFFLINE_RETRY_MS = 10_000;
+
 interface LibraryState {
   entries: Entry[];
   loading: boolean;
@@ -69,6 +77,9 @@ interface LibraryState {
    *  remote change, a refused write. Shown by the screen it concerns. */
   notice: LibraryNotice | null;
   clearNotice: () => void;
+  /** Entries with a write waiting for the network (the offline window).
+   *  Their screens show the optimistic state and say it is waiting. */
+  queued: string[];
   draft: { recipe: Recipe; sourceUrl?: string | null } | null;
   setDraft: (draft: { recipe: Recipe; sourceUrl?: string | null } | null) => void;
 }
@@ -107,6 +118,7 @@ export function LibraryProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<LibraryNotice | null>(null);
+  const [queued, setQueued] = useState<string[]>([]);
   const [draft, setDraft] = useState<{ recipe: Recipe; sourceUrl?: string | null } | null>(null);
 
   const replaceEntry = useCallback((next: Entry) => {
@@ -137,6 +149,7 @@ export function LibraryProvider({ children }: { children: React.ReactNode }) {
       onSyncedChange: (synced) => {
         if (userId) void writeLibraryCache(userId, synced);
       },
+      onDeferredChange: (ids) => setQueued(ids),
     });
   }
   const engine = engineRef.current;
@@ -178,14 +191,25 @@ export function LibraryProvider({ children }: { children: React.ReactNode }) {
   }, [userId, engine, refresh]);
 
   // The focus refetch: coming back to the foreground re-reads the library
-  // before the next write can collide with what happened elsewhere.
+  // before the next write can collide with what happened elsewhere — and
+  // then sends whatever was waiting for the network, merged with what the
+  // refetch found.
   useEffect(() => {
     if (!userId) return;
     const sub = AppState.addEventListener('change', (state: AppStateStatus) => {
-      if (state === 'active') void refresh();
+      if (state === 'active') void refresh().then(() => engine.retry());
     });
     return () => sub.remove();
-  }, [userId, refresh]);
+  }, [userId, refresh, engine]);
+
+  // While anything is waiting for the network, try again every few
+  // seconds. The engine gives up past its window, so this cannot run for
+  // ever on a write that will never land.
+  useEffect(() => {
+    if (!queued.length) return;
+    const id = setInterval(() => engine.retry(), OFFLINE_RETRY_MS);
+    return () => clearInterval(id);
+  }, [queued.length, engine]);
 
   const getEntry = useCallback((id: string) => entries.find((e) => e.id === id), [entries]);
 
@@ -230,8 +254,8 @@ export function LibraryProvider({ children }: { children: React.ReactNode }) {
   const clearNotice = useCallback(() => setNotice(null), []);
 
   const value = useMemo<LibraryState>(
-    () => ({ entries, loading, error, refresh, getEntry, saveRecipe, update, remove, notice, clearNotice, draft, setDraft }),
-    [entries, loading, error, refresh, getEntry, saveRecipe, update, remove, notice, clearNotice, draft]
+    () => ({ entries, loading, error, refresh, getEntry, saveRecipe, update, remove, notice, clearNotice, queued, draft, setDraft }),
+    [entries, loading, error, refresh, getEntry, saveRecipe, update, remove, notice, clearNotice, queued, draft]
   );
 
   return <LibraryContext.Provider value={value}>{children}</LibraryContext.Provider>;

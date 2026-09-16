@@ -32,7 +32,7 @@ export default function RecipeDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const colors = useColors();
   const styles = makeStyles(colors);
-  const { draft, setDraft, getEntry, update, remove, saveRecipe, notice, clearNotice } = useLibrary();
+  const { draft, setDraft, getEntry, update, remove, saveRecipe, notice, clearNotice, queued } = useLibrary();
   const [saving, setSaving] = useState(false);
   const [draftServings, setDraftServings] = useState<number | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -143,6 +143,7 @@ export default function RecipeDetailScreen() {
           setSyncError(null);
           clearNotice();
         }}
+        offlineQueued={queued.includes(entry.id)}
       />
 
       <Sheet open={menuOpen} title={recipeTitle} closeLabel="Close" onClose={() => setMenuOpen(false)}>

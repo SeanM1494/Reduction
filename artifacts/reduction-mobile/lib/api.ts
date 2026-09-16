@@ -43,6 +43,17 @@ export class ApiError extends Error {
   }
 }
 
+/**
+ * How long a request may hang before it is treated as the network failing.
+ * Without this a phone on one bar waits for the OS to give up — on the
+ * order of a minute — with a checkmark on screen that may then revert. With
+ * it, a hung write becomes a bare Error (no HTTP status), which the sync
+ * engine reads as "offline" and keeps for its window. Reads are bounded by
+ * the same number: a library fetch that has not answered in this long is
+ * not going to.
+ */
+export const REQUEST_TIMEOUT_MS = 15_000;
+
 async function request(path: string, init?: RequestInit): Promise<any> {
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
@@ -50,7 +61,20 @@ async function request(path: string, init?: RequestInit): Promise<any> {
   };
   if (authToken) headers['Authorization'] = `Bearer ${authToken}`;
 
-  const res = await fetch(`${baseUrl()}${path}`, { ...init, headers });
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  let res: Response;
+  try {
+    res = await fetch(`${baseUrl()}${path}`, { ...init, headers, signal: controller.signal });
+  } catch (e) {
+    // No status on purpose: the sync engine keys "offline" on its absence.
+    // An aborted write may still have reached the server; the retry then
+    // 409s against its own commit and merges, which is the safe outcome.
+    if ((e as Error)?.name === 'AbortError') throw new Error('The request timed out.');
+    throw e;
+  } finally {
+    clearTimeout(timer);
+  }
   const body = await res.json().catch(() => ({}));
   if (!res.ok) {
     throw new ApiError(body.error || `Request failed (${res.status}).`, res.status, {

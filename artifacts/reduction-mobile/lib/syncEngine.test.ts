@@ -6,7 +6,7 @@
  */
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { buildPatch, createSyncEngine, type EngineApi, type SyncEntry, type SyncFailure, type SyncNotice } from './syncEngine';
+import { buildPatch, createSyncEngine, isNetworkFailure, OFFLINE_WINDOW_MS, type EngineApi, type EngineOptions, type SyncEntry, type SyncFailure, type SyncNotice } from './syncEngine';
 
 interface E extends SyncEntry {}
 
@@ -99,17 +99,39 @@ function server(initial: E[] = []) {
   };
 }
 
-function harness(initial: E[] = []) {
+function harness(initial: E[] = [], options: EngineOptions = {}) {
   const s = server(initial);
   const replaced: E[] = [];
   const failures: SyncFailure<E>[] = [];
   const notices: SyncNotice<E>[] = [];
-  const engine = createSyncEngine<E>(s.api, {
-    onReplaced: (e) => replaced.push(e),
-    onFailure: (f) => failures.push(f),
-    onNotice: (n) => notices.push(n),
-  });
-  return { ...s, engine, replaced, failures, notices };
+  const deferredLog: string[][] = [];
+  const engine = createSyncEngine<E>(
+    s.api,
+    {
+      onReplaced: (e) => replaced.push(e),
+      onFailure: (f) => failures.push(f),
+      onNotice: (n) => notices.push(n),
+      onDeferredChange: (ids) => deferredLog.push(ids),
+    },
+    options
+  );
+  return { ...s, engine, replaced, failures, notices, deferredLog };
+}
+
+/** The network is down: the transport throws the way fetch does — a bare
+ *  Error with no HTTP status. */
+function offline(s: ReturnType<typeof server>) {
+  const real = { patch: s.api.patch, create: s.api.create };
+  s.api.patch = async () => {
+    throw new TypeError('Network request failed');
+  };
+  s.api.create = async () => {
+    throw new TypeError('Network request failed');
+  };
+  return () => {
+    s.api.patch = real.patch;
+    s.api.create = real.create;
+  };
 }
 
 test('buildPatch sends only what changed, plus the base version', () => {
@@ -286,4 +308,150 @@ test('a failed delete restores the accepted state', async () => {
   assert.equal(h.failures.length, 1);
   assert.equal(h.failures[0].kind, 'delete');
   assert.equal(h.engine.lastAccepted('r1')!.id, 'r1');
+});
+
+// ---------------------------------------------------------- offline ------
+
+test('isNetworkFailure: no HTTP status means the network, a status means the server', () => {
+  assert.equal(isNetworkFailure(new TypeError('Network request failed')), true);
+  assert.equal(isNetworkFailure(new Error('Request timed out')), true);
+  assert.equal(isNetworkFailure(Object.assign(new Error('conflict'), { status: 409 })), false);
+  assert.equal(isNetworkFailure(Object.assign(new Error('rejected'), { status: 422 })), false);
+  assert.equal(isNetworkFailure(Object.assign(new Error('down'), { status: 503 })), false);
+});
+
+test('offline: a tap is kept, not rolled back, and sends itself when the network returns', async () => {
+  const h = harness([entry()]);
+  await h.engine.load();
+  const online = offline(h);
+  h.engine.save(entry({ done: ['avo'] }));
+  await h.engine.idle();
+  assert.equal(h.failures.length, 0, 'no rollback');
+  assert.deepEqual(h.engine.deferredIds(), ['r1']);
+  assert.deepEqual(h.deferredLog.at(-1), ['r1']);
+  // Still offline: another retry changes nothing and reports nothing.
+  h.engine.retry();
+  await h.engine.idle();
+  assert.equal(h.failures.length, 0);
+  assert.deepEqual(h.rows.get('r1')!.done, []);
+  online();
+  h.engine.retry();
+  await h.engine.idle();
+  assert.deepEqual(h.rows.get('r1')!.done, ['avo']);
+  assert.deepEqual(h.engine.deferredIds(), []);
+  assert.deepEqual(h.deferredLog.at(-1), []);
+  assert.equal(h.failures.length, 0);
+});
+
+test('offline: taps made while waiting collapse into the newest state, sent once', async () => {
+  const h = harness([entry()]);
+  await h.engine.load();
+  const online = offline(h);
+  h.engine.save(entry({ done: ['avo'] }));
+  await h.engine.idle();
+  h.engine.save(entry({ done: ['avo', 'd1'] }));
+  h.engine.save(entry({ done: ['avo', 'd1', 'lime'] }));
+  await h.engine.idle();
+  online();
+  const before = h.log.length;
+  h.engine.retry();
+  await h.engine.idle();
+  const patches = h.log.slice(before).filter((l) => l.op === 'patch');
+  assert.equal(patches.length, 1);
+  assert.deepEqual(patches[0].body, { done: ['avo', 'd1', 'lime'], ifVersion: 1 });
+});
+
+test('offline: past the window the write gives up — rollback and the failure, like an immediate refusal', async () => {
+  let clock = 1_000_000;
+  const h = harness([entry({ done: ['avo'] })], { now: () => clock });
+  await h.engine.load();
+  offline(h);
+  h.engine.save(entry({ done: ['avo', 'd1'] }));
+  await h.engine.idle();
+  assert.equal(h.failures.length, 0);
+  clock += OFFLINE_WINDOW_MS - 1000;
+  h.engine.retry();
+  await h.engine.idle();
+  assert.equal(h.failures.length, 0, 'inside the window: still waiting');
+  clock += 2000;
+  h.engine.retry();
+  await h.engine.idle();
+  assert.equal(h.failures.length, 1);
+  assert.equal(h.failures[0].kind, 'update');
+  assert.deepEqual(h.failures[0].accepted!.done, ['avo'], 'rolls back to the last acknowledged state');
+  assert.deepEqual(h.engine.deferredIds(), []);
+  assert.deepEqual(h.deferredLog.at(-1), []);
+});
+
+test('offline: a queued write that lands after the server moved on takes the ordinary 409 merge', async () => {
+  const h = harness([entry()]);
+  await h.engine.load();
+  const online = offline(h);
+  // This device, in the dead spot: the avocado branch.
+  h.engine.save(entry({ done: ['avo', 'd1'] }));
+  await h.engine.idle();
+  // Meanwhile the laptop did the lime and rated it.
+  h.external('r1', { done: ['lime'], rating: 1 });
+  online();
+  h.engine.retry();
+  await h.engine.idle();
+  const patches = h.log.filter((l) => l.op === 'patch');
+  assert.equal(patches.length, 2, 'the stale write 409d once and was retried merged');
+  assert.deepEqual([...h.rows.get('r1')!.done].sort(), ['avo', 'd1', 'lime']);
+  assert.equal(h.rows.get('r1')!.rating, 1);
+  assert.equal(h.replaced.length, 1, 'the screen adopted the merge');
+  assert.equal(h.failures.length, 0);
+  assert.equal(h.notices.length, 0);
+});
+
+test('offline: a refresh while a write waits folds the server into the queued write', async () => {
+  const h = harness([entry()]);
+  const loaded = await h.engine.load();
+  const online = offline(h);
+  const local = entry({ done: ['avo', 'd1'] });
+  h.engine.save(local);
+  await h.engine.idle();
+  h.external('r1', { rating: 1 });
+  // The list call still works (a partial outage) and the screen refreshes.
+  const out = await h.engine.refresh([local]);
+  assert.equal(out[0].rating, 1);
+  assert.deepEqual(out[0].done, ['avo', 'd1']);
+  online();
+  h.engine.retry();
+  await h.engine.idle();
+  const last = h.log.filter((l) => l.op === 'patch').at(-1)!;
+  assert.deepEqual(last.body, { done: ['avo', 'd1'], ifVersion: 2 }, 'sent against the fresh version, no 409');
+  assert.equal(h.rows.get('r1')!.rating, 1);
+  void loaded;
+});
+
+test('offline: a create waits too, and the edit queued behind it follows once it lands', async () => {
+  const h = harness();
+  await h.engine.load();
+  const online = offline(h);
+  const fresh = entry({ id: 'new', version: 0 });
+  h.engine.create(fresh);
+  await h.engine.idle();
+  h.engine.save({ ...fresh, done: ['avo'] });
+  await h.engine.idle();
+  assert.equal(h.failures.length, 0);
+  assert.deepEqual(h.engine.deferredIds(), ['new']);
+  online();
+  h.engine.retry();
+  await h.engine.idle();
+  assert.deepEqual(h.log.filter((l) => l.op !== 'list').map((l) => l.op), ['create']);
+  assert.deepEqual(h.rows.get('new')!.done, ['avo'], 'the create carried the newest state');
+  assert.equal(h.failures.length, 0);
+});
+
+test('a real server refusal while others wait is still immediate', async () => {
+  const h = harness([entry()]);
+  await h.engine.load();
+  h.api.patch = async () => {
+    throw Object.assign(new Error('That change was rejected.'), { status: 422 });
+  };
+  h.engine.save(entry({ done: ['avo'] }));
+  await h.engine.idle();
+  assert.equal(h.failures.length, 1);
+  assert.deepEqual(h.engine.deferredIds(), []);
 });

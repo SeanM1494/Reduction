@@ -347,12 +347,60 @@ Not ported yet: the press-and-hold drag to move an ingredient (the
 sheet's "Used in" list is the move for now), and the keyboard's
 behaviour over the sheet on a real phone — Chromium has no soft keyboard.
 
-**Open question — an offline WRITE queue.** The cache makes the library
-readable on dead wifi; a tap made there still fails and rolls back, with
-a notice. Queuing writes to replay on reconnect is the next step and a
-real product decision: it means progress that looks saved is not, for an
-unbounded time, and a replay that lands after the laptop moved on has to
-merge blind. The web has no such queue either. Decide before Phase 3.
+**The offline write queue — built (Sep 16), as a five-minute window
+and nothing more.** Decided against a general offline system. A write
+that fails because the network is unreachable (no HTTP status: the fetch
+threw, or the new 15-second request timeout in `lib/api.ts` fired) is not
+rolled back. The engine keeps the newest state for that entry queued, the
+screen keeps showing it, a muted banner on the recipe says "No connection.
+Your progress here is kept and will save when it returns.", and the write
+is retried on every return to the foreground (after the refresh) and
+every 10 seconds in between. Taps made while queued collapse into the one
+pending write. After five minutes from the first failure without a
+successful send, it gives up exactly as an immediate failure does: the
+entry rolls back to the last acknowledged state and the existing notice
+shows. A real refusal — any response with a status — never waits.
+
+*The merge case is the ordinary merge case.* A queued write carries the
+`ifVersion` of what the phone last had acknowledged. If the server moved
+on meanwhile, the replay 409s with the row, the three-way merge runs
+against `lastSynced`, and the merged state is retried — the same path a
+stale write has always taken, because nothing in it knows how long the
+write waited. If the phone comes back to the foreground first, the
+refresh merges the server's row into the queued state before it is sent,
+and there is no 409 at all. Both were verified against the real API in
+Chromium with the route aborted at the browser (no status, like dead
+wifi): one tap online (landed, v2); block; three taps (kept, banner, no
+notice, nothing in the DB through an interval retry at 10s); another
+device's change applied in SQL (unchecks one, checks another); foreground
+→ GET then one PATCH, DB v4 with the phone's three adds plus the other
+device's check, and its uncheck honoured — 4/12 on screen matching the
+row. Then the same with no foreground event: the interval retry sent the
+stale version, got a 409, retried, landed merged. And the expiry, waited
+out in real time: a tap with the route still blocked was on screen with
+the banner at 4½ minutes, and at 5 minutes it had rolled back (3/12 to
+2/12), the banner was gone, and the notice read "That change could not be
+saved (No connection.). It has been undone." — the DB untouched throughout.
+
+*What happens if the app is killed or backgrounded with something
+queued — plainly.* The queue is in memory only. A force-quit loses it: the
+next launch shows the disk cache, which is the last state the server
+acknowledged, so the taps made offline are gone with no notice (there is
+nothing left to notice from). Backgrounding keeps it: iOS suspends the JS
+thread within seconds, so the 10-second retry does not run in the
+background, but the queue survives suspension and the return to the
+foreground triggers refresh-then-retry. The window is wall-clock, so a
+phone backgrounded for longer than five minutes rolls back with the notice
+on return even if the network is fine by then. Deletes are not deferred:
+a delete with no network fails at once and the row comes back.
+
+*Open, and deliberately not built:* persisting the queue to disk so a
+force-quit replays it. That is what turns "looks saved, is not" from a
+five-minute risk into an unbounded one, with a replay that can land days
+later against a recipe edited elsewhere — the general offline system this
+was scoped away from. If real use shows people force-quitting mid-cook on
+dead wifi, that is the next decision, not a bug in this one. The web has
+no queue at all; it still fails and rolls back at once.
 
 **Phase 3 — monetization and notifications.** The server halves are done
 (above). What remains is client: the StoreKit purchase handler behind

@@ -141,6 +141,9 @@ interface RecipeScreenProps {
    *  "Writes are confirmed, not assumed"). */
   notice?: string | null;
   onDismissNotice?: () => void;
+  /** A write is waiting for the network: what is on screen is kept and will
+   *  be sent when the connection returns, so the banner is calm, not red. */
+  offlineQueued?: boolean;
   isDraft?: boolean;
   onSave?: () => void;
   saving?: boolean;
@@ -175,6 +178,7 @@ export function RecipeScreen({
   canEdit = true,
   notice,
   onDismissNotice,
+  offlineQueued,
   isDraft,
   onSave,
   saving,
@@ -306,6 +310,12 @@ export function RecipeScreen({
       </View>
 
       {above ? <View style={styles.above}>{above}</View> : null}
+
+      {offlineQueued && !notice ? (
+        <View style={styles.queuedBanner} accessibilityLiveRegion="polite" testID="offline-banner">
+          <Text style={styles.queuedText}>No connection. Your progress here is kept and will save when it returns.</Text>
+        </View>
+      ) : null}
 
       {notice ? (
         <View style={styles.notice} accessibilityRole="alert">
@@ -482,6 +492,17 @@ function makeStyles(colors: Colors) {
       gap: 10,
     },
     noticeText: { fontSize: 13.5, lineHeight: 19, color: colors.dangerInk },
+    queuedBanner: {
+      marginHorizontal: 20,
+      marginBottom: 12,
+      backgroundColor: colors.muted,
+      borderWidth: 1,
+      borderColor: colors.borderStrong,
+      borderRadius: 9,
+      paddingVertical: 10,
+      paddingHorizontal: 12,
+    },
+    queuedText: { fontSize: 13.5, lineHeight: 19, color: colors.mutedForeground },
     scrollContent: { paddingHorizontal: 20, paddingBottom: 100 },
     factsRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 8, marginBottom: 10 },
     factsSpacer: { flex: 1 },
