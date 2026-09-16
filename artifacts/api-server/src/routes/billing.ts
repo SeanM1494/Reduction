@@ -48,11 +48,12 @@ billingRouter.get("/config", (_req: Request, res: Response) => {
     // not sell while the adapter that verifies is unconfigured.
     nativePurchaseAvailable: appleIapConfig() !== null,
     priceLabel: "$1.99/month",
-    // The public marketing/app URL, not a secret — the mobile app's paywall
-    // links out to it (Apple's rules forbid an in-app Stripe checkout button,
-    // so mobile can only ever point at the web purchase flow, never start it
-    // itself). Null when unset rather than a guess, so the client can hide
-    // the link instead of sending someone to a broken URL.
+    // The public marketing/app URL, not a secret. The mobile app's Settings
+    // links an EXISTING web subscriber here to manage that plan; its wall
+    // never links out (Apple's rules forbid steering toward a purchase
+    // outside In-App Purchase, which is what the StoreKit handler is for).
+    // Null when unset rather than a guess, so the client can hide the link
+    // instead of sending someone to a broken URL.
     webUrl: process.env.PUBLIC_BASE_URL?.trim() || null,
   });
 });

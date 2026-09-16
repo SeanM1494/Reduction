@@ -29,9 +29,9 @@ suites guarding the model's invariants were orphaned with the backup — the
 package is what makes that impossible to repeat. It has NO runtime deps and
 NO env access on purpose: `@workspace/db` throws at import without
 DATABASE_URL, which is exactly why the frontend couldn't import it and the
-copies happened. (`artifacts/reduction-mobile` still holds its own copy. The native rebuild
-is now DECIDED — see ROADMAP's mobile section — and folding that copy into
-the package is the first act of real mobile work.)
+copies happened. (`artifacts/reduction-mobile`'s `shared/*.ts` are the same
+one-line shims since Phase 0 of the native rebuild folded its last local
+copy in — see ROADMAP's mobile section.)
 
 **Nothing may run `drizzle-kit push` at a non-local database.** In the Replit
 workspace, DATABASE_URL is PRODUCTION, and the scaffold's `post-merge.sh`

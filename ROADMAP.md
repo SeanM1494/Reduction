@@ -190,10 +190,9 @@ reaches Delete more easily than a mouse); (2) the recipe opens on its
 stored `mode` tab instead of the web's Diagram / Step-by-step chooser, and
 tapping a tab writes `mode`; (3) the list shows a sort control and a count
 where the web shows a "My Recipes" title, because the tab header already
-says Library. Also: `update` in the mobile context is not yet serialized
-per entry, so two fast cooking taps can race their own `ifVersion` and pay
-a 409-merge-retry — correct, but it is the Phase 2 write queue's job to
-make it free.
+says Library. (The per-entry serialization this slice lacked — two fast
+cooking taps racing their own `ifVersion` — arrived with the Phase 2 sync
+engine.)
 
 **Phase 1, fourth slice — SHIPPED (Sep 11): Cook mode is the web's
 StepsMode.** `components/recipe/StepsMode.tsx`: one card per step from
