@@ -3,7 +3,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { KeyboardProvider } from 'react-native-keyboard-controller';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { View } from 'react-native';
+import { Platform, View } from 'react-native';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { AuthProvider, useAuth } from '@/lib/auth-context';
 import { LibraryProvider } from '@/lib/library-context';
@@ -22,17 +22,28 @@ import { Stack, router } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { configureNotifications, onNotificationTap } from '@/lib/push';
 import { notificationTarget } from '@/lib/pushPolicy';
+import { setPurchaseHandler } from '@/lib/purchase';
+import { startStoreKitReconciler, storeKitHandler } from '@/lib/storeKit';
 
 // Prevent the splash screen from auto-hiding before asset loading is complete.
 SplashScreen.preventAutoHideAsync();
 
 // How a timer notification presents while the app is open (lib/push.ts).
 configureNotifications();
+// Who sells a subscription on this host: the App Store on an iPhone, nobody
+// anywhere else (lib/purchase.ts). Registered once, before any screen asks.
+if (Platform.OS === 'ios') setPurchaseHandler(storeKitHandler);
 
 const queryClient = new QueryClient();
 
 function RootLayoutNav() {
   const colors = useColors();
+  const { refresh } = useAuth();
+  // Whatever the store delivers outside a purchase — a renewal, an Ask to
+  // Buy approval, a transaction left unfinished last time — is verified
+  // and recorded, and the entitlement refreshed. Signed-in tree only:
+  // verifying needs the session.
+  useEffect(() => startStoreKitReconciler(() => void refresh()), [refresh]);
   // A tapped timer notification opens its recipe. Registered here, inside
   // the signed-in tree, because a timer belongs to an account's recipe and
   // there is nothing to open before sign-in.

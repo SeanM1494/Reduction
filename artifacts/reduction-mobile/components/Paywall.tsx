@@ -1,17 +1,16 @@
 /**
  * components/Paywall.tsx — shown when the entitlement check says no.
  *
- * Deliberately has NO purchase call-to-action, unlike the web version
- * (client/src/components/Paywall.tsx). Apple's guideline 3.1.1 forbids
- * steering a user toward buying a digital subscription outside In-App
- * Purchase — a "Subscribe on the website" button (what this component used
- * to render) is exactly that steering and would put the whole app at App
- * Review risk. Until native in-app purchase ships (tracked as a follow-up:
- * "Let mobile users subscribe without leaving the app"), this screen only
- * states the limit was reached; it does not mention price or link anywhere
- * to pay. A user who already subscribed on the web still unlocks mobile
- * automatically via the shared entitlement check (see auth-context.tsx) —
- * that is not a purchase flow, just recognizing an existing one.
+ * It sells ONLY through the purchase seam (lib/purchase.ts), which is In-App
+ * Purchase on an iPhone and nothing anywhere else. It never links to the
+ * website to pay: Apple's guideline 3.1.1 forbids steering someone toward
+ * buying a digital subscription outside In-App Purchase, and a "Subscribe
+ * on the website" button (what this component once rendered) is exactly
+ * that steering. On a host with no handler — the web build, a simulator —
+ * the SubscribeBox renders nothing and the wall only states the limit. A
+ * user who subscribed on the web still unlocks here automatically through
+ * the shared entitlement check (auth-context.tsx); that is not a purchase
+ * flow, just recognising an existing one.
  *
  * What it DOES offer is a code (components/CouponBox.tsx): "N recipes free"
  * is a grant, not a sale, and the wall is the moment someone holding one
@@ -22,6 +21,7 @@
 import React, { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { CouponBox } from '@/components/CouponBox';
+import { SubscribeBox } from '@/components/SubscribeBox';
 import { useColors, type Colors } from '@/hooks/useColors';
 import { cardShadow, fonts } from '@/constants/colors';
 
@@ -57,6 +57,8 @@ export function Paywall({ recipeTitle, context = 'generic' }: Props) {
         Adding more recipes needs the paid plan. If you already have one on your account, it will
         unlock here automatically.
       </Text>
+
+      <SubscribeBox />
 
       {showCode ? (
         <CouponBox onRedeemed={() => setShowCode(false)} />

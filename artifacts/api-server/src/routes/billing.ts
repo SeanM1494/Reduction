@@ -25,6 +25,7 @@ import {
 } from "../lib/billing/stripe";
 import { entitlementFor } from "../lib/billing/entitlement";
 import { redeemCoupon, redemptionsFor } from "../lib/billing/coupons";
+import { appleIapConfig } from "../lib/billing/apple";
 
 export const billingRouter = Router();
 
@@ -41,6 +42,11 @@ billingRouter.get("/config", (_req: Request, res: Response) => {
     // possible, not who processes it — see client/src/lib/purchase.ts for why
     // that distinction is load-bearing for the App Store build.
     purchaseAvailable: stripeConfigured(),
+    // The native app's question: can a STORE purchase be recorded here? It
+    // is money taken the moment the store completes it, and nothing unlocks
+    // until this server verifies the signed transaction — so the app must
+    // not sell while the adapter that verifies is unconfigured.
+    nativePurchaseAvailable: appleIapConfig() !== null,
     priceLabel: "$1.99/month",
     // The public marketing/app URL, not a secret — the mobile app's paywall
     // links out to it (Apple's rules forbid an in-app Stripe checkout button,

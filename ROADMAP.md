@@ -472,22 +472,37 @@ no queue at all; it still fails and rolls back at once.
   tried at all: `eas init` (the project id in `app.json`'s `extra.eas`),
   and a development build — Expo Go can produce a token but the shipped
   handler and channel are part of the native build.
-- NOT BUILT — **the StoreKit purchase handler.** Three decisions first,
-  none of which the code should guess: (1) the IAP library — `expo-iap`
-  is the maintained Expo-first choice and exposes StoreKit 2's
-  `jwsRepresentation`, which is exactly what `/api/billing/apple/verify`
-  consumes; `react-native-iap` is the older one; RevenueCat would put a
-  third party between the app and the adapter that was built to avoid
-  one. (2) The product: one auto-renewing subscription at the web's
-  $1.99/month, or a yearly too — its App Store Connect product id is
-  what the handler asks StoreKit for. (3) App Store Connect itself: the
-  product, the Server Notifications URL, the root certificates in
-  Secrets (README). With those, the handler is the web's `purchase.ts`
-  seam ported — `setPurchaseHandler`, `appAccountToken` = the user's id,
-  the JWS pair posted to `/verify`, "Manage" deep-linking to the App
-  Store's subscriptions page — and the wall grows its Subscribe button
-  only when `available()` says so, which keeps the current wall exactly
-  as it is until then. It needs a standalone build, not Expo Go.
+- BUILT, unverifiable here — **the StoreKit purchase handler** (Sep 16,
+  on `expo-iap`; decided: monthly at $1.99 matching the web, yearly at
+  $19.99). The web's purchase seam ported (`lib/purchase.ts`: the wall and
+  the Plan card call `startPurchase` and never know who sells), the App
+  Store handler behind it (`lib/storeKit.ts`, the only file that imports
+  expo-iap), and the flow as a pure module (`lib/storeKitFlow.ts`) driven
+  through a Store interface so it is proven under node: verify with the
+  server THEN finish with the store (a transaction the server never
+  recorded stays in StoreKit's queue and is re-delivered next launch
+  rather than vanishing with the money), only our two products are ever
+  verified or finished, the listener not the request is the source of
+  truth, a cancel is not an error, Ask to Buy is "started", restore
+  takes the newest of this Apple ID's purchases that is ours and lets
+  the server refuse one bound to another account, and a standing
+  reconciler settles renewals, approvals and leftovers whenever the
+  signed-in app runs. `appAccountToken` = the user's id. **Available
+  means the server can record it**: `/api/billing/config` now carries
+  `nativePurchaseAvailable`, true only when the Apple adapter is
+  configured, and the app sells nothing until it is — a store purchase
+  is money taken, and the wall must never show a price it cannot honour.
+  The wall grows the plans, a Subscribe button and "Restore purchases"
+  (`components/SubscribeBox.tsx`) only on a host that can sell, and the
+  Plan card in Settings manages an App Store subscription in the App
+  Store's own page. Verified: twelve node tests over the policy and the
+  flow, and in Chromium that the web build's wall and Settings render no
+  price, no button and no error. **Not verifiable from a container, in
+  order of what has to happen first: App Store Connect (the two products
+  in one subscription group, the server secrets, the notifications URL —
+  README "App Store subscriptions"), a development build on a physical
+  iPhone, a sandbox tester's purchase, then the same restore on a second
+  device.** Expo Go cannot run StoreKit.
 
 **Phase 4 — store passage.** Icons, screenshots, privacy labels,
 TestFlight, review. The onboarding decision that used to sit here is

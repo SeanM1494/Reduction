@@ -193,6 +193,29 @@ that is how a notification names an account with no lookup table. It sends
 `{ signedTransactionInfo, signedRenewalInfo }` (StoreKit 2's
 `jwsRepresentation`s) to the verify route after a purchase or restore.
 
+**The products, exactly as the app asks the store for them**
+(`artifacts/reduction-mobile/lib/purchasePolicy.ts`). Create both in App
+Store Connect → the app → Subscriptions, in ONE subscription group (so a
+change of plan is an upgrade or downgrade, not a second subscription):
+
+| product id | plan | price |
+|---|---|---|
+| `com.recipereduction.mobile.monthly` | auto-renewable, 1 month | $1.99 |
+| `com.recipereduction.mobile.yearly` | auto-renewable, 1 year | $19.99 |
+
+The app only ever renders the price the store returns, so a product that
+is not yet approved, or whose id differs by a character, is simply absent
+from the wall rather than shown wrong. The app sells nothing at all until
+`GET /api/billing/config` reports `nativePurchaseAvailable: true`, which is
+the Apple adapter being configured with the secrets above — a purchase the
+server could not record would be money taken and nothing unlocked.
+
+To try it end to end: a development build (`eas build --profile
+development`; Expo Go cannot run StoreKit) on a physical iPhone, a Sandbox
+tester (App Store Connect → Users and Access → Sandbox), the server on
+`APPLE_IAP_ENVIRONMENT=Sandbox`, then a purchase from the wall and a
+"Restore purchases" from Settings on a second device.
+
 Preflight (needs `ADMIN_SECRET`): `GET /api/admin/preflight/apple-iap` reports
 which roots parsed, the environment, the API key's posture and the exact URL
 to register; `POST /api/admin/preflight/apple-iap/test-notification` asks

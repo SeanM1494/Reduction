@@ -1,15 +1,22 @@
 /**
- * app/(tabs)/settings.tsx — account info, sign out, and a link to manage
- * billing on the website (see components/Paywall.tsx for why subscription
- * management stays on the web rather than in-app).
+ * app/(tabs)/settings.tsx — account, plan, timers, sign out.
+ *
+ * The Plan card sells and manages through the purchase seam
+ * (lib/purchase.ts): an App Store subscription is managed in the App
+ * Store's own page, a web one on the website, and only an existing
+ * subscriber ever sees a link out (guideline 3.1.1 is about steering
+ * someone toward buying elsewhere; managing what they already bought is
+ * a different, permitted thing).
  */
 
-import React from 'react';
+import React, { useState } from 'react';
 import { Alert, Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@/lib/auth-context';
 import { CouponBox } from '@/components/CouponBox';
 import { TimersCard } from '@/components/settings/TimersCard';
+import { SubscribeBox } from '@/components/SubscribeBox';
+import { manageSubscription } from '@/lib/purchase';
 import { useColors, type Colors } from '@/hooks/useColors';
 import { cardShadow, fonts } from '@/constants/colors';
 
@@ -18,6 +25,7 @@ export default function SettingsScreen() {
   const styles = makeStyles(colors);
   const { user, entitlement, webUrl, signOut } = useAuth();
   const insets = useSafeAreaInsets();
+  const [manageError, setManageError] = useState<string | null>(null);
 
   const confirmSignOut = () => {
     Alert.alert('Sign out?', undefined, [
@@ -48,27 +56,51 @@ export default function SettingsScreen() {
       <View style={styles.section}>
         <Text style={styles.label}>Plan</Text>
         <Text style={styles.value}>{planLabel}</Text>
+        {entitlement?.status === 'grace' ? (
+          // Grace is the provider's own retry window, not a timer this app
+          // runs, so the copy promises no number of days.
+          <Text style={styles.subvalue}>
+            Your last payment didn't go through. It will be retried, and nothing changes while it is.
+          </Text>
+        ) : null}
         {entitlement?.subscribed ? (
-          // Only shown to an already-active subscriber managing an existing
-          // plan — not a purchase CTA. Apple's guideline 3.1.1 targets
-          // steering someone toward buying outside In-App Purchase; linking
-          // an existing subscriber to manage what they already bought is a
-          // different, permitted thing. This must never render for someone
-          // without an active subscription — see components/Paywall.tsx for
-          // why that screen has no link at all.
-          <Pressable
-            style={styles.linkRow}
-            onPress={() => Linking.openURL(webUrl || 'https://recipereduction.com')}
-          >
-            <Text style={styles.link}>Manage your plan on the website</Text>
-          </Pressable>
+          entitlement.provider === 'apple' ? (
+            // An App Store subscription is managed where it was bought.
+            <Pressable
+              style={styles.linkRow}
+              onPress={async () => {
+                setManageError(null);
+                const out = await manageSubscription();
+                if (out.status === 'error') setManageError(out.message);
+              }}
+              testID="settings-manage-apple"
+            >
+              <Text style={styles.link}>Manage your subscription</Text>
+            </Pressable>
+          ) : (
+            // Only shown to an already-active subscriber managing an
+            // existing plan — never to someone without one.
+            <Pressable
+              style={styles.linkRow}
+              onPress={() => Linking.openURL(webUrl || 'https://recipereduction.com')}
+            >
+              <Text style={styles.link}>Manage your plan on the website</Text>
+            </Pressable>
+          )
         ) : (
-          // The second place a code can go (the first is the wall): someone
-          // given one last week comes here looking for it.
-          <View style={styles.coupon}>
-            <CouponBox />
-          </View>
+          <>
+            {/* Nothing on a host that cannot sell; the plans on one that can. */}
+            <View style={styles.coupon}>
+              <SubscribeBox />
+            </View>
+            {/* The second place a code can go (the first is the wall):
+                someone given one last week comes here looking for it. */}
+            <View style={styles.coupon}>
+              <CouponBox />
+            </View>
+          </>
         )}
+        {manageError ? <Text style={styles.error}>{manageError}</Text> : null}
       </View>
 
       <TimersCard />
@@ -110,6 +142,7 @@ function makeStyles(colors: Colors) {
     subvalue: { fontSize: 13, color: colors.mutedForeground },
     linkRow: { marginTop: 6, minHeight: 44, justifyContent: 'center' },
     coupon: { marginTop: 12 },
+    error: { fontSize: 13.5, lineHeight: 19, color: colors.dangerInk, marginTop: 6 },
     link: { fontSize: 14, color: colors.coolInk, fontFamily: fonts.headingMedium, textDecorationLine: 'underline' },
     signOutButton: {
       minHeight: 48,

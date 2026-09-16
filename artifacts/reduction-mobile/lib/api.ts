@@ -126,6 +126,10 @@ export interface BillingConfig {
   purchaseAvailable: boolean;
   priceLabel: string;
   webUrl: string | null;
+  /** True only when the server can verify and record a store purchase.
+   *  The app must not sell when this is false: the money would be taken
+   *  and nothing unlocked until the server was configured. */
+  nativePurchaseAvailable?: boolean;
 }
 
 export const fetchBillingConfig = (): Promise<BillingConfig> => request('/api/billing/config');
@@ -144,6 +148,12 @@ export interface Entitlement {
 
 export const fetchEntitlement = (): Promise<{ entitlement: Entitlement | null }> =>
   request('/api/billing/status');
+
+/** After a purchase or a restore: StoreKit 2's signed transaction, which
+ *  the server verifies against Apple's roots and binds to this account.
+ *  Refusals carry the server's sentence (wrong account, unverifiable). */
+export const verifyApplePurchase = (body: { signedTransactionInfo: string; signedRenewalInfo?: string }): Promise<{ ok: true; entitlement: Entitlement }> =>
+  request('/api/billing/apple/verify', { method: 'POST', body: JSON.stringify(body) });
 
 /** "N recipes free". A refused code comes back as an ApiError with the
  *  server's own sentence (unknown, expired, fully claimed, already used). */
