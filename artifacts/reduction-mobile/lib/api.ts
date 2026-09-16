@@ -145,6 +145,11 @@ export interface Entitlement {
 export const fetchEntitlement = (): Promise<{ entitlement: Entitlement | null }> =>
   request('/api/billing/status');
 
+/** "N recipes free". A refused code comes back as an ApiError with the
+ *  server's own sentence (unknown, expired, fully claimed, already used). */
+export const redeemCoupon = (code: string): Promise<{ ok: true; recipes: number; entitlement: Entitlement }> =>
+  request('/api/billing/coupon', { method: 'POST', body: JSON.stringify({ code }) });
+
 // ------------------------------------------------------------ recipes -----
 
 export interface ExtractMeta {

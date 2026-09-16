@@ -8,6 +8,7 @@ import React from 'react';
 import { Alert, Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@/lib/auth-context';
+import { CouponBox } from '@/components/CouponBox';
 import { useColors, type Colors } from '@/hooks/useColors';
 import { cardShadow, fonts } from '@/constants/colors';
 
@@ -24,12 +25,15 @@ export default function SettingsScreen() {
     ]);
   };
 
+  const remaining = entitlement ? Math.max(0, entitlement.allowance - entitlement.used) : 0;
   const planLabel = entitlement?.subscribed
     ? 'Unlimited recipes'
     : entitlement?.reason === 'within_allowance'
-      ? 'Free recipe available'
+      ? remaining === 1
+        ? 'Free recipe available'
+        : `${remaining} free recipes available`
       : entitlement?.reason === 'exhausted'
-        ? 'Free recipe used'
+        ? 'Free recipes used'
         : '—';
 
   return (
@@ -57,7 +61,13 @@ export default function SettingsScreen() {
           >
             <Text style={styles.link}>Manage your plan on the website</Text>
           </Pressable>
-        ) : null}
+        ) : (
+          // The second place a code can go (the first is the wall): someone
+          // given one last week comes here looking for it.
+          <View style={styles.coupon}>
+            <CouponBox />
+          </View>
+        )}
       </View>
 
       {/* .rd-btn-danger: a real button on the card colour, not a transparent
@@ -96,6 +106,7 @@ function makeStyles(colors: Colors) {
     value: { fontFamily: fonts.headingMedium, fontSize: 17, color: colors.foreground, marginTop: 2 },
     subvalue: { fontSize: 13, color: colors.mutedForeground },
     linkRow: { marginTop: 6, minHeight: 44, justifyContent: 'center' },
+    coupon: { marginTop: 12 },
     link: { fontSize: 14, color: colors.coolInk, fontFamily: fonts.headingMedium, textDecorationLine: 'underline' },
     signOutButton: {
       minHeight: 48,

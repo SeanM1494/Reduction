@@ -12,10 +12,16 @@
  * to pay. A user who already subscribed on the web still unlocks mobile
  * automatically via the shared entitlement check (see auth-context.tsx) —
  * that is not a purchase flow, just recognizing an existing one.
+ *
+ * What it DOES offer is a code (components/CouponBox.tsx): "N recipes free"
+ * is a grant, not a sale, and the wall is the moment someone holding one
+ * wants it. Behind a "Have a code?" link, as on the web, so the wall does
+ * not read as a form to everyone without one.
  */
 
-import React from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import React, { useState } from 'react';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { CouponBox } from '@/components/CouponBox';
 import { useColors, type Colors } from '@/hooks/useColors';
 import { cardShadow, fonts } from '@/constants/colors';
 
@@ -27,6 +33,7 @@ interface Props {
 export function Paywall({ recipeTitle, context = 'generic' }: Props) {
   const colors = useColors();
   const styles = makeStyles(colors);
+  const [showCode, setShowCode] = useState(false);
 
   const lead =
     context === 'search'
@@ -50,6 +57,19 @@ export function Paywall({ recipeTitle, context = 'generic' }: Props) {
         Adding more recipes needs the paid plan. If you already have one on your account, it will
         unlock here automatically.
       </Text>
+
+      {showCode ? (
+        <CouponBox onRedeemed={() => setShowCode(false)} />
+      ) : (
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => setShowCode(true)}
+          style={styles.codeLink}
+          testID="paywall-have-code"
+        >
+          <Text style={styles.codeLinkText}>Have a code?</Text>
+        </Pressable>
+      )}
     </View>
   );
 }
@@ -80,5 +100,8 @@ function makeStyles(colors: Colors) {
     keep: { fontSize: 15, lineHeight: 22, color: colors.mutedForeground, textAlign: 'center' },
     keepStrong: { color: colors.foreground, fontFamily: fonts.headingMedium },
     fineprint: { fontSize: 13.5, lineHeight: 19, color: colors.mutedForeground, textAlign: 'center' },
+    // .rd-paywall-link: a quiet text link, 44px tall so it is a real target.
+    codeLink: { minHeight: 44, justifyContent: 'center' },
+    codeLinkText: { fontSize: 14, color: colors.coolInk, fontFamily: fonts.headingMedium, textDecorationLine: 'underline' },
   });
 }
