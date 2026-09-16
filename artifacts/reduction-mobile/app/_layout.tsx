@@ -18,16 +18,30 @@ import {
   useFonts,
 } from '@expo-google-fonts/space-grotesk';
 import { SpaceMono_400Regular, SpaceMono_700Bold } from '@expo-google-fonts/space-mono';
-import { Stack } from 'expo-router';
+import { Stack, router } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
+import { configureNotifications, onNotificationTap } from '@/lib/push';
+import { notificationTarget } from '@/lib/pushPolicy';
 
 // Prevent the splash screen from auto-hiding before asset loading is complete.
 SplashScreen.preventAutoHideAsync();
+
+// How a timer notification presents while the app is open (lib/push.ts).
+configureNotifications();
 
 const queryClient = new QueryClient();
 
 function RootLayoutNav() {
   const colors = useColors();
+  // A tapped timer notification opens its recipe. Registered here, inside
+  // the signed-in tree, because a timer belongs to an account's recipe and
+  // there is nothing to open before sign-in.
+  useEffect(() => {
+    return onNotificationTap((data) => {
+      const target = notificationTarget(data);
+      if (target) router.push(`/recipe/${target.recipeId}`);
+    });
+  }, []);
   return (
     <Stack
       screenOptions={{

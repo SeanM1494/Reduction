@@ -59,7 +59,9 @@
     "@expo-google-fonts/space-grotesk": "^0.4.1",
     "@expo-google-fonts/space-mono": "^0.4.2",
     "@workspace/recipe-model": "workspace:*",
+    "expo-device": "~57.0.2",
     "expo-image-manipulator": "~57.0.16",
+    "expo-notifications": "~57.0.18",
     "expo-secure-store": "^57.0.3"
   }
 }

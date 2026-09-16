@@ -438,11 +438,56 @@ dead wifi, that is the next decision, not a bug in this one. The web has
 no queue at all; it still fails and rolls back at once.
 
 **Phase 3 — monetization and notifications.** The server halves are done
-(above). What remains is client: the StoreKit purchase handler behind
-`setPurchaseHandler`, the paywall and coupon surfaces, the Settings
-timers card, and the Expo token registration. Parallelizable with late
-Phase 2, and the point where the app needs a standalone build rather than
-Expo Go (StoreKit does not run in Expo Go).
+(above). Client status, Sep 16:
+
+- DONE — **the coupon surfaces** (`components/CouponBox.tsx`): the web's
+  box ported, mounted behind "Have a code?" at the wall and in the Plan
+  card in Settings, refreshing the entitlement on success so the wall
+  lifts because the allowance moved. A grant is not a sale, so it is
+  fine under guideline 3.1.1. Verified against the real server: an
+  unknown code refused with the server's sentence, a lowercase code
+  redeemed (allowance 1 → 3, one redemption row), the wall gone, the same
+  code refused again in Settings as already used.
+- DONE, unverifiable here — **the Timers card and Expo token
+  registration** (`lib/push.ts`, `lib/pushPolicy.ts`,
+  `components/settings/TimersCard.tsx`, `expo-notifications` and
+  `expo-device` added, the notifications plugin in app.json). The card
+  states the sleeping-server limitation whether or not it is switched on
+  (the same copy as the web, for the same reason). Turning it on asks
+  the OS, gets the Expo token for the build's EAS project id, posts it
+  to `/api/push/subscribe`, and remembers the token per account so
+  turning it off deletes that exact endpoint and a different account on
+  the same phone inherits nothing. A foreground handler shows the banner
+  while the app is open — the case that matters, since that is when
+  someone is cooking — and a tapped notification, running or cold, opens
+  its recipe from the payload's `recipeId`. The state machine
+  (`derivePushState`: web and simulators can never hold a token, a build
+  without an EAS project id is named as a setup problem rather than shown
+  as a toggle that fails, denied sends people to the system Settings)
+  and the payload reader are pure and tested. Verified in Chromium only
+  that the card renders its "can't receive notifications" state on the
+  web build without crashing the app. **Not verified, and not verifiable
+  from a container: the permission prompt, a real token, the subscribe
+  round-trip from a phone, and a phone buzzing.** Before that can be
+  tried at all: `eas init` (the project id in `app.json`'s `extra.eas`),
+  and a development build — Expo Go can produce a token but the shipped
+  handler and channel are part of the native build.
+- NOT BUILT — **the StoreKit purchase handler.** Three decisions first,
+  none of which the code should guess: (1) the IAP library — `expo-iap`
+  is the maintained Expo-first choice and exposes StoreKit 2's
+  `jwsRepresentation`, which is exactly what `/api/billing/apple/verify`
+  consumes; `react-native-iap` is the older one; RevenueCat would put a
+  third party between the app and the adapter that was built to avoid
+  one. (2) The product: one auto-renewing subscription at the web's
+  $1.99/month, or a yearly too — its App Store Connect product id is
+  what the handler asks StoreKit for. (3) App Store Connect itself: the
+  product, the Server Notifications URL, the root certificates in
+  Secrets (README). With those, the handler is the web's `purchase.ts`
+  seam ported — `setPurchaseHandler`, `appAccountToken` = the user's id,
+  the JWS pair posted to `/verify`, "Manage" deep-linking to the App
+  Store's subscriptions page — and the wall grows its Subscribe button
+  only when `available()` says so, which keeps the current wall exactly
+  as it is until then. It needs a standalone build, not Expo Go.
 
 **Phase 4 — store passage.** Icons, screenshots, privacy labels,
 TestFlight, review. The onboarding decision that used to sit here is

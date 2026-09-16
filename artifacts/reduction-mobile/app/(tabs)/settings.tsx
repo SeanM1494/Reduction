@@ -9,6 +9,7 @@ import { Alert, Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'r
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@/lib/auth-context';
 import { CouponBox } from '@/components/CouponBox';
+import { TimersCard } from '@/components/settings/TimersCard';
 import { useColors, type Colors } from '@/hooks/useColors';
 import { cardShadow, fonts } from '@/constants/colors';
 
@@ -69,6 +70,8 @@ export default function SettingsScreen() {
           </View>
         )}
       </View>
+
+      <TimersCard />
 
       {/* .rd-btn-danger: a real button on the card colour, not a transparent
           box whose only edge is a line within a shade of the page. */}

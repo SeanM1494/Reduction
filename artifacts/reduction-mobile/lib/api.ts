@@ -150,6 +150,18 @@ export const fetchEntitlement = (): Promise<{ entitlement: Entitlement | null }>
 export const redeemCoupon = (code: string): Promise<{ ok: true; recipes: number; entitlement: Entitlement }> =>
   request('/api/billing/coupon', { method: 'POST', body: JSON.stringify({ code }) });
 
+// --------------------------------------------------------------- push -----
+
+/** The native arm of POST /api/push/subscribe: an Expo push token in place
+ *  of a web subscription. The server checks the shape strictly (422). */
+export const subscribePush = (expoPushToken: string, userAgent: string): Promise<{ ok: true }> =>
+  request('/api/push/subscribe', { method: 'POST', body: JSON.stringify({ expoPushToken, userAgent }) });
+
+/** Scoped to the account server-side, so a leaked token cannot silence
+ *  someone else's phone. */
+export const unsubscribePush = (endpoint: string): Promise<{ ok: true }> =>
+  request('/api/push/subscribe', { method: 'DELETE', body: JSON.stringify({ endpoint }) });
+
 // ------------------------------------------------------------ recipes -----
 
 export interface ExtractMeta {

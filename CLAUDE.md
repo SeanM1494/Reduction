@@ -232,11 +232,12 @@ somebody can use the app at all, and the seventh guards a route that reads
 other people's accounts, and the eighth guards the second provider's write path
 with Apple's signature stubbed at the adapter's seam, and the ninth guards the
 one-time code that a phone's sign-in rides on, which has to be redeemable by an
-instance that never minted it. **The full suite — 383 tests at the time of
-writing — has been run against a real Postgres and passes 383/0.** The
-thirty-two that are not api-server or model tests are the mobile library's
+instance that never minted it. **The full suite — 388 tests at the time of
+writing — has been run against a real Postgres and passes 388/0.** The
+thirty-seven that are not api-server or model tests are the mobile library's
 filter and sort (`artifacts/reduction-mobile/lib/libraryView.test.ts`), the
-photo size bounds (`photoSize.test.ts`), the diagram drag's hit-testing
+photo size bounds (`photoSize.test.ts`), the push state machine
+(`pushPolicy.test.ts`), the diagram drag's hit-testing
 (`components/diagram/dragMath.test.ts`) and the sync engine
 (`syncEngine.test.ts`, against an in-memory model of the library route —
 the per-entry queue, the 409 merge, the refresh reconciliation and the
