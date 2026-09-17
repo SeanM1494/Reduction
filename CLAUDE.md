@@ -232,8 +232,8 @@ somebody can use the app at all, and the seventh guards a route that reads
 other people's accounts, and the eighth guards the second provider's write path
 with Apple's signature stubbed at the adapter's seam, and the ninth guards the
 one-time code that a phone's sign-in rides on, which has to be redeemable by an
-instance that never minted it. **The full suite — 400 tests at the time of
-writing — has been run against a real Postgres and passes 400/0.** The
+instance that never minted it. **The full suite — 403 tests at the time of
+writing — has been run against a real Postgres and passes 403/0.** The
 forty-nine that are not api-server or model tests are the mobile library's
 filter and sort (`artifacts/reduction-mobile/lib/libraryView.test.ts`), the
 photo size bounds (`photoSize.test.ts`), the push state machine
