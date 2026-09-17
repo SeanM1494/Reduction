@@ -353,8 +353,9 @@ column is display state: it rides the optimistic-concurrency merge, so
 `mergeTimer` can rewrite `endsAt` under you; writing a marker back into it
 would bump `version` and hand every other device a 409 for a write the user
 never made; it is keyed by `owner_key` when a notification is owed to an
-*account*; and nothing ever clears it, so every recipe anyone has timed
-carries a permanently-past `endsAt`. `timer_notifications` is the queue.
+*account*; and until Sep 17 nothing ever cleared it (the clients now clear
+it on the completion transition, but rows timed before that still carry a
+past `endsAt`). `timer_notifications` is the queue.
 
 **Scheduling happens in the library PATCH, not in `StepsMode`.** The client
 already sends `timer` there the moment one starts, so the cooking-mode
@@ -972,6 +973,12 @@ proofs. The rules that must survive any refactor:
   single test of "was that the network"; a transport that throws a status
   for a network error would silently turn every dead-wifi tap back into
   an instant rollback.
+- **A cancel beats only the timer it cancelled.** `mergeTimer`'s
+  "explicit cancel wins" applies when the other side left the timer alone;
+  when BOTH sides changed it and one is null, `mergeEntry` keeps the other
+  side's NEW timer. The client clears the row's timer on completion, so
+  without this a finished timer on one phone would silently kill a timer
+  the other phone had just started.
 - **A tree conflict is never quiet.** Mine-wins is the rule, but it is the
   one rule that can discard real work, so both devices are told: the winner
   at merge time, the loser at its next focus refetch (`onSyncNotice`).

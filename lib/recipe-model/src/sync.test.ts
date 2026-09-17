@@ -173,6 +173,30 @@ test("otherwise the later end time wins", () => {
   assert.deepEqual(mergeTimer(late, early), late);
 });
 
+// ------------------------------------------------------ mergeEntry: timer --
+
+const T1 = { stepId: "d2", endsAt: 100 };
+const T2 = { stepId: "d3", endsAt: 200 };
+
+test("a cancel beats the timer it cancelled when the other side left it alone", () => {
+  const b = entry({ timer: T1 });
+  assert.equal(mergeEntry(b, { ...b, timer: null }, b).merged.timer, null);
+  assert.equal(mergeEntry(b, b, { ...b, timer: null }).merged.timer, null);
+});
+
+test("a cancel does NOT beat a timer the other side started meanwhile", () => {
+  // Device A's timer finished and it cleared the row; device B had just
+  // started a new one for a different step. B's timer survives A's 409-merge.
+  const b = entry({ timer: T1 });
+  assert.deepEqual(mergeEntry(b, { ...b, timer: null }, { ...b, timer: T2 }).merged.timer, T2);
+  assert.deepEqual(mergeEntry(b, { ...b, timer: T2 }, { ...b, timer: null }).merged.timer, T2);
+});
+
+test("two new timers: the later end time wins, as before", () => {
+  const b = entry({ timer: null });
+  assert.deepEqual(mergeEntry(b, { ...b, timer: T1 }, { ...b, timer: T2 }).merged.timer, T2);
+});
+
 // ----------------------------------------------------------- mergeCooked --
 
 test("cook timestamps union, and near-duplicates collapse", () => {

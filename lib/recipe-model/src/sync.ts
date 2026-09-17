@@ -217,7 +217,21 @@ export function mergeEntry(
   const done = pick("done", () =>
     mergeDone(base ? base.done : null, mine.done, theirs.done, myRecentUnclears)
   );
-  const timer = pick("timer", () => mergeTimer(mine.timer, theirs.timer));
+  /**
+   * Both devices touched the timer. A cancel (null) beats the timer it
+   * cancelled — that is mergeTimer's rule — but here both sides CHANGED
+   * against the base, so a null on one side and a timer on the other means
+   * one device cleared the old timer while the other started a NEW one.
+   * The new timer is the fresher intent and survives; the clear was about
+   * a timer that no longer exists. Without this, the client's own
+   * clear-on-completion (StepsMode) would silently kill a timer the other
+   * device had just started, on the 409 that a stale ifVersion earns.
+   */
+  const timer = pick("timer", () => {
+    if (mine.timer === null) return theirs.timer;
+    if (theirs.timer === null) return mine.timer;
+    return mergeTimer(mine.timer, theirs.timer);
+  });
   // mode and servings are UI state the user just set; getting this "wrong"
   // costs one extra tap, getting it wrong the other way ignores a tap.
   const mode = pick("mode", () => mine.mode);

@@ -9,7 +9,10 @@
     "userInterfaceStyle": "automatic",
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "com.recipereduction.mobile"
+      "bundleIdentifier": "com.recipereduction.mobile",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
       "package": "com.recipereduction.mobile"
@@ -19,6 +22,18 @@
     },
     "plugins": [
       "expo-router",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/images/splash-icon.png",
+          "imageWidth": 200,
+          "resizeMode": "contain",
+          "backgroundColor": "#e8d5b2",
+          "dark": {
+            "backgroundColor": "#131110"
+          }
+        }
+      ],
       "expo-notifications",
       "expo-iap",
       [

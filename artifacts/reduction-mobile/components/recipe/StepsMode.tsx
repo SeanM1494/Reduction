@@ -137,18 +137,31 @@ export function StepsMode({ recipe, done, order, timer, scale, onToggle, onSetTi
   const remainingMs = timerForCurrent ? timerForCurrent.endsAt - Date.now() : null;
   const elapsed = remainingMs != null && remainingMs <= 0;
 
-  // One buzz per timer, the moment it crosses from running to elapsed.
+  // One buzz per timer, the moment it crosses from running to elapsed — and
+  // on that same transition the row's timer is cleared (one write, through
+  // the normal route). Before this, nothing ever cleared it: every timed
+  // recipe carried a past `endsAt` for ever, and coming back to the card
+  // re-fired the alert for a timer that finished yesterday. The alert stays
+  // on screen from local state (`finishedStep`) rather than from the row,
+  // so clearing the row does not blank the "Time's up" someone is reading.
   const notifiedForRef = useRef<string | null>(null);
+  const [finishedStep, setFinishedStep] = useState<string | null>(null);
   useEffect(() => {
     if (!timerForCurrent || !elapsed) return;
     const key = `${timerForCurrent.stepId}@${timerForCurrent.endsAt}`;
     if (notifiedForRef.current === key) return;
     notifiedForRef.current = key;
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
-  }, [timerForCurrent, elapsed]);
+    setFinishedStep(timerForCurrent.stepId);
+    onSetTimer(null);
+  }, [timerForCurrent, elapsed, onSetTimer]);
+  const timeIsUp = !!card && (elapsed || finishedStep === card.stepId);
 
   const startTimer = useCallback(
-    (step: Step) => onSetTimer({ stepId: step.id, endsAt: Date.now() + (stepMinutes(step.minutes) ?? 0) * 60_000 }),
+    (step: Step) => {
+      setFinishedStep(null);
+      onSetTimer({ stepId: step.id, endsAt: Date.now() + (stepMinutes(step.minutes) ?? 0) * 60_000 });
+    },
     [onSetTimer]
   );
 
@@ -173,6 +186,7 @@ export function StepsMode({ recipe, done, order, timer, scale, onToggle, onSetTi
   };
 
   const markDone = (c: StepCard) => {
+    if (finishedStep === c.stepId) setFinishedStep(null);
     onMarkDone(c.stepId);
     if (returnIndex != null && cardIndex === returnIndex) setReturnIndex(null);
     goTo(cardIndex + 1);
@@ -257,14 +271,12 @@ export function StepsMode({ recipe, done, order, timer, scale, onToggle, onSetTi
 
           {stepMinutes(card.step.minutes) != null ? (
             <View style={styles.timerBox} testID="cook-timer">
-              {timerForCurrent ? (
-                elapsed ? (
-                  <Text style={styles.timerAlert} accessibilityLiveRegion="assertive">
-                    Time's up — {card.step.label}
-                  </Text>
-                ) : (
-                  <Text style={styles.timerCount}>{fmtRemaining(remainingMs!)}</Text>
-                )
+              {timeIsUp ? (
+                <Text style={styles.timerAlert} accessibilityLiveRegion="assertive" testID="cook-timer-done">
+                  Time's up — {card.step.label}
+                </Text>
+              ) : timerForCurrent ? (
+                <Text style={styles.timerCount} testID="cook-timer-count">{fmtRemaining(remainingMs!)}</Text>
               ) : (
                 <SheetButton label={`Start timer (${formatMinutes(card.step.minutes)})`} onPress={() => startTimer(card.step)} testID="cook-start-timer" />
               )}

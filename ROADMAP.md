@@ -1533,22 +1533,37 @@ and the text change carries the whole signal.
   array, `typeof UNITS[number]` for the type) is a small change now and an
   annoying one once a third list appears. Surfaced when the editor's unit
   picker needed the set at runtime.
-- **`recipes.timer` is never cleared when a timer finishes.** Small, real,
-  and independent of Phase B. `StepsMode`'s completion effect fires the
-  in-page banner and nothing else — it does not PATCH, so the row keeps a
-  past `endsAt` for ever. Two visible consequences: `notifiedForRef` is
-  component-local, so leaving and re-entering steps mode re-fires the alert
-  for a timer that finished yesterday; and every recipe anyone has ever timed
-  carries permanent stale state.
+- ~~**`recipes.timer` is never cleared when a timer finishes.**~~ **Done
+  (Sep 17), on both clients.** The completion transition that fires the
+  alert now also writes `timer: null`, once, through the normal
+  `onUpdate` / `ifVersion` route; the "Time's up" line stays on screen from
+  component state, so clearing the row does not blank what someone is
+  reading, and it goes when the step is marked done or a new timer starts.
+  Leaving and re-entering Cook mode no longer re-fires an alert for a timer
+  that finished yesterday, and the server's PATCH hook cancels the pending
+  `timer_notifications` row on the same write.
 
-  The fix is to write `timer: null` once, on the same transition that already
-  fires the notification. What makes it worth its own line rather than a
-  drive-by: it is a WRITE on a path that currently only reads, so it has to
-  go through the normal `onUpdate` / `ifVersion` route, and `mergeTimer`
-  already has an opinion about a null timer (an explicit cancel wins over a
-  running one). Clearing on completion looks identical to a cancel from
-  another device's point of view. Probably fine — both mean "this timer is
-  over" — but it wants checking against `sync.test.ts` rather than assuming.
+  The check the entry asked for found a real hole. `mergeEntry` resolved a
+  both-changed timer with `mergeTimer`, whose "an explicit cancel wins"
+  rule would have let this clear kill a timer another device had JUST
+  started (base T1; mine null; theirs T2 → null). The merge is now
+  base-aware for that case: a cancel beats the timer it cancelled and
+  nothing else, so a null on one side and a new timer on the other keeps
+  the new timer, in both directions. Three `sync.test.ts` cases pin it;
+  `mergeTimer` itself and its tests are unchanged. Verified on BOTH clients
+  in Chromium against the real API: a seeded running timer counted down,
+  the alert appeared on the transition, one PATCH landed with
+  `timer: null`, the row read null and its pending notification was
+  cancelled, and the alert stayed on screen; on mobile, leaving Cook mode
+  and returning showed the Start button rather than a stale alert.
+
+  Also in the same commit, two store-passage settings in `app.json`: a
+  branded splash (the transparent brand mark on the app's background
+  colour, light and dark) where a blank white screen used to show before
+  the parchment appeared, and the standard export-compliance declaration
+  (`ITSAppUsesNonExemptEncryption: false` — the app uses only standard
+  HTTPS), so every TestFlight upload does not stop to ask. Both need a
+  native build to see.
 
   Phase B does NOT depend on this and deliberately does not read that column;
   see `timer_notifications` in `lib/db/src/schema/schema.ts` for the three reasons.

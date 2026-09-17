@@ -228,8 +228,15 @@ export default function StepsMode({ recipe, entry, done, scale, onToggle, onUpda
   const elapsed = remainingMs != null && remainingMs <= 0;
 
   // Fires the in-page alert + Web Notification exactly once per timer, the
-  // moment it crosses from running to elapsed.
+  // moment it crosses from running to elapsed — and on that same transition
+  // clears the row's timer, in one write through the normal route. Before
+  // this nothing ever cleared it: every timed recipe kept a past `endsAt`
+  // for ever, and coming back to the card re-fired the alert for a timer
+  // that finished yesterday. The alert stays on screen from local state
+  // (`finishedStep`), so clearing the row does not blank what someone is
+  // reading.
   const notifiedForRef = useRef<string | null>(null);
+  const [finishedStep, setFinishedStep] = useState<string | null>(null);
   useEffect(() => {
     if (!timerForCurrent || remainingMs == null || remainingMs > 0) return;
     const key = `${timerForCurrent.stepId}@${timerForCurrent.endsAt}`;
@@ -244,7 +251,10 @@ export default function StepsMode({ recipe, entry, done, scale, onToggle, onUpda
         // Notifications are best-effort — the in-page banner still shows.
       }
     }
-  }, [timerForCurrent, remainingMs, card]);
+    setFinishedStep(timerForCurrent.stepId);
+    onUpdate({ ...entry, timer: null });
+  }, [timerForCurrent, remainingMs, card, entry, onUpdate]);
+  const timeIsUp = !!card && (elapsed || finishedStep === card.stepId);
 
   const startTimer = useCallback(
     (step: Step) => {
@@ -256,6 +266,7 @@ export default function StepsMode({ recipe, entry, done, scale, onToggle, onUpda
         Notification.requestPermission().catch(() => {});
       }
       const endsAt = Date.now() + (stepMinutes(step.minutes) ?? 0) * 60_000;
+      setFinishedStep(null);
       onUpdate({ ...entry, timer: { stepId: step.id, endsAt } });
     },
     [entry, onUpdate]
@@ -292,11 +303,12 @@ export default function StepsMode({ recipe, entry, done, scale, onToggle, onUpda
   // ---- card actions --------------------------------------------------------
   const markDone = useCallback(
     (c: StepCard) => {
+      if (finishedStep === c.stepId) setFinishedStep(null);
       if (!done.has(c.stepId)) onToggle(c.stepId);
       if (returnIndex != null && cardIndex === returnIndex) setReturnIndex(null);
       goTo(cardIndex + 1);
     },
-    [done, onToggle, cardIndex, goTo, returnIndex]
+    [done, onToggle, cardIndex, goTo, returnIndex, finishedStep]
   );
 
   if (cards.length === 0) {
@@ -410,14 +422,12 @@ export default function StepsMode({ recipe, entry, done, scale, onToggle, onUpda
 
             {stepMinutes(card.step.minutes) != null ? (
               <div className="rd-steps-timer">
-                {timerForCurrent ? (
-                  elapsed ? (
-                    <p className="rd-steps-timer-alert" role="status">
-                      Time&rsquo;s up &mdash; {card.step.label}
-                    </p>
-                  ) : (
-                    <p className="rd-steps-timer-count">{fmtRemaining(remainingMs!)}</p>
-                  )
+                {timeIsUp ? (
+                  <p className="rd-steps-timer-alert" role="status">
+                    Time&rsquo;s up &mdash; {card.step.label}
+                  </p>
+                ) : timerForCurrent ? (
+                  <p className="rd-steps-timer-count">{fmtRemaining(remainingMs!)}</p>
                 ) : (
                   <button className="rd-btn" onClick={() => startTimer(card.step)}>
                     Start timer ({formatMinutes(card.step.minutes)})
