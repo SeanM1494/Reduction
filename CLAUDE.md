@@ -111,10 +111,14 @@ and close the ones that can be closed:
   make every environment resolve with one pnpm; pnpm 10 honours that
   field by installing that version of itself before doing anything, and
   on Replit that self-install dies with SIGABRT and retries for ever —
-  every pnpm command, including the install. Removed the same day. If a
-  frozen install ever reports a config mismatch again, run `pnpm install`
-  once, read the lockfile diff, and commit it — do not loosen the freeze,
-  and do not pin pnpm.
+  every pnpm command, including the install. Removed the same day. The
+  same newer pnpm on EAS also ignores `onlyBuiltDependencies` and makes an
+  unapproved install script a hard error (`ERR_PNPM_IGNORED_BUILDS` on
+  esbuild) that a cloud build cannot answer interactively, so the workspace
+  file carries the approvals twice: the old list and the `allowBuilds` map
+  the newer line reads. Keep them in step. If a frozen install ever reports
+  a config mismatch again, run `pnpm install` once, read the lockfile diff,
+  and commit it — do not loosen the freeze, and do not pin pnpm.
 - **The network is not the same network.** The agent proxy answers 403 to
   the deployed site, Apple's hosts (`api.storekit.apple.com`, `apple.com`'s
   certificate downloads, `appleid.apple.com`), Expo's push service and

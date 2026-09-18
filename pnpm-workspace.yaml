@@ -74,6 +74,17 @@ onlyBuiltDependencies:
   - msw
   - unrs-resolver
 
+# The same approvals in the form newer pnpm reads. EAS Build's pnpm (a
+# major above the 10.x here and on Replit) ignores onlyBuiltDependencies,
+# treats esbuild's unapproved install script as an ERROR, and cannot
+# answer "pnpm approve-builds" in a non-interactive cloud build (Sep 18).
+# Keep both lists in step until every environment is on the newer line.
+allowBuilds:
+  '@swc/core': true
+  esbuild: true
+  msw: true
+  unrs-resolver: true
+
 overrides:
   # replit uses linux-x64 only, we can exclude all other platforms
   "esbuild>@esbuild/darwin-arm64": "-"
