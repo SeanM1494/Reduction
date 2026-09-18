@@ -491,8 +491,11 @@ no queue at all; it still fails and rolls back at once.
   `nativePurchaseAvailable`, true only when the Apple adapter is
   configured, and the app sells nothing until it is — a store purchase
   is money taken, and the wall must never show a price it cannot honour.
-  The wall grows the plans, a Subscribe button and "Restore purchases"
-  (`components/SubscribeBox.tsx`) only on a host that can sell, and the
+  The wall grows the two plans — each one IS the purchase button, since
+  the store's own sheet is the confirmation and a second Subscribe step
+  would only be a tap between the person and the price they chose — and
+  "Restore purchases" (`components/SubscribeBox.tsx`), only on a host
+  that can sell, and the
   Plan card in Settings manages an App Store subscription in the App
   Store's own page. Verified: twelve node tests over the policy and the
   flow, and in Chromium that the web build's wall and Settings render no
