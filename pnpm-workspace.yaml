@@ -158,3 +158,8 @@ overrides:
   # drizzle-kit uses esbuild internally on an older version that's vulnerable, this overrides it
   "@esbuild-kit/esm-loader": "npm:tsx@^4.21.0"
   esbuild: "0.27.3"
+  # Lived in package.json's "pnpm" field until Sep 18. Newer pnpm no longer
+  # reads that field, and EAS Build's pnpm saw no @types/pg override while
+  # the lockfile recorded one, so its frozen install refused the mismatch.
+  # Every override now lives here, which every pnpm version reads.
+  "@types/pg": "8.20.3"

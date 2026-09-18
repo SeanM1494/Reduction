@@ -97,6 +97,19 @@ and close the ones that can be closed:
   ./artifacts/reduction run build && pnpm --filter @workspace/api-server run
   build`, then boot `dist/index.mjs` with `NODE_ENV=production` and a `PORT`
   and hit `/api/health`.
+- **pnpm settings live in `pnpm-workspace.yaml` and nowhere else, and
+  `packageManager` pins the version.** Newer pnpm no longer reads the
+  `pnpm` field of `package.json`, and EAS Build's pnpm was the first to
+  say so: it computed no `@types/pg` override, the lockfile recorded one,
+  and the frozen install refused (`ERR_PNPM_LOCKFILE_CONFIG_MISMATCH`,
+  Sep 18). Reconciling also showed the lockfile had NEVER recorded the
+  platform exclusions the workspace file has carried since the migration
+  — three environments had agreed on a lockfile that matched none of
+  their configs. Every override now lives in the workspace file, the
+  lockfile records the merged set, and `packageManager: pnpm@10.33.0`
+  makes Replit, EAS and this container resolve with the same pnpm. If a
+  frozen install ever reports a config mismatch again, run `pnpm install`
+  once, read the lockfile diff, and commit it — do not loosen the freeze.
 - **The network is not the same network.** The agent proxy answers 403 to
   the deployed site, Apple's hosts (`api.storekit.apple.com`, `apple.com`'s
   certificate downloads, `appleid.apple.com`), Expo's push service and
