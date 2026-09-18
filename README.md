@@ -210,11 +210,40 @@ from the wall rather than shown wrong. The app sells nothing at all until
 the Apple adapter being configured with the secrets above — a purchase the
 server could not record would be money taken and nothing unlocked.
 
-To try it end to end: a development build (`eas build --profile
-development`; Expo Go cannot run StoreKit) on a physical iPhone, a Sandbox
-tester (App Store Connect → Users and Access → Sandbox), the server on
-`APPLE_IAP_ENVIRONMENT=Sandbox`, then a purchase from the wall and a
-"Restore purchases" from Settings on a second device.
+To try it end to end: a development build (below; Expo Go cannot run
+StoreKit) on a physical iPhone, a Sandbox tester (App Store Connect → Users
+and Access → Sandbox), the server on `APPLE_IAP_ENVIRONMENT=Sandbox`, then a
+purchase from the wall and a "Restore purchases" from Settings on a second
+device.
+
+### A development build for a physical iPhone
+
+`artifacts/reduction-mobile/eas.json` has three profiles. `development` is
+a dev-client build (`expo-dev-client`): the native shell with StoreKit,
+notifications and the store's own splash, loading its JavaScript from a
+dev server exactly as Expo Go does — so a code change never needs a
+rebuild, only a native change does (a new native module, a plugin, a
+permission string, the icon). `preview` and `production` embed the bundle
+and point it at the deployment through `EXPO_PUBLIC_DOMAIN`; a dev build
+takes that from whichever dev server it connects to.
+
+From `artifacts/reduction-mobile`, once (each needs the Apple Developer
+Program membership and `eas login`):
+
+1. `pnpm exec eas device:create` — registers the phone's UDID with Apple
+   for internal distribution. It prints a link; open it ON THE PHONE in
+   Safari and install the profile it offers.
+2. `pnpm exec eas build --profile development --platform ios` — answer
+   yes to letting EAS manage credentials; it creates the distribution
+   certificate and an ad-hoc provisioning profile containing the
+   registered device, then builds in the cloud (fifteen to twenty
+   minutes the first time). The build page shows a QR code; open it on
+   the phone to install.
+3. Start the dev server on Replit (the mobile workflow), open the
+   installed app, and pick the server from the list or paste its URL.
+
+The EAS project is `seans-apps/reduction-mobile` (`extra.eas.projectId`
+in app.json), which is also what push tokens key on.
 
 Preflight (needs `ADMIN_SECRET`): `GET /api/admin/preflight/apple-iap` reports
 which roots parsed, the environment, the API key's posture and the exact URL

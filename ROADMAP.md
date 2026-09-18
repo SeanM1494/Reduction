@@ -504,7 +504,9 @@ no queue at all; it still fails and rolls back at once.
   in one subscription group, the server secrets, the notifications URL —
   README "App Store subscriptions"), a development build on a physical
   iPhone, a sandbox tester's purchase, then the same restore on a second
-  device.** Expo Go cannot run StoreKit.
+  device.** Expo Go cannot run StoreKit. Sep 18: the EAS project exists
+  (`seans-apps/reduction-mobile`, the id in app.json), `expo-dev-client`
+  and `eas.json` are in, and the README walks the build.
 
 **Phase 4 — store passage.** Icons, screenshots, privacy labels,
 TestFlight, review. The onboarding decision that used to sit here is

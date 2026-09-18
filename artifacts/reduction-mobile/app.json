@@ -2,6 +2,7 @@
   "expo": {
     "name": "Reduction Mobile",
     "slug": "reduction-mobile",
+    "owner": "seans-apps",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
@@ -47,6 +48,11 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
+    },
+    "extra": {
+      "eas": {
+        "projectId": "a5dc28dd-7afa-41f5-b5ee-49d173fee814"
+      }
     }
   }
 }
