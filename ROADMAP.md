@@ -52,6 +52,11 @@ to migrate — and why it is marked for removal rather than deleted (#7).
 
 ## The mobile app: native React Native rebuild — DECIDED (Sep 8)
 
+**Parity audit (Sep 19): `MOBILE_PARITY.md`,** beside this file — every web
+feature against the native code, what is missing, what differs on purpose, and
+the decision on what ships before submission (items 1, 3, 9, 10 there) versus
+after. Update it when a row closes; it is the file of record for the gap list.
+
 Capacitor is out; Replit's generated Expo/React Native artifact
 (`artifacts/reduction-mobile`) is the delivery mechanism actually in use —
 settled by it being what runs in Expo Go today. That converts the earlier
