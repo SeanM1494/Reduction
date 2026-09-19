@@ -37,7 +37,12 @@ export default function FindScreen() {
   const [busy, setBusy] = useState<'text' | 'photo' | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const blocked = entitlement !== null && !entitlement.allowed;
+  // The same predicate as the web's isWalled: the wall bites only when the
+  // allowance is exhausted AND enforcement is on. `allowed` alone is the
+  // truth of the rule; `enforced` is whether it may act (CLAUDE.md, "The
+  // wall is off by default"). Gating on `allowed` alone walled mobile users
+  // during the shadow period while the web let them through.
+  const blocked = entitlement !== null && !entitlement.allowed && entitlement.enforced;
 
   const looksLikeUrl = /^https?:\/\//i.test(input.trim());
 

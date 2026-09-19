@@ -579,6 +579,26 @@ select decision, reason, count(*) from access_events
 during the shadow period is invisible to the counter, and flipping the flag
 hands everyone a fresh free recipe on top of what they already have.
 
+**Both clients wall on `allowed && enforced`, and the mobile app re-reads the
+entitlement after a SAVE.** The web's `isWalled` has always been "exhausted AND
+the wall is on"; the mobile Find tab was written against `allowed` alone, which
+was stricter than the web and would have walled a mobile user the web let
+through. The other half is what reached a device: the mobile app re-read the
+entitlement after the EXTRACT, but extraction does not spend the allowance —
+`POST /api/library` does, on the created row — so the read landed before the
+count moved, Settings kept saying "Free recipe available" after the first recipe
+was saved, and it stayed that way until the next sign-in. The refresh now
+follows the save. (The web still relies on the server's 402 at the next extract
+and on the next page load; its Settings label has the same staleness within one
+session.) When you cannot tell whether the wall SHOULD have fired, read
+`enforced` from `/api/billing/status` before reading anything else: on a
+deployment with `PAYWALL_ENFORCED` unset it is false for everyone, `allowed`
+goes false on schedule, and no client walls anyone — that is shadow mode
+working, not a client bug. `enforce_override = true` on one `account_access`
+row (the admin PATCH) turns the wall on for that account alone. Nothing in the
+Apple adapter or App Store Connect's sandbox touches `account_access` or the
+flag; StoreKit configuration decides only whether a plan can be SOLD.
+
 **The purchase button must never open a URL itself.** It calls
 `startPurchase()` in `artifacts/reduction/src/lib/purchase.ts`. A native wrapper registers
 a StoreKit handler there and no caller changes; a component that does

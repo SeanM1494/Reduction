@@ -26,6 +26,7 @@ import { useLibrary, type EntryPatch } from '@/lib/library-context';
 import { RecipeScreen } from '@/components/RecipeScreen';
 import { MealTypeSheet } from '@/components/recipe/MealTypeSheet';
 import { Sheet, SheetButton, SheetNote } from '@/components/Sheet';
+import { useAuth } from '@/lib/auth-context';
 import { useColors, type Colors } from '@/hooks/useColors';
 
 export default function RecipeDetailScreen() {
@@ -33,6 +34,7 @@ export default function RecipeDetailScreen() {
   const colors = useColors();
   const styles = makeStyles(colors);
   const { draft, setDraft, getEntry, update, remove, saveRecipe, notice, clearNotice, queued } = useLibrary();
+  const { refresh: refreshAccount } = useAuth();
   const [saving, setSaving] = useState(false);
   const [draftServings, setDraftServings] = useState<number | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -86,6 +88,12 @@ export default function RecipeDetailScreen() {
             try {
               const saved = await saveRecipe(draft.recipe);
               setDraft(null);
+              // The SAVE is what spends the free allowance (the server counts
+              // a created row, not an extraction), so the entitlement the
+              // Find tab and Settings read has to be re-read here. Without
+              // this, Settings said "Free recipe available" after the first
+              // recipe was already saved and counted.
+              await refreshAccount();
               router.replace(`/recipe/${saved.id}`);
             } catch {
               // saveRecipe surfaces its own error via LibraryContext.error; the
