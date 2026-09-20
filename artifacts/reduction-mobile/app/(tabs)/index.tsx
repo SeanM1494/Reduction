@@ -19,6 +19,7 @@ import { useAuth } from '@/lib/auth-context';
 import { useLibrary } from '@/lib/library-context';
 import { extractFromUrl, extractFromText, extractFromFile, ApiError } from '@/lib/api';
 import { PhotoPicker } from '@/components/PhotoPicker';
+import { ExtractionProgress } from '@/components/ExtractionProgress';
 import type { PreparedPhoto } from '@/lib/photo';
 import type { Recipe } from '@/shared/layout';
 import { Paywall } from '@/components/Paywall';
@@ -138,6 +139,11 @@ export default function FindScreen() {
               <Text style={styles.buttonText}>{looksLikeUrl ? 'Extract from link' : 'Extract recipe'}</Text>
             )}
           </Pressable>
+          {/* The wait, in words, under the button that started it. Only for
+              this box's own extraction: the photo picker carries its own
+              line under its own button, so the message sits where the
+              person is looking. */}
+          <ExtractionProgress active={busy === 'text'} testID="find-progress" />
 
           <PhotoPicker photo={photo} onPhoto={setPhoto} onExtract={submitPhoto} busy={busy === 'photo'} />
         </>

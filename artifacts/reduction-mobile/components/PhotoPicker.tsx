@@ -11,6 +11,7 @@ import React, { useState } from 'react';
 import { ActivityIndicator, Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { SheetButton } from '@/components/Sheet';
+import { ExtractionProgress } from '@/components/ExtractionProgress';
 import { openSettings, PhotoError, takePhoto, type PhotoSource, type PreparedPhoto } from '@/lib/photo';
 import { formatBytes } from '@/lib/photoSize';
 import { useColors, type Colors } from '@/hooks/useColors';
@@ -86,6 +87,10 @@ export function PhotoPicker({ photo, onPhoto, onExtract, busy }: Props) {
           {busy ? <ActivityIndicator color={colors.primaryForeground} /> : <Text style={styles.extractText}>Extract from photo</Text>}
         </Pressable>
       ) : null}
+      {/* The same wait as the paste box's, under this button while this
+          button's extraction runs. Fixed height: nothing below it moves as
+          the message changes. */}
+      <ExtractionProgress active={busy} testID="photo-progress" />
     </View>
   );
 }
