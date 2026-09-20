@@ -6,6 +6,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { Platform, View } from 'react-native';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { AuthProvider, useAuth } from '@/lib/auth-context';
+import { ThemeProvider } from '@/lib/theme-context';
 import { LibraryProvider } from '@/lib/library-context';
 import { SignInScreen } from '@/components/SignInScreen';
 import { DemoScreen } from '@/components/DemoScreen';
@@ -130,9 +131,12 @@ export default function RootLayout() {
         <QueryClientProvider client={queryClient}>
           <GestureHandlerRootView>
             <KeyboardProvider>
-              <AuthProvider>
-                <Gate />
-              </AuthProvider>
+              {/* Outside the auth gate: the demo is themed too. */}
+              <ThemeProvider>
+                <AuthProvider>
+                  <Gate />
+                </AuthProvider>
+              </ThemeProvider>
             </KeyboardProvider>
           </GestureHandlerRootView>
         </QueryClientProvider>

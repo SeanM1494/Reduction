@@ -10,7 +10,7 @@ port still lacks, and the decision taken on it.
 
 **Decision (Sep 19):** items 1, 3, 9 and 10 below are fixed before App Store
 submission (all four closed Sep 20) — they are what a reviewer or a first user hits within a minute.
-Items 2, 4, 5 and 11 follow soon after launch (2 and 4 closed Sep 20). Everything else waits.
+Items 2, 4, 5 and 11 follow soon after launch (2, 4 and 5 closed Sep 20). Everything else waits.
 
 ## Missing entirely on mobile
 
@@ -23,7 +23,7 @@ deferred before this audit.
 | 2 | **Search** | `SearchBar.tsx`: local filter over title, source and ingredient names, plus "Search the web" with "Instant" badges for cached pages | **CLOSED Sep 20.** `components/SearchBar.tsx` at the top of the Find tab: `searchLibrary` (in `lib/libraryView.ts`, under test) over the library, the web row from three characters, result cards with the Instant badge, a picked result extracted into the draft with its own wait line and its own error. |
 | 3 | **Extraction progress messages** | `ExtractionProgress.tsx`: five rotating stage lines at 3s over the 10–30s wait (ROADMAP #9) | **CLOSED Sep 20.** `lib/extractionStage.ts` (the web's stages verbatim, under test) and `components/ExtractionProgress.tsx`, under the paste box's and the photo picker's own buttons, fixed height, live region. |
 | 4 | **Account ID with copy button** | `AccountId.tsx` in Settings, plus the "N recipes in your library" line | **CLOSED Sep 20.** `components/settings/AccountId.tsx` (expo-clipboard, required lazily so a dev build without the module falls back to the share sheet) and the count line in the Account card. |
-| 5 | **Theme control** | Light / Dark / Colorblind, persisted (`ThemeToggle.tsx`, `lib/theme.ts`) | Follows the system scheme only (`hooks/useColors.ts`). No manual override; `constants/colors.ts` has `light` and `dark` and no colorblind palette. |
+| 5 | **Theme control** | Light / Dark / Colorblind, persisted (`ThemeToggle.tsx`, `lib/theme.ts`) | **CLOSED Sep 20.** An Appearance card in Settings with System / Light / Dark / Colorblind (System is the visible form of the web's unmade choice), stored in AsyncStorage (`lib/theme-context.tsx`, rule in `lib/themePolicy.ts` under test); the colorblind layer is the web's blue/orange tokens over either base, and a ready cell or strip row also carries the web's triangle mark. |
 | 6 | **Read the page again** (re-extract) | Menu item with a confirm sheet and the progress line (`RecipeView.tsx`) | `reextract` in `lib/api.ts`, no caller, no menu item. |
 | 7 | **Save as Image** | Menu item; `lib/exportImage.ts` renders a PNG at 2x | No view-shot or sharing dependency. Nothing. |
 | 8 | **PDF and other file uploads** | The file input accepts PDF, PNG, GIF and WebP | Camera or photo library only, re-encoded to JPEG (`lib/photo.ts`). No document picker. |

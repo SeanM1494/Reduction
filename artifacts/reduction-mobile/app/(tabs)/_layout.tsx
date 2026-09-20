@@ -1,5 +1,5 @@
 import React from 'react';
-import { Platform, StyleSheet, useColorScheme, View } from 'react-native';
+import { Platform, StyleSheet, View } from 'react-native';
 import { useColors } from '@/hooks/useColors';
 import { fonts } from '@/constants/colors';
 import { Feather } from '@expo/vector-icons';
@@ -34,8 +34,9 @@ function NativeTabLayout() {
 
 function ClassicTabLayout() {
   const colors = useColors();
-  const colorScheme = useColorScheme();
-  const isDark = colorScheme === 'dark';
+  // The theme preference, not the phone's scheme: a Dark choice on a light
+  // phone must tint the bar's blur too.
+  const isDark = colors.scheme === 'dark';
   const isIOS = Platform.OS === 'ios';
   const isWeb = Platform.OS === 'web';
 

@@ -400,6 +400,7 @@ const DiagramCell = memo(function DiagramCell({
             pointerEvents="none"
             style={[styles.halo, { borderColor: colors.warmLine, opacity: pulse }]}
           />
+          <ReadyMark colors={colors} />
         </>
       ) : null}
       {isDone && c.kind !== "gap" ? (
@@ -420,6 +421,35 @@ const DiagramCell = memo(function DiagramCell({
     </Pressable>
   );
 });
+
+/**
+ * Colorblind mode's non-colour "ready" cue: the web's `.rd-op.is-ready
+ * .rd-mark` triangle, top right, in the warm line colour. Colour alone
+ * cannot carry "you can do this now" for someone who cannot tell the warm
+ * ring from the cool one, so the shape does. Exported for the strip.
+ */
+export function ReadyMark({ colors, top = 7, right = 8 }: { colors: Colors; top?: number; right?: number }) {
+  if (!colors.colorblind) return null;
+  return (
+    <View
+      pointerEvents="none"
+      style={{
+        position: "absolute",
+        top,
+        right,
+        width: 0,
+        height: 0,
+        borderLeftWidth: 5,
+        borderRightWidth: 5,
+        borderBottomWidth: 9,
+        borderLeftColor: "transparent",
+        borderRightColor: "transparent",
+        borderBottomColor: colors.warmLine,
+      }}
+      testID="ready-mark"
+    />
+  );
+}
 
 /** .rd-cell.is-done: color-mix(in srgb, var(--cool-bg) 52%, var(--card)).
  *  Exported so the demo's legend paints "done" with the same value. */

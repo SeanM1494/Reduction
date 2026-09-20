@@ -15,6 +15,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@/lib/auth-context';
 import { useLibrary } from '@/lib/library-context';
 import { AccountId } from '@/components/settings/AccountId';
+import { AppearanceCard } from '@/components/settings/AppearanceCard';
 import { CouponBox } from '@/components/CouponBox';
 import { TimersCard } from '@/components/settings/TimersCard';
 import { SubscribeBox } from '@/components/SubscribeBox';
@@ -111,6 +112,8 @@ export default function SettingsScreen() {
       </View>
 
       <TimersCard />
+
+      <AppearanceCard />
 
       {/* .rd-btn-danger: a real button on the card colour, not a transparent
           box whose only edge is a line within a shade of the page. */}

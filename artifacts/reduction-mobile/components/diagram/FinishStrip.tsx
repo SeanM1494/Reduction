@@ -19,6 +19,7 @@ import type { Step } from "@/shared/layout";
 import { formatMinutes } from "@/shared/amounts";
 import { tailStepReady } from "@/shared/collapse";
 import type { Colors } from "@/hooks/useColors";
+import { ReadyMark } from "./DiagramView";
 
 export type StripDrop = "ok" | "over" | "no" | null;
 
@@ -85,6 +86,7 @@ export function FinishStrip({ tail, done, focus, colors, onPress, dropFor, rowRe
                 </Text>
                 {mins ? <Text style={[styles.time, { color: isDone ? colors.coolInk : colors.mutedForeground }]}>{mins}</Text> : null}
                 {isDone ? <Text style={[styles.mark, { color: colors.coolInk }]}>✓</Text> : null}
+                {ready ? <ReadyMark colors={colors} top={9} right={10} /> : null}
               </Pressable>
             </View>
           </View>

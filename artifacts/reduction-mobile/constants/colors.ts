@@ -105,6 +105,35 @@ const colors = {
     dangerInk: '#ff9c85',
   },
 
+  // Colorblind mode — the web's :root[data-colorblind="true"] tokens: a
+  // blue/orange pair over the warm/cool "ready vs. done" accents, layered
+  // on whichever base is active (hooks/useColors.ts). Only the accent
+  // tokens change; the page, cards and ink stay the base's.
+  colorblindLight: {
+    warmBg: '#fce3bd',
+    warmLine: '#a35c05',
+    warmInk: '#6b3d05',
+    coolBg: '#dfebf6',
+    coolLine: '#3d8fc4',
+    coolInk: '#2b5f7e',
+    accent: '#fce3bd',
+    accentForeground: '#6b3d05',
+    secondary: '#dfebf6',
+    secondaryForeground: '#2b5f7e',
+  },
+  colorblindDark: {
+    warmBg: 'rgba(230,159,0,0.22)',
+    warmLine: '#e6a324',
+    warmInk: '#ffd68a',
+    coolBg: 'rgba(86,168,224,0.2)',
+    coolLine: '#6fb3e0',
+    coolInk: '#bfe3fa',
+    accent: 'rgba(230,159,0,0.22)',
+    accentForeground: '#ffd68a',
+    secondary: 'rgba(86,168,224,0.2)',
+    secondaryForeground: '#bfe3fa',
+  },
+
   // Border radii (px), synced from the web app, which draws three: small
   // buttons at 11 (.rd-btn), the primary action at 12 (.rd-go), and cards at
   // 15 (.rd-card; the diagram frame is 14). One radius for everything is how
