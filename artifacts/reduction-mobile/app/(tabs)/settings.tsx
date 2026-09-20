@@ -13,6 +13,8 @@ import React, { useState } from 'react';
 import { Alert, Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@/lib/auth-context';
+import { useLibrary } from '@/lib/library-context';
+import { AccountId } from '@/components/settings/AccountId';
 import { CouponBox } from '@/components/CouponBox';
 import { TimersCard } from '@/components/settings/TimersCard';
 import { SubscribeBox } from '@/components/SubscribeBox';
@@ -24,6 +26,7 @@ export default function SettingsScreen() {
   const colors = useColors();
   const styles = makeStyles(colors);
   const { user, entitlement, webUrl, signOut } = useAuth();
+  const { entries } = useLibrary();
   const insets = useSafeAreaInsets();
   const [manageError, setManageError] = useState<string | null>(null);
 
@@ -51,6 +54,10 @@ export default function SettingsScreen() {
         <Text style={styles.label}>Account</Text>
         <Text style={styles.value}>{user?.name || user?.email || 'Signed in'}</Text>
         {user?.email && user?.name ? <Text style={styles.subvalue}>{user.email}</Text> : null}
+        <Text style={styles.subvalue} testID="settings-recipe-count">
+          {entries.length} {entries.length === 1 ? 'recipe' : 'recipes'} in your library
+        </Text>
+        {user?.id ? <AccountId id={user.id} /> : null}
       </View>
 
       <View style={styles.section}>
