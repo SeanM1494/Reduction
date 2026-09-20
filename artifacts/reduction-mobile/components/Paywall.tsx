@@ -26,25 +26,32 @@ import { useColors, type Colors } from '@/hooks/useColors';
 import { cardShadow, fonts } from '@/constants/colors';
 
 interface Props {
+  /** The one recipe they already have, if they have one. */
   recipeTitle?: string | null;
+  /** A real way out: opens that recipe. A wall with no door reads as
+   *  hostile; a wall with one reads as a limit (the web's rule 3). */
+  onOpenRecipe?: () => void;
+  /** Only changes the opening line, as on the web. */
   context?: 'search' | 'extract' | 'generic';
 }
 
-export function Paywall({ recipeTitle, context = 'generic' }: Props) {
+export function Paywall({ recipeTitle, onOpenRecipe, context = 'generic' }: Props) {
   const colors = useColors();
   const styles = makeStyles(colors);
   const [showCode, setShowCode] = useState(false);
 
   const lead =
     context === 'search'
-      ? "You've used your free recipe."
+      ? 'Searching for a new recipe needs a subscription.'
       : context === 'extract'
-        ? "You've used your free recipe."
+        ? 'Adding a new recipe needs a subscription.'
         : "You've used your free recipe.";
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>{lead}</Text>
+    <View style={styles.container} testID="paywall">
+      <Text style={styles.title} testID="paywall-lead">
+        {lead}
+      </Text>
 
       {recipeTitle ? (
         <Text style={styles.keep}>
@@ -72,6 +79,16 @@ export function Paywall({ recipeTitle, context = 'generic' }: Props) {
           <Text style={styles.codeLinkText}>Have a code?</Text>
         </Pressable>
       )}
+      {onOpenRecipe && recipeTitle ? (
+        <Pressable
+          accessibilityRole="button"
+          onPress={onOpenRecipe}
+          style={({ pressed }) => [styles.door, pressed && styles.doorPressed]}
+          testID="paywall-open-recipe"
+        >
+          <Text style={styles.doorText}>Open my recipe</Text>
+        </Pressable>
+      ) : null}
     </View>
   );
 }
@@ -105,5 +122,19 @@ function makeStyles(colors: Colors) {
     // .rd-paywall-link: a quiet text link, 44px tall so it is a real target.
     codeLink: { minHeight: 44, justifyContent: 'center' },
     codeLinkText: { fontSize: 14, color: colors.coolInk, fontFamily: fonts.headingMedium, textDecorationLine: 'underline' },
+    // .rd-paywall-back: a plain .rd-btn, full width, under everything else.
+    door: {
+      alignSelf: 'stretch',
+      minHeight: 44,
+      alignItems: 'center',
+      justifyContent: 'center',
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: colors.radius,
+      backgroundColor: colors.card,
+      marginTop: 4,
+    },
+    doorPressed: { borderColor: colors.borderStrong },
+    doorText: { fontSize: 14, color: colors.foreground, fontFamily: fonts.headingMedium },
   });
 }

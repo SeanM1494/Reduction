@@ -31,7 +31,7 @@ export default function FindScreen() {
   const colors = useColors();
   const styles = makeStyles(colors);
   const { entitlement, refresh } = useAuth();
-  const { setDraft } = useLibrary();
+  const { setDraft, entries } = useLibrary();
   const insets = useSafeAreaInsets();
 
   const [input, setInput] = useState('');
@@ -129,7 +129,13 @@ export default function FindScreen() {
       <Text style={styles.hint}>Paste a link, paste the recipe text itself, or photograph the page.</Text>
 
       {blocked ? (
-        <Paywall context="extract" />
+        // Their most recent recipe is the door out of the wall, as on the
+        // web (the library loads newest first).
+        <Paywall
+          context="extract"
+          recipeTitle={entries[0]?.recipe.title ?? null}
+          onOpenRecipe={entries[0] ? () => router.push(`/recipe/${entries[0].id}`) : undefined}
+        />
       ) : (
         <>
           {/* The web's header search, in the tab: the library first, the
