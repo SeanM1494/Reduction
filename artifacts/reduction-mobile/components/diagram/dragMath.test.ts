@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { edgeDir, stepAt, toContent } from "./dragMath";
+import { edgeDir, stepAt, toContent, rectAt } from "./dragMath";
 import type { CellRect } from "./layoutRects";
 
 const rect = (key: string, kind: string, x: number, y: number, w: number, h: number): CellRect =>
@@ -42,4 +42,19 @@ test("toContent maps a window point through the frame origin, the scroller and p
   // The page scrolled 60px down since pickup: the frame rose 60px, so the
   // same window point is 60px further into the content.
   assert.deepEqual(toContent(100, 500, { x: 20, y: 400 }, 0, 60), { x: 80, y: 160 });
+});
+
+test("rectAt: window-space rows, corrected for how far the page scrolled since measuring", () => {
+  const rows = [
+    { id: "d4", x: 20, y: 600, width: 350, height: 48 },
+    { id: "d5", x: 20, y: 663, width: 350, height: 48 },
+  ];
+  assert.equal(rectAt(rows, 100, 610, 0), "d4");
+  assert.equal(rectAt(rows, 100, 670, 0), "d5");
+  assert.equal(rectAt(rows, 100, 655, 0), null, "the gap between rows is nothing");
+  assert.equal(rectAt(rows, 10, 610, 0), null, "left of the rows");
+  // The page scrolled 60px up since pickup: a finger at window y=550 is over
+  // what was measured at 610.
+  assert.equal(rectAt(rows, 100, 550, 60), "d4");
+  assert.equal(rectAt([], 100, 610, 0), null);
 });

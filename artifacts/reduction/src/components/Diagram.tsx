@@ -14,7 +14,8 @@
  */
 
 import React, { useLayoutEffect, useRef, useState } from "react";
-import { computeLayout, type Section, type Step } from "../shared/layout";
+import type { Section } from "../shared/layout";
+import { deriveDiagramState } from "../shared/collapse";
 import { formatAmount, formatMinutes } from "../shared/amounts";
 
 /**
@@ -210,9 +211,14 @@ export default function Diagram({
     };
   });
 
-  let baseLayout;
+  // The finish strip, progressive collapse and the handoff are one pure
+  // derivation shared with the native renderer — shared/collapse.ts — so the
+  // two cannot drift. This component keeps only the two pieces of UI state
+  // it feeds in: which chips were reopened, and whether the tucked table was
+  // asked for back.
+  let derived;
   try {
-    baseLayout = computeLayout(section);
+    derived = deriveDiagramState(section, done, expanded);
   } catch (e) {
     return (
       <section className="rd-section">
@@ -221,90 +227,9 @@ export default function Diagram({
       </section>
     );
   }
-  const baseTotalRows = baseLayout.totalRows;
+  const { tail, tailIds, treeDone } = derived;
+  const rows = derived.table.rows;
 
-  // ---- terminal chain ----------------------------------------------------
-  // Walk down from the root while each step spans every row. A step spanning
-  // everything is combining the whole dish, so it has no structure left to show.
-  // But the step where the *last* ingredient actually joins is the join itself,
-  // not a consequence of it — it stays in the table even though it also spans
-  // every row, so the table always shows where every ingredient lands.
-  // This always walks the uncollapsed layout, so the finish strip is entirely
-  // unaffected by progressive collapse below.
-  const nodeById = new Map(section.nodes.map((n) => [n.id, n]));
-  const spanById = new Map<string, number>();
-  baseLayout.rows.forEach((r) =>
-    r.forEach((c) => {
-      if (c.kind === "op") spanById.set(c.key, c.rowSpan);
-    })
-  );
-
-  const tail: Step[] = [];
-  let cursor: string | undefined = section.root;
-  while (cursor && spanById.get(cursor) === baseTotalRows) {
-    const node = nodeById.get(cursor);
-    if (!node) break;
-    const stepInputs = node.inputs || [];
-    const joinsIngredient = stepInputs.some((i) => !nodeById.has(i));
-    if (joinsIngredient) break;
-    tail.unshift(node);
-    const priorSteps = stepInputs.filter((i) => nodeById.has(i));
-    cursor = priorSteps.length === 1 ? priorSteps[0] : undefined;
-  }
-  const tailIds = new Set(tail.map((n) => n.id));
-
-  // ---- progressive collapse -----------------------------------------------
-  // A finished step folds its whole subtree into one row once its parent
-  // isn't finished too (or it has no parent at all) — everything upstream of
-  // it is already done, so there is nothing left to decide in that branch.
-  // Tail steps are the finish strip's job, never the table's, so they're
-  // never eligible here regardless of done state.
-  //
-  // Steps only collapse alongside their fellow inputs of the same parent
-  // step, not one at a time — a parent's rowspan is the union of its
-  // inputs' rows, so folding one input away while a sibling input stays
-  // multi-row reads as broken alignment rather than progress. Grouping by
-  // shared parent (rather than by column) matters because layout now packs
-  // steps as-late-as-possible: an unrelated, short branch elsewhere in the
-  // tree can land in the same column as this step's real siblings purely by
-  // numeric coincidence, without actually feeding the same parent.
-  const siblingsByParent = new Map<string, string[]>();
-  for (const node of section.nodes) {
-    if (tailIds.has(node.id)) continue;
-    const parent = baseLayout.parentOf.get(node.id);
-    if (parent == null) continue;
-    if (!siblingsByParent.has(parent)) siblingsByParent.set(parent, []);
-    siblingsByParent.get(parent)!.push(node.id);
-  }
-  const siblingGroupFullyDone = (parent: string) =>
-    (siblingsByParent.get(parent) || []).every((id) => done.has(id));
-
-  const collapsedIds = new Set<string>();
-  for (const node of section.nodes) {
-    if (tailIds.has(node.id)) continue;
-    if (!done.has(node.id)) continue;
-    if (expanded.has(node.id)) continue;
-    const parent = baseLayout.parentOf.get(node.id);
-    if (parent && done.has(parent)) continue;
-    if (parent && !siblingGroupFullyDone(parent)) continue;
-    collapsedIds.add(node.id);
-  }
-
-  let rows = baseLayout.rows;
-  if (collapsedIds.size) {
-    try {
-      rows = computeLayout(section, { collapsed: collapsedIds }).rows;
-    } catch {
-      // Fall back to the uncollapsed layout rather than breaking the diagram.
-    }
-  }
-
-  // ---- handoff -----------------------------------------------------------
-  const treeIds = [
-    ...section.ingredients.map((i) => i.id),
-    ...section.nodes.filter((n) => !tailIds.has(n.id)).map((n) => n.id),
-  ];
-  const treeDone = treeIds.length > 0 && treeIds.every((id) => done.has(id));
   // The override only applies once the tree is finished, so unchecking anything
   // brings the diagram straight back with no stale state to reset.
   const showTable = treeDone ? override : true;

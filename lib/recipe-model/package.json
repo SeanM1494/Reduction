@@ -12,7 +12,8 @@
     "./sync": "./src/sync.ts",
     "./amounts": "./src/amounts.ts",
     "./mealTypes": "./src/mealTypes.ts",
-    "./progress": "./src/progress.ts"
+    "./progress": "./src/progress.ts",
+    "./collapse": "./src/collapse.ts"
   },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json"

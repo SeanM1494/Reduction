@@ -9,7 +9,7 @@ the phases and the calls that were made on purpose; this file records what the
 port still lacks, and the decision taken on it.
 
 **Decision (Sep 19):** items 1, 3, 9 and 10 below are fixed before App Store
-submission (3 and 9 closed Sep 20; 1 and 10 open) — they are what a reviewer or a first user hits within a minute.
+submission (1, 3 and 9 closed Sep 20; 10 open) — they are what a reviewer or a first user hits within a minute.
 Items 2, 4, 5 and 11 follow soon after launch. Everything else waits.
 
 ## Missing entirely on mobile
@@ -19,7 +19,7 @@ deferred before this audit.
 
 | # | Feature | Web | Mobile state |
 |---|---|---|---|
-| 1 | **Progressive collapse, finish strip and handoff in the diagram** | `Diagram.tsx` folds a finished branch into one chip once its sibling inputs are done, pulls the tail steps (bake, chill, slice) out of the table into a numbered strip with their minutes, and tucks the table away once every ingredient has combined | `DiagramView.tsx` calls `computeLayout(section)` with no `collapsed` set; the collapsed-cell paths in `layoutRects.ts` and `DiagramCell` exist but are unreachable. Tail steps render as full-height cells and force extra columns and horizontal scrolling — the failure the web header says the strip exists to prevent. No minutes on steps either. |
+| 1 | **Progressive collapse, finish strip and handoff in the diagram** | `Diagram.tsx` folds a finished branch into one chip once its sibling inputs are done, pulls the tail steps (bake, chill, slice) out of the table into a numbered strip with their minutes, and tucks the table away once every ingredient has combined | **CLOSED Sep 20.** The derivation moved into `lib/recipe-model/src/collapse.ts` (under test, pinned to the web's behaviour) and both renderers call it. `DiagramView` draws chips that reopen on tap, a table that fills the frame once it is chips alone, the tucked card with Show diagram / Tuck the diagram away, and `FinishStrip.tsx`: numbered rows with minutes that toggle, open the step sheet in edit mode, and take a drop from the drag. No height animation (first cut). |
 | 2 | **Search** | `SearchBar.tsx`: local filter over title, source and ingredient names, plus "Search the web" with "Instant" badges for cached pages | `searchRecipes` sits in `lib/api.ts` with zero callers; `lib/libraryView.ts` has no text filter. Nothing to type into anywhere. |
 | 3 | **Extraction progress messages** | `ExtractionProgress.tsx`: five rotating stage lines at 3s over the 10–30s wait (ROADMAP #9) | **CLOSED Sep 20.** `lib/extractionStage.ts` (the web's stages verbatim, under test) and `components/ExtractionProgress.tsx`, under the paste box's and the photo picker's own buttons, fixed height, live region. |
 | 4 | **Account ID with copy button** | `AccountId.tsx` in Settings, plus the "N recipes in your library" line | Neither exists. Settings shows name and email only. |

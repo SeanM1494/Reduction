@@ -21,8 +21,13 @@ a place to edit. Paths in this file have been updated; if a path looks wrong,
 the migration is why, and the file to trust is the one in the live tree.
 
 **The recipe model lives in exactly one place: `lib/recipe-model`.** layout,
-sequence, edits, sync, amounts, mealTypes, progress — and their test suites,
-beside them. The per-artifact `src/shared/*.ts` files are ONE-LINE RE-EXPORT
+sequence, edits, sync, amounts, mealTypes, progress, collapse — and their test
+suites, beside them. `collapse.ts` is the newest and the easiest to re-derive
+by accident: the finish strip, the sibling-group collapse and the handoff were
+inline in the web's `Diagram.tsx` for months and the native `DiagramView`
+shipped without them because nothing shared said what they were. Both
+renderers now call `deriveDiagramState`, and the rule is that neither may
+decide on its own which cells to draw. The per-artifact `src/shared/*.ts` files are ONE-LINE RE-EXPORT
 SHIMS of that package, kept so import sites did not churn; never put logic in
 a shim. The migration briefly created four diverging copies, and the six
 suites guarding the model's invariants were orphaned with the backup — the

@@ -49,3 +49,24 @@ export function toContent(
 ): { x: number; y: number } {
   return { x: wx - frame.x + scrollX, y: wy - frame.y + pageScrolled };
 }
+
+/** A rectangle measured in window space — a finish-strip row at pickup. */
+export interface WindowRect {
+  id: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+/** The measured rect containing window point (wx, wy) once the page has
+ *  scrolled `pageScrolled` since the rects were measured (they moved up
+ *  by that much), or null. The strip's rows sit outside the scroller, so
+ *  they are hit-tested in window space rather than content space. */
+export function rectAt(rects: readonly WindowRect[], wx: number, wy: number, pageScrolled: number): string | null {
+  const y = wy + pageScrolled;
+  for (const r of rects) {
+    if (wx >= r.x && wx < r.x + r.width && y >= r.y && y < r.y + r.height) return r.id;
+  }
+  return null;
+}

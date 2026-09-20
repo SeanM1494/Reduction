@@ -66,10 +66,11 @@ import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Reanimated, { runOnJS, useAnimatedStyle, useSharedValue } from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
 import type { Recipe, Section, Cell } from "@/shared/layout";
-import { computeLayout } from "@/shared/layout";
+import { deriveDiagramState } from "@/shared/collapse";
 import { formatAmount } from "@/shared/amounts";
 import { noTargetsReason, validMoveTargets } from "@/shared/edits";
-import { edgeDir, stepAt, toContent } from "./dragMath";
+import { edgeDir, rectAt, stepAt, toContent, type WindowRect } from "./dragMath";
+import { FinishStrip, type StripDrop } from "./FinishStrip";
 import { useColors, type Colors } from "@/hooks/useColors";
 import {
   diagramRects,
@@ -377,7 +378,18 @@ export const doneBackground = (colors: Colors): string => mix(colors.coolBg, col
 export function SectionDiagram({ section, done, onToggle, scale = 1, edit = null, drag = null }: SectionDiagramProps) {
   const colors = useColors();
   const { height: windowH } = useWindowDimensions();
-  const layout = useMemo(() => computeLayout(section), [section]);
+  // The finish strip, progressive collapse and the handoff are one pure
+  // derivation shared with the web (shared/collapse.ts). This component
+  // keeps only the two pieces of UI state it is fed: which chips the user
+  // reopened, and whether the tucked table was asked for back. The override
+  // only applies once the tree is finished, so unchecking anything brings
+  // the diagram straight back with no stale state to reset.
+  const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
+  const [override, setOverride] = useState(false);
+  const derived = useMemo(() => deriveDiagramState(section, done, expanded), [section, done, expanded]);
+  const { tail, treeDone } = derived;
+  const layout = derived.table;
+  const showTable = treeDone ? override : true;
   const cells = useMemo(() => layout.rows.flat(), [layout]);
   const doneBg = useMemo(() => doneBackground(colors), [colors]);
 
@@ -401,10 +413,20 @@ export function SectionDiagram({ section, done, onToggle, scale = 1, edit = null
     }
   }, []);
 
+  // A table that has folded down to its first column alone — every branch
+  // a chip — fills the frame's width, as the web's min-width table does,
+  // rather than leaving two chips beside an empty card. The frame's inner
+  // width comes from its own layout; until it is known the chips take the
+  // column's usual width.
+  const [frameInnerW, setFrameInnerW] = useState(0);
+  const metrics = useMemo(
+    () => (layout.totalCols === 1 && frameInnerW > METRICS.ingColWidth ? { ...METRICS, ingColWidth: frameInnerW } : METRICS),
+    [layout.totalCols, frameInnerW]
+  );
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const geometry = useMemo(
-    () => diagramRects(layout, heightsRef.current, METRICS),
-    [layout, measuredVersion]
+    () => diagramRects(layout, heightsRef.current, metrics),
+    [layout, metrics, measuredVersion]
   );
   const placed = measuredVersion > 0;
 
@@ -459,6 +481,16 @@ export function SectionDiagram({ section, done, onToggle, scale = 1, edit = null
     if (Date.now() < suppressTapUntil.current) return;
     onTapRef.current(id);
   }, []);
+  // A collapsed chip reopens its branch; it never toggles. Once reopened it
+  // stays open for the life of this component — unchecking a step inside
+  // also reopens it, since that step's parent chain gets un-done too.
+  const stableExpand = useCallback((id: string) => {
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      next.add(id);
+      return next;
+    });
+  }, []);
 
   // ---- the drag ----------------------------------------------------------
   // Everything the gesture reads lives in refs: the callbacks run on the JS
@@ -476,6 +508,17 @@ export function SectionDiagram({ section, done, onToggle, scale = 1, edit = null
   const lastPoint = useRef({ x: 0, y: 0 });
   const edgeTimer = useRef<ReturnType<typeof setInterval> | null>(null);
   const live = useRef<{ id: string; targets: Set<string> } | null>(null);
+  // The finish strip's rows sit outside the scroller, so they are measured
+  // in window space at pickup and hit-tested there (dragMath.rectAt).
+  const stripViews = useRef(new Map<string, View>());
+  const stripRects = useRef<WindowRect[]>([]);
+  const stripRowRef = useCallback(
+    (id: string) => (v: View | null) => {
+      if (v) stripViews.current.set(id, v);
+      else stripViews.current.delete(id);
+    },
+    []
+  );
   /** The hold completed, whether or not anything lifted: a refused pickup
    *  is still a hold, and its release is not a tap either. */
   const held = useRef(false);
@@ -504,7 +547,7 @@ export function SectionDiagram({ section, done, onToggle, scale = 1, edit = null
     lastPoint.current = { x: wx, y: wy };
     place(wx, wy);
     const p = toContent(wx, wy, frameWin.current, hScroll.current, pageScrolled.current);
-    const under = stepAt(geometryRef.current.rects, p.x, p.y);
+    const under = stepAt(geometryRef.current.rects, p.x, p.y) ?? rectAt(stripRects.current, wx, wy, pageScrolled.current);
     const next = under && d.targets.has(under) ? under : null;
     if (next !== hoverRef.current) {
       hoverRef.current = next;
@@ -574,6 +617,12 @@ export function SectionDiagram({ section, done, onToggle, scale = 1, edit = null
       place(wx, wy);
       ghostOn.value = 1;
     });
+    stripRects.current = [];
+    for (const [rowId, v] of stripViews.current) {
+      v.measureInWindow((x, y, w, h) => {
+        stripRects.current.push({ id: rowId, x, y, width: w, height: h });
+      });
+    }
   };
   const track = (wx: number, wy: number) => {
     if (!live.current) return;
@@ -629,6 +678,12 @@ export function SectionDiagram({ section, done, onToggle, scale = 1, edit = null
     opacity: ghostOn.value,
   }));
 
+  const dropForStrip = (id: string): StripDrop => {
+    if (!dragging) return null;
+    if (hover === id) return "over";
+    return targets.has(id) ? "ok" : "no";
+  };
+
   const dropFor = (c: Cell): DropState => {
     if (!dragging) return null;
     if (c.key === dragging) return "lifted";
@@ -651,7 +706,7 @@ export function SectionDiagram({ section, done, onToggle, scale = 1, edit = null
         colors={colors}
         doneBg={doneBg}
         pulse={pulse}
-        onToggle={stableToggle}
+        onToggle={c.kind === "collapsed" ? stableExpand : stableToggle}
         onMeasure={opts.measuring ? onMeasure : null}
         drop={dropFor(c)}
       />
@@ -684,11 +739,19 @@ export function SectionDiagram({ section, done, onToggle, scale = 1, edit = null
   const bodyH = placed ? geometry.totalHeight : METRICS.minRowHeight * layout.totalRows;
 
   return (
+    <View>
+      {showTable ? (
     // Two views because iOS drops a shadow from any view that clips: the
-    // outer one casts, the inner one clips to the radius.
-    <View style={styles.frameShadow}>
+    // outer one casts, the inner one clips to the radius. Lifted above the
+    // strip while dragging so the ghost paints over it, not under it.
+    <View style={[styles.frameShadow, dragging ? { zIndex: 2 } : null]}>
       <View style={[styles.frame, { borderColor: edit ? colors.coolLine : colors.borderStrong, borderWidth: edit ? 2 : 1, backgroundColor: colors.card }]}>
-        <View ref={bodyRef} collapsable={false} style={{ height: bodyH }}>
+        <View
+          ref={bodyRef}
+          collapsable={false}
+          style={{ height: bodyH }}
+          onLayout={(e) => setFrameInnerW(Math.round(e.nativeEvent.layout.width))}
+        >
           {/* Pass 1: the invisible measuring tree. Stays mounted so content
               changes re-measure; costs nothing visible. */}
           <View style={StyleSheet.absoluteFill} pointerEvents="none">
@@ -717,7 +780,7 @@ export function SectionDiagram({ section, done, onToggle, scale = 1, edit = null
                   so it can never jank. */}
               <View
                 pointerEvents="box-none"
-                style={[StyleSheet.absoluteFill, { width: METRICS.ingColWidth }]}
+                style={[StyleSheet.absoluteFill, { width: metrics.ingColWidth }]}
               >
                 {stickyCells.map((c) => renderSticky(c))}
                 {/* --pin: the column's soft shadow onto the scrolled content,
@@ -727,7 +790,7 @@ export function SectionDiagram({ section, done, onToggle, scale = 1, edit = null
                   style={[
                     StyleSheet.absoluteFill,
                     {
-                      left: METRICS.ingColWidth,
+                      left: metrics.ingColWidth,
                       width: 8,
                       backgroundColor: colors.text,
                       opacity: stickyShadow,
@@ -739,6 +802,17 @@ export function SectionDiagram({ section, done, onToggle, scale = 1, edit = null
           ) : null}
         </View>
       </View>
+      {treeDone ? (
+        /* .rd-tuck-btn: the handoff, by hand. */
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => setOverride(false)}
+          style={styles.tuckBtn}
+          testID="diagram-tuck"
+        >
+          <Text style={[styles.tuckText, { color: colors.mutedForeground }]}>Tuck the diagram away</Text>
+        </Pressable>
+      ) : null}
       {dragging ? (
         /* .rd-drag-ghost: outside the clipping frame, under the fingertip. */
         <Reanimated.View
@@ -755,6 +829,34 @@ export function SectionDiagram({ section, done, onToggle, scale = 1, edit = null
           </Text>
         </Reanimated.View>
       ) : null}
+    </View>
+      ) : (
+        /* .rd-tucked: the collapsed stand-in for the table once every
+           ingredient has combined. Tapping it brings the table back. */
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`All ${section.ingredients.length} ingredients combined. Show the full diagram again`}
+          onPress={() => setOverride(true)}
+          style={[styles.tucked, { backgroundColor: colors.coolBg, borderColor: colors.coolLine }]}
+          testID="diagram-tucked"
+        >
+          <Text style={[styles.tuckedCheck, { color: colors.coolInk }]}>✓</Text>
+          <Text style={[styles.tuckedText, { color: colors.coolInk }]}>
+            All {section.ingredients.length} ingredients combined
+          </Text>
+          <Text style={[styles.tuckedMore, { color: colors.mutedForeground }]}>SHOW DIAGRAM</Text>
+        </Pressable>
+      )}
+      <FinishStrip
+        tail={tail}
+        done={done}
+        focus={treeDone}
+        colors={colors}
+        onPress={stableToggle}
+        dropFor={dropForStrip}
+        rowRef={stripRowRef}
+        editing={!!edit}
+      />
     </View>
   );
 }
@@ -824,6 +926,21 @@ const styles = StyleSheet.create({
     elevation: 4,
   },
   frame: { borderWidth: 1, borderRadius: 14, overflow: "hidden" },
+  tuckBtn: { alignSelf: "flex-start", minHeight: 44, justifyContent: "center", paddingHorizontal: 2 },
+  tuckText: { fontSize: 12, textDecorationLine: "underline" },
+  tucked: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 11,
+    minHeight: 44,
+    borderWidth: 1,
+    borderRadius: 13,
+    paddingVertical: 13,
+    paddingHorizontal: 15,
+  },
+  tuckedCheck: { fontSize: 15, fontWeight: "700" },
+  tuckedText: { flex: 1, fontSize: 14, fontWeight: "600" },
+  tuckedMore: { fontFamily: "SpaceMono_400Regular", fontSize: 10.5, letterSpacing: 0.5 },
   ingBody: { gap: 3 },
   amount: { fontFamily: "SpaceMono_400Regular", fontSize: 13, letterSpacing: -0.13 },
   name: { fontSize: 14, lineHeight: 17.5 },
