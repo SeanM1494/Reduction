@@ -10,7 +10,7 @@ port still lacks, and the decision taken on it.
 
 **Decision (Sep 19):** items 1, 3, 9 and 10 below are fixed before App Store
 submission (all four closed Sep 20) — they are what a reviewer or a first user hits within a minute.
-Items 2, 4, 5 and 11 follow soon after launch. Everything else waits.
+Items 2, 4, 5 and 11 follow soon after launch (2 and 4 closed Sep 20). Everything else waits.
 
 ## Missing entirely on mobile
 
@@ -20,9 +20,9 @@ deferred before this audit.
 | # | Feature | Web | Mobile state |
 |---|---|---|---|
 | 1 | **Progressive collapse, finish strip and handoff in the diagram** | `Diagram.tsx` folds a finished branch into one chip once its sibling inputs are done, pulls the tail steps (bake, chill, slice) out of the table into a numbered strip with their minutes, and tucks the table away once every ingredient has combined | **CLOSED Sep 20.** The derivation moved into `lib/recipe-model/src/collapse.ts` (under test, pinned to the web's behaviour) and both renderers call it. `DiagramView` draws chips that reopen on tap, a table that fills the frame once it is chips alone, the tucked card with Show diagram / Tuck the diagram away, and `FinishStrip.tsx`: numbered rows with minutes that toggle, open the step sheet in edit mode, and take a drop from the drag. No height animation (first cut). |
-| 2 | **Search** | `SearchBar.tsx`: local filter over title, source and ingredient names, plus "Search the web" with "Instant" badges for cached pages | `searchRecipes` sits in `lib/api.ts` with zero callers; `lib/libraryView.ts` has no text filter. Nothing to type into anywhere. |
+| 2 | **Search** | `SearchBar.tsx`: local filter over title, source and ingredient names, plus "Search the web" with "Instant" badges for cached pages | **CLOSED Sep 20.** `components/SearchBar.tsx` at the top of the Find tab: `searchLibrary` (in `lib/libraryView.ts`, under test) over the library, the web row from three characters, result cards with the Instant badge, a picked result extracted into the draft with its own wait line and its own error. |
 | 3 | **Extraction progress messages** | `ExtractionProgress.tsx`: five rotating stage lines at 3s over the 10–30s wait (ROADMAP #9) | **CLOSED Sep 20.** `lib/extractionStage.ts` (the web's stages verbatim, under test) and `components/ExtractionProgress.tsx`, under the paste box's and the photo picker's own buttons, fixed height, live region. |
-| 4 | **Account ID with copy button** | `AccountId.tsx` in Settings, plus the "N recipes in your library" line | Neither exists. Settings shows name and email only. |
+| 4 | **Account ID with copy button** | `AccountId.tsx` in Settings, plus the "N recipes in your library" line | **CLOSED Sep 20.** `components/settings/AccountId.tsx` (expo-clipboard, required lazily so a dev build without the module falls back to the share sheet) and the count line in the Account card. |
 | 5 | **Theme control** | Light / Dark / Colorblind, persisted (`ThemeToggle.tsx`, `lib/theme.ts`) | Follows the system scheme only (`hooks/useColors.ts`). No manual override; `constants/colors.ts` has `light` and `dark` and no colorblind palette. |
 | 6 | **Read the page again** (re-extract) | Menu item with a confirm sheet and the progress line (`RecipeView.tsx`) | `reextract` in `lib/api.ts`, no caller, no menu item. |
 | 7 | **Save as Image** | Menu item; `lib/exportImage.ts` renders a PNG at 2x | No view-shot or sharing dependency. Nothing. |

@@ -12,6 +12,7 @@ import {
   hasUntagged,
   presentMealTypes,
   progressOf,
+  searchLibrary,
   totalMinutes,
   type LibraryItem,
 } from './libraryView';
@@ -86,4 +87,20 @@ test('progress label: not started, a percentage, done', () => {
   assert.deepEqual(progressOf(3, 8), { pct: 38, label: '38%' });
   assert.deepEqual(progressOf(8, 8), { pct: 100, label: 'Done' });
   assert.deepEqual(progressOf(0, 0), { pct: 0, label: 'Not started' });
+});
+
+test("searchLibrary: title, source and ingredient names, case-insensitive; blank matches nothing", () => {
+  const lib = [
+    { savedAt: 3, recipe: { title: "Guacamole", source: "seriouseats.com", sections: [{ ingredients: [{ name: "ripe avocados" }, { name: "lime" }] }] } },
+    { savedAt: 2, recipe: { title: "Chocolate chip cookies", source: "Grandma", sections: [{ ingredients: [{ name: "butter" }, { name: "flour" }] }] } },
+    { savedAt: 1, recipe: { title: "Toast", sections: [{ ingredients: [{ name: "bread" }] }] } },
+  ];
+  const titles = (q: string) => searchLibrary(lib, q).map((e) => e.recipe.title);
+  assert.deepEqual(titles("guac"), ["Guacamole"]);
+  assert.deepEqual(titles("GRANDMA"), ["Chocolate chip cookies"]);
+  assert.deepEqual(titles("avocado"), ["Guacamole"]);
+  assert.deepEqual(titles("o"), ["Guacamole", "Chocolate chip cookies", "Toast"]);
+  assert.deepEqual(titles(""), []);
+  assert.deepEqual(titles("   "), []);
+  assert.deepEqual(titles("zzz"), []);
 });

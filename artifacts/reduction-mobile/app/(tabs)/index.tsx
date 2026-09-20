@@ -20,6 +20,7 @@ import { useLibrary } from '@/lib/library-context';
 import { extractFromUrl, extractFromText, extractFromFile, ApiError } from '@/lib/api';
 import { PhotoPicker } from '@/components/PhotoPicker';
 import { ExtractionProgress } from '@/components/ExtractionProgress';
+import { SearchBar } from '@/components/SearchBar';
 import type { PreparedPhoto } from '@/lib/photo';
 import type { Recipe } from '@/shared/layout';
 import { Paywall } from '@/components/Paywall';
@@ -35,7 +36,7 @@ export default function FindScreen() {
 
   const [input, setInput] = useState('');
   const [photo, setPhoto] = useState<PreparedPhoto | null>(null);
-  const [busy, setBusy] = useState<'text' | 'photo' | null>(null);
+  const [busy, setBusy] = useState<'text' | 'photo' | 'search' | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   // The same predicate as the web's isWalled: the wall bites only when the
@@ -82,6 +83,28 @@ export default function FindScreen() {
     }
   };
 
+  /** A web search result, picked: the same extraction as a pasted link,
+   *  but rejecting on failure so the card can own its own error while the
+   *  rest of the panel stays usable (the web's `runSilently`). */
+  const pickWebResult = async (url: string) => {
+    if (busy) return;
+    // Its own marker: the paste box's button still disables, but its
+    // progress line stays off — the card carries this wait's words.
+    setBusy('search');
+    try {
+      const result = await extractFromUrl(url);
+      setDraft({ recipe: result.recipe, sourceUrl: url });
+      await refresh();
+      router.push('/recipe/draft');
+    } catch (e) {
+      const err = e as ApiError;
+      if (err.status === 402 || err.code === 'trial_spent') await refresh();
+      throw err;
+    } finally {
+      setBusy(null);
+    }
+  };
+
   const submit = () => {
     const value = input.trim();
     if (!value) return;
@@ -109,6 +132,10 @@ export default function FindScreen() {
         <Paywall context="extract" />
       ) : (
         <>
+          {/* The web's header search, in the tab: the library first, the
+              web underneath. Above the paste box because a saved recipe
+              is the cheaper answer to "I want to cook X". */}
+          <SearchBar onPickWebResult={pickWebResult} disabled={!!busy} />
           <TextInput
             style={styles.input}
             placeholder="https://example.com/recipe or paste recipe text"

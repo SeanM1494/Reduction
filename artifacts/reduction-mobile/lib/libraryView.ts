@@ -25,9 +25,10 @@ export interface LibraryItem {
   cooked?: number[] | null;
   rating?: number | null;
   recipe: {
+    title?: string;
     source?: string | null;
     mealTypes?: string[];
-    sections?: Array<{ nodes?: Array<{ minutes?: unknown }> }>;
+    sections?: Array<{ nodes?: Array<{ minutes?: unknown }>; ingredients?: Array<{ name?: string }> }>;
   };
 }
 
@@ -125,4 +126,21 @@ export function arrangeLibrary<T extends LibraryItem>(library: T[], filter: Filt
 export function progressOf(done: number, total: number): { pct: number; label: string } {
   const pct = total ? Math.round((done / total) * 100) : 0;
   return { pct, label: pct === 0 ? 'Not started' : pct === 100 ? 'Done' : `${pct}%` };
+}
+
+/**
+ * The library filtered by a typed query — the web SearchBar's `localMatches`:
+ * title, source and ingredient names, case-insensitive substring, no
+ * network. Empty or whitespace matches nothing, so the panel has something
+ * to show only once there is something to look for.
+ */
+export function searchLibrary<T extends LibraryItem>(library: T[], query: string): T[] {
+  const needle = query.trim().toLowerCase();
+  if (!needle) return [];
+  return library.filter((e) => {
+    const r = e.recipe;
+    if ((r.title ?? '').toLowerCase().includes(needle)) return true;
+    if (r.source && r.source.toLowerCase().includes(needle)) return true;
+    return (r.sections ?? []).some((s) => (s.ingredients ?? []).some((i) => (i.name ?? '').toLowerCase().includes(needle)));
+  });
 }
