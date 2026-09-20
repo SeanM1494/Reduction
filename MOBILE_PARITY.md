@@ -9,7 +9,7 @@ the phases and the calls that were made on purpose; this file records what the
 port still lacks, and the decision taken on it.
 
 **Decision (Sep 19):** items 1, 3, 9 and 10 below are fixed before App Store
-submission — they are what a reviewer or a first user hits within a minute.
+submission (3 and 9 closed Sep 20; 1 and 10 open) — they are what a reviewer or a first user hits within a minute.
 Items 2, 4, 5 and 11 follow soon after launch. Everything else waits.
 
 ## Missing entirely on mobile
@@ -21,13 +21,13 @@ deferred before this audit.
 |---|---|---|---|
 | 1 | **Progressive collapse, finish strip and handoff in the diagram** | `Diagram.tsx` folds a finished branch into one chip once its sibling inputs are done, pulls the tail steps (bake, chill, slice) out of the table into a numbered strip with their minutes, and tucks the table away once every ingredient has combined | `DiagramView.tsx` calls `computeLayout(section)` with no `collapsed` set; the collapsed-cell paths in `layoutRects.ts` and `DiagramCell` exist but are unreachable. Tail steps render as full-height cells and force extra columns and horizontal scrolling — the failure the web header says the strip exists to prevent. No minutes on steps either. |
 | 2 | **Search** | `SearchBar.tsx`: local filter over title, source and ingredient names, plus "Search the web" with "Instant" badges for cached pages | `searchRecipes` sits in `lib/api.ts` with zero callers; `lib/libraryView.ts` has no text filter. Nothing to type into anywhere. |
-| 3 | **Extraction progress messages** | `ExtractionProgress.tsx`: five rotating stage lines at 3s over the 10–30s wait (ROADMAP #9) | A spinner inside the disabled button. No stage text, no live region. |
+| 3 | **Extraction progress messages** | `ExtractionProgress.tsx`: five rotating stage lines at 3s over the 10–30s wait (ROADMAP #9) | **CLOSED Sep 20.** `lib/extractionStage.ts` (the web's stages verbatim, under test) and `components/ExtractionProgress.tsx`, under the paste box's and the photo picker's own buttons, fixed height, live region. |
 | 4 | **Account ID with copy button** | `AccountId.tsx` in Settings, plus the "N recipes in your library" line | Neither exists. Settings shows name and email only. |
 | 5 | **Theme control** | Light / Dark / Colorblind, persisted (`ThemeToggle.tsx`, `lib/theme.ts`) | Follows the system scheme only (`hooks/useColors.ts`). No manual override; `constants/colors.ts` has `light` and `dark` and no colorblind palette. |
 | 6 | **Read the page again** (re-extract) | Menu item with a confirm sheet and the progress line (`RecipeView.tsx`) | `reextract` in `lib/api.ts`, no caller, no menu item. |
 | 7 | **Save as Image** | Menu item; `lib/exportImage.ts` renders a PNG at 2x | No view-shot or sharing dependency. Nothing. |
 | 8 | **PDF and other file uploads** | The file input accepts PDF, PNG, GIF and WebP | Camera or photo library only, re-encoded to JPEG (`lib/photo.ts`). No document picker. |
-| 9 | **Sign-in resilience** | Offers only the providers `/api/auth/providers` reports configured; maps six server `auth_error` codes to specific sentences (`SignIn.tsx`) | Never calls the providers route; both buttons always render (`SignInScreen.tsx`); one generic error sentence (`lib/auth-context.tsx`). |
+| 9 | **Sign-in resilience** | Offers only the providers `/api/auth/providers` reports configured; maps six server `auth_error` codes to specific sentences (`SignIn.tsx`) | **CLOSED Sep 20.** Providers asked at boot and on the screen; Google gated, Apple "Coming soon" when unconfigured, a hint when neither; the six codes in the web's sentences (`lib/authErrors.ts`, under test). Unknown (unreachable) offers both enabled. |
 | 10 | **Diagram accessibility** | Cells are `role=button` with `aria-pressed` and a title; keyboard operable | Cells are bare `Pressable` with only a `testID` (`DiagramView.tsx`); VoiceOver gets nothing useful. `RatingControl` uses `radiogroup` for a clearable control; `MealTypeSheet` options have no radio or checkbox semantics. |
 | 11 | **The paywall's "Open my recipe" door** | Names the kept recipe and offers a button to open it (`Paywall.tsx`) | Names it, no button. The Library tab is the way out, but the wall itself has no door. |
 | 12 | Hold-progress ring during press-and-hold | `is-pressing` ring over the 350ms hold | Haptics only; nothing paints during the hold. |
