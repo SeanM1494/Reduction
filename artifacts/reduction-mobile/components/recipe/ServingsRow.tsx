@@ -77,15 +77,28 @@ export function ServingsRow({
       {scale === 1 ? (
         <Text style={styles.note}>{yieldLine ?? `Recipe makes ${formatQty(base)}`}</Text>
       ) : (
-        <Text style={styles.note}>
-          <Text style={styles.scale}>×{formatQty(scale)}</Text>
-          {' from a recipe for '}
-          {formatQty(base)}
-          {'   '}
-          <Text style={styles.reset} onPress={() => onChange(null)} accessibilityRole="button">
-            Reset
+        <View style={styles.noteRow}>
+          <Text style={styles.note}>
+            <Text style={styles.scale}>×{formatQty(scale)}</Text>
+            {' from a recipe for '}
+            {formatQty(base)}
           </Text>
-        </Text>
+          {/* A real button, not a tappable run of text. It is 44px tall,
+              but pulls its extra height back in with negative margins so
+              the line still lays out at 18px and the diagram below does not
+              move on an iPhone SE, where this block's height is budgeted
+              (CLAUDE.md). */}
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Reset to the recipe's own servings"
+            hitSlop={{ left: 8, right: 8 }}
+            onPress={() => onChange(null)}
+            style={styles.resetBtn}
+            testID="servings-reset"
+          >
+            <Text style={styles.reset}>Reset</Text>
+          </Pressable>
+        </View>
       )}
     </View>
   );
@@ -140,6 +153,8 @@ function makeStyles(colors: Colors) {
     value: { fontFamily: fonts.mono, fontSize: 15, minWidth: 44, textAlign: 'center', color: colors.foreground },
     note: { fontSize: 12.5, lineHeight: 18, color: colors.mutedForeground },
     scale: { fontWeight: '600', color: colors.foreground },
-    reset: { color: colors.coolInk, textDecorationLine: 'underline' },
+    noteRow: { flexDirection: 'row', alignItems: 'center', gap: 12, flexWrap: 'wrap' },
+    resetBtn: { minHeight: 44, marginVertical: -13, justifyContent: 'center', paddingHorizontal: 4 },
+    reset: { fontSize: 12.5, lineHeight: 18, color: colors.coolInk, textDecorationLine: 'underline' },
   });
 }

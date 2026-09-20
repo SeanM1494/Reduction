@@ -53,6 +53,14 @@ export function FinishStrip({ tail, done, focus, colors, onPress, dropFor, rowRe
               <Pressable
                 onPress={() => onPress(n.id)}
                 testID={`fin-${n.id}`}
+                {...(editing
+                  ? { accessibilityRole: "button" as const, accessibilityLabel: `Edit "${n.label}"` }
+                  : {
+                      accessibilityRole: "togglebutton" as const,
+                      accessibilityLabel: `${i + 1}. ${n.label}${mins ? `, ${mins}` : ""}, ${isDone ? "done" : ready ? "ready" : "not yet"}`,
+                      "aria-checked": isDone,
+                      accessibilityHint: isDone ? `Undoes ${n.label}` : ready ? `Marks ${n.label} done` : `Marks ${n.label} done, along with every step before it`,
+                    })}
                 style={[
                   styles.row,
                   { backgroundColor: bg, borderColor: drop === "over" ? colors.coolInk : line },

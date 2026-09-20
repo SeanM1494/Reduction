@@ -112,18 +112,26 @@ export function SheetOption({
   current,
   disabled,
   onPress,
+  role = 'button',
+  testID,
 }: {
   label: string;
   current: boolean;
   disabled?: boolean;
   onPress: () => void;
+  /** What the option IS to a screen reader: one of a set (radio), an
+   *  independent toggle (checkbox), or a plain choice (button). */
+  role?: 'button' | 'radio' | 'checkbox';
+  testID?: string;
 }) {
   const colors = useColors();
   const styles = makeStyles(colors);
   return (
     <Pressable
-      accessibilityRole="button"
-      accessibilityState={{ selected: current, disabled }}
+      accessibilityRole={role}
+      accessibilityState={{ disabled }}
+      {...(role === 'button' ? { 'aria-selected': current } : { 'aria-checked': current })}
+      testID={testID}
       disabled={disabled}
       onPress={onPress}
       style={[styles.opt, current && styles.optCurrent, disabled && styles.btnDisabled]}

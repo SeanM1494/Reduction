@@ -236,6 +236,45 @@ function cellContent(
   );
 }
 
+/**
+ * What a cell says to a screen reader — the web's `title` and `aria-pressed`
+ * (RecipeView's `interaction`), as RN accessibility props. A cooking cell is
+ * a toggle button whose checked state is "done"; a collapsed chip is a
+ * button that expands; in edit mode every cell is a plain button that opens
+ * fields. Gaps say nothing.
+ */
+function cellAccessibility(c: Cell, st: CellState, scale: number, editing: boolean) {
+  if (c.kind === "gap") return {};
+  if (c.kind === "collapsed") {
+    return {
+      accessibilityRole: "button" as const,
+      accessibilityLabel: `Expand "${c.text ?? ""}" to show its ${c.itemCount ?? 0} ingredients and steps`,
+      "aria-expanded": false,
+    };
+  }
+  const name =
+    c.kind === "ingredient" && c.ingredient
+      ? `${formatAmount(c.ingredient, scale)} ${c.ingredient.name}${c.ingredient.note ? `, ${c.ingredient.note}` : ""}`.trim()
+      : (c.text ?? "");
+  if (editing) {
+    return {
+      accessibilityRole: "button" as const,
+      accessibilityLabel: c.kind === "ingredient" ? `Edit ${name}, or press and hold to move it` : `Edit "${name}"`,
+    };
+  }
+  const state = st.isDone ? "done" : st.ready ? "ready" : "not yet";
+  return {
+    accessibilityRole: "togglebutton" as const,
+    accessibilityLabel: `${name}, ${state}`,
+    "aria-checked": st.isDone,
+    accessibilityHint: st.isDone
+      ? `Undoes ${name} and everything after it`
+      : st.ready
+        ? `Marks ${name} done`
+        : `Marks ${name} done, along with every step before it`,
+  };
+}
+
 interface DiagramCellProps {
   cell: Cell;
   /** Null for the invisible measuring copy (pass 1). */
@@ -250,6 +289,11 @@ interface DiagramCellProps {
   onToggle: (id: string) => void;
   onMeasure: ((key: string) => (e: LayoutChangeEvent) => void) | null;
   drop: DropState;
+  /** Edit mode: a tap opens fields, so the cell is a plain button. */
+  editing: boolean;
+  /** The scroller's copy of a column-0 cell sits under the sticky overlay's
+   *  copy; only one of them may speak. */
+  a11yHidden: boolean;
 }
 
 /**
@@ -275,9 +319,12 @@ const DiagramCell = memo(function DiagramCell({
   onToggle,
   onMeasure,
   drop,
+  editing,
+  a11yHidden,
 }: DiagramCellProps) {
   const st: CellState = { isDone, ready, ownerDone };
   const tappable = c.kind !== "gap";
+  const a11y = cellAccessibility(c, st, scale, editing);
   if (onMeasure) {
     return (
       <View
@@ -315,6 +362,9 @@ const DiagramCell = memo(function DiagramCell({
       testID={`cell-${c.kind}-${c.key}`}
       disabled={!tappable}
       onPress={tappable ? () => onToggle(c.key) : undefined}
+      accessible={tappable && !a11yHidden}
+      aria-hidden={!tappable || a11yHidden}
+      {...a11y}
       style={{
         position: "absolute",
         left: rect!.x,
@@ -692,7 +742,7 @@ export function SectionDiagram({ section, done, onToggle, scale = 1, edit = null
     return targets.has(c.key) ? "ok" : "no";
   };
 
-  const renderCell = (c: Cell, opts: { measuring?: boolean; rect?: CellRect } = {}) => {
+  const renderCell = (c: Cell, opts: { measuring?: boolean; rect?: CellRect; a11yHidden?: boolean } = {}) => {
     const st = stateOf(c, done);
     return (
       <DiagramCell
@@ -709,6 +759,8 @@ export function SectionDiagram({ section, done, onToggle, scale = 1, edit = null
         onToggle={c.kind === "collapsed" ? stableExpand : stableToggle}
         onMeasure={opts.measuring ? onMeasure : null}
         drop={dropFor(c)}
+        editing={!!edit}
+        a11yHidden={!!opts.a11yHidden}
       />
     );
   };
@@ -754,7 +806,7 @@ export function SectionDiagram({ section, done, onToggle, scale = 1, edit = null
         >
           {/* Pass 1: the invisible measuring tree. Stays mounted so content
               changes re-measure; costs nothing visible. */}
-          <View style={StyleSheet.absoluteFill} pointerEvents="none">
+          <View style={StyleSheet.absoluteFill} pointerEvents="none" aria-hidden>
             {cells.map((c) => renderCell(c, { measuring: true }))}
           </View>
 
@@ -773,7 +825,7 @@ export function SectionDiagram({ section, done, onToggle, scale = 1, edit = null
                 scrollEventThrottle={16}
                 contentContainerStyle={{ width: geometry.totalWidth, height: bodyH }}
               >
-                {cells.map((c) => renderCell(c))}
+                {cells.map((c) => renderCell(c, { a11yHidden: c.col === 0 }))}
               </Animated.ScrollView>
 
               {/* The sticky ingredient column: a static overlay. It never moves,

@@ -9,7 +9,7 @@ the phases and the calls that were made on purpose; this file records what the
 port still lacks, and the decision taken on it.
 
 **Decision (Sep 19):** items 1, 3, 9 and 10 below are fixed before App Store
-submission (1, 3 and 9 closed Sep 20; 10 open) — they are what a reviewer or a first user hits within a minute.
+submission (all four closed Sep 20) — they are what a reviewer or a first user hits within a minute.
 Items 2, 4, 5 and 11 follow soon after launch. Everything else waits.
 
 ## Missing entirely on mobile
@@ -28,7 +28,7 @@ deferred before this audit.
 | 7 | **Save as Image** | Menu item; `lib/exportImage.ts` renders a PNG at 2x | No view-shot or sharing dependency. Nothing. |
 | 8 | **PDF and other file uploads** | The file input accepts PDF, PNG, GIF and WebP | Camera or photo library only, re-encoded to JPEG (`lib/photo.ts`). No document picker. |
 | 9 | **Sign-in resilience** | Offers only the providers `/api/auth/providers` reports configured; maps six server `auth_error` codes to specific sentences (`SignIn.tsx`) | **CLOSED Sep 20.** Providers asked at boot and on the screen; Google gated, Apple "Coming soon" when unconfigured, a hint when neither; the six codes in the web's sentences (`lib/authErrors.ts`, under test). Unknown (unreachable) offers both enabled. |
-| 10 | **Diagram accessibility** | Cells are `role=button` with `aria-pressed` and a title; keyboard operable | Cells are bare `Pressable` with only a `testID` (`DiagramView.tsx`); VoiceOver gets nothing useful. `RatingControl` uses `radiogroup` for a clearable control; `MealTypeSheet` options have no radio or checkbox semantics. |
+| 10 | **Diagram accessibility** | Cells are `role=button` with `aria-pressed` and a title; keyboard operable | **CLOSED Sep 20.** Cells, chips and strip rows are toggle buttons with a label of the form "3 ripe avocados, not yet / ready / done", a checked state and the web's hint ("Edit …" buttons in edit mode); a chip says how many steps it folds; the measuring layer and the scroller's copies of the sticky column are hidden from readers so nothing is read twice; the rating is a toolbar of toggle buttons; meal types are a radiogroup and checkboxes; the servings Reset is a 44px button that costs the block no height. Verified through Chromium's ARIA tree; the VoiceOver pass needs the phone. |
 | 11 | **The paywall's "Open my recipe" door** | Names the kept recipe and offers a button to open it (`Paywall.tsx`) | Names it, no button. The Library tab is the way out, but the wall itself has no door. |
 | 12 | Hold-progress ring during press-and-hold | `is-pressing` ring over the 350ms hold | Haptics only; nothing paints during the hold. |
 | 13 | Card sweep animation; diagram entrance fade and height animation | Yes | The sweep is logged as deferred in ROADMAP. The others were not logged. |

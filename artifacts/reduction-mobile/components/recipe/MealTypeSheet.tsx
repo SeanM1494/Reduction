@@ -39,9 +39,9 @@ export function MealTypeSheet({
   return (
     <Sheet open={open} title="Meal types" onClose={onClose}>
       <SheetField label="Primary" hint="drives sorting and the card badge">
-        <View style={optionRow}>
+        <View style={optionRow} accessibilityRole="radiogroup" accessibilityLabel="Primary meal type">
           {MEAL_TYPES.map((t) => (
-            <SheetOption key={t} label={MEAL_TYPE_LABELS[t]} current={t === primary} onPress={() => setPrimary(t)} />
+            <SheetOption key={t} label={MEAL_TYPE_LABELS[t]} current={t === primary} onPress={() => setPrimary(t)} role="radio" testID={`meal-primary-${t}`} />
           ))}
         </View>
       </SheetField>
@@ -54,6 +54,8 @@ export function MealTypeSheet({
               current={secondaries.has(t)}
               disabled={t === primary}
               onPress={() => toggleSecondary(t)}
+              role="checkbox"
+              testID={`meal-also-${t}`}
             />
           ))}
         </View>

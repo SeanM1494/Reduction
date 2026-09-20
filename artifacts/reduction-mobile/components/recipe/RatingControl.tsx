@@ -31,15 +31,20 @@ export function RatingControl({
   const styles = makeStyles(colors);
   const current = typeof rating === 'number' ? rating : null;
   return (
-    <View style={styles.row} accessibilityRole="radiogroup" accessibilityLabel="Rate this recipe" testID="rating">
+    // A toolbar of three toggle buttons, not a radiogroup: tapping the current
+    // one clears it, which a radio cannot do, and a reader told "radio button"
+    // would expect one to stay chosen.
+    <View style={styles.row} accessibilityRole="toolbar" accessibilityLabel="Rate this recipe" testID="rating">
       {OPTIONS.map(({ value, glyph, label }) => {
         const on = current === value;
         return (
           <Pressable
             key={value}
-            accessibilityRole="button"
-            accessibilityState={{ selected: on }}
-            accessibilityLabel={on ? `${label} — tap to clear` : label}
+            accessibilityRole="togglebutton"
+            aria-checked={on}
+            accessibilityLabel={label}
+            accessibilityHint={on ? "Clears your rating" : "Rates this recipe"}
+            testID={`rating-${value}`}
             onPress={() => onChange(on ? null : value)}
             style={[styles.btn, on && styles.btnOn]}
           >
