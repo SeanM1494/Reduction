@@ -24,10 +24,12 @@ import {
   fetchBillingConfig,
   fetchEntitlement,
   fetchMe,
+  fetchProviders,
   mobileStartUrl,
   setAuthToken,
   signOutServer,
 } from './api';
+import { describeAuthError, type ProviderState } from './authErrors';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { deleteSecureItem, getSecureItem, setSecureItem } from './secure-storage';
 
@@ -51,6 +53,10 @@ interface AuthState {
   user: AuthUser | null;
   entitlement: Entitlement | null;
   webUrl: string | null;
+  /** What /api/auth/providers said; null until it has answered. */
+  providers: ProviderState;
+  /** Ask again — the sign-in screen does this on mount while unknown. */
+  reloadProviders: () => Promise<void>;
   signingIn: 'google' | 'apple' | null;
   signInError: string | null;
   signIn: (provider: 'google' | 'apple') => Promise<void>;
@@ -66,7 +72,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [entitlement, setEntitlement] = useState<Entitlement | null>(null);
   const [webUrl, setWebUrl] = useState<string | null>(null);
+  const [providers, setProviders] = useState<ProviderState>(null);
   const [signingIn, setSigningIn] = useState<'google' | 'apple' | null>(null);
+
+  /** A failed ask leaves the state unknown rather than "nothing": the
+   *  screen then offers both buttons, whose own failures explain. */
+  const reloadProviders = useCallback(async () => {
+    try {
+      const { providers: next } = await fetchProviders();
+      setProviders({ google: !!next?.google, apple: !!next?.apple });
+    } catch {
+      /* unknown stays unknown */
+    }
+  }, []);
   const [signInError, setSignInError] = useState<string | null>(null);
 
   /** Drops the stored token and signed-in state, e.g. after the server
@@ -133,13 +151,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setToken(stored);
           await loadAccount();
         }
-        const cfg = await fetchBillingConfig().catch(() => null);
+        const [cfg] = await Promise.all([fetchBillingConfig().catch(() => null), reloadProviders()]);
         if (cfg) setWebUrl(cfg.webUrl);
       } finally {
         setLoading(false);
       }
     })();
-  }, [loadAccount]);
+  }, [loadAccount, reloadProviders]);
 
   const signIn = useCallback(
     async (provider: 'google' | 'apple') => {
@@ -161,7 +179,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const code = parsed.queryParams?.code;
         const authError = parsed.queryParams?.auth_error;
         if (authError) {
-          setSignInError('Sign-in was declined or could not start. Please try again.');
+          // The server's own code, in the web's sentence for it — "expired"
+          // and "declined" are different advice (lib/authErrors.ts).
+          setSignInError(describeAuthError(authError));
           return;
         }
         if (typeof code !== 'string' || !code) {
@@ -198,13 +218,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       user,
       entitlement,
       webUrl,
+      providers,
+      reloadProviders,
       signingIn,
       signInError,
       signIn,
       signOut,
       refresh,
     }),
-    [loading, token, user, entitlement, webUrl, signingIn, signInError, signIn, signOut, refresh]
+    [loading, token, user, entitlement, webUrl, providers, reloadProviders, signingIn, signInError, signIn, signOut, refresh]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

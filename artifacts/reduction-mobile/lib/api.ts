@@ -94,6 +94,11 @@ export interface MeResponse {
 
 export const fetchMe = (): Promise<MeResponse> => request('/api/auth/me');
 
+/** Which providers the server is configured for, so the sign-in screen
+ *  offers only buttons that work (the web asks the same route first). */
+export const fetchProviders = (): Promise<{ providers: { google: boolean; apple: boolean } }> =>
+  request('/api/auth/providers');
+
 export const signOutServer = (): Promise<void> =>
   request('/api/auth/logout', { method: 'POST' }).catch(() => {});
 
