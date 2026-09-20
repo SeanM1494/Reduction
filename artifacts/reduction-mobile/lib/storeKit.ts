@@ -32,6 +32,7 @@ import {
   fetchProducts,
   finishTransaction,
   getAvailablePurchases,
+  getStorefront,
   initConnection,
   purchaseErrorListener,
   purchaseUpdatedListener,
@@ -44,6 +45,39 @@ import { offersFrom, PLAN_ORDER, PLAN_SKUS, type Plan } from './purchasePolicy';
 import { purchase as runPurchase, reconcile, restore as runRestore, type Store, type Verifier } from './storeKitFlow';
 
 type StorePurchase = Purchase & { transactionDate: number };
+
+/**
+ * Dev-only trace of what the store actually answers, in the Metro console.
+ *
+ * Every failure on the way to a price is swallowed by design further up —
+ * `available()` answers false, `offers()` answers [], SubscribeBox renders
+ * nothing — which is right for a user and useless for whoever is holding
+ * the phone asking why the wall is empty. So in a dev build each step says
+ * what it asked and what came back: the host that answered the config, the
+ * connection, the storefront, the products by id and price, and any error
+ * with the fields expo-iap normalises native failures into (`code`,
+ * `debugMessage`, `responseCode`). Silent in a release build: `__DEV__` is
+ * false there and the branch is dead code.
+ *
+ * expo-iap's own logger is enabled the same way: it is silent unless
+ * `globalThis.EXPO_IAP_DEV_MODE` is true, and its `[Expo-IAP Debug]` lines
+ * show the request as the library saw it, one layer nearer the native call.
+ */
+const trace = (...args: unknown[]) => {
+  if (__DEV__) console.log('[storekit]', ...args);
+};
+if (__DEV__) (globalThis as { EXPO_IAP_DEV_MODE?: boolean }).EXPO_IAP_DEV_MODE = true;
+
+function describeError(e: unknown): Record<string, unknown> {
+  const r = (typeof e === 'object' && e !== null ? e : {}) as Record<string, unknown>;
+  return {
+    code: r.code,
+    message: r.message ?? (typeof e === 'string' ? e : undefined),
+    debugMessage: r.debugMessage,
+    responseCode: r.responseCode,
+    productIds: r.productIds,
+  };
+}
 
 const store: Store<StorePurchase> = {
   async requestSubscription(sku, appAccountToken) {
@@ -76,10 +110,16 @@ let connected: Promise<boolean> | null = null;
  *  does not need paying twice. */
 function connect(): Promise<boolean> {
   if (!connected) {
-    connected = initConnection().catch(() => {
-      connected = null;
-      return false;
-    });
+    connected = initConnection()
+      .then((ok) => {
+        trace('initConnection ->', ok);
+        return ok;
+      })
+      .catch((e) => {
+        trace('initConnection FAILED', describeError(e));
+        connected = null;
+        return false;
+      });
   }
   return connected;
 }
@@ -88,11 +128,22 @@ const hostCanSell = () => Platform.OS === 'ios' && Device.isDevice;
 
 export const storeKitHandler: PurchaseHandler = {
   async available() {
-    if (!hostCanSell()) return false;
+    if (!hostCanSell()) {
+      trace('available: host cannot sell', { os: Platform.OS, isDevice: Device.isDevice });
+      return false;
+    }
     try {
       const cfg = await fetchBillingConfig();
+      // The host is the one that matters: a dev build asks whichever server
+      // its dev server names, which is not necessarily the deployment whose
+      // preflight was just run.
+      trace('available: /api/billing/config from', process.env.EXPO_PUBLIC_DOMAIN, '->', {
+        nativePurchaseAvailable: cfg.nativePurchaseAvailable,
+        purchaseAvailable: cfg.purchaseAvailable,
+      });
       if (!cfg.nativePurchaseAvailable) return false;
-    } catch {
+    } catch (e) {
+      trace('available: /api/billing/config FAILED', describeError(e));
       return false;
     }
     return connect();
@@ -100,8 +151,39 @@ export const storeKitHandler: PurchaseHandler = {
 
   async offers(): Promise<Offer[]> {
     if (!(await connect())) return [];
-    const products = (await fetchProducts({ skus: PLAN_ORDER.map((p) => PLAN_SKUS[p]), type: 'subs' })) ?? [];
-    return offersFrom(products.map((p) => ({ id: p.id, displayPrice: p.displayPrice })));
+    const skus = PLAN_ORDER.map((p) => PLAN_SKUS[p]);
+    if (__DEV__) {
+      try {
+        trace('storefront ->', await getStorefront());
+      } catch (e) {
+        trace('storefront FAILED', describeError(e));
+      }
+    }
+    trace('fetchProducts asking for', skus);
+    let products;
+    try {
+      products = (await fetchProducts({ skus, type: 'subs' })) ?? [];
+    } catch (e) {
+      // Rethrown so the caller's own handling is unchanged; the log is the
+      // point. Unknown SKUs never throw — they are simply absent from the
+      // result — so an error here is the store or the connection, not the
+      // catalogue.
+      trace('fetchProducts FAILED', describeError(e));
+      throw e;
+    }
+    trace(
+      `fetchProducts -> ${products.length} product(s)`,
+      products.map((p) => ({ id: p.id, displayPrice: p.displayPrice, type: p.type, platform: p.platform }))
+    );
+    const offers = offersFrom(products.map((p) => ({ id: p.id, displayPrice: p.displayPrice })));
+    if (offers.length !== skus.length) {
+      trace(
+        'missing from the store:',
+        skus.filter((s) => !offers.some((o) => o.sku === s)),
+        '(a product Apple has not returned: agreement, status, bundle id, or propagation — the store does not say which)'
+      );
+    }
+    return offers;
   },
 
   async purchase(plan: Plan, userId: string): Promise<PurchaseOutcome> {

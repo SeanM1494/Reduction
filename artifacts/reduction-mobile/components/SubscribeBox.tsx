@@ -37,7 +37,13 @@ export function SubscribeBox() {
     purchaseAvailable()
       .then(async (can) => (can ? purchaseOffers() : []))
       .then((o) => alive && setOffers(o))
-      .catch(() => alive && setOffers([]));
+      .catch((e) => {
+        // Swallowed for the user (the box just renders nothing), said aloud
+        // for whoever is holding a dev build; lib/storeKit.ts has already
+        // logged the store's own answer by the time this fires.
+        if (__DEV__) console.log('[subscribe] offers unavailable:', (e as Error)?.message ?? e);
+        if (alive) setOffers([]);
+      });
     return () => {
       alive = false;
     };
