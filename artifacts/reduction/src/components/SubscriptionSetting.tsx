@@ -14,6 +14,7 @@
  */
 
 import { useCallback, useEffect, useState } from "react";
+import LegalLinks from "./LegalLinks";
 import { fetchSessionState, type Entitlement } from "../lib/session";
 import { manageSubscription, purchaseAvailable, startPurchase } from "../lib/purchase";
 import CouponBox from "./CouponBox";
@@ -98,6 +99,7 @@ export default function SubscriptionSetting() {
               Subscribe &mdash; $1.99/month
             </button>
           ) : null}
+          {canBuy ? <LegalLinks terms /> : null}
         </>
       )}
 

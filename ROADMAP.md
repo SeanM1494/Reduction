@@ -536,14 +536,19 @@ verification, or a decision.
   bearer-token path against the built server. Not verifiable here: the
   phone's own alert (React Native's Alert does not exist on the web build)
   and a real Stripe cancel.
-- **No Terms of Use and no privacy policy — BUILD, after a DECISION.**
-  Guideline 3.1.2 requires a functional link to both in the binary and in
-  the metadata for any auto-renewable subscription, and App Store Connect
-  requires a Privacy Policy URL for every app. Neither page exists on the
-  web (`/privacy`, `/terms` — nothing), so nothing can link to them. The
-  text is the decision (legal content, not something to invent); once it
-  exists the code is a web route each, links from `SubscribeBox` and the
-  mobile Settings, and the URLs in App Store Connect. Half a day.
+- ~~**No Terms of Use and no privacy policy — BUILD, after a DECISION.**~~
+  **Done Sep 21.** Written in-house (decided: no generator subscription),
+  as static pages at `/privacy` and `/terms`, linked beside every price, in
+  both Settings, on the mobile sign-in screen and under the landing CTA
+  (README "The legal pages" says where each thing goes in App Store
+  Connect). Two things the pages say that the brief simplified, kept
+  because the documents would otherwise be false: the website bills
+  through Stripe, and extraction sends the recipe (or photo) to Anthropic.
+  Three things to confirm before submission: `privacy@recipereduction.com`
+  must be a mailbox someone reads (or change the address on both pages);
+  the operator is named as "Recipe Reduction" — if there is a legal entity
+  it should be named instead; governing law is left as "where Recipe
+  Reduction is established" rather than a state, on purpose.
 - ~~**The Apple adapter verifies ONE environment per server — BUILD, and a
   review blocker.**~~ **Done Sep 21**: the payload's declared environment
   selects the verifier, both built from the same roots; a server without

@@ -1937,6 +1937,20 @@ body.rd-dragging-body {
 .rd-settings-line { margin: 0 0 6px; font-size: 15px; }
 .rd-settings-sub { color: var(--muted); font-size: 13.5px; }
 .rd-settings-signout { margin-top: 10px; }
+/* The legal links: 44px targets in a muted line. `terms` is the renewal
+   sentence Apple wants beside a price. */
+.rd-legal { margin-top: 10px; }
+.rd-legal-terms { margin: 0; font-size: 13.5px; line-height: 19px; color: var(--muted); }
+.rd-legal-links { margin: 0; display: flex; gap: 18px; flex-wrap: wrap; }
+.rd-legal-links a {
+  display: inline-block; min-height: 44px; line-height: 44px;
+  font-size: 14px; color: var(--muted); text-decoration: underline; text-underline-offset: 2px;
+}
+.rd-legal-links a:hover { color: var(--ink); }
+.rd-legal-links a:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+.rd-settings-legal { padding: 0 4px; }
+.rd-landing-legal { margin-top: 6px; }
+.rd-landing-legal .rd-legal-links { justify-content: center; }
 /* Deletion: a text button at the foot of Settings. 44px tall for a thumb,
    muted so it is found on purpose rather than by accident. */
 .rd-settings-delete {

@@ -596,6 +596,20 @@ stays: `admin_events`, on purpose — the audit trail of who was comped
 outlives the account. The confirm lives on the screen, not the route; the
 route asks nothing twice.
 
+**The legal pages describe the code, so a change to what the code does with
+data is a change to `public/privacy.html` in the same commit.** They are
+static HTML on purpose (README "The legal pages"): Apple's reviewer and a
+`mailto:` link need them without JavaScript, and the web has no router. The
+policy names Stripe (the website still bills through it), Anthropic (every
+link, paste and photo goes there for extraction; photos are not kept), the
+anonymous extraction cache, Expo for push and Replit for hosting, and says
+deletion cancels what it can and not an App Store subscription. Drop a
+provider and the sentence goes; add one and it is added. The links live in
+one component per client (`LegalLinks`) beside every price — Apple's 3.1.2
+wants them in the binary, not only in App Store Connect — and the URL is
+built by `lib/legal.ts` from `webUrl`, so a deployment that sets
+`PUBLIC_BASE_URL` to a host without the pages breaks the links.
+
 The expensive failure is never the schema. It is provider vocabulary escaping
 into code that outlives the provider: a `current_period_end` in UI copy, a
 `cancel_at_period_end` behind a toggle, a `status === 'past_due'` in a

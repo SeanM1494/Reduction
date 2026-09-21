@@ -20,6 +20,7 @@ import { SheetButton, optionRow } from '@/components/Sheet';
 import { useAuth } from '@/lib/auth-context';
 import { purchaseAvailable, purchaseOffers, restorePurchases, startPurchase, type Offer } from '@/lib/purchase';
 import { PLAN_LABELS, type Plan } from '@/lib/purchasePolicy';
+import { LegalLinks } from '@/components/LegalLinks';
 import { useColors, type Colors } from '@/hooks/useColors';
 import { fonts } from '@/constants/colors';
 
@@ -108,6 +109,9 @@ export function SubscribeBox() {
           {message.text}
         </Text>
       ) : null}
+      {/* Beside the price, always: what renews, where it is cancelled, and
+          the two pages Apple requires a link to (guideline 3.1.2). */}
+      <LegalLinks terms />
     </View>
   );
 }

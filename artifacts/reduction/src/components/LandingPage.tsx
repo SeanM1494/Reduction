@@ -22,6 +22,7 @@
  */
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import LegalLinks from "./LegalLinks";
 import { computeLayout } from "../shared/layout";
 import type { ThemeMode } from "../lib/theme";
 import type { Entry, StepTimer } from "../lib/storage";
@@ -435,6 +436,9 @@ export default function LandingPage({
             Create an account or log in
           </button>
         </div>
+        {/* Below the CTA, so it spends none of the fold (CLAUDE.md: the SE
+            has +24px above the CTA's bottom and nothing else). */}
+        <LegalLinks className="rd-landing-legal" />
       </div>
     </div>
   );

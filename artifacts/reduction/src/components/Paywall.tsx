@@ -29,6 +29,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { purchaseAvailable, startPurchase } from "../lib/purchase";
+import LegalLinks from "./LegalLinks";
 import CouponBox from "./CouponBox";
 
 interface Props {
@@ -119,6 +120,9 @@ export default function Paywall({
           {error}
         </p>
       ) : null}
+
+      {/* Beside the price, always: the renewal sentence and the two links. */}
+      <LegalLinks terms />
 
       {showCode ? (
         <CouponBox

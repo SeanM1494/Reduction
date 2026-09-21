@@ -218,6 +218,34 @@ and Access → Sandbox), a workspace server on `APPLE_IAP_ENVIRONMENT=Sandbox`
 and App Review's are exactly those), then a purchase from the wall and a
 "Restore purchases" from Settings on a second device.
 
+### The legal pages
+
+The Privacy Policy and Terms of Use are static HTML in
+`artifacts/reduction/public/privacy.html` and `terms.html`, served at
+`/privacy` and `/terms` (the static middleware's `extensions: ["html"]`, in
+`artifacts/api-server/src/app.ts` — no router on the web, and Apple's
+reviewer needs them reachable without JavaScript). The mobile app links them
+through `lib/legal.ts`: `webUrl` from `/api/billing/config` (this server's
+`PUBLIC_BASE_URL`) with `https://recipereduction.com` as the fallback, so the
+pages must exist on whichever host that names. The links appear beside every
+price (the web paywall and Subscription card; the mobile `SubscribeBox`,
+which is the wall and Settings), in both Settings screens, on the mobile
+sign-in screen and under the landing page's call to action — Apple's 3.1.2
+wants them in the binary as well as the metadata.
+
+What to put in App Store Connect: **App Information → Privacy Policy URL** =
+`https://recipereduction.com/privacy`; the version's **License Agreement**
+field, or a line in the description, = `https://recipereduction.com/terms`.
+The **App Privacy** questionnaire has to say what the policy says: name,
+email and an identifier from sign-in; the recipes and progress people save;
+purchase records; a push token when timers are on; server logs. Photos are
+sent for extraction and not kept. The contact address on both pages is
+`privacy@recipereduction.com`, which has to be a mailbox that is read.
+
+The pages describe what the code does — Stripe on the website, Anthropic for
+extraction, the cache of extracted pages, deletion cancelling what it can.
+If any of that changes, the pages change in the same commit.
+
 ### A development build for a physical iPhone
 
 `artifacts/reduction-mobile/eas.json` has three profiles. `development` is

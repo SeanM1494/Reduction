@@ -19,6 +19,7 @@ import { AppearanceCard } from '@/components/settings/AppearanceCard';
 import { CouponBox } from '@/components/CouponBox';
 import { TimersCard } from '@/components/settings/TimersCard';
 import { SubscribeBox } from '@/components/SubscribeBox';
+import { LegalLinks } from '@/components/LegalLinks';
 import { manageSubscription } from '@/lib/purchase';
 import { useColors, type Colors } from '@/hooks/useColors';
 import { cardShadow, fonts } from '@/constants/colors';
@@ -155,6 +156,10 @@ export default function SettingsScreen() {
 
       <AppearanceCard />
 
+      <View style={styles.legal}>
+        <LegalLinks />
+      </View>
+
       {/* .rd-btn-danger: a real button on the card colour, not a transparent
           box whose only edge is a line within a shade of the page. */}
       <Pressable
@@ -223,6 +228,7 @@ function makeStyles(colors: Colors) {
     },
     signOutPressed: { borderColor: colors.borderStrong },
     signOutText: { color: colors.dangerInk, fontFamily: fonts.headingMedium, fontSize: 15 },
+    legal: { paddingHorizontal: 4 },
     deleteRow: { minHeight: 44, alignItems: 'center', justifyContent: 'center', marginTop: 4 },
     deleteText: { color: colors.mutedForeground, fontSize: 14, textDecorationLine: 'underline' },
   });

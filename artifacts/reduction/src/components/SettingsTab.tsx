@@ -11,6 +11,7 @@ import ThemeToggle from "./ThemeToggle";
 import NotificationSetting from "./NotificationSetting";
 import SubscriptionSetting from "./SubscriptionSetting";
 import AccountId from "./AccountId";
+import LegalLinks from "./LegalLinks";
 import type { ThemeMode } from "../lib/theme";
 import type { SessionUser } from "../lib/session";
 
@@ -56,6 +57,8 @@ export default function SettingsTab({
         <h2 className="rd-settings-heading">Appearance</h2>
         <ThemeToggle mode={themeMode} onChange={onThemeChange} />
       </div>
+
+      <LegalLinks className="rd-settings-legal" />
 
       {/* Deletion, last and quiet: a text button, findable without being
           the loudest thing on the page. The confirm lives in App.tsx, where

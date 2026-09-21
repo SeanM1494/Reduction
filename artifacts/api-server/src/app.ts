@@ -80,7 +80,12 @@ if (process.env.NODE_ENV === "production") {
   if (!fs.existsSync(clientDir)) {
     logger.error({ clientDir }, "dist/public missing — build artifacts/reduction first");
   }
-  app.use(express.static(clientDir));
+  // `extensions` is what serves the legal pages at /privacy and /terms:
+  // they are static HTML in artifacts/reduction/public (no router on the
+  // web, and a page Apple's reviewer and a mailto: link both need to be
+  // reachable without JavaScript). The SPA fallback below would otherwise
+  // answer index.html for them.
+  app.use(express.static(clientDir, { extensions: ["html"] }));
   // SPA fallback as plain middleware, not app.get("*") — Express 5's router
   // (path-to-regexp v8) rejects the bare-star pattern outright.
   app.use((req, res, next) => {

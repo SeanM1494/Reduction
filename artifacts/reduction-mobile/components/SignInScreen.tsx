@@ -29,6 +29,7 @@ import { offerFrom } from '@/lib/authErrors';
 import { useColors, type Colors } from '@/hooks/useColors';
 import { cardShadow, fonts } from '@/constants/colors';
 import { BrandLogo } from '@/components/BrandLogo';
+import { LegalLinks } from '@/components/LegalLinks';
 
 export function SignInScreen({ onBack }: { onBack: () => void }) {
   const { signIn, signingIn, signInError, providers, reloadProviders } = useAuth();
@@ -119,6 +120,7 @@ export function SignInScreen({ onBack }: { onBack: () => void }) {
         <Text style={styles.fineprint}>
           Your first recipe is free. One account works on the web and here.
         </Text>
+        <LegalLinks center />
       </View>
     </SafeAreaView>
   );
