@@ -26,6 +26,7 @@ import {
   environmentOfTransaction,
   fetchAppleSubscriptionStatus,
   normaliseAppleStatus,
+  publicKeyFingerprint,
   requestAppleTestNotification,
   resetAppleIapCache,
   selectingVerifier,
@@ -407,6 +408,32 @@ test("the token is cached, and a rotated key id invalidates the cache", () => {
   assert.notEqual(a, c);
   assert.equal(decodeSeg(c.split(".")[0]).kid, "ROTATED999");
   resetAppleIapCache();
+});
+
+test("the preflight fingerprints the Server API key's PUBLIC half, matching openssl on the file", () => {
+  withEnv(
+    {
+      ...ALL_UNSET,
+      APPLE_BUNDLE_ID: "com.example.reduction",
+      APPLE_IAP_ENVIRONMENT: "Sandbox",
+      APPLE_ROOT_CERTS: TEST_ROOT_B64,
+      APPLE_IAP_KEY_ID: "ABCDEF1234",
+      APPLE_IAP_ISSUER_ID: "57246542-96fe-1a63-e053-0824d011072a",
+      APPLE_IAP_PRIVATE_KEY: TEST_KEY_PEM,
+    },
+    () => {
+      const r = describeAppleIapEnv() as { serverApi: { publicKeyFingerprint: string | null; privateKeyParses: boolean } };
+      assert.equal(r.serverApi.privateKeyParses, true);
+      // What `openssl pkey -pubout -outform DER | sha256sum` prints: SHA-256 of the SPKI DER.
+      const spki = crypto.createPublicKey(TEST_KEY).export({ type: "spki", format: "der" });
+      assert.equal(r.serverApi.publicKeyFingerprint, crypto.createHash("sha256").update(spki).digest("hex"));
+      assert.equal(publicKeyFingerprint(TEST_KEY), r.serverApi.publicKeyFingerprint);
+      // Nothing of the private key reaches the report.
+      const body = TEST_KEY_PEM.replace(/-----[^-]+-----/g, "").replace(/\s+/g, "");
+      const report = JSON.stringify(r);
+      for (let i = 0; i + 12 <= body.length; i += 6) assert.equal(report.includes(body.slice(i, i + 12)), false);
+    }
+  );
 });
 
 test("a damaged key paste is named as such, not as an ASN.1 error", () => {

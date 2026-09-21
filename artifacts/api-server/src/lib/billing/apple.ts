@@ -690,6 +690,13 @@ export async function requestAppleTestNotification(
 
 // --------------------------------------------------------------- preflight ---
 
+/** SHA-256 of the SPKI DER of a private key's public half — what
+ *  `openssl pkey -pubout -outform DER | sha256sum` prints for the file. */
+export function publicKeyFingerprint(key: crypto.KeyObject): string {
+  const spki = crypto.createPublicKey(key).export({ type: "spki", format: "der" });
+  return crypto.createHash("sha256").update(spki).digest("hex");
+}
+
 /**
  * What the running process holds, for GET /api/admin/preflight/apple-iap.
  * Discloses nothing secret: certificate subjects and expiries are public,
@@ -714,10 +721,18 @@ export function describeAppleIapEnv(): Record<string, unknown> {
   const api = apiCredentials();
   let apiKeyParses = false;
   let apiKeyError: string | null = null;
+  let apiKeyFingerprint: string | null = null;
   if (api) {
     try {
-      crypto.createPrivateKey(api.privateKeyPem);
+      const key = crypto.createPrivateKey(api.privateKeyPem);
       apiKeyParses = true;
+      // The PUBLIC key's SHA-256, so a paste can be checked against the
+      // downloaded file without disclosing anything:
+      //   openssl pkey -in SubscriptionKey_<KEYID>.p8 -pubout -outform DER | sha256sum
+      // A 401 from Apple with a key that parses is almost always a
+      // different .p8 than the Key ID names (the Sign in with Apple key,
+      // most often); this is the check that settles it.
+      apiKeyFingerprint = publicKeyFingerprint(key);
     } catch (e) {
       apiKeyError = (e as Error).message;
     }
@@ -744,7 +759,7 @@ export function describeAppleIapEnv(): Record<string, unknown> {
     rootCertificatesDroppedAsUnparseable: inlineUnparseable,
     onlineChecks: process.env.APPLE_IAP_OFFLINE?.trim() !== "1",
     serverApi: api
-      ? { configured: true, keyId: api.keyId, issuerId: api.issuerId, privateKeyParses: apiKeyParses, parseError: apiKeyError }
+      ? { configured: true, keyId: api.keyId, issuerId: api.issuerId, privateKeyParses: apiKeyParses, parseError: apiKeyError, publicKeyFingerprint: apiKeyFingerprint }
       : { configured: false, note: "APPLE_IAP_KEY_ID, APPLE_IAP_ISSUER_ID and APPLE_IAP_PRIVATE_KEY unset — the verify route still works from the signed transaction; status refresh and test notifications are off." },
     notificationsUrl: process.env.PUBLIC_BASE_URL
       ? `${process.env.PUBLIC_BASE_URL.trim().replace(/\/+$/, "")}/api/billing/apple/notifications`

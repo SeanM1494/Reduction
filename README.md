@@ -180,7 +180,15 @@ to the same provider-agnostic `subscriptions` table as Stripe, as
 Without the three API credentials the app's `POST /api/billing/apple/verify`
 still works from the signed transaction alone; with them the server also asks
 Apple for the current status on each verify, and the admin route below can
-request a test notification.
+request a test notification. **A 401 from Apple with a key that parses** is
+almost always a different `.p8` than the Key ID names — the Sign in with
+Apple key is the usual one, since both are `.p8` files from the same account.
+The download's filename says which it is (`SubscriptionKey_<KEYID>.p8` for an
+In-App Purchase key, `AuthKey_<KEYID>.p8` for the others), and the preflight
+reports `serverApi.publicKeyFingerprint`, which must equal
+`openssl pkey -in SubscriptionKey_<KEYID>.p8 -pubout -outform DER | sha256sum`
+on the file. The Issuer ID is the one on the In-App Purchase tab of
+Integrations, and a key minutes old can be refused for a short while.
 
 Register `PUBLIC_BASE_URL` + `/api/billing/apple/notifications` in App Store
 Connect → App → App Information → App Store Server Notifications (V2), in BOTH
