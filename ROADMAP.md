@@ -539,8 +539,13 @@ verification, or a decision.
   text is the decision (legal content, not something to invent); once it
   exists the code is a web route each, links from `SubscribeBox` and the
   mobile Settings, and the URLs in App Store Connect. Half a day.
-- **The Apple adapter verifies ONE environment per server — BUILD, and a
-  review blocker.** `APPLE_IAP_ENVIRONMENT` picks Sandbox or Production
+- ~~**The Apple adapter verifies ONE environment per server — BUILD, and a
+  review blocker.**~~ **Done Sep 21**: the payload's declared environment
+  selects the verifier, both built from the same roots; a server without
+  `APPLE_APP_APPLE_ID` verifies sandbox only and says so
+  (`production_unconfigured`); the preflight's `verifies` must read both on
+  the deployment; the one notifications URL goes in both App Store Connect
+  fields. Was: `APPLE_IAP_ENVIRONMENT` picked Sandbox or Production
   for the whole process, fail-closed. App Review (and TestFlight) make
   SANDBOX purchases against the PRODUCTION deployment, so a reviewer's
   purchase would come back `wrong_environment` and the review fails on

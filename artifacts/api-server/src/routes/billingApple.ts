@@ -30,6 +30,7 @@ import {
   appleIapConfig,
   appleVerifier,
   describeVerificationFailure,
+  environmentOfTransaction,
   fetchAppleSubscriptionStatus,
   storedOwnerOfAppleSubscription,
   subscriptionFromApple,
@@ -108,8 +109,9 @@ appleBillingRouter.post("/verify", async (req: Request, res: Response) => {
     // answers. A failure here means "slightly less current", not "refused".
     let status = null;
     const ref = transaction.originalTransactionId ?? transaction.transactionId;
+    const environment = environmentOfTransaction(transaction);
     if (ref && cfg.api) {
-      const snap = await fetchAppleSubscriptionStatus(cfg, ref);
+      const snap = await fetchAppleSubscriptionStatus(cfg, ref, environment);
       if (snap) {
         status = snap.status;
         // Apple's latest signed objects supersede what the app sent, which
@@ -130,6 +132,9 @@ appleBillingRouter.post("/verify", async (req: Request, res: Response) => {
       return res.status(422).json({ error: "That is not a subscription purchase.", code: "not_subscription" });
 
     await upsertAppleSubscription({ userId, facts, transaction, renewalInfo });
+    // The environment in the log line is what tells a reviewer's sandbox
+    // purchase apart from a customer's on the same deployment.
+    console.log(`[billing:apple:verify] ${environment} ${ref ?? "?"} → ${facts.status}`);
     return res.json({ ok: true, entitlement: await entitlementFor(userId) });
   } catch (e) {
     console.error("[billing:apple:verify]", (e as Error).message);
@@ -141,10 +146,13 @@ appleBillingRouter.post("/verify", async (req: Request, res: Response) => {
  * App Store Server Notifications V2. Body: { signedPayload }.
  *
  * Registered in App Store Connect → App → App Information → App Store Server
- * Notifications, as PUBLIC_BASE_URL + this path — one URL for production and
- * one for sandbox, and this server handles whichever APPLE_IAP_ENVIRONMENT
- * says (a payload from the other is refused as wrong_environment and
- * answered 400, so Apple stops resending it).
+ * Notifications, as PUBLIC_BASE_URL + this path — the SAME URL in both the
+ * production and the sandbox field. The payload declares its environment
+ * and the adapter verifies with the matching verifier (lib/billing/apple.ts,
+ * "TWO ENVIRONMENTS, ONE SERVER"); a payload whose signature disagrees with
+ * its claim is refused as wrong_environment and answered 400, so Apple
+ * stops resending it, and a production payload reaching a server that can
+ * only verify sandbox is `production_unconfigured`, also 400.
  */
 appleBillingRouter.post("/notifications", async (req: Request, res: Response) => {
   const verifier = appleVerifier();

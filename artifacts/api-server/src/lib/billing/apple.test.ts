@@ -14,16 +14,25 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import crypto from "node:crypto";
 import { createServer, type Server } from "node:http";
+import { Environment, VerificationException, VerificationStatus } from "@apple/app-store-server-library";
 import {
+  AppleEnvironmentUnconfigured,
+  appStoreApiBase,
   appStoreApiJwt,
   appleIapConfig,
   describeAppleIapEnv,
+  describeVerificationFailure,
+  environmentDeclaredBy,
+  environmentOfTransaction,
   fetchAppleSubscriptionStatus,
   normaliseAppleStatus,
   requestAppleTestNotification,
   resetAppleIapCache,
+  selectingVerifier,
   subscriptionFromApple,
+  type AppleEnvironment,
   type AppleIapConfig,
+  type AppleVerifier,
 } from "./apple";
 
 function withEnv(vars: Record<string, string | undefined>, fn: () => void | Promise<void>) {
@@ -210,8 +219,121 @@ test("Production is the default environment, and requires the App Store id", () 
       assert.equal(cfg.rootCerts.length, 1);
       assert.equal(cfg.api, null, "the Server API is optional");
       assert.equal(cfg.onlineChecks, true);
+      // THE REVIEW CASE. App Review buys in Sandbox against this server, so
+      // a production deployment must verify both.
+      assert.deepEqual(cfg.verifies, ["Sandbox", "Production"]);
+      assert.deepEqual((describeAppleIapEnv() as { verifies: string[] }).verifies, ["Sandbox", "Production"]);
     }
   );
+  // A sandbox-selling server (the workspace) verifies sandbox only: without
+  // the App Store id the library cannot bind a production payload.
+  withEnv(
+    { ...ALL_UNSET, APPLE_BUNDLE_ID: "com.example.reduction", APPLE_ROOT_CERTS: TEST_ROOT_B64, APPLE_IAP_ENVIRONMENT: "sandbox" },
+    () => {
+      const cfg = appleIapConfig()!;
+      assert.equal(cfg.environment, "Sandbox");
+      assert.deepEqual(cfg.verifies, ["Sandbox"]);
+    }
+  );
+});
+
+// ------------------------------------------- the environment a payload declares ---
+
+/** A JWS-shaped string whose middle segment is the given payload, unsigned. */
+const jwsOf = (payload: unknown) =>
+  `eyJhbGciOiJFUzI1NiJ9.${Buffer.from(JSON.stringify(payload)).toString("base64url")}.c2ln`;
+
+test("the declared environment is read from a transaction, a renewal info and a notification alike", () => {
+  assert.equal(environmentDeclaredBy(jwsOf({ environment: "Sandbox", transactionId: "1" })), "Sandbox");
+  assert.equal(environmentDeclaredBy(jwsOf({ environment: "Production", autoRenewStatus: 1 })), "Production");
+  assert.equal(environmentDeclaredBy(jwsOf({ notificationType: "DID_RENEW", data: { environment: "Sandbox" } })), "Sandbox");
+  // Unknown to this adapter, missing, or not even JSON: null, so the caller
+  // falls back to the server's own environment rather than guessing.
+  assert.equal(environmentDeclaredBy(jwsOf({ environment: "Xcode" })), null);
+  assert.equal(environmentDeclaredBy(jwsOf({ transactionId: "1" })), null);
+  assert.equal(environmentDeclaredBy("eyJhbGciOiJFUzI1NiJ9.bm90IGpzb24.c2ln"), null);
+  assert.equal(environmentDeclaredBy("garbage"), null);
+});
+
+test("a verified transaction's environment is Sandbox or Production, nothing else", () => {
+  assert.equal(environmentOfTransaction({ environment: Environment.SANDBOX } as any), "Sandbox");
+  assert.equal(environmentOfTransaction({ environment: Environment.PRODUCTION } as any), "Production");
+});
+
+// ------------------------------------------------ dispatch by environment ---
+
+/** A fake per-environment verifier that records which one was asked. */
+function fakeVerifiers() {
+  const calls: Array<[AppleEnvironment, string]> = [];
+  const build = (env: AppleEnvironment): AppleVerifier => ({
+    async notification(s) { calls.push([env, "notification"]); return { notificationType: "TEST" } as any; },
+    async transaction(s) { calls.push([env, "transaction"]); return { transactionId: env } as any; },
+    async renewalInfo(s) { calls.push([env, "renewalInfo"]); return { autoRenewStatus: 1 } as any; },
+  });
+  return { calls, build };
+}
+
+test("THE REVIEW CASE: a production server verifies a sandbox payload with the sandbox verifier", async () => {
+  const { calls, build } = fakeVerifiers();
+  const v = selectingVerifier({ environment: "Production", verifies: ["Sandbox", "Production"] }, build);
+  const tx = await v.transaction(jwsOf({ environment: "Sandbox", transactionId: "s1" }));
+  assert.equal(tx.transactionId, "Sandbox");
+  await v.renewalInfo(jwsOf({ environment: "Sandbox" }));
+  await v.notification(jwsOf({ data: { environment: "Sandbox" } }));
+  // A customer's purchase, same server, same process.
+  await v.transaction(jwsOf({ environment: "Production", transactionId: "p1" }));
+  assert.deepEqual(calls, [
+    ["Sandbox", "transaction"],
+    ["Sandbox", "renewalInfo"],
+    ["Sandbox", "notification"],
+    ["Production", "transaction"],
+  ]);
+});
+
+test("a payload with no readable environment is verified as the server's own", async () => {
+  const { calls, build } = fakeVerifiers();
+  const v = selectingVerifier({ environment: "Production", verifies: ["Sandbox", "Production"] }, build);
+  await v.transaction(jwsOf({ transactionId: "no-env" }));
+  await v.transaction("garbage.that.passes-nothing");
+  assert.deepEqual(calls, [["Production", "transaction"], ["Production", "transaction"]]);
+});
+
+test("a production payload reaching a sandbox-only server is refused as such, not entitled", async () => {
+  const { calls, build } = fakeVerifiers();
+  const v = selectingVerifier({ environment: "Sandbox", verifies: ["Sandbox"] }, build);
+  await assert.rejects(
+    v.transaction(jwsOf({ environment: "Production", transactionId: "p1" })),
+    (e: unknown) => e instanceof AppleEnvironmentUnconfigured && e.environment === "Production"
+  );
+  assert.deepEqual(calls, [], "no verifier was even built for it");
+  // And the route answers it with a code that names the fix.
+  assert.equal(describeVerificationFailure(new AppleEnvironmentUnconfigured("Production")), "production_unconfigured");
+  // Distinct from the library's own mismatch, which is a signature disagreeing with the claim.
+  assert.equal(
+    describeVerificationFailure(new VerificationException(VerificationStatus.INVALID_ENVIRONMENT)),
+    "wrong_environment"
+  );
+});
+
+test("each environment's verifier is built once and reused", async () => {
+  let builds = 0;
+  const v = selectingVerifier({ environment: "Production", verifies: ["Sandbox", "Production"] }, (env) => {
+    builds++;
+    return fakeVerifiers().build(env);
+  });
+  await v.transaction(jwsOf({ environment: "Sandbox" }));
+  await v.transaction(jwsOf({ environment: "Sandbox" }));
+  await v.transaction(jwsOf({ environment: "Production" }));
+  assert.equal(builds, 2);
+});
+
+test("the Server API host follows the TRANSACTION's environment, not the server's", () => {
+  withEnv({ APPLE_STOREKIT_API_URL: undefined }, () => {
+    const prod = apiConfig({ environment: "Production", verifies: ["Sandbox", "Production"] });
+    assert.equal(appStoreApiBase(prod), "https://api.storekit.apple.com", "the default is the server's own");
+    assert.equal(appStoreApiBase(prod, "Sandbox"), "https://api.storekit-sandbox.itunes.apple.com", "a reviewer's purchase is looked up where it exists");
+    assert.equal(appStoreApiBase(prod, "Production"), "https://api.storekit.apple.com");
+  });
 });
 
 test("roots are reported by subject and expiry, and a bad paste is counted, not fatal", () => {
@@ -240,6 +362,7 @@ function apiConfig(overrides: Partial<AppleIapConfig> = {}): AppleIapConfig {
   return {
     bundleId: "com.example.reduction",
     environment: "Sandbox",
+    verifies: ["Sandbox"],
     rootCerts: [Buffer.from(TEST_ROOT_B64, "base64")],
     appAppleId: null,
     api: { keyId: "ABCDEF1234", issuerId: "57246542-96fe-1a63-e053-0824d011072a", privateKeyPem: TEST_KEY_PEM },

@@ -172,8 +172,8 @@ to the same provider-agnostic `subscriptions` table as Stripe, as
 |---|---|---|
 | `APPLE_BUNDLE_ID` | the app's bundle id (`com.example.reduction`) | yes |
 | `APPLE_ROOT_CERTS` | base64 of Apple's root CA `.cer` files (DER), comma-separated — from https://www.apple.com/certificateauthority/ ("Apple Root CA - G3" signs App Store payloads; add G2 too). Or `APPLE_ROOT_CA_DIR`, a directory of `.cer` files. | yes |
-| `APPLE_IAP_ENVIRONMENT` | `Production` (default) or `Sandbox` — TestFlight and sandbox testers are Sandbox | for testing |
-| `APPLE_APP_APPLE_ID` | the numeric App Store id, from App Store Connect → App Information | Production only |
+| `APPLE_IAP_ENVIRONMENT` | the environment this server SELLS in: `Production` (default) or `Sandbox`. Verification accepts BOTH regardless — the payload declares its environment and the matching verifier runs — which is how App Review's sandbox purchases verify on the production deployment. `Sandbox` is for a workspace server, where no App Store id is needed | for testing |
+| `APPLE_APP_APPLE_ID` | the numeric App Store id, from App Store Connect → App Information. Required to verify PRODUCTION payloads at all; a server without it verifies sandbox only (`verifies` in the preflight report says which) | Production |
 | `APPLE_IAP_KEY_ID`, `APPLE_IAP_ISSUER_ID`, `APPLE_IAP_PRIVATE_KEY` | an **In-App Purchase** key (App Store Connect → Users and Access → Integrations → In-App Purchase) — a different key from the Sign in with Apple one; the `.p8` pastes the same way as `APPLE_PRIVATE_KEY` | optional |
 | `APPLE_IAP_OFFLINE` | `1` disables OCSP revocation checks against Apple | no |
 
@@ -183,8 +183,9 @@ Apple for the current status on each verify, and the admin route below can
 request a test notification.
 
 Register `PUBLIC_BASE_URL` + `/api/billing/apple/notifications` in App Store
-Connect → App → App Information → App Store Server Notifications (V2), for the
-environment this server is configured for. The route 404s until the adapter is
+Connect → App → App Information → App Store Server Notifications (V2), in BOTH
+the production and the sandbox URL field — one server handles both, by the
+environment each payload declares. The route 404s until the adapter is
 configured and answers 400 to anything that does not verify, so Apple stops
 retrying it.
 
@@ -212,9 +213,10 @@ server could not record would be money taken and nothing unlocked.
 
 To try it end to end: a development build (below; Expo Go cannot run
 StoreKit) on a physical iPhone, a Sandbox tester (App Store Connect → Users
-and Access → Sandbox), the server on `APPLE_IAP_ENVIRONMENT=Sandbox`, then a
-purchase from the wall and a "Restore purchases" from Settings on a second
-device.
+and Access → Sandbox), a workspace server on `APPLE_IAP_ENVIRONMENT=Sandbox`
+(the deployment needs no change: it verifies sandbox purchases as it stands,
+and App Review's are exactly those), then a purchase from the wall and a
+"Restore purchases" from Settings on a second device.
 
 ### A development build for a physical iPhone
 

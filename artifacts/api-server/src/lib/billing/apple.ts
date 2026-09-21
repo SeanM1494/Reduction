@@ -31,6 +31,24 @@
  * originalTransactionId, which covers a notification for a purchase made
  * before the app set the token, or a restore on a new device.
  *
+ * TWO ENVIRONMENTS, ONE SERVER. App Review and TestFlight make SANDBOX
+ * purchases against the PRODUCTION deployment — there is no other server
+ * for them to reach — so a verifier bound to one environment fails every
+ * review with "could not complete the purchase" (the first cut did exactly
+ * that, and never met a reviewer only because it never shipped). Apple's
+ * guidance is to accept the environment the signed payload declares, and
+ * that is what happens: every JWS carries an `environment` claim (a
+ * notification carries it under `data`), `environmentDeclaredBy` reads it
+ * UNVERIFIED, and the verifier built for that environment does the
+ * verification — which includes checking the claim, so a lie only selects
+ * the verifier that will refuse it. `APPLE_IAP_ENVIRONMENT` is therefore
+ * not "which payloads to accept" but "which environment this server SELLS
+ * in": Production requires `APPLE_APP_APPLE_ID` (the library needs it to
+ * bind a production payload to the app), Sandbox does not, and the wall
+ * shows a price only when the selling environment can be verified. Sandbox
+ * testers exist only where this team creates them, which is why accepting
+ * their purchases in production is Apple's recommendation and not a hole.
+ *
  * WHAT THE LIBRARY IS FOR AND WHAT IT IS NOT. `SignedDataVerifier` does the
  * x5c chain walk to Apple's roots, the OCSP check, and the bundle/environment
  * binding — the part where a hand-rolled version fails silently and
@@ -88,7 +106,14 @@ export interface AppleApiCredentials {
 
 export interface AppleIapConfig {
   bundleId: string;
+  /** The environment this server SELLS in — the default for an outbound
+   *  call with no payload to read one from (the preflight's test
+   *  notification), and the one `nativePurchaseAvailable` vouches for.
+   *  Verification accepts every environment in `verifies`. */
   environment: AppleEnvironment;
+  /** Which environments this process can verify: Sandbox always (roots are
+   *  enough), Production once APPLE_APP_APPLE_ID is set. */
+  verifies: AppleEnvironment[];
   /** Apple's root CAs, DER. Required; verification is impossible without. */
   rootCerts: Buffer[];
   /** The numeric App Store id. The library insists on it for Production. */
@@ -159,10 +184,10 @@ function apiCredentials(): AppleApiCredentials | null {
 }
 
 function environmentFromEnv(): AppleEnvironment {
-  // Production unless told otherwise: the fail-closed direction. A sandbox
-  // payload reaching a production-configured server is refused as the wrong
-  // environment rather than entitling anyone. Sandbox is what TestFlight and
-  // sandbox testers produce, so set it explicitly while testing.
+  // Production unless told otherwise: the fail-closed direction for SELLING.
+  // A production server without the App Store id cannot verify a production
+  // purchase, so it must not offer one. Sandbox is what a workspace server
+  // sells in while testing; set it explicitly there.
   const raw = process.env.APPLE_IAP_ENVIRONMENT?.trim().toLowerCase();
   return raw === "sandbox" ? "Sandbox" : "Production";
 }
@@ -186,6 +211,7 @@ export function appleIapConfig(): AppleIapConfig | null {
   cachedConfig = {
     bundleId,
     environment,
+    verifies: appAppleId === null ? ["Sandbox"] : ["Sandbox", "Production"],
     rootCerts,
     appAppleId,
     api: apiCredentials(),
@@ -217,19 +243,91 @@ export interface AppleVerifier {
 let verifier: AppleVerifier | null = null;
 let injected: AppleVerifier | null = null;
 
-function libraryVerifier(cfg: AppleIapConfig): AppleVerifier {
-  const v = new SignedDataVerifier(
-    cfg.rootCerts,
-    cfg.onlineChecks,
-    cfg.environment === "Sandbox" ? Environment.SANDBOX : Environment.PRODUCTION,
-    cfg.bundleId,
-    cfg.appAppleId ?? undefined
-  );
-  return {
-    notification: (s) => v.verifyAndDecodeNotification(s),
-    transaction: (s) => v.verifyAndDecodeTransaction(s),
-    renewalInfo: (s) => v.verifyAndDecodeRenewalInfo(s),
+/**
+ * The environment a JWS says it is from, read WITHOUT verifying it. A
+ * transaction and a renewal info carry `environment` at the top level; a
+ * notification carries it under `data`. Anything unreadable, or an
+ * environment this adapter does not know (Xcode, LocalTesting), is null and
+ * the caller falls back to the server's own. This is only ever used to
+ * choose which verifier to run — the verifier then checks the same claim
+ * against the signature, so a forged claim buys nothing.
+ */
+export function environmentDeclaredBy(jws: string): AppleEnvironment | null {
+  const seg = jws.split(".")[1];
+  if (!seg) return null;
+  try {
+    const body = JSON.parse(Buffer.from(seg, "base64url").toString("utf8")) as {
+      environment?: unknown;
+      data?: { environment?: unknown };
+    };
+    const raw = body.environment ?? body.data?.environment;
+    return raw === "Sandbox" || raw === "Production" ? raw : null;
+  } catch {
+    return null;
+  }
+}
+
+/** The environment a VERIFIED transaction is from, in this file's terms. */
+export function environmentOfTransaction(tx: JWSTransactionDecodedPayload): AppleEnvironment {
+  return tx.environment === Environment.SANDBOX ? "Sandbox" : "Production";
+}
+
+/** Thrown when a payload declares an environment this process has no
+ *  verifier for — a production purchase reaching a server with no
+ *  APPLE_APP_APPLE_ID. Distinct from the library's INVALID_ENVIRONMENT,
+ *  which means the signature disagreed with the claim. */
+export class AppleEnvironmentUnconfigured extends Error {
+  constructor(public readonly environment: AppleEnvironment) {
+    super(`No verifier for ${environment} payloads: ${environment === "Production" ? "APPLE_APP_APPLE_ID is unset" : "unconfigured"}.`);
+  }
+}
+
+/**
+ * One verifier that dispatches on the payload's declared environment.
+ * Exported with its factory injectable so the dispatch is provable under
+ * node without a signature: the real factory builds the library's verifier,
+ * the suite hands in fakes.
+ */
+export function selectingVerifier(
+  cfg: Pick<AppleIapConfig, "environment" | "verifies">,
+  build: (env: AppleEnvironment) => AppleVerifier
+): AppleVerifier {
+  const built = new Map<AppleEnvironment, AppleVerifier>();
+  const pick = (jws: string): AppleVerifier => {
+    const env = environmentDeclaredBy(jws) ?? cfg.environment;
+    if (!cfg.verifies.includes(env)) throw new AppleEnvironmentUnconfigured(env);
+    let v = built.get(env);
+    if (!v) {
+      v = build(env);
+      built.set(env, v);
+    }
+    return v;
   };
+  // async, so a missing verifier is a REJECTION like every other failure
+  // here, never a synchronous throw that only a try block around the call
+  // would catch.
+  return {
+    notification: async (s) => pick(s).notification(s),
+    transaction: async (s) => pick(s).transaction(s),
+    renewalInfo: async (s) => pick(s).renewalInfo(s),
+  };
+}
+
+function libraryVerifier(cfg: AppleIapConfig): AppleVerifier {
+  return selectingVerifier(cfg, (env) => {
+    const v = new SignedDataVerifier(
+      cfg.rootCerts,
+      cfg.onlineChecks,
+      env === "Sandbox" ? Environment.SANDBOX : Environment.PRODUCTION,
+      cfg.bundleId,
+      cfg.appAppleId ?? undefined
+    );
+    return {
+      notification: (s) => v.verifyAndDecodeNotification(s),
+      transaction: (s) => v.verifyAndDecodeTransaction(s),
+      renewalInfo: (s) => v.verifyAndDecodeRenewalInfo(s),
+    };
+  });
 }
 
 /** The verifier for the current config, or null when unconfigured. */
@@ -257,6 +355,7 @@ export function setAppleVerifierForTests(v: AppleVerifier | null): void {
  * with, and a log line can name. Everything else is rethrown.
  */
 export function describeVerificationFailure(e: unknown): string | null {
+  if (e instanceof AppleEnvironmentUnconfigured) return `${e.environment.toLowerCase()}_unconfigured`;
   if (!(e instanceof VerificationException)) return null;
   switch (e.status) {
     case VerificationStatus.INVALID_APP_IDENTIFIER:
@@ -491,11 +590,14 @@ export function appStoreApiJwt(cfg: AppleIapConfig, now = Date.now()): string {
   return token;
 }
 
-/** Apple's hosts per environment, or the suite's loopback stub. */
-export function appStoreApiBase(cfg: AppleIapConfig): string {
+/** Apple's hosts per environment, or the suite's loopback stub. The
+ *  environment is the TRANSACTION's, when there is one — a sandbox
+ *  purchase verified by the production server is looked up at the sandbox
+ *  host, where it exists. */
+export function appStoreApiBase(cfg: AppleIapConfig, environment: AppleEnvironment = cfg.environment): string {
   const override = process.env.APPLE_STOREKIT_API_URL?.trim();
   if (override) return override.replace(/\/+$/, "");
-  return cfg.environment === "Sandbox"
+  return environment === "Sandbox"
     ? "https://api.storekit-sandbox.itunes.apple.com"
     : "https://api.storekit.apple.com";
 }
@@ -517,12 +619,13 @@ export interface AppleStatusSnapshot {
  */
 export async function fetchAppleSubscriptionStatus(
   cfg: AppleIapConfig,
-  originalTransactionId: string
+  originalTransactionId: string,
+  environment: AppleEnvironment = cfg.environment
 ): Promise<AppleStatusSnapshot | null> {
   if (!cfg.api) return null;
   try {
     const res = await fetch(
-      `${appStoreApiBase(cfg)}/inApps/v1/subscriptions/${encodeURIComponent(originalTransactionId)}`,
+      `${appStoreApiBase(cfg, environment)}/inApps/v1/subscriptions/${encodeURIComponent(originalTransactionId)}`,
       {
         headers: { Authorization: `Bearer ${appStoreApiJwt(cfg)}`, Accept: "application/json" },
         signal: AbortSignal.timeout(10_000),
@@ -632,6 +735,9 @@ export function describeAppleIapEnv(): Record<string, unknown> {
     configured: cfg !== null,
     missing,
     environment,
+    // What this process will verify. A production deployment must list
+    // both: App Review's purchases are Sandbox and arrive here.
+    verifies: cfg?.verifies ?? [],
     bundleId: process.env.APPLE_BUNDLE_ID?.trim() || null,
     appAppleId: cfg?.appAppleId ?? null,
     rootCertificates: roots,

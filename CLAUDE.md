@@ -556,6 +556,26 @@ unique per app (Apple: "can't be reused ... within the same app, even if you
 delete the original"), so the same ids can be created again under the right
 record; there is no bundle-id-prefix rule.
 
+**The Apple adapter verifies BOTH environments on one server, and
+`APPLE_IAP_ENVIRONMENT` only says which one it sells in.** App Review and
+TestFlight make sandbox purchases against the production deployment — there
+is no other server for them to reach — so the first cut, one verifier bound
+to the configured environment, would have failed every review with "could
+not complete the purchase" and no line of ours would have said why. Now
+`environmentDeclaredBy` reads the payload's own `environment` claim
+UNVERIFIED, picks the verifier for it, and that verifier checks the claim
+against the signature, so a forged claim only selects the verifier that
+will refuse it (`selectingVerifier`, under test with fakes; the review case
+is the first test). Production needs `APPLE_APP_APPLE_ID` or its verifier
+cannot be built, so a server without it verifies sandbox only and answers a
+production purchase `production_unconfigured` — the preflight's `verifies`
+list is the check, and on the deployment it must read both. The Server API
+host follows the transaction's environment, not the server's: a reviewer's
+subscription exists at the sandbox host. The same notifications URL goes in
+both of App Store Connect's fields. None of this could be exercised here;
+what the phone proved (Sep 21) is a sandbox purchase against a
+sandbox-selling workspace server.
+
 The expensive failure is never the schema. It is provider vocabulary escaping
 into code that outlives the provider: a `current_period_end` in UI copy, a
 `cancel_at_period_end` behind a toggle, a `status === 'past_due'` in a

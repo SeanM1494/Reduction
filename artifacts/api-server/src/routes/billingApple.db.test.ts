@@ -21,7 +21,7 @@ import { VerificationException, VerificationStatus } from "@apple/app-store-serv
 import { getDb } from "../db";
 import { accountAccess, subscriptions, users } from "@workspace/db";
 import { needsDatabase } from "../lib/testdb";
-import { resetAppleIapCache, setAppleVerifierForTests, type AppleVerifier } from "../lib/billing/apple";
+import { AppleEnvironmentUnconfigured, resetAppleIapCache, setAppleVerifierForTests, type AppleVerifier } from "../lib/billing/apple";
 import { appleBillingRouter } from "./billingApple";
 
 const TABLES = ["users", "subscriptions", "account_access"];
@@ -61,6 +61,8 @@ function signed(payload: unknown): string {
 }
 const FORGED = "eyJhbGciOiJFUzI1NiJ9.Zm9yZ2Vk.c2ln";
 const WRONG_ENV = "eyJhbGciOiJFUzI1NiJ9.d3JvbmdlbnY.c2ln";
+/** A production purchase arriving at a server that can verify sandbox only. */
+const PROD_UNCONFIGURED = "eyJhbGciOiJFUzI1NiJ9.cHJvZHVuY29uZg.c2ln";
 
 const stubVerifier: AppleVerifier = {
   async notification(s) {
@@ -69,6 +71,7 @@ const stubVerifier: AppleVerifier = {
     return payloads.get(s) as any;
   },
   async transaction(s) {
+    if (s === PROD_UNCONFIGURED) throw new AppleEnvironmentUnconfigured("Production");
     if (!payloads.has(s)) throw new VerificationException(VerificationStatus.VERIFICATION_FAILURE);
     return payloads.get(s) as any;
   },
@@ -219,6 +222,13 @@ test("verify: a forged payload is 400 with the reason, and writes nothing", asyn
   const r = await post("/api/billing/apple/verify", { signedTransactionInfo: FORGED }, userId);
   assert.equal(r.status, 400);
   assert.equal(r.body.code, "bad_signature");
+  assert.equal((await rowFor(userId)).length, 0);
+  // A production purchase reaching a server that can only verify sandbox
+  // (the workspace, or a deployment missing APPLE_APP_APPLE_ID): refused
+  // with a code that names the fix, and nothing written.
+  const p = await post("/api/billing/apple/verify", { signedTransactionInfo: PROD_UNCONFIGURED }, userId);
+  assert.equal(p.status, 400);
+  assert.equal(p.body.code, "production_unconfigured");
   assert.equal((await rowFor(userId)).length, 0);
 });
 
