@@ -28,6 +28,8 @@ import {
   mobileStartUrl,
   setAuthToken,
   signOutServer,
+  deleteAccount as deleteAccountServer,
+  type DeleteAccountResult,
 } from './api';
 import { describeAuthError, type ProviderState } from './authErrors';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -61,6 +63,9 @@ interface AuthState {
   signInError: string | null;
   signIn: (provider: 'google' | 'apple') => Promise<void>;
   signOut: () => Promise<void>;
+  /** Delete the account on the server, then forget it here. Rejects, with
+   *  nothing forgotten, when the server refused (billing not stopped). */
+  deleteAccount: () => Promise<DeleteAccountResult>;
   refresh: () => Promise<void>;
 }
 
@@ -207,6 +212,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await forgetSession();
   }, [forgetSession]);
 
+  const deleteAccount = useCallback(async () => {
+    // The server's answer first: a refusal (502, nothing deleted) must leave
+    // the session in place so the person can try again or contact support.
+    const result = await deleteAccountServer();
+    await forgetSession();
+    return result;
+  }, [forgetSession]);
+
   const refresh = useCallback(async () => {
     await loadAccount();
   }, [loadAccount]);
@@ -224,9 +237,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       signInError,
       signIn,
       signOut,
+      deleteAccount,
       refresh,
     }),
-    [loading, token, user, entitlement, webUrl, providers, reloadProviders, signingIn, signInError, signIn, signOut, refresh]
+    [loading, token, user, entitlement, webUrl, providers, reloadProviders, signingIn, signInError, signIn, signOut, deleteAccount, refresh]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

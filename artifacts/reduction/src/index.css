@@ -1937,6 +1937,16 @@ body.rd-dragging-body {
 .rd-settings-line { margin: 0 0 6px; font-size: 15px; }
 .rd-settings-sub { color: var(--muted); font-size: 13.5px; }
 .rd-settings-signout { margin-top: 10px; }
+/* Deletion: a text button at the foot of Settings. 44px tall for a thumb,
+   muted so it is found on purpose rather than by accident. */
+.rd-settings-delete {
+  display: block; width: 100%; min-height: 44px; margin-top: 6px;
+  background: none; border: 0; padding: 10px; cursor: pointer;
+  font: inherit; font-size: 14px; color: var(--muted);
+  text-decoration: underline; text-underline-offset: 2px;
+}
+.rd-settings-delete:hover { color: var(--danger-ink); }
+.rd-settings-delete:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
 .rd-settings-toggle { margin-top: 10px; }
 /* The limitation under the timers toggle. Dimmer than the description above
    it, but not hidden — someone deciding whether to rely on this has to be

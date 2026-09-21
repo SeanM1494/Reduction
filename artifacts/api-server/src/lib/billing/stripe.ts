@@ -55,6 +55,35 @@ export function resetStripeCache(): void {
   client = undefined;
 }
 
+let cancelSeam: ((providerRef: string) => Promise<void>) | null = null;
+
+/**
+ * Cancel a subscription NOW — not at period end. This exists for account
+ * deletion (ROADMAP, decided Sep 21: deleting the account cancels its
+ * subscription in the same action), and "at period end" would be a promise
+ * to an account that no longer exists to run out. Stripe refunds nothing on
+ * a cancel by default; a refund is a Dashboard decision, not this app's.
+ *
+ * Throws on failure, deliberately: the caller must refuse to delete an
+ * account whose billing it could not stop, or the person keeps paying for
+ * nothing with no account left to cancel from.
+ */
+export async function cancelStripeSubscriptionNow(providerRef: string): Promise<void> {
+  if (cancelSeam) return cancelSeam(providerRef);
+  const stripe = stripeClient();
+  if (!stripe) throw new Error("Stripe is not configured, so its subscription cannot be cancelled.");
+  await stripe.subscriptions.cancel(providerRef);
+}
+
+/** TEST SEAM. Refuses to be set in production for the same reason the Apple
+ *  verifier's does: a stub here makes "cancelled" a lie. */
+export function setStripeCancelForTests(fn: ((providerRef: string) => Promise<void>) | null): void {
+  if (process.env.NODE_ENV === "production") {
+    throw new Error("setStripeCancelForTests is a test seam and must not be called in production.");
+  }
+  cancelSeam = fn;
+}
+
 /**
  * THE TRANSLATION, and the only place Stripe's vocabulary is allowed to
  * appear.

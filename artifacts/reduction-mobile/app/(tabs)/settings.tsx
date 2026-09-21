@@ -26,7 +26,7 @@ import { cardShadow, fonts } from '@/constants/colors';
 export default function SettingsScreen() {
   const colors = useColors();
   const styles = makeStyles(colors);
-  const { user, entitlement, webUrl, signOut } = useAuth();
+  const { user, entitlement, webUrl, signOut, deleteAccount } = useAuth();
   const { entries } = useLibrary();
   const insets = useSafeAreaInsets();
   const [manageError, setManageError] = useState<string | null>(null);
@@ -36,6 +36,46 @@ export default function SettingsScreen() {
       { text: 'Cancel', style: 'cancel' },
       { text: 'Sign out', style: 'destructive', onPress: signOut },
     ]);
+  };
+
+  // The one place a subscription's provider is READ: for the sentence in
+  // the confirm, because what deletion does to billing differs by who
+  // bills. An App Store subscription is the person's to cancel — no server
+  // can — so the dialog says so before, and the farewell says so after.
+  const storeBilled = !!entitlement?.subscribed && entitlement.provider === 'apple';
+  const confirmDeleteAccount = () => {
+    const consequence = storeBilled
+      ? ' Your App Store subscription is not cancelled by this — cancel it in Settings › Apple Account › Subscriptions, or it keeps billing.'
+      : entitlement?.subscribed
+        ? ' Your subscription is cancelled.'
+        : '';
+    Alert.alert(
+      'Delete your account?',
+      `Your recipes and your account are deleted for good. This cannot be undone.${consequence}`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete account',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              const result = await deleteAccount();
+              if (result.manual.length) {
+                Alert.alert(
+                  'Account deleted',
+                  'Remember to cancel the App Store subscription in Settings › Apple Account › Subscriptions.'
+                );
+              }
+            } catch (e) {
+              // Nothing was deleted (routes/account.ts refuses before it
+              // touches a row when billing cannot be stopped), so the
+              // session is still good and the sentence says to try again.
+              Alert.alert('Could not delete your account', (e as Error).message || 'Try again in a moment.');
+            }
+          },
+        },
+      ]
+    );
   };
 
   const remaining = entitlement ? Math.max(0, entitlement.allowance - entitlement.used) : 0;
@@ -125,6 +165,18 @@ export default function SettingsScreen() {
       >
         <Text style={styles.signOutText}>Sign out</Text>
       </Pressable>
+
+      {/* Apple's 5.1.1(v): an account that can be created in the app can be
+          deleted in it. Quiet — plain text, no card — so it is findable
+          without being the loudest thing on the screen. */}
+      <Pressable
+        accessibilityRole="button"
+        style={({ pressed }) => [styles.deleteRow, pressed && { opacity: 0.6 }]}
+        onPress={confirmDeleteAccount}
+        testID="settings-delete-account"
+      >
+        <Text style={styles.deleteText}>Delete account</Text>
+      </Pressable>
     </ScrollView>
   );
 }
@@ -171,5 +223,7 @@ function makeStyles(colors: Colors) {
     },
     signOutPressed: { borderColor: colors.borderStrong },
     signOutText: { color: colors.dangerInk, fontFamily: fonts.headingMedium, fontSize: 15 },
+    deleteRow: { minHeight: 44, alignItems: 'center', justifyContent: 'center', marginTop: 4 },
+    deleteText: { color: colors.mutedForeground, fontSize: 14, textDecorationLine: 'underline' },
   });
 }

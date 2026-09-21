@@ -9,6 +9,7 @@ import { pushRouter, timersRouter } from "./push";
 import { billingRouter } from "./billing";
 import { appleBillingRouter } from "./billingApple";
 import { adminRouter } from "./admin";
+import { accountRouter } from "./account";
 
 const router: IRouter = Router();
 
@@ -18,6 +19,7 @@ router.use(healthRouter);
 router.get("/health", (_req, res) => res.json({ ok: true, commit: BUILD_COMMIT }));
 
 router.use("/auth", authRouter);
+router.use("/account", accountRouter);
 router.use("/recipes", recipesRouter);
 router.use("/library", libraryRouter);
 router.use("/trial", trialRouter);

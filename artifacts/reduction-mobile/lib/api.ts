@@ -102,6 +102,22 @@ export const fetchProviders = (): Promise<{ providers: { google: boolean; apple:
 export const signOutServer = (): Promise<void> =>
   request('/api/auth/logout', { method: 'POST' }).catch(() => {});
 
+/** What the server did about the subscription while deleting the account:
+ *  `cancelled` names providers it stopped, `manual` the ones only the person
+ *  can stop (the App Store). Provider names are for the sentence shown,
+ *  never for branching. */
+export interface DeleteAccountResult {
+  ok: true;
+  cancelled: string[];
+  manual: string[];
+}
+
+/** Delete the signed-in account, its recipes and its subscription rows.
+ *  Rejects — with the server's sentence — when billing could not be
+ *  stopped, in which case NOTHING was deleted (routes/account.ts). */
+export const deleteAccount = (): Promise<DeleteAccountResult> =>
+  request('/api/account', { method: 'DELETE' });
+
 /** The server always redirects the mobile handshake back to the fixed
  *  `reduction-mobile://auth` deep link (see server/routes/auth.ts —
  *  mobileRedirect()); there is no redirect_uri parameter to pass. */

@@ -19,6 +19,7 @@ interface Props {
   themeMode: ThemeMode;
   onThemeChange: (mode: ThemeMode) => void;
   onSignOut: () => void;
+  onDeleteAccount: () => void;
   recipeCount: number;
 }
 
@@ -27,6 +28,7 @@ export default function SettingsTab({
   themeMode,
   onThemeChange,
   onSignOut,
+  onDeleteAccount,
   recipeCount,
 }: Props) {
   return (
@@ -54,6 +56,13 @@ export default function SettingsTab({
         <h2 className="rd-settings-heading">Appearance</h2>
         <ThemeToggle mode={themeMode} onChange={onThemeChange} />
       </div>
+
+      {/* Deletion, last and quiet: a text button, findable without being
+          the loudest thing on the page. The confirm lives in App.tsx, where
+          the entitlement says what deletion does to billing. */}
+      <button type="button" className="rd-settings-delete" onClick={onDeleteAccount}>
+        Delete account
+      </button>
     </div>
   );
 }

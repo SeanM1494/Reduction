@@ -520,17 +520,22 @@ the list of what is ACTUALLY left, read from the code and from Apple's
 guidelines rather than assumed — each item says whether it is a build, a
 verification, or a decision.
 
-- **Account deletion does not exist, anywhere — BUILD, and a guideline
-  blocker.** Guideline 5.1.1(v): an app that lets people create an account
-  must let them delete it in the app. There is no route, no control on
-  either client (`grep -ri delete.*account` finds only comments). Needs a
-  `DELETE /api/account` that removes the user's rows in one transaction
-  (sessions, recipes, `account_access`, push subscriptions, `subscriptions`
-  — the provider rows go too; the provider's own subscription is the
-  user's to cancel and the copy must say so), a confirm in mobile Settings
-  and the web's. About a day. DECISION inside it: what to do about a live
-  Stripe subscription (cancel at period end through the adapter, or refuse
-  deletion until it is cancelled) — Apple's cannot be cancelled by us.
+- ~~**Account deletion does not exist, anywhere — BUILD, and a guideline
+  blocker.**~~ **Done Sep 21.** `DELETE /api/account`, "Delete account" at
+  the foot of both Settings screens with a confirm that names what happens
+  to billing. DECIDED (Sep 21): deletion cancels the subscription in the
+  same action. Two readings of that were made without asking and should be
+  confirmed: a Stripe subscription is cancelled IMMEDIATELY, not at period
+  end (no account remains to run out; Stripe refunds nothing on a cancel
+  unless done in the Dashboard), and an App Store subscription — which no
+  server can cancel — is named in the confirm and again after deletion as
+  the person's to cancel in Settings › Apple Account › Subscriptions.
+  Verified: seven route tests against Postgres (order, refusal, cascade,
+  the audit trail kept), the web flow in Chromium on three phone profiles
+  through the confirm both ways, the mobile control's geometry and the
+  bearer-token path against the built server. Not verifiable here: the
+  phone's own alert (React Native's Alert does not exist on the web build)
+  and a real Stripe cancel.
 - **No Terms of Use and no privacy policy — BUILD, after a DECISION.**
   Guideline 3.1.2 requires a functional link to both in the binary and in
   the metadata for any auto-renewable subscription, and App Store Connect

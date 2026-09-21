@@ -236,19 +236,19 @@ them is the whole point:
 
 | result | meaning |
 |---|---|
-| ***n* pass, 106 skipped** | no `DATABASE_URL` at all. Fine on a machine with no Postgres. |
-| ***n*+106 pass, 0 skipped** | a local database with a current schema. This is the real gate — `pnpm run test:db` produces it. |
+| ***n* pass, 113 skipped** | no `DATABASE_URL` at all. Fine on a machine with no Postgres. |
+| ***n*+113 pass, 0 skipped** | a local database with a current schema. This is the real gate — `pnpm run test:db` produces it. |
 | **failures saying "Refusing to run database tests against …"** | `DATABASE_URL` in the shell points somewhere non-local — on Replit, that is production. Working as designed: use `pnpm run test:db`, which ignores the env var entirely. |
 | **failures naming a missing table** | a reachable local database whose schema is behind `lib/db/src/schema/schema.ts`. `test:db` re-pushes on every start, so this means a hand-run database — push it or use the script. |
 
 The total grows as suites are added — pin your expectation to the **skip
 count**, not the pass count (an earlier version of this table hard-coded
 23/39 and went stale within a week, so treat the number above as needing an
-edit whenever a database-backed suite is added). The 106 are nine suites:
+edit whenever a database-backed suite is added). The 113 are ten suites:
 `claim.db.test.ts` (the anonymous library), `trial.db.test.ts` (the free
 extraction), `cache.db.test.ts` (the URL alias and the "Instant" badge),
 `extractionLog.test.ts` (the cost table), `push.db.test.ts` (timer
-notifications) `access.db.test.ts` (the paywall), `admin.db.test.ts` (the operator lookup), `billingApple.db.test.ts` (the App Store routes) and `mobileHandoff.db.test.ts` (the mobile sign-in handoff). The first two are transactional guarantees — all-or-nothing
+notifications) `access.db.test.ts` (the paywall), `admin.db.test.ts` (the operator lookup), `billingApple.db.test.ts` (the App Store routes), `mobileHandoff.db.test.ts` (the mobile sign-in handoff) and `account.db.test.ts` (account deletion). The first two are transactional guarantees — all-or-nothing
 rollback, idempotent repeats, never taking another user's rows. The third is a
 promise about correctness: that a normalised URL never serves a different page.
 The fourth guards a denominator — a cache hit that recorded a `via` would
@@ -259,7 +259,8 @@ somebody can use the app at all, and the seventh guards a route that reads
 other people's accounts, and the eighth guards the second provider's write path
 with Apple's signature stubbed at the adapter's seam, and the ninth guards the
 one-time code that a phone's sign-in rides on, which has to be redeemable by an
-instance that never minted it. **The full suite — 403 tests at the time of
+instance that never minted it, and the tenth guards the order of a deletion —
+billing stopped before any row goes, and nothing gone when it cannot be. **The full suite — 403 tests at the time of
 writing — has been run against a real Postgres and passes 403/0.** The
 forty-nine that are not api-server or model tests are the mobile library's
 filter and sort (`artifacts/reduction-mobile/lib/libraryView.test.ts`), the
@@ -575,6 +576,25 @@ subscription exists at the sandbox host. The same notifications URL goes in
 both of App Store Connect's fields. None of this could be exercised here;
 what the phone proved (Sep 21) is a sandbox purchase against a
 sandbox-selling workspace server.
+
+**Account deletion cancels the billing FIRST, and refuses to delete when it
+cannot.** `DELETE /api/account` (`routes/account.ts`) is Apple's 5.1.1(v)
+requirement and the decision (Sep 21) that deleting the account cancels its
+subscription in the same action. `lib/billing/cancel.ts` absorbs what that
+can mean per provider so nothing else learns a provider's name: Stripe is
+cancelled NOW through `stripe.ts` (not at period end — there is no account
+left to run out), and a store subscription is nobody's to cancel but the
+subscriber's, so it comes back under `manual` and both clients say "cancel
+it in Settings › Apple Account › Subscriptions" before the confirm and
+after the deletion. The order is the rule: a Stripe refusal answers 502 and
+deletes NOTHING, because deleting first leaves a subscription charging an
+account that no longer exists to cancel it from (`account.db.test.ts` pins
+that the account is still whole while Stripe is being asked). What goes:
+the user row and every cascade, plus `recipes` and `access_events` (keyed
+by id without a foreign key) and the trial's `claimed_by_user_id`. What
+stays: `admin_events`, on purpose — the audit trail of who was comped
+outlives the account. The confirm lives on the screen, not the route; the
+route asks nothing twice.
 
 The expensive failure is never the schema. It is provider vocabulary escaping
 into code that outlives the provider: a `current_period_end` in UI copy, a

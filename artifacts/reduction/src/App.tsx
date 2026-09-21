@@ -25,6 +25,7 @@ import {
   fetchSessionState,
   isWalled,
   logout as endSession,
+  deleteAccount as deleteAccountOnServer,
   type SessionUser,
 } from "./lib/session";
 import { ownerKeyClaimedBy } from "./lib/storage";
@@ -522,21 +523,49 @@ export default function App() {
     run(() => extractFromUrl(url));
   }, [loaded, user, authParams.pending, run]);
 
+  // Sign-out leaves the anonymous library, which is empty for anyone whose
+  // rows were claimed — so this lands on the landing page, which says as
+  // much rather than showing an empty shelf that reads as data loss.
+  const forgetSession = useCallback(() => {
+    setUser(null);
+    setEntitlement(null);
+    setOpenId(null);
+    setLibrary([]);
+    setShowSignup(false);
+    setTrialEntry(null);
+  }, []);
+
   const signOut = useCallback(async () => {
     try {
       await endSession();
     } catch (e) {
       console.error("[logout]", e);
     }
-    // Sign-out leaves the anonymous library, which is empty for anyone whose
-    // rows were claimed — so this lands on the landing page, which says as
-    // much rather than showing an empty shelf that reads as data loss.
-    setUser(null);
-    setOpenId(null);
-    setLibrary([]);
-    setShowSignup(false);
-    setTrialEntry(null);
-  }, []);
+    forgetSession();
+  }, [forgetSession]);
+
+  // Deletion: the confirm names what happens to billing, because it differs
+  // by who bills — an App Store subscription is the person's to cancel, no
+  // server can. A refusal (billing not stopped) deletes nothing, so the
+  // session stays and the sentence says to try again.
+  const deleteAccount = useCallback(async () => {
+    const storeBilled = !!entitlement?.subscribed && entitlement.provider === "apple";
+    const consequence = storeBilled
+      ? " Your App Store subscription is not cancelled by this — cancel it on your iPhone under Settings › Apple Account › Subscriptions, or it keeps billing."
+      : entitlement?.subscribed
+        ? " Your subscription is cancelled."
+        : "";
+    if (!window.confirm(`Delete your account? Your recipes and your account are deleted for good. This cannot be undone.${consequence}`)) return;
+    try {
+      const result = await deleteAccountOnServer();
+      forgetSession();
+      if (result.manual.length) {
+        window.alert("Your account is deleted. Remember to cancel the App Store subscription on your iPhone under Settings › Apple Account › Subscriptions.");
+      }
+    } catch (e) {
+      window.alert((e as Error).message || "Could not delete your account. Try again in a moment.");
+    }
+  }, [entitlement, forgetSession]);
 
   const entry =
     library.find((e) => e.id === openId) ||
@@ -716,6 +745,7 @@ export default function App() {
             themeMode={themeMode}
             onThemeChange={setThemeMode}
             onSignOut={signOut}
+            onDeleteAccount={deleteAccount}
             recipeCount={library.length}
           />
         ) : null}

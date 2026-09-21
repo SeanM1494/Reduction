@@ -123,6 +123,23 @@ export async function logout(): Promise<void> {
   await authApi("/logout", { method: "POST" });
 }
 
+/** What the server did about the subscription while deleting the account.
+ *  Provider names are for the sentence shown, never for branching. */
+export interface DeleteAccountResult {
+  ok: true;
+  cancelled: string[];
+  manual: string[];
+}
+
+/** Delete the signed-in account. Throws the server's sentence when billing
+ *  could not be stopped — in which case nothing was deleted. */
+export async function deleteAccount(): Promise<DeleteAccountResult> {
+  const res = await fetch("/api/account", { method: "DELETE", credentials: "same-origin" });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(body.error || `Could not delete your account (${res.status}).`);
+  return body as DeleteAccountResult;
+}
+
 /**
  * Hands this browser's anonymous library to the signed-in account, if that
  * has not already happened.
