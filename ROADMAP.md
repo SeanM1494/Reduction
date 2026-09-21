@@ -1362,6 +1362,41 @@ and the text change carries the whole signal.
 
 ## Still open from earlier work
 
+- **A component that joins at the last step gets no finish strip — decision
+  needed (Sep 21).** Reported from a real extraction (a copycat lemon loaf
+  with a Lemon Glaze section): the main table stayed wide while the last
+  steps were left. The derivation (`lib/recipe-model/src/collapse.ts`, shared
+  by both renderers) is doing what the web has always done: the strip takes
+  only the steps AFTER the last ingredient join, and when the glaze joins at
+  the root there is nothing after it, so "bake" and "cool completely" stay
+  in the table as a tall chain until they are done and fold into a chip.
+  Traced on a loaf-shaped fixture (now pinned in `collapse.test.ts`): the
+  main table goes 7 → 4 → 3 → 2 columns as batter, bake and cool are done;
+  on a 348px frame the 3-column state already fits, so on THAT shape the
+  scroll the report describes is the raw 7-column table before anything is
+  done, or a longer chain (cool in pan → turn out → cool → glaze → set)
+  than the fixture has. The mobile diagram now prints one `[diagram]` line
+  per section in a dev build — columns before/after, what folded, the tail,
+  what is not done — so the real recipe's shape can be read from the Metro
+  console instead of guessed. The extension on the table, if this is worth
+  it: let the walk continue through a step that joins ONLY component
+  ingredients (a `componentLinks` name, i.e. another section's output), so
+  "pour glaze over" and the single-input chain under it become strip rows
+  and the component's ingredient row leaves the table. It changes both
+  renderers and the tuck's count, so it is a decision, not a fix.
+- **"Unchecking a step turns it red" — it is the ready cue; decision
+  needed (Sep 21).** Measured in Chromium: a step unchecked after being
+  done renders exactly as a never-checked ready step (`warm-bg`
+  rgb(249,214,207), a 2px `warm-line` rgb(185,51,38) ring, `warm-ink`
+  label; the same on the web), because unchecking leaves its inputs done,
+  which is the definition of ready. Nothing is misapplied. What the report
+  is really about is the ready palette reading as an error on a phone: the
+  terracotta/red pair is the product's signature ("Amber means you can do
+  it now" is the hint under every diagram), and colorblind mode already
+  swaps it for orange. Options: keep it; soften the warm tokens on mobile
+  only (`constants/colors.ts`, no logic); or make the hint copy say "red".
+  Not changed, on purpose — it is a colour decision, not a bug.
+
 - ~~**The servings stepper does not exist, and scaling is unreachable.**~~
   **Done.** `artifacts/reduction/src/components/ServingsRow.tsx`, above the first section
   rather than in the badge row — it is the control that changes every number

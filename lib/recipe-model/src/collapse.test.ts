@@ -219,3 +219,54 @@ test("random trees: the derivation is total and its invariants hold", () => {
   }
   assert.ok(checked >= 100, `only ${checked} valid random trees`);
 });
+
+// A real extraction's shape (a copycat lemon loaf, Sep 21): the glaze is its
+// own section and joins the main section as an ingredient at the very last
+// step. Pinned because it is the case the guacamole fixture cannot cover.
+const LOAF_MAIN = (): Section => ({
+  name: "Lemon Loaf",
+  ingredients: [
+    { id: "flour", qty: 1.5, unit: "cup", name: "flour" },
+    { id: "sugar", qty: 1, unit: "cup", name: "sugar" },
+    { id: "butter", qty: 0.5, unit: "cup", name: "butter" },
+    { id: "eggs", qty: 3, unit: null, name: "eggs" },
+    { id: "zest", qty: 1, unit: "tbsp", name: "lemon zest" },
+    { id: "juice", qty: 2, unit: "tbsp", name: "lemon juice" },
+    { id: "glaze_in", qty: 1, unit: null, name: "Lemon Glaze" },
+  ],
+  nodes: [
+    { id: "cream", label: "cream butter and sugar", inputs: ["butter", "sugar"] },
+    { id: "wet", label: "beat in eggs, zest and juice", inputs: ["cream", "eggs", "zest", "juice"] },
+    { id: "batter", label: "fold in flour", inputs: ["wet", "flour"] },
+    { id: "bake", label: "bake 50 min", inputs: ["batter"], minutes: 50 },
+    { id: "cool", label: "cool completely", inputs: ["bake"], minutes: 60 },
+    { id: "glazeit", label: "pour glaze over", inputs: ["cool", "glaze_in"] },
+  ],
+  root: "glazeit",
+});
+
+test("a glaze joining at the last step: no strip (the root is a join), but the done chain folds the table down", () => {
+  const main = LOAF_MAIN();
+  const base = computeLayout(main);
+  assert.equal(base.totalCols, 7, "the raw table is seven columns wide");
+  const s0 = deriveDiagramState(main, NONE, NONE);
+  assert.deepEqual(s0.tail, [], "the root joins an ingredient, so nothing is after the last join");
+  // Through the batter: batter folds, three steps remain in view.
+  const throughBatter = new Set(["flour", "sugar", "butter", "eggs", "zest", "juice", "cream", "wet", "batter"]);
+  const s1 = deriveDiagramState(main, throughBatter, NONE);
+  assert.deepEqual([...s1.collapsedIds], ["batter"]);
+  assert.equal(s1.table.totalCols, 4);
+  // Baked: bake folds (its parent cool is not done); cool and the glaze step remain.
+  const baked = new Set([...throughBatter, "bake"]);
+  const s2 = deriveDiagramState(main, baked, NONE);
+  assert.deepEqual([...s2.collapsedIds], ["bake"]);
+  assert.equal(s2.table.totalCols, 3);
+  // Cooled: cool folds; the table is the chip, the glaze row and the join.
+  const cooled = new Set([...baked, "cool"]);
+  const s3 = deriveDiagramState(main, cooled, NONE);
+  assert.deepEqual([...s3.collapsedIds], ["cool"]);
+  assert.equal(s3.table.totalCols, 2);
+  assert.equal(s3.treeDone, false, "the glaze has not joined");
+  const s4 = deriveDiagramState(main, new Set([...cooled, "glaze_in", "glazeit"]), NONE);
+  assert.equal(s4.treeDone, true);
+});

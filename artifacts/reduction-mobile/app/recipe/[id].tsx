@@ -42,6 +42,12 @@ export default function RecipeDetailScreen() {
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [syncError, setSyncError] = useState<string | null>(null);
+  // The diagram scrolls sideways. At its leftmost position a swipe to the
+  // right on it is, to iOS, the interactive pop gesture — and the screen
+  // went back to the library under a finger that was reading a table. So
+  // the swipe-back is off while the Overview is up and on again in Cook,
+  // which has nothing horizontal. The header's back button always works.
+  const [overview, setOverview] = useState(true);
 
   const isDraft = id === 'draft';
   const entry = isDraft ? null : getEntry(id);
@@ -68,8 +74,9 @@ export default function RecipeDetailScreen() {
     }
     return (
       <>
-        <Stack.Screen options={{ title: recipeTitle }} />
+        <Stack.Screen options={{ title: recipeTitle, gestureEnabled: !overview }} />
         <RecipeScreen
+          onViewChange={(v) => setOverview(v === 'overview')}
           recipe={draft.recipe}
           done={[]}
           servings={draftServings}
@@ -121,6 +128,7 @@ export default function RecipeDetailScreen() {
       <Stack.Screen
         options={{
           title: recipeTitle,
+          gestureEnabled: !overview,
           headerRight: () => (
             <Pressable
               accessibilityRole="button"
@@ -136,6 +144,7 @@ export default function RecipeDetailScreen() {
         }}
       />
       <RecipeScreen
+        onViewChange={(v) => setOverview(v === 'overview')}
         recipe={entry.recipe}
         done={entry.done}
         servings={entry.servings}

@@ -638,6 +638,14 @@ accommodate afterwards.
   meta; that disables pinch zoom for people who need it.
 - Legibility at arm's length across a counter, and reach for one thumb, beat
   desktop density every time they conflict.
+- **The recipe screen turns iOS's swipe-back off while the diagram is up.**
+  The diagram scrolls sideways, and at its leftmost position a rightward
+  swipe on it is, to iOS, the interactive pop gesture — the screen went
+  back to the library under a finger that was reading a table (Sep 21, a
+  real device). `app/recipe/[id].tsx` sets `gestureEnabled: !overview` from
+  `RecipeScreen`'s `onViewChange`; Cook mode has nothing horizontal and
+  keeps the gesture, and the header's back button always works. Chromium
+  cannot exercise this; it is the phone's to confirm.
 - The landing page section below is part of this rule, not a separate concern.
 
 ### Verify on a real phone viewport, and on production

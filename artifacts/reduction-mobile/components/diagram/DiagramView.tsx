@@ -67,6 +67,7 @@ import Reanimated, { runOnJS, useAnimatedStyle, useSharedValue } from "react-nat
 import * as Haptics from "expo-haptics";
 import type { Recipe, Section, Cell } from "@/shared/layout";
 import { deriveDiagramState } from "@/shared/collapse";
+import { computeLayout } from "@/shared/layout";
 import { formatAmount } from "@/shared/amounts";
 import { noTargetsReason, validMoveTargets } from "@/shared/edits";
 import { edgeDir, rectAt, stepAt, toContent, type WindowRect } from "./dragMath";
@@ -223,6 +224,18 @@ function cellContent(
       </View>
     );
   }
+  if (c.kind === "collapsed") {
+    // A fixed word, the same for every chip. The step's own label wrapped or
+    // clipped mid-word in a 120px column on a real recipe ("cool complet…"),
+    // and a chip is not that step any more — it is the whole branch, done.
+    // What it folds is still in the accessibility label (cellAccessibility).
+    return (
+      <View style={styles.chipBody}>
+        <Text style={[styles.chipMark, { color: colors.coolInk }]}>✓</Text>
+        <Text style={[styles.opLabel, { color: colors.coolInk, fontWeight: "600" }]}>Combined</Text>
+      </View>
+    );
+  }
   const label = c.text ?? "";
   // Measure at the ready weight (600): it is the widest a label gets, so a
   // step becoming ready can never overflow the height it was measured at.
@@ -231,7 +244,6 @@ function cellContent(
   return (
     <Text style={[styles.opLabel, { color, fontWeight: weight }, struck]}>
       {label}
-      {c.kind === "collapsed" && c.itemCount ? `  (${c.itemCount})` : ""}
     </Text>
   );
 }
@@ -403,7 +415,7 @@ const DiagramCell = memo(function DiagramCell({
           <ReadyMark colors={colors} />
         </>
       ) : null}
-      {isDone && c.kind !== "gap" ? (
+      {isDone && c.kind !== "gap" && c.kind !== "collapsed" ? (
         <Text style={[styles.mark, { color: colors.coolInk }]}>✓</Text>
       ) : null}
       {drop === "ok" || drop === "over" ? (
@@ -469,6 +481,15 @@ export function SectionDiagram({ section, done, onToggle, scale = 1, edit = null
   const derived = useMemo(() => deriveDiagramState(section, done, expanded), [section, done, expanded]);
   const { tail, treeDone } = derived;
   const layout = derived.table;
+  useEffect(() => {
+    if (!__DEV__) return;
+    const base = computeLayout(section);
+    console.log(
+      `[diagram] "${section.name}": table ${base.totalCols}→${layout.totalCols} cols, ${base.totalRows}→${layout.totalRows} rows;` +
+        ` collapsed [${[...derived.collapsedIds].join(", ")}]; tail [${tail.map((n) => n.id).join(", ")}]; treeDone ${treeDone}` +
+        `; not done: [${[...section.ingredients.map((i) => i.id), ...section.nodes.map((n) => n.id)].filter((id) => !done.has(id)).join(", ")}]`
+    );
+  }, [section, layout, derived.collapsedIds, tail, treeDone, done]);
   const showTable = treeDone ? override : true;
   const cells = useMemo(() => layout.rows.flat(), [layout]);
   const doneBg = useMemo(() => doneBackground(colors), [colors]);
@@ -1028,6 +1049,8 @@ const styles = StyleSheet.create({
   name: { fontSize: 14, lineHeight: 17.5 },
   note: { fontSize: 12.5, lineHeight: 15, fontStyle: "italic" },
   opLabel: { fontSize: 14, lineHeight: 18, textAlign: "center" },
+  chipBody: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 7 },
+  chipMark: { fontSize: 13, fontWeight: "700" },
   struck: { textDecorationLine: "line-through", opacity: 0.58 },
   // The halo sits 3px outside the ring (0 0 0 3px in the web's box-shadow)
   // and breathes; the frame clips it at the table's edge, as the web does.

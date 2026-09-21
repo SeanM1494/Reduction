@@ -27,7 +27,7 @@
  * rating.
  */
 
-import React, { useCallback, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { DiagramView } from '@/components/diagram/DiagramView';
@@ -156,6 +156,9 @@ interface RecipeScreenProps {
   /** The demo hides the stepper: it is about tonight, and nobody is cooking
    *  the demo — and the small phone needs the 80px above the diagram. */
   showServings?: boolean;
+  /** Which view is up, for the route: the diagram scrolls sideways, and a
+   *  swipe on it at its left edge must not be iOS's swipe-back. */
+  onViewChange?: (view: 'overview' | 'cook') => void;
 }
 
 type ViewMode = 'overview' | 'cook';
@@ -185,12 +188,16 @@ export function RecipeScreen({
   above,
   overviewFooter,
   showServings = true,
+  onViewChange,
 }: RecipeScreenProps) {
   const colors = useColors();
   const styles = makeStyles(colors);
   // The stored mode picks the opening tab; a tap writes it back so the next
   // open (and the other device) lands where this one left off.
   const [view, setView] = useState<ViewMode>(mode === 'steps' ? 'cook' : 'overview');
+  useEffect(() => {
+    onViewChange?.(view);
+  }, [view, onViewChange]);
   const pickView = (v: ViewMode) => {
     setView(v);
     if (v === 'cook') stopEditing();
