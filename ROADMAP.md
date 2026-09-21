@@ -513,9 +513,86 @@ no queue at all; it still fails and rolls back at once.
   (`seans-apps/reduction-mobile`, the id in app.json), `expo-dev-client`
   and `eas.json` are in, and the README walks the build.
 
-**Phase 4 — store passage.** Icons, screenshots, privacy labels,
-TestFlight, review. The onboarding decision that used to sit here is
-settled (the demo).
+**Phase 4 — store passage.** The onboarding decision that used to sit
+here is settled (the demo). Sep 21: the first real sandbox purchase went
+through end to end (monthly; the yearly is propagating), so what follows is
+the list of what is ACTUALLY left, read from the code and from Apple's
+guidelines rather than assumed — each item says whether it is a build, a
+verification, or a decision.
+
+- **Account deletion does not exist, anywhere — BUILD, and a guideline
+  blocker.** Guideline 5.1.1(v): an app that lets people create an account
+  must let them delete it in the app. There is no route, no control on
+  either client (`grep -ri delete.*account` finds only comments). Needs a
+  `DELETE /api/account` that removes the user's rows in one transaction
+  (sessions, recipes, `account_access`, push subscriptions, `subscriptions`
+  — the provider rows go too; the provider's own subscription is the
+  user's to cancel and the copy must say so), a confirm in mobile Settings
+  and the web's. About a day. DECISION inside it: what to do about a live
+  Stripe subscription (cancel at period end through the adapter, or refuse
+  deletion until it is cancelled) — Apple's cannot be cancelled by us.
+- **No Terms of Use and no privacy policy — BUILD, after a DECISION.**
+  Guideline 3.1.2 requires a functional link to both in the binary and in
+  the metadata for any auto-renewable subscription, and App Store Connect
+  requires a Privacy Policy URL for every app. Neither page exists on the
+  web (`/privacy`, `/terms` — nothing), so nothing can link to them. The
+  text is the decision (legal content, not something to invent); once it
+  exists the code is a web route each, links from `SubscribeBox` and the
+  mobile Settings, and the URLs in App Store Connect. Half a day.
+- **The Apple adapter verifies ONE environment per server — BUILD, and a
+  review blocker.** `APPLE_IAP_ENVIRONMENT` picks Sandbox or Production
+  for the whole process, fail-closed. App Review (and TestFlight) make
+  SANDBOX purchases against the PRODUCTION deployment, so a reviewer's
+  purchase would come back `wrong_environment` and the review fails on
+  "we could not complete the purchase". Apple's own guidance is to accept
+  the environment the signed payload declares: decode the (unverified)
+  `environment` claim, verify with the matching verifier built from the
+  same roots, and record it on the row. Sandbox testers are created only
+  in this team's App Store Connect, which is why accepting them in
+  production is Apple's recommendation and not a hole. Half a day with the
+  suite; the notifications route needs the same treatment.
+- **Sign in with Apple must be live on the deployment — VERIFY.**
+  Guideline 4.8: offering Google sign-in requires an equivalent option,
+  and Sign in with Apple is the one built (`lib/apple.ts`). The mobile
+  screen shows "Coming soon" when `/api/auth/providers` reports it
+  unconfigured. Read that route on the deployment; if `apple: false`, set
+  the four `APPLE_*` sign-in secrets there. The Apple exchange has never
+  run from a phone.
+- **PAYWALL_ENFORCED at launch — DECISION.** Shadow mode today. The
+  reviewer can reach the purchase either way, because Settings shows the
+  plans to anyone without one; what the flag decides is whether the
+  second recipe is walled on day one. Read `access_events` first (the
+  query in CLAUDE.md).
+- **Push in a store build — VERIFY.** Expo's push service needs an APNs
+  key in EAS credentials (`eas credentials`) before a TestFlight build can
+  receive anything; the dev build's token path proves nothing about it.
+  One timer, one buzz, on the TestFlight build.
+- **The TestFlight pass — VERIFY, the list this whole section has been
+  accumulating.** On the production build against the deployment: the
+  finish strip through a full cook, VoiceOver over the diagram (items 1
+  and 10, still owed), swipe-back off over the diagram, the Lemon Loaf's
+  `[diagram]` trace, Google sign-in from a store build (the deployment is
+  `EXPO_PUBLIC_DOMAIN` there, not the workspace), Apple sign-in, a
+  purchase and a restore on a second device, a photo extraction, a timer.
+- **App Store Connect — the metadata, none of it started.** Rename
+  "Reduction Mobile" to Recipe Reduction (rename the old record out of
+  the way first, then remove it — it has no build, so it can go; the
+  name is released on removal and anyone can take it, hence the order);
+  screenshots for the required iPhone sizes (no iPad: `supportsTablet` is
+  false); description, keywords, support URL, marketing URL, the privacy
+  policy URL from above; the App Privacy questionnaire (name, email,
+  user id, purchases; photos are sent for extraction and not kept — say
+  so); age rating; category; attach both subscriptions to version 1.0's
+  In-App Purchases section (a first subscription is submitted WITH a
+  version); review notes saying how to sign in (Sign in with Apple with
+  their own Apple ID, which is why the item above must be true first).
+  Export compliance is already declared in `app.json`.
+- **Housekeeping.** The yearly product appearing in the sandbox; the
+  stray `eas.json` at the repo root on Replit (from a wrong-directory
+  run — the real one is in `artifacts/reduction-mobile`).
+
+The two entries under "Still open from earlier work" (the component-join
+finish strip, the ready colour) are decisions, not blockers.
 
 **Deliberately NOT ported** — each listed so it does not port by inertia:
 
