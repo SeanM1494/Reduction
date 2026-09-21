@@ -240,7 +240,7 @@ The **App Privacy** questionnaire has to say what the policy says: name,
 email and an identifier from sign-in; the recipes and progress people save;
 purchase records; a push token when timers are on; server logs. Photos are
 sent for extraction and not kept. The contact address on both pages is
-`sean@recruitthebench.com`, which has to be a mailbox that is read.
+`sean@recruitthebench.com`; the same address goes in App Store Connect's App Review contact.
 
 The pages describe what the code does — Stripe on the website, Anthropic for
 extraction, the cache of extracted pages, deletion cancelling what it can.

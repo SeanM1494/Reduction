@@ -524,8 +524,8 @@ verification, or a decision.
   blocker.**~~ **Done Sep 21.** `DELETE /api/account`, "Delete account" at
   the foot of both Settings screens with a confirm that names what happens
   to billing. DECIDED (Sep 21): deletion cancels the subscription in the
-  same action. Two readings of that were made without asking and should be
-  confirmed: a Stripe subscription is cancelled IMMEDIATELY, not at period
+  same action, and both readings below were CONFIRMED the same day: a
+  Stripe subscription is cancelled IMMEDIATELY, not at period
   end (no account remains to run out; Stripe refunds nothing on a cancel
   unless done in the Dashboard), and an App Store subscription — which no
   server can cancel — is named in the confirm and again after deletion as
@@ -544,11 +544,13 @@ verification, or a decision.
   Connect). Two things the pages say that the brief simplified, kept
   because the documents would otherwise be false: the website bills
   through Stripe, and extraction sends the recipe (or photo) to Anthropic.
-  Three things to confirm before submission: `sean@recruitthebench.com`
-  must be a mailbox someone reads (or change the address on both pages);
-  the operator is named as "Recipe Reduction" — if there is a legal entity
-  it should be named instead; governing law is left as "where Recipe
-  Reduction is established" rather than a state, on purpose.
+  DECIDED Sep 21: the contact on both pages is `sean@recruitthebench.com`;
+  no legal entity and no governing law are named — the operator is an
+  individual for now, and the Terms say "where Recipe Reduction is
+  established". **Revisit on incorporation**: the entity's name replaces
+  "Recipe Reduction (we, us)" in both pages, a governing law can be named
+  then, and App Store Connect's seller name (which Apple takes from the
+  developer account, not from these pages) changes with the account.
 - ~~**The Apple adapter verifies ONE environment per server — BUILD, and a
   review blocker.**~~ **Done Sep 21**: the payload's declared environment
   selects the verifier, both built from the same roots; a server without
@@ -573,11 +575,12 @@ verification, or a decision.
   unconfigured. Read that route on the deployment; if `apple: false`, set
   the four `APPLE_*` sign-in secrets there. The Apple exchange has never
   run from a phone.
-- **PAYWALL_ENFORCED at launch — DECISION.** Shadow mode today. The
-  reviewer can reach the purchase either way, because Settings shows the
-  plans to anyone without one; what the flag decides is whether the
-  second recipe is walled on day one. Read `access_events` first (the
-  query in CLAUDE.md).
+- **PAYWALL_ENFORCED at launch — DECIDED Sep 21: ON, as the LAST step.**
+  Not before every other item here is verified on the TestFlight build;
+  shadow mode until then. The reviewer can reach the purchase either way,
+  because Settings shows the plans to anyone without one. Read
+  `access_events` first (the query in CLAUDE.md), then set the flag on the
+  deployment and redeploy; nothing in the clients changes.
 - **Push in a store build — VERIFY.** Expo's push service needs an APNs
   key in EAS credentials (`eas credentials`) before a TestFlight build can
   receive anything; the dev build's token path proves nothing about it.
