@@ -537,6 +537,25 @@ on this side of the signature; Apple's hosts and root certificates are both
 unreachable from the container. The preflight route's test notification is the
 first real exercise, and it has to be run from a deployment.
 
+**StoreKit finds products by the RUNNING APP'S BUNDLE ID, and nothing on the
+server side can see whether the record that holds the products is that app.**
+Two days went into "fetchProducts returns zero, no error, every preflight
+green" (Sep 19-21). The products were in "Ready to Submit" under an App Store
+Connect record whose bundle id was `com.reciprededuction.app` — a typo, made
+by hand when the record was created — while `app.json` and the dev build
+said `com.recipereduction.mobile`. StoreKit asks Apple for the products of
+the bundle id it is running as; that app had no record at all, and StoreKit
+answers an unknown product id by omitting it, never by raising. It came out
+only when `eas submit` created a SECOND record, which it does exactly when no
+record matches the build's bundle id. So the first check for an empty
+product list is App Store Connect → the app → App Information → Bundle ID,
+read against `ios.bundleIdentifier` in `app.json` and `APPLE_BUNDLE_ID` on
+BOTH servers (`/api/admin/preflight/apple-iap` reports the latter) — before
+Availability, before the storefront, before a DTS ticket. Product ids are
+unique per app (Apple: "can't be reused ... within the same app, even if you
+delete the original"), so the same ids can be created again under the right
+record; there is no bundle-id-prefix rule.
+
 The expensive failure is never the schema. It is provider vocabulary escaping
 into code that outlives the provider: a `current_period_end` in UI copy, a
 `cancel_at_period_end` behind a toggle, a `status === 'past_due'` in a
