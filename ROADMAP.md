@@ -544,7 +544,7 @@ verification, or a decision.
   Connect). Two things the pages say that the brief simplified, kept
   because the documents would otherwise be false: the website bills
   through Stripe, and extraction sends the recipe (or photo) to Anthropic.
-  Three things to confirm before submission: `privacy@recipereduction.com`
+  Three things to confirm before submission: `sean@recruitthebench.com`
   must be a mailbox someone reads (or change the address on both pages);
   the operator is named as "Recipe Reduction" — if there is a legal entity
   it should be named instead; governing law is left as "where Recipe
