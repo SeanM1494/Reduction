@@ -200,8 +200,8 @@ change of plan is an upgrade or downgrade, not a second subscription):
 
 | product id | plan | price |
 |---|---|---|
-| `com.recipereduction.mobile.monthly` | auto-renewable, 1 month | $1.99 |
-| `com.recipereduction.mobile.yearly` | auto-renewable, 1 year | $19.99 |
+| `com.recipereduction.mobile.plan.monthly` | auto-renewable, 1 month | $1.99 |
+| `com.recipereduction.mobile.plan.yearly` | auto-renewable, 1 year | $19.99 |
 
 The app only ever renders the price the store returns, so a product that
 is not yet approved, or whose id differs by a character, is simply absent

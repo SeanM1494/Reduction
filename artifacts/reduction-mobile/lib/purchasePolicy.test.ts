@@ -6,6 +6,14 @@ const JWS = "eyJhbGciOiJFUzI1NiJ9.eyJ0cmFuc2FjdGlvbklkIjoiMSJ9.c2ln";
 
 test("the two products are distinct and round-trip through planOf", () => {
   assert.notEqual(PLAN_SKUS.monthly, PLAN_SKUS.yearly);
+  // The literal strings, pinned: these are the ids in App Store Connect
+  // under the record whose bundle id the build carries. The un-suffixed
+  // originals are burned account-wide (see purchasePolicy.ts) and must not
+  // come back; a change here is a change in App Store Connect first.
+  assert.deepEqual(PLAN_SKUS, {
+    monthly: "com.recipereduction.mobile.plan.monthly",
+    yearly: "com.recipereduction.mobile.plan.yearly",
+  });
   assert.equal(planOf(PLAN_SKUS.monthly), "monthly");
   assert.equal(planOf(PLAN_SKUS.yearly), "yearly");
   assert.equal(planOf("com.example.other"), null);

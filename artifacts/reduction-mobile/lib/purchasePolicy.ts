@@ -10,13 +10,23 @@
  * the whole contract between the app and the store catalogue, and both
  * products must live in ONE subscription group so that switching plans is
  * an upgrade or downgrade rather than a second subscription.
+ *
+ * The `.plan.` segment is not decoration. The first ids
+ * (`com.recipereduction.mobile.monthly` / `.yearly`) were created under an
+ * App Store Connect record whose bundle id was a typo of the build's, and
+ * App Store Connect burns a subscription's product id ACCOUNT-WIDE the
+ * moment it is created — deleting the product does not free it (Sep 21:
+ * "The Product ID you entered is already being used by another
+ * subscription", after the originals were deleted). These two are the
+ * replacements, under the record whose bundle id the build actually
+ * carries; the old strings can never be used again on this account.
  */
 
 export type Plan = 'monthly' | 'yearly';
 
 export const PLAN_SKUS: Record<Plan, string> = {
-  monthly: 'com.recipereduction.mobile.monthly',
-  yearly: 'com.recipereduction.mobile.yearly',
+  monthly: 'com.recipereduction.mobile.plan.monthly',
+  yearly: 'com.recipereduction.mobile.plan.yearly',
 };
 
 /** Display order: the plan the web sells first, the better deal second. */
