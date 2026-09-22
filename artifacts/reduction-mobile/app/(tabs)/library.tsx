@@ -67,6 +67,15 @@ export default function LibraryScreen() {
   // list pads itself past it: the classic bar is 49px plus the home
   // indicator; on web the layout pins it at 84. Over-padding is harmless.
   const tabBarHeight = 84 + insets.bottom;
+  // The TOP inset has to be paid by this screen, because the category strip
+  // is a plain View and the FIRST thing on it. A ScrollView gets iOS's
+  // automatic content-inset adjustment and the old chips-inside-the-list
+  // layout rode on that; a View gets nothing and lands under the notch.
+  // `useSafeAreaInsets` reports 0 here whenever a navigator header is
+  // already absorbing it (ClassicTabLayout, and the web), and the real
+  // inset when nothing is (NativeTabs on iOS 26 shows NO header — see
+  // (tabs)/_layout.tsx, and it is the path a real iPhone takes while
+  // Chromium takes the other one, which is why this was invisible here).
   const stageH = Math.max(0, listH - headH - tabBarHeight - 12);
 
   useFocusEffect(
@@ -120,7 +129,7 @@ export default function LibraryScreen() {
       : `${shown.length} of ${entries.length}`;
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { paddingTop: insets.top }]}>
       {/* The category strip, pinned above the list rather than scrolling
           with it: the point of the recipe box is jumping to a category,
           and a tab that has scrolled away cannot be jumped to. */}

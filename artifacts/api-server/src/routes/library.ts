@@ -175,15 +175,36 @@ function wireEntry(row: typeof recipes.$inferSelect, photo: PhotoMeta | null = n
   };
 }
 
-/** wireEntry for a set of rows, with one photo lookup for all of them. */
+/**
+ * wireEntry for a set of rows, with one photo lookup for all of them.
+ *
+ * A PICTURE MAY NEVER TAKE DOWN THE LIBRARY. The photo lookup is a second
+ * table, and the library is the app while a picture is decoration, so a
+ * failure here degrades to "no photos" rather than an unusable library.
+ * The case that made this a rule: `recipe_photos` is hand-run DDL
+ * (CLAUDE.md — production schema changes are never pushed), so between
+ * deploying this code and running the CREATE TABLE, every list request
+ * would otherwise 500 and the app would show an empty shelf. Logged, not
+ * swallowed: an operator needs to see it, a cook does not.
+ */
 async function wireEntries(rows: Array<typeof recipes.$inferSelect>) {
-  const metas = await photoMetaFor(rows.map((r) => ({ ownerKey: r.ownerKey, id: r.id })));
+  let metas = new Map<string, PhotoMeta>();
+  try {
+    metas = await photoMetaFor(rows.map((r) => ({ ownerKey: r.ownerKey, id: r.id })));
+  } catch (e) {
+    console.error("[library:photo] meta lookup failed; serving without pictures:", (e as Error).message);
+  }
   return rows.map((r) => wireEntry(r, metas.get(`${r.ownerKey}\u0000${r.id}`) ?? null));
 }
 
-/** wireEntry for one row, photo included. */
+/** wireEntry for one row, photo included. Same rule as wireEntries. */
 async function wireOne(row: typeof recipes.$inferSelect) {
-  return wireEntry(row, await photoMeta(row.ownerKey, row.id));
+  try {
+    return wireEntry(row, await photoMeta(row.ownerKey, row.id));
+  } catch (e) {
+    console.error("[library:photo] meta lookup failed; serving without a picture:", (e as Error).message);
+    return wireEntry(row, null);
+  }
 }
 
 const isValidCooked = (v: unknown): v is number[] =>

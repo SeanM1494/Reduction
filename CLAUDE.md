@@ -83,8 +83,16 @@ and close the ones that can be closed:
   mobile app crashed on load that way on Sep 9 while everything here
   passed. `scripts/check-workspace-links.mjs` now runs before the test
   runner and the dev server and names what is missing; the metro config
-  aliases the model package so the app boots regardless. If you add a
-  workspace dependency, the check covers it automatically.
+  aliases the model package so the app boots regardless. **The check now
+  covers EVERY declared dependency, not only `workspace:*`** (Sep 22): a
+  pull that brings a new third-party package leaves this machine without
+  it, because `scripts/dev.sh` — what Replit's Run executes — does not
+  install, and only the DEPLOYMENT build runs `pnpm install
+  --frozen-lockfile`. `jimp` arrived with the recipe photos and the
+  api-server build died on `Could not resolve "jimp"`, naming a package
+  that was correctly in `package.json` and the lockfile; that reads like a
+  broken import rather than an install that never ran. The answer is
+  always `pnpm install`, and the check now says so instead of esbuild.
 - **`DATABASE_URL` is set in this shell, to a non-local placeholder.** The
   test guard refuses it (outcome three in the table below), which LOOKS like
   the designed behaviour and hides a broken skip path — that is how
@@ -624,6 +632,17 @@ upsert); nothing may reorder that. Everything stored is JPEG at long edge
 1024 through `jimp`, chosen over `sharp` because it has no native build for
 the frozen install or EAS to refuse.
 
+**A picture may never take down the library.** `recipe_photos` is a second
+table reached by a join in `wireEntries`/`wireOne`, and it is HAND-RUN DDL
+— so between deploying the code and running the CREATE TABLE there is a
+window where every list request would 500 and the app would show an empty
+shelf over a library that is perfectly intact. Both wire helpers therefore
+catch and serve `photo: null`, logging once for the operator. Verified by
+renaming the table under a running server: 200 with no pictures, and the
+pictures return when the table does. The rule generalises — the library is
+the app, a picture is decoration, and a decoration's failure mode is to be
+absent.
+
 **A LIST RECYCLES ITS CELLS, so a card may not remember anything about the
 recipe it was showing.** The same component instance is handed recipe B a
 frame after it showed recipe A, and no cleanup function sees it because
@@ -760,6 +779,22 @@ accommodate afterwards.
   `RecipeScreen`'s `onViewChange`; Cook mode has nothing horizontal and
   keeps the gesture, and the header's back button always works. Chromium
   cannot exercise this; it is the phone's to confirm.
+- **There are TWO tab layouts and Chromium can only ever reach one of
+  them.** `app/(tabs)/_layout.tsx` returns `NativeTabLayout` when
+  `isLiquidGlassAvailable()` — iOS 26 on a real iPhone — and
+  `ClassicTabLayout` otherwise, which is every run in this container. They
+  differ in a way that breaks layouts silently: **the native one renders NO
+  header at all**, so a tab screen starts at y=0 under the notch, while the
+  classic one has a header that absorbs the top inset. A ScrollView at the
+  root of a screen survives either, because iOS adjusts its content inset;
+  a plain `View` does not. That is how the Library's category strip came to
+  sit under the status bar the moment it moved out of the FlatList's header
+  (Sep 22, a real device, invisible in every Chromium profile). **Any screen
+  whose first child is not a scroll view must pay `insets.top` itself** —
+  `useSafeAreaInsets()` reports 0 wherever a navigator header is already
+  absorbing it, so the same line is correct on both paths. When a screenshot
+  from the phone has no screen title in it, that is the native path, and it
+  is not the same layout you measured.
 - The landing page section below is part of this rule, not a separate concern.
 
 ### Verify on a real phone viewport, and on production
