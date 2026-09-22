@@ -1,169 +1,295 @@
 /**
- * components/library/CardStack.tsx — the recipe box as a stack: one card
- * fills the stage, the next two peek behind it, a swipe left flips to the
- * next, a swipe right back, a tap opens. Within whatever the category tab
- * has selected.
+ * components/library/CardStack.tsx — the recipe box as a deck you flip
+ * through with your thumb: one card fills the stage, the next two peek
+ * behind it, and a swipe carries the front card off while the ones behind
+ * rise to meet you.
  *
- * Built on PanResponder and Animated from React Native itself — no gesture
- * library, so nothing new for the build. The gesture policy (how far or
- * fast commits) is pure, in lib/libraryViewMode.ts, under test; this file
- * is the animation around it.
+ * ONE CONTINUOUS POSITION DRIVES EVERYTHING. `position` is a shared value
+ * holding `index + how far through the swipe you are`, and every card's
+ * transform is a pure function of `cardIndex - position`. That is what makes
+ * the deck feel like a deck: the card behind grows and rises by exactly as
+ * much as the front card has left, at every frame, rather than snapping when
+ * the swipe commits. It also removes the reset that a per-card offset needs —
+ * nothing is ever set back to zero, so there is no frame where a card is in
+ * the wrong place. The whole thing runs on the UI thread (reanimated
+ * worklets), so a slow render cannot stutter the drag.
  *
- * Two rules here were learned the hard way, both invisible in Chromium:
+ * The policy is pure and tested, in lib/libraryViewMode.ts: `dragPosition`
+ * (the 1:1 tracking and the rubber band at the ends), `swipeOutcome` (how
+ * far or fast commits), `stackStep` (the clamped index) and `stackWindow`
+ * (which cards are mounted, in paint order). This file is the animation
+ * around those.
  *
- * EVERY CARD IS AN ABSOLUTELY POSITIONED SIBLING AND PAINT ORDER IS JSX
- * ORDER. The first cut drew the peeks absolutely and the top card in flow,
- * ordering them with `zIndex`/`elevation`. On a real iPhone the peeks
- * painted OVER the top card: the visible card was the one behind, with a
- * third card's title ghosting through its translucent neighbour, and the
- * card being dragged was invisible. zIndex against a statically positioned
- * sibling is not a promise any of the three platforms makes the same way;
- * document order among absolute siblings is. Deepest peek first, top card
- * last, and no zIndex anywhere.
+ * PAINT ORDER IS JSX ORDER AND THERE IS NO zIndex. `stackWindow` returns the
+ * cards deepest-first, so the last one rendered is the one on top — see
+ * CLAUDE.md for the iPhone-only bug that rule exists to prevent. Note that
+ * the card it puts on top is `index - 1`, not the front card: the card
+ * before the front one is the one sliding in from the left when you swipe
+ * back, and the one still flying off after a forward swipe commits.
  *
- * THE PAN CAPTURES THE TOUCH. RecipeCard is a Pressable, so it wins the
- * responder on touch-down and the pan never starts — swiping did nothing at
- * all. The capture-phase handlers run root-downward, so the top card's
- * wrapper takes the gesture before the Pressable is asked, and the tap is
- * handled here too (the card's own onPress is deliberately inert). That also
- * settles it against any ancestor scroller, which is why the screen renders
- * this as a sibling of the list rather than inside it.
+ * The gesture is gesture-handler's, not a PanResponder: RecipeCard is a
+ * Pressable and won the responder on touch-down, so a PanResponder above it
+ * never started. A Pan and a Tap racing settles that at the native layer,
+ * and the card's own onPress is inert.
  */
 
-import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Animated, PanResponder, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { Platform, Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import Animated, {
+  Extrapolation,
+  interpolate,
+  runOnJS,
+  useAnimatedStyle,
+  useSharedValue,
+  withSpring,
+  type SharedValue,
+} from 'react-native-reanimated';
+import * as Haptics from 'expo-haptics';
+import { Feather } from '@expo/vector-icons';
 import { RecipeCard } from '@/components/library/RecipeCard';
-import { stackStep, swipeOutcome, TAP_SLOP_PX } from '@/lib/libraryViewMode';
+import {
+  dragPosition,
+  overscrollPx,
+  stackStep,
+  stackWindow,
+  swipeOutcome,
+  TAP_SLOP_PX,
+} from '@/lib/libraryViewMode';
 import { useColors, type Colors } from '@/hooks/useColors';
 import { fonts } from '@/constants/colors';
 import type { Entry } from '@/lib/api';
 
-/** How many cards peek behind the top one. */
-const PEEK = 2;
+/** Extra distance past the card's own width before it is clear of the
+ *  screen. It is also the denominator the finger is tracked against, so
+ *  the card stays exactly under the thumb. */
+const GAP = 60;
+/** How far each card behind sits above the one in front of it. */
+const RISE = 14;
+const SHRINK = 0.05;
+const FADE = 0.09;
+/** Firm enough to feel decisive, soft enough not to wobble. */
+const SPRING = { damping: 19, stiffness: 165, mass: 0.7, overshootClamping: false } as const;
 
 export function CardStack({ entries, onOpen }: { entries: Entry[]; onOpen: (id: string) => void }) {
   const colors = useColors();
   const styles = makeStyles(colors);
   const { width: windowW } = useWindowDimensions();
   const cardW = Math.min(windowW - 48, 420);
+  const travel = cardW + GAP;
+  const count = entries.length;
+
   const [index, setIndex] = useState(0);
-  const indexRef = useRef(0);
-  const countRef = useRef(entries.length);
-  countRef.current = entries.length;
-  // A filter change can shrink the list under the index: clamp, do not reset,
-  // so switching tabs and back keeps the place.
-  useEffect(() => {
-    const clamped = stackStep(indexRef.current, 'stay', entries.length);
-    if (clamped !== indexRef.current) {
-      indexRef.current = clamped;
-      setIndex(clamped);
-    }
-  }, [entries.length]);
+  const position = useSharedValue(0);
+  // Dragging past either end moves the DECK, not the position: see
+  // `overscrollPx` for why the two cannot be the same number.
+  const overscroll = useSharedValue(0);
+  const gestureStart = useSharedValue(0);
+  // The gesture's worklets need the count without re-creating the gesture
+  // (which would drop an in-flight drag when the library refreshes).
+  const countSV = useSharedValue(count);
+  countSV.value = count;
 
-  const drag = useRef(new Animated.ValueXY()).current;
-  const settle = (outcome: 'next' | 'prev' | 'stay') => {
-    const from = indexRef.current;
-    const to = stackStep(from, outcome, countRef.current);
-    if (to === from) {
-      Animated.spring(drag, { toValue: { x: 0, y: 0 }, useNativeDriver: false, bounciness: 6 }).start();
-      return;
-    }
-    // Fly the top card off in the swipe's direction, then reset under the
-    // next card. The reset is instant and invisible: by then the flown card
-    // is the one BEHIND, drawn at the peek offset.
-    Animated.timing(drag, {
-      toValue: { x: (outcome === 'next' ? -1 : 1) * (cardW + 80), y: 0 },
-      duration: 180,
-      useNativeDriver: false,
-    }).start(() => {
-      indexRef.current = to;
+  // The front card at tap time, for the tap worklet's hop back to JS.
+  const frontRef = useRef<Entry | null>(entries[0] ?? null);
+  frontRef.current = entries[index] ?? null;
+
+  const settleAt = useCallback(
+    (to: number, velocity: number) => {
+      position.value = withSpring(to, { ...SPRING, velocity });
       setIndex(to);
-      drag.setValue({ x: 0, y: 0 });
-    });
-  };
-
-  const responder = useMemo(
-    () =>
-      PanResponder.create({
-        // Capture phase, so the card's own Pressable never takes the touch
-        // and no ancestor can either. The tap below is the replacement.
-        onStartShouldSetPanResponderCapture: () => true,
-        onMoveShouldSetPanResponderCapture: () => true,
-        onPanResponderTerminationRequest: () => false,
-        onPanResponderMove: (_e, g) => drag.setValue({ x: g.dx, y: g.dy * 0.15 }),
-        onPanResponderRelease: (_e, g) => {
-          if (Math.abs(g.dx) < TAP_SLOP_PX && Math.abs(g.dy) < TAP_SLOP_PX) {
-            drag.setValue({ x: 0, y: 0 });
-            const cur = entries[indexRef.current];
-            if (cur) onOpen(cur.id);
-            return;
-          }
-          settle(swipeOutcome(g.dx, g.vx, cardW));
-        },
-        onPanResponderTerminate: () => settle('stay'),
-      }),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [entries, cardW]
+    },
+    [position]
   );
 
-  if (!entries.length) return null;
-  const rotate = drag.x.interpolate({ inputRange: [-cardW, 0, cardW], outputRange: ['-6deg', '0deg', '6deg'] });
+  const tick = useCallback(() => {
+    if (Platform.OS === 'web') return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+  }, []);
 
-  // Back to front. The deepest card is first in the list and the top card
-  // last, because that is the paint order — see the header.
-  const layers: Array<{ entry: Entry; depth: number }> = [];
-  for (let depth = PEEK; depth >= 1; depth -= 1) {
-    const e = entries[index + depth];
-    if (e) layers.push({ entry: e, depth });
-  }
-  layers.push({ entry: entries[index], depth: 0 });
+  // A filter change can shrink the list under the index: clamp, do not
+  // reset, so switching category tabs and back keeps the place.
+  useEffect(() => {
+    const clamped = stackStep(index, 'stay', count);
+    if (clamped !== index) {
+      setIndex(clamped);
+      position.value = withSpring(clamped, SPRING);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [count]);
+
+  const openFront = useCallback(() => {
+    const cur = frontRef.current;
+    if (cur) onOpen(cur.id);
+  }, [onOpen]);
+
+  // `activeOffsetX` is what lets the Tap win a press that barely moved:
+  // the Pan does not claim the gesture until the finger has travelled, and
+  // `failOffsetY` hands a mostly-vertical drag back rather than eating it.
+  const pan = Gesture.Pan()
+    .activeOffsetX([-TAP_SLOP_PX, TAP_SLOP_PX])
+    .failOffsetY([-28, 28])
+    .onBegin(() => {
+      gestureStart.value = position.value;
+    })
+    .onUpdate((e) => {
+      position.value = dragPosition(gestureStart.value, e.translationX, travel, countSV.value);
+      overscroll.value = overscrollPx(gestureStart.value, e.translationX, travel, countSV.value);
+    })
+    .onEnd((e) => {
+      // velocityX is px/second; swipeOutcome speaks px/ms.
+      const outcome = swipeOutcome(e.translationX, e.velocityX / 1000, cardW);
+      const to = stackStep(Math.round(gestureStart.value), outcome, countSV.value);
+      // Hand the spring the finger's own speed, in position units, so a
+      // flick carries through instead of restarting from rest.
+      if (to !== Math.round(gestureStart.value)) runOnJS(tick)();
+      overscroll.value = withSpring(0, SPRING);
+      runOnJS(settleAt)(to, -e.velocityX / travel);
+    });
+
+  const tap = Gesture.Tap()
+    .maxDistance(TAP_SLOP_PX)
+    .onEnd((_e, success) => {
+      if (success) runOnJS(openFront)();
+    });
+
+  const gesture = Gesture.Race(pan, tap);
+
+  const deckStyle = useAnimatedStyle(() => ({ transform: [{ translateX: overscroll.value }] }));
+
+  if (!count) return null;
+
+  const step = (delta: number) => {
+    const to = stackStep(index, delta < 0 ? 'prev' : 'next', count);
+    if (to !== index) {
+      tick();
+      settleAt(to, 0);
+    }
+  };
 
   return (
     <View style={styles.stage} testID="library-stack">
-      <View style={[styles.deck, { width: cardW }]}>
-        {layers.map(({ entry, depth }) =>
-          depth === 0 ? (
-            <Animated.View
-              key={entry.id}
-              {...responder.panHandlers}
-              style={[styles.layer, { transform: [{ translateX: drag.x }, { translateY: drag.y }, { rotate }] }]}
-              testID="stack-top"
-            >
-              {/* Inert on purpose: the pan above owns the tap. */}
-              <RecipeCard entry={entry} layout="stack" onPress={() => {}} />
-            </Animated.View>
-          ) : (
-            <View
-              key={entry.id}
-              pointerEvents="none"
-              style={[
-                styles.layer,
-                { transform: [{ scale: 1 - depth * 0.05 }, { translateY: -depth * 14 }], opacity: 1 - depth * 0.08 },
-              ]}
-              testID={`stack-peek-${depth}`}
-            >
-              <RecipeCard entry={entry} layout="stack" onPress={() => {}} />
-            </View>
-          )
-        )}
+      <GestureDetector gesture={gesture}>
+        <Animated.View style={[deckGeometry.deck, { width: cardW }, deckStyle]} testID="library-deck">
+          {stackWindow(index, count).map((cardIndex) => (
+            <StackCard
+              key={entries[cardIndex].id}
+              entry={entries[cardIndex]}
+              cardIndex={cardIndex}
+              position={position}
+              travel={travel}
+            />
+          ))}
+        </Animated.View>
+      </GestureDetector>
+      {/* The swipe is the point, but it must not be the ONLY way through:
+          a deck you can only flip by dragging is unreachable to anyone who
+          cannot drag, and awkward one-handed on a large phone. */}
+      <View style={styles.footer}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Previous recipe"
+          onPress={() => step(-1)}
+          disabled={index === 0}
+          style={({ pressed }) => [styles.arrow, index === 0 && styles.arrowOff, pressed && styles.arrowPressed]}
+          testID="stack-prev"
+        >
+          <Feather name="chevron-left" size={20} color={colors.mutedForeground} />
+        </Pressable>
+        <Text style={styles.counter} testID="stack-counter">
+          {index + 1} of {count}
+        </Text>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Next recipe"
+          onPress={() => step(1)}
+          disabled={index >= count - 1}
+          style={({ pressed }) => [styles.arrow, index >= count - 1 && styles.arrowOff, pressed && styles.arrowPressed]}
+          testID="stack-next"
+        >
+          <Feather name="chevron-right" size={20} color={colors.mutedForeground} />
+        </Pressable>
       </View>
-      <Text style={styles.counter} testID="stack-counter">
-        {index + 1} of {entries.length}
-        {index + 1 < entries.length ? '  ·  swipe left for the next' : index > 0 ? '  ·  swipe right to go back' : ''}
-      </Text>
     </View>
   );
 }
 
+/**
+ * One card, placed entirely by how far it is from the deck's position.
+ * `d` is 0 for the front card, negative once it has been carried off to the
+ * left, and 1, 2, 3 for the cards waiting behind. Every stop on that scale
+ * is interpolated, which is why the deck moves as one thing.
+ */
+function StackCard({
+  entry,
+  cardIndex,
+  position,
+  travel,
+}: {
+  entry: Entry;
+  cardIndex: number;
+  position: SharedValue<number>;
+  travel: number;
+}) {
+  const style = useAnimatedStyle(() => {
+    const d = cardIndex - position.value;
+    return {
+      opacity: interpolate(d, [0, 1, 2, 3], [1, 1 - FADE, 1 - 2 * FADE, 0], Extrapolation.CLAMP),
+      transform: [
+        // Leaving to the left below zero; pinned at centre behind it, so the
+        // cards in the deck do not slide sideways as the front one goes.
+        { translateX: interpolate(d, [-1, 0, 1], [-travel, 0, 0], Extrapolation.CLAMP) },
+        { translateY: interpolate(d, [-1, 0, 1, 2, 3], [0, 0, -RISE, -2 * RISE, -3 * RISE], Extrapolation.CLAMP) },
+        {
+          scale: interpolate(
+            d,
+            [-1, 0, 1, 2, 3],
+            [1, 1, 1 - SHRINK, 1 - 2 * SHRINK, 1 - 3 * SHRINK],
+            Extrapolation.CLAMP
+          ),
+        },
+        { rotate: `${interpolate(d, [-1, 0, 1], [-11, 0, 0], Extrapolation.CLAMP)}deg` },
+      ],
+    };
+  });
+
+  return (
+    <Animated.View
+      style={[deckGeometry.layer, style]}
+      pointerEvents="none"
+      testID={`stack-card-${cardIndex}`}
+    >
+      {/* Inert on purpose: the deck's Tap gesture owns the tap. */}
+      <RecipeCard entry={entry} layout="stack" onPress={() => {}} />
+    </Animated.View>
+  );
+}
+
+/** The layer geometry is the same whatever the theme, so it is not rebuilt
+ *  per render like the coloured styles below. */
+const deckGeometry = StyleSheet.create({
+  layer: { position: 'absolute', left: 0, right: 0, top: 0, bottom: 0 },
+  deck: { flex: 1, maxHeight: 620, alignSelf: 'center' },
+});
+
 function makeStyles(colors: Colors) {
   return StyleSheet.create({
-    // The stage takes the height its parent gives it and the deck takes the
-    // rest after the counter, so nothing here measures anything: the card's
-    // height is flex, not a number read back from a layout event one frame
-    // late. The top padding is the room the peeks rise into.
+    // The stage takes the height its parent gives it and the deck takes what
+    // the footer leaves, so nothing measures anything: the card's height is
+    // flex, not a number read back from a layout event one frame late. The
+    // top padding is the room the cards behind rise into.
     stage: { flex: 1, alignItems: 'center', paddingTop: 30, paddingBottom: 4 },
-    deck: { flex: 1, maxHeight: 620, alignSelf: 'center' },
-    layer: { position: 'absolute', left: 0, right: 0, top: 0, bottom: 0 },
-    counter: { marginTop: 14, fontFamily: fonts.mono, fontSize: 11, letterSpacing: 0.4, color: colors.mutedForeground },
+    footer: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, marginTop: 8 },
+    arrow: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center', borderRadius: 22 },
+    arrowOff: { opacity: 0.25 },
+    arrowPressed: { backgroundColor: colors.muted },
+    counter: {
+      minWidth: 78,
+      textAlign: 'center',
+      fontFamily: fonts.mono,
+      fontSize: 11,
+      letterSpacing: 0.4,
+      color: colors.mutedForeground,
+    },
   });
 }
