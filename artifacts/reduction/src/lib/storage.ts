@@ -46,6 +46,15 @@ export interface Entry {
    *  split as servings. Advisory; see OrderPreference in shared/sequence. */
   order?: OrderPreference | null;
   savedAt: number;
+  /** The card's picture, as the server describes it. Server-owned: never
+   *  in a PATCH (buildPatch ignores it), never merged, simply taken from the
+   *  server on refresh. The bytes are fetched by `photoBlobUrl`. */
+  photo?: PhotoMeta | null;
+}
+
+export interface PhotoMeta {
+  version: number;
+  source: "page" | "user";
 }
 
 const LOCAL_KEY = "logic-cooking:library:v1";
@@ -305,7 +314,48 @@ function toEntry(row: any): Entry {
     rating: typeof row.rating === "number" ? row.rating : null,
     order: row.order ?? null,
     savedAt: row.savedAt ?? Date.now(),
+    photo: row.photo ?? null,
   };
+}
+
+// ------------------------------------------------------------- the photo ---
+
+const blobUrls = new Map<string, string>();
+
+/** The photo's bytes as a blob URL, cached by id and version — an <img>
+ *  cannot send X-Owner-Key, so the bytes come through fetch. Null when
+ *  there is no photo, or it could not be loaded. */
+export async function photoBlobUrl(id: string, version: number): Promise<string | null> {
+  const key = `${id}\u0000${version}`;
+  const hit = blobUrls.get(key);
+  if (hit) return hit;
+  try {
+    const res = await fetch(`/api/library/${encodeURIComponent(id)}/photo?v=${version}`, {
+      headers: { "X-Owner-Key": ownerKey() },
+    });
+    if (!res.ok) return null;
+    const url = URL.createObjectURL(await res.blob());
+    blobUrls.set(key, url);
+    return url;
+  } catch {
+    return null;
+  }
+}
+
+/** Attach the person's own picture: base64 of an image the caller has
+ *  already shrunk (a canvas — see PhotoSheet in RecipeView). */
+export function uploadPhoto(id: string, data: string, mediaType: string): Promise<{ photo: PhotoMeta }> {
+  return api(`/${encodeURIComponent(id)}/photo`, { method: "PUT", body: JSON.stringify({ data, mediaType }) });
+}
+
+export function removePhoto(id: string): Promise<{ photo: null }> {
+  return api(`/${encodeURIComponent(id)}/photo`, { method: "DELETE" });
+}
+
+/** Ask the server to fetch the source page's picture now — the self-healing
+ *  half of the capture at save. */
+export function fetchPhotoFromSource(id: string): Promise<{ photo: PhotoMeta | null }> {
+  return api(`/${encodeURIComponent(id)}/photo/from-source`, { method: "POST" });
 }
 
 export async function loadLibrary(): Promise<Entry[]> {
@@ -708,13 +758,14 @@ export async function refreshLibrary(current: Entry[]): Promise<Entry[]> {
       const treeChanged =
         JSON.stringify(base!.recipe) !== JSON.stringify(theirs.recipe);
       lastSynced?.set(local.id, theirs);
-      out.push({ ...local, ...toSyncable(theirs) });
+      // The photo is server-owned: taken as is, clean or dirty.
+      out.push({ ...local, ...toSyncable(theirs), photo: theirs.photo ?? null });
       if (treeChanged) {
         reportSyncNotice({
           id: local.id,
           kind: "remote_update",
           message: "This recipe was changed on another device.",
-          entry: { ...local, ...toSyncable(theirs) },
+          entry: { ...local, ...toSyncable(theirs), photo: theirs.photo ?? null },
         });
       }
       continue;
@@ -726,7 +777,7 @@ export async function refreshLibrary(current: Entry[]): Promise<Entry[]> {
       recentUnclears.get(local.id) ?? new Set()
     );
     lastSynced?.set(local.id, theirs);
-    const adopted = { ...local, ...merged };
+    const adopted = { ...local, ...merged, photo: theirs.photo ?? null };
     out.push(adopted);
     if (treeConflict) {
       reportSyncNotice({

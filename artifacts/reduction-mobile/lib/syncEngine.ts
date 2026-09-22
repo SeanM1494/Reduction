@@ -56,6 +56,10 @@ export interface SyncEntry extends SyncableEntry {
   id: string;
   version: number;
   savedAt: number;
+  /** Server-owned meta the list carries (the card's picture). Never in a
+   *  patch, never merged: on refresh the server's value is simply taken,
+   *  clean or dirty, because no device ever writes it through this path. */
+  photo?: { version: number; source: 'page' | 'user' } | null;
 }
 
 export interface ConflictError {
@@ -373,7 +377,7 @@ export function createSyncEngine<E extends SyncEntry>(api: EngineApi<E>, events:
         if (clean) {
           const treeChanged = !same(base!.recipe, theirs.recipe);
           lastSynced.set(local.id, theirs);
-          const adopted = { ...local, ...toSyncable(theirs), version: theirs.version } as E;
+          const adopted = { ...local, ...toSyncable(theirs), version: theirs.version, photo: theirs.photo ?? null } as E;
           out.push(adopted);
           if (treeChanged) events.onNotice({ id: local.id, kind: 'remote_update', message: REMOTE_UPDATE, entry: adopted });
           continue;
@@ -385,7 +389,7 @@ export function createSyncEngine<E extends SyncEntry>(api: EngineApi<E>, events:
           recentUnclears.get(local.id) ?? new Set()
         );
         lastSynced.set(local.id, theirs);
-        const adopted = { ...local, ...merged, version: theirs.version } as E;
+        const adopted = { ...local, ...merged, version: theirs.version, photo: theirs.photo ?? null } as E;
         out.push(adopted);
         // A write waiting for the network now carries the merge, so what it
         // sends is what the screen shows.

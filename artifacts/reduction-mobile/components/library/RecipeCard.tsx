@@ -1,73 +1,68 @@
 /**
- * components/library/RecipeCard.tsx — one saved recipe in the library list.
+ * components/library/RecipeCard.tsx — one saved recipe, as a card in the
+ * recipe box: its picture (or the meal-type art), its name, a ★ when it is
+ * a favourite. The same card serves the grid, the stack and the shelves,
+ * sized by whoever lays it out; `layout` picks the proportions.
  *
- * The web's `.rd-card`, token for token: meal-type badge (or "Untagged"), a
- * ★ for a favourite, the total time on the right; the title; "N steps ·
- * source" in mono; and the progress bar with its label. A 👎 is NOT shown
- * back — the rating still sorts and filters, it just does not decorate.
+ * What is NOT here any more: the progress bar and the step count. A card in
+ * a box is for finding a recipe, not reading its state; both are on the
+ * recipe screen. A 👎 is still not shown back — the rating sorts and
+ * filters, it does not decorate.
  */
 
 import React from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
-import { countAll, countSteps, formatMinutes } from '@/shared/amounts';
+import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import { formatMinutes } from '@/shared/amounts';
 import { MEAL_TYPE_LABELS, sanitizeMealTypes } from '@/shared/mealTypes';
-import { progressOf, ratingOf, totalMinutes } from '@/lib/libraryView';
+import { ratingOf, totalMinutes } from '@/lib/libraryView';
+import { useRecipePhoto } from '@/lib/recipePhoto';
+import { MealTypeArt } from '@/components/library/MealTypeArt';
 import { useColors, type Colors } from '@/hooks/useColors';
 import { cardShadow, fonts } from '@/constants/colors';
 import type { Entry } from '@/lib/api';
 
-export function RecipeCard({ entry, onPress }: { entry: Entry; onPress: () => void }) {
+export type CardLayout = 'grid' | 'stack' | 'shelf';
+
+export function RecipeCard({ entry, onPress, layout = 'grid' }: { entry: Entry; onPress: () => void; layout?: CardLayout }) {
   const colors = useColors();
   const styles = makeStyles(colors);
-  const { pct, label } = progressOf(entry.done.length, countAll(entry.recipe));
   const types = sanitizeMealTypes(entry.recipe.mealTypes);
   const primary = types[0] ?? null;
   const mins = totalMinutes(entry);
-  const steps = countSteps(entry.recipe);
+  const photo = useRecipePhoto(entry);
+  const fav = ratingOf(entry) === 1;
+  const big = layout === 'stack';
 
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel={entry.recipe.title}
+      accessibilityLabel={`${entry.recipe.title}${fav ? ', favourite' : ''}${primary ? `, ${MEAL_TYPE_LABELS[primary]}` : ''}`}
       onPress={onPress}
       testID="library-card"
-      style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
+      style={({ pressed }) => [styles.card, big && styles.cardBig, pressed && styles.cardPressed]}
     >
-      <View style={styles.top}>
-        {primary ? (
-          <View style={styles.type}>
-            <Text style={styles.typeText}>{MEAL_TYPE_LABELS[primary].toUpperCase()}</Text>
-          </View>
+      <View style={[styles.face, big && styles.faceBig]}>
+        {photo ? (
+          <Image source={photo} style={StyleSheet.absoluteFill} resizeMode="cover" accessibilityIgnoresInvertColors testID="card-photo" />
         ) : (
-          <View style={[styles.type, styles.typeUntagged]}>
-            <Text style={[styles.typeText, styles.typeTextUntagged]}>UNTAGGED</Text>
-          </View>
+          <MealTypeArt type={primary} size={big ? 64 : 36} />
         )}
-        {types.length > 1 ? <Text style={styles.typeMore}>+{types.length - 1}</Text> : null}
-        {ratingOf(entry) === 1 ? (
-          <Text style={styles.fav} accessibilityLabel="Favourite">
-            ★
-          </Text>
+        {fav ? (
+          <View style={styles.favBadge} accessibilityLabel="Favourite" testID="card-fav">
+            <Text style={styles.favText}>★</Text>
+          </View>
         ) : null}
-        {mins !== null ? <Text style={styles.time}>{formatMinutes(mins)}</Text> : null}
       </View>
-      <Text style={styles.title} numberOfLines={3}>
-        {entry.recipe.title}
-      </Text>
-      <Text style={styles.meta} numberOfLines={1}>
-        {steps} {steps === 1 ? 'step' : 'steps'}
-        {entry.recipe.source ? ` · ${entry.recipe.source}` : ''}
-      </Text>
-      <View style={styles.bar}>
-        <LinearGradient
-          colors={[colors.warmLine, colors.coolInk]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 0 }}
-          style={[styles.fill, { width: `${pct}%` }]}
-        />
+      <View style={styles.body}>
+        <Text style={[styles.title, big && styles.titleBig]} numberOfLines={big ? 3 : 2}>
+          {entry.recipe.title}
+        </Text>
+        <Text style={styles.meta} numberOfLines={1}>
+          {primary ? MEAL_TYPE_LABELS[primary] : 'Untagged'}
+          {types.length > 1 ? ` +${types.length - 1}` : ''}
+          {mins !== null ? ` · ${formatMinutes(mins)}` : ''}
+        </Text>
       </View>
-      <Text style={styles.pct}>{label}</Text>
     </Pressable>
   );
 }
@@ -75,36 +70,35 @@ export function RecipeCard({ entry, onPress }: { entry: Entry; onPress: () => vo
 function makeStyles(colors: Colors) {
   return StyleSheet.create({
     card: {
+      flex: 1,
       backgroundColor: colors.card,
       borderRadius: colors.radiusCard,
       borderWidth: 1,
       borderColor: colors.border,
-      paddingTop: 15,
-      paddingHorizontal: 16,
-      paddingBottom: 14,
-      gap: 7,
+      overflow: 'hidden',
       ...cardShadow,
     },
+    cardBig: { flex: 0 },
     cardPressed: { borderColor: colors.borderStrong },
-    top: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: -1 },
-    type: {
-      borderRadius: 99,
-      paddingVertical: 3,
-      paddingHorizontal: 9,
-      backgroundColor: colors.warmBg,
-      borderWidth: 1,
-      borderColor: colors.dangerLine,
+    // 4:3, the shape of a plated dish photographed from above a table.
+    face: { aspectRatio: 4 / 3, backgroundColor: colors.muted, overflow: 'hidden' },
+    faceBig: { aspectRatio: 1 },
+    favBadge: {
+      position: 'absolute',
+      top: 8,
+      right: 8,
+      width: 26,
+      height: 26,
+      borderRadius: 13,
+      backgroundColor: colors.card,
+      alignItems: 'center',
+      justifyContent: 'center',
+      ...cardShadow,
     },
-    typeUntagged: { backgroundColor: colors.muted, borderColor: colors.border },
-    typeText: { fontFamily: fonts.mono, fontSize: 10, letterSpacing: 0.5, color: colors.warmInk },
-    typeTextUntagged: { color: colors.mutedForeground },
-    typeMore: { fontSize: 11, color: colors.faint },
-    fav: { color: colors.warmLine, fontSize: 13, lineHeight: 15 },
-    time: { marginLeft: 'auto', fontFamily: fonts.mono, fontSize: 10.5, color: colors.mutedForeground },
-    title: { fontFamily: fonts.heading, fontSize: 16, lineHeight: 19, letterSpacing: -0.24, color: colors.foreground },
+    favText: { color: colors.warmLine, fontSize: 14, lineHeight: 16 },
+    body: { paddingHorizontal: 12, paddingTop: 10, paddingBottom: 12, gap: 3 },
+    title: { fontFamily: fonts.heading, fontSize: 15, lineHeight: 18, letterSpacing: -0.2, color: colors.foreground },
+    titleBig: { fontSize: 22, lineHeight: 26, letterSpacing: -0.3 },
     meta: { fontFamily: fonts.mono, fontSize: 10.5, lineHeight: 15, color: colors.faint },
-    bar: { height: 4, borderRadius: 99, backgroundColor: colors.border, overflow: 'hidden', marginTop: 3 },
-    fill: { height: '100%', borderRadius: 99 },
-    pct: { fontFamily: fonts.mono, fontSize: 10, letterSpacing: 0.4, color: colors.mutedForeground },
   });
 }

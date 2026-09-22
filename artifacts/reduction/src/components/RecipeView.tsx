@@ -34,6 +34,9 @@ import ExtractionProgress from "./ExtractionProgress";
 import { lastAcceptedEntry, onSyncFailure } from "../lib/storage";
 import { useIngredientDrag } from "../lib/useIngredientDrag";
 import { saveRecipeAsImage, slugForFile } from "../lib/exportImage";
+import RecipePhoto from "./RecipePhoto";
+import { removePhoto, uploadPhoto } from "../lib/storage";
+import { resizePhoto } from "../lib/photoResize";
 
 interface Props {
   entry: Entry;
@@ -86,6 +89,10 @@ export default function RecipeView({
   const { recipe } = entry;
   const [phase, setPhase] = useState<Phase>("choose");
   const [menuOpen, setMenuOpen] = useState(false);
+  const [photoSheetOpen, setPhotoSheetOpen] = useState(false);
+  const [photoBusy, setPhotoBusy] = useState<"upload" | "remove" | null>(null);
+  const [photoError, setPhotoError] = useState<string | null>(null);
+  const photoInputRef = useRef<HTMLInputElement | null>(null);
   const [hovered, setHovered] = useState<string | null>(null);
   const [savingImage, setSavingImage] = useState(false);
 
@@ -470,6 +477,22 @@ export default function RecipeView({
                   Meal types
                 </button>
               ) : null}
+              {/* The card's picture. Server-owned meta: `onUpdate` with a new
+                  `photo` changes state, and the sync path sends nothing for
+                  it (buildPatch ignores the field). */}
+              {canEdit ? (
+                <button
+                  className="rfx-menu-item"
+                  role="menuitem"
+                  onClick={() => {
+                    setMenuOpen(false);
+                    setPhotoError(null);
+                    setPhotoSheetOpen(true);
+                  }}
+                >
+                  Photo
+                </button>
+              ) : null}
               <button
                 className="rfx-menu-item"
                 role="menuitem"
@@ -731,7 +754,95 @@ export default function RecipeView({
           />
         ) : null}
 
-        {confirmReread ? (
+        {photoSheetOpen ? (
+        <div
+          className="rd-sheet-scrim"
+          onPointerDown={(e) => e.target === e.currentTarget && setPhotoSheetOpen(false)}
+        >
+          <div className="rd-sheet" role="dialog" aria-modal="true" aria-label="Photo">
+            <div className="rd-sheet-grab" aria-hidden="true" />
+            <div className="rd-sheet-head">
+              <h2 className="rd-sheet-title">Photo</h2>
+              <button className="rd-btn" onClick={() => setPhotoSheetOpen(false)}>
+                Done
+              </button>
+            </div>
+            <div className="rd-field">
+              <span className="rd-photo-preview" data-testid="photo-sheet-preview">
+                <RecipePhoto entry={entry} glyph={44} />
+              </span>
+              <p className="rd-sheet-note">
+                {entry.photo?.source === "page"
+                  ? "This is the picture from the recipe\u2019s page. Yours replaces it."
+                  : entry.photo
+                    ? "Your photo. A new one replaces it."
+                    : "No picture yet \u2014 the card shows the meal type instead."}
+              </p>
+              <input
+                ref={photoInputRef}
+                type="file"
+                accept="image/*"
+                hidden
+                data-testid="photo-file"
+                onChange={async (e) => {
+                  const file = e.target.files?.[0];
+                  e.target.value = "";
+                  if (!file) return;
+                  setPhotoBusy("upload");
+                  setPhotoError(null);
+                  try {
+                    const shrunk = await resizePhoto(file);
+                    const { photo } = await uploadPhoto(entry.id, shrunk.base64, shrunk.mediaType);
+                    onUpdate({ ...entry, photo });
+                  } catch (err) {
+                    setPhotoError((err as Error).message || "Could not save that photo.");
+                  } finally {
+                    setPhotoBusy(null);
+                  }
+                }}
+              />
+              <div className="rd-step-actions">
+                <button
+                  className="rd-btn"
+                  disabled={photoBusy !== null}
+                  onClick={() => photoInputRef.current?.click()}
+                  data-testid="photo-choose"
+                >
+                  {photoBusy === "upload" ? "Saving\u2026" : "Choose photo"}
+                </button>
+                {entry.photo ? (
+                  <button
+                    className="rd-btn rd-step-danger"
+                    disabled={photoBusy !== null}
+                    data-testid="photo-remove"
+                    onClick={async () => {
+                      setPhotoBusy("remove");
+                      setPhotoError(null);
+                      try {
+                        await removePhoto(entry.id);
+                        onUpdate({ ...entry, photo: null });
+                      } catch (err) {
+                        setPhotoError((err as Error).message || "Could not remove the photo.");
+                      } finally {
+                        setPhotoBusy(null);
+                      }
+                    }}
+                  >
+                    {photoBusy === "remove" ? "Removing\u2026" : "Remove photo"}
+                  </button>
+                ) : null}
+              </div>
+              {photoError ? (
+                <p className="rd-paywall-error" role="alert" data-testid="photo-error">
+                  {photoError}
+                </p>
+              ) : null}
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {confirmReread ? (
           <div
             className="rd-sheet-scrim"
             onPointerDown={(e) => e.target === e.currentTarget && setConfirmReread(false)}

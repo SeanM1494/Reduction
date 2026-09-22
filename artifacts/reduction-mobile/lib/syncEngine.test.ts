@@ -272,6 +272,24 @@ test('refresh: clean entries adopt the server, dirty ones merge, remote deletes 
   assert.equal(h.notices.length, 0);
 });
 
+test('refresh adopts the server-owned photo meta, clean or dirty, and a patch never carries it', async () => {
+  const h = harness([entry({ id: 'clean' }), entry({ id: 'dirty' })]);
+  const loaded = await h.engine.load();
+  // The server fetched the page's picture for both after the save.
+  h.external('clean', { photo: { version: 1, source: 'page' } } as Partial<E>);
+  h.external('dirty', { photo: { version: 2, source: 'user' } } as Partial<E>);
+  const local = loaded.map((e) => (e.id === 'dirty' ? { ...e, done: ['lime'] } : e));
+  const out = await h.engine.refresh(local);
+  const byId = new Map(out.map((e) => [e.id, e]));
+  assert.deepEqual(byId.get('clean')!.photo, { version: 1, source: 'page' });
+  assert.deepEqual(byId.get('dirty')!.photo, { version: 2, source: 'user' }, 'taken even through a merge');
+  assert.deepEqual(byId.get('dirty')!.done, ['lime'], 'the local edit still kept');
+  h.engine.save({ ...byId.get('dirty')!, rating: 1 });
+  await h.engine.idle();
+  const last = h.log[h.log.length - 1];
+  assert.equal('photo' in last.body, false, 'server-owned: never in a PATCH');
+});
+
 test('refresh tells the loser of a tree conflict, and keeps an unlanded create', async () => {
   const h = harness([entry({ id: 'r1' })]);
   const loaded = await h.engine.load();

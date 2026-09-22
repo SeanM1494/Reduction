@@ -238,6 +238,14 @@ export interface StepTimer {
   endsAt: number;
 }
 
+/** The card's picture, as the list describes it: which version is stored
+ *  and where it came from. The bytes are at `photoUrl`. Server-owned —
+ *  never in a PATCH, never merged; see lib/syncEngine.ts. */
+export interface PhotoMeta {
+  version: number;
+  source: 'page' | 'user';
+}
+
 export interface Entry {
   id: string;
   recipe: Recipe;
@@ -250,7 +258,31 @@ export interface Entry {
   order: OrderPreference | null;
   version: number;
   savedAt: number;
+  photo?: PhotoMeta | null;
 }
+
+/** The photo's URL for an <Image>: private, so it needs the bearer token
+ *  as a header (`photoHeaders`), and versioned, so it can be cached for
+ *  ever. */
+export const photoUrl = (id: string, version: number): string =>
+  `${baseUrl()}/api/library/${encodeURIComponent(id)}/photo?v=${version}`;
+
+export const photoHeaders = (): Record<string, string> =>
+  authToken ? { Authorization: `Bearer ${authToken}` } : {};
+
+/** Attach the person's own photo (already shrunk by lib/photo.ts). */
+export const uploadPhoto = (id: string, base64: string, mediaType: string): Promise<{ photo: PhotoMeta }> =>
+  request(`/api/library/${encodeURIComponent(id)}/photo`, { method: 'PUT', body: JSON.stringify({ data: base64, mediaType }) });
+
+export const removePhoto = (id: string): Promise<{ photo: null }> =>
+  request(`/api/library/${encodeURIComponent(id)}/photo`, { method: 'DELETE' });
+
+/** Ask the server to fetch the source page's picture now — the self-healing
+ *  half of the capture at save. `photo` is null when the page had none
+ *  worth keeping; the route 404s with `no_source_image` when the recipe
+ *  has no URL at all. */
+export const fetchPhotoFromSource = (id: string): Promise<{ photo: PhotoMeta | null }> =>
+  request(`/api/library/${encodeURIComponent(id)}/photo/from-source`, { method: 'POST' });
 
 export const loadLibrary = (): Promise<{ entries: Entry[] }> => request('/api/library');
 

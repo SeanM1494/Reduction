@@ -28,6 +28,7 @@ import { MealTypeSheet } from '@/components/recipe/MealTypeSheet';
 import { Sheet, SheetButton, SheetNote } from '@/components/Sheet';
 import { useAuth } from '@/lib/auth-context';
 import { useColors, type Colors } from '@/hooks/useColors';
+import { PhotoSheet } from '@/components/recipe/PhotoSheet';
 
 export default function RecipeDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -39,6 +40,7 @@ export default function RecipeDetailScreen() {
   const [draftServings, setDraftServings] = useState<number | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const [mealSheetOpen, setMealSheetOpen] = useState(false);
+  const [photoSheetOpen, setPhotoSheetOpen] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [syncError, setSyncError] = useState<string | null>(null);
@@ -174,6 +176,14 @@ export default function RecipeDetailScreen() {
             colors={colors}
           />
           <MenuItem
+            label="Photo"
+            onPress={() => {
+              setMenuOpen(false);
+              setPhotoSheetOpen(true);
+            }}
+            colors={colors}
+          />
+          <MenuItem
             label="Clear progress"
             onPress={() => {
               setMenuOpen(false);
@@ -192,6 +202,8 @@ export default function RecipeDetailScreen() {
           />
         </View>
       </Sheet>
+
+      <PhotoSheet open={photoSheetOpen} entry={entry} onClose={() => setPhotoSheetOpen(false)} />
 
       <MealTypeSheet
         open={mealSheetOpen}

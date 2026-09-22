@@ -9,8 +9,9 @@
  */
 
 import React, { useMemo, useState } from "react";
-import type { Entry } from "../lib/storage";
-import { countAll, countSteps, stepMinutes } from "../shared/amounts";
+import type { Entry, PhotoMeta } from "../lib/storage";
+import { stepMinutes } from "../shared/amounts";
+import RecipePhoto from "./RecipePhoto";
 import {
   MEAL_TYPES,
   MEAL_TYPE_LABELS,
@@ -27,6 +28,8 @@ interface Props {
   onOpen: (id: string) => void;
   /** Sends the user to the Find tab — the empty state's call to action. */
   onFind: () => void;
+  /** A card's self-heal fetched the page's picture: carry it into state. */
+  onPhoto?: (id: string, photo: PhotoMeta) => void;
 }
 
 /** `added` stays first and therefore stays the default. Favourites-first
@@ -63,7 +66,7 @@ const lastCooked = (e: Entry): number =>
 
 const ratingOf = (e: Entry): number => (typeof e.rating === "number" ? e.rating : 0);
 
-export default function MyRecipes({ library, onOpen, onFind }: Props) {
+export default function MyRecipes({ library, onOpen, onFind, onPhoto }: Props) {
   const [filter, setFilter] = useState<Filter>("all");
   const [sort, setSort] = useState<SortKey>("added");
 
@@ -181,50 +184,41 @@ export default function MyRecipes({ library, onOpen, onFind }: Props) {
       {shown.length === 0 ? (
         <div className="rd-empty">Nothing matches that filter.</div>
       ) : (
+        // The recipe box: two cards across on a phone, more on a desk. Each
+        // is its picture (or the meal-type art), its name, a ★ when
+        // favourite. Progress and step counts live on the recipe screen — a
+        // card here is for finding, not for reading state. A 👎 is NOT
+        // shown back; it sorts and filters, it does not decorate.
         <div className="rd-grid">
           {shown.map((entry) => {
-            const total = countAll(entry.recipe);
-            const doneN = (entry.done || []).length;
-            const pct = total ? Math.round((doneN / total) * 100) : 0;
             const types = sanitizeMealTypes(entry.recipe.mealTypes);
             const primary = types[0] ?? null;
             const mins = totalMinutes(entry);
+            const fav = ratingOf(entry) === 1;
             return (
-              <button key={entry.id} className="rd-card" onClick={() => onOpen(entry.id)}>
-                <span className="rd-card-top">
-                  {primary ? (
-                    <span className="rd-card-type">{MEAL_TYPE_LABELS[primary]}</span>
-                  ) : (
-                    <span className="rd-card-type is-untagged">Untagged</span>
-                  )}
-                  {types.length > 1 ? (
-                    <span className="rd-card-type-more">+{types.length - 1}</span>
-                  ) : null}
-                  {/* Favourites are marked; a 👎 is NOT shown back. A library
-                      that displays your rejects at you is a worse library —
-                      the rating still sorts and filters, it just does not
-                      decorate. */}
-                  {ratingOf(entry) === 1 ? (
-                    <span className="rd-card-fav" aria-label="Favourite">
+              <button
+                key={entry.id}
+                className="rd-card"
+                onClick={() => onOpen(entry.id)}
+                aria-label={`${entry.recipe.title}${fav ? ", favourite" : ""}${primary ? `, ${MEAL_TYPE_LABELS[primary]}` : ""}`}
+              >
+                <span className="rd-card-face">
+                  <RecipePhoto entry={entry} onPhoto={onPhoto} />
+                  {fav ? (
+                    <span className="rd-card-fav" aria-hidden="true">
                       ★
                     </span>
                   ) : null}
-                  {mins !== null ? (
-                    <span className="rd-card-time">
-                      {mins >= 60 ? `${Math.floor(mins / 60)} hr ${mins % 60 ? `${mins % 60} min` : ""}` : `${mins} min`}
-                    </span>
-                  ) : null}
                 </span>
-                <span className="rd-card-title">{entry.recipe.title}</span>
-                <span className="rd-card-meta">
-                  {countSteps(entry.recipe)} steps
-                  {entry.recipe.source ? ` · ${entry.recipe.source}` : ""}
-                </span>
-                <span className="rd-card-bar">
-                  <span className="rd-card-fill" style={{ width: `${pct}%` }} />
-                </span>
-                <span className="rd-card-pct">
-                  {pct === 0 ? "Not started" : pct === 100 ? "Done" : `${pct}%`}
+                <span className="rd-card-body">
+                  <span className="rd-card-title">{entry.recipe.title}</span>
+                  <span className="rd-card-meta">
+                    {primary ? MEAL_TYPE_LABELS[primary] : "Untagged"}
+                    {types.length > 1 ? ` +${types.length - 1}` : ""}
+                    {mins !== null
+                      ? ` · ${mins >= 60 ? `${Math.floor(mins / 60)} hr${mins % 60 ? ` ${mins % 60} min` : ""}` : `${mins} min`}`
+                      : ""}
+                  </span>
                 </span>
               </button>
             );

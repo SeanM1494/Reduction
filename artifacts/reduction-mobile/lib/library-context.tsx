@@ -37,6 +37,7 @@ import {
   loadLibrary,
   newEntryId,
   type StepTimer,
+  type PhotoMeta,
 } from './api';
 import { createSyncEngine, type EngineApi, type SyncEngine } from './syncEngine';
 import { clearLibraryCache, readLibraryCache, writeLibraryCache } from './libraryCache';
@@ -72,6 +73,10 @@ interface LibraryState {
   getEntry: (id: string) => Entry | undefined;
   saveRecipe: (recipe: Recipe) => Promise<Entry>;
   update: (id: string, patch: EntryPatch) => void;
+  /** The photo's meta, as the server reported it after an upload, a
+   *  removal or a from-source fetch. Local only: the photo is server-owned
+   *  and never rides a PATCH, so this does not touch the sync engine. */
+  setPhoto: (id: string, photo: PhotoMeta | null) => void;
   remove: (id: string) => Promise<void>;
   /** The latest thing the sync path had to say — a lost conflict, a
    *  remote change, a refused write. Shown by the screen it concerns. */
@@ -236,6 +241,10 @@ export function LibraryProvider({ children }: { children: React.ReactNode }) {
     [engine]
   );
 
+  const setPhoto = useCallback((id: string, photo: PhotoMeta | null) => {
+    setEntries((prev) => prev.map((e) => (e.id === id ? { ...e, photo } : e)));
+  }, []);
+
   const remove = useCallback(
     async (id: string) => {
       setEntries((prev) => prev.filter((e) => e.id !== id));
@@ -254,8 +263,9 @@ export function LibraryProvider({ children }: { children: React.ReactNode }) {
   const clearNotice = useCallback(() => setNotice(null), []);
 
   const value = useMemo<LibraryState>(
-    () => ({ entries, loading, error, refresh, getEntry, saveRecipe, update, remove, notice, clearNotice, queued, draft, setDraft }),
-    [entries, loading, error, refresh, getEntry, saveRecipe, update, remove, notice, clearNotice, queued, draft]
+    () => ({ entries, loading, error, refresh, getEntry, saveRecipe, update,
+      setPhoto, remove, notice, clearNotice, queued, draft, setDraft }),
+    [entries, loading, error, refresh, getEntry, saveRecipe, update, setPhoto, remove, notice, clearNotice, queued, draft]
   );
 
   return <LibraryContext.Provider value={value}>{children}</LibraryContext.Provider>;

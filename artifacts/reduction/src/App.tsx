@@ -738,7 +738,14 @@ export default function App() {
           </>
           )
         ) : tab === "recipes" ? (
-          <MyRecipes library={library} onOpen={setOpenId} onFind={() => setTab("find")} />
+          <MyRecipes
+            library={library}
+            onOpen={setOpenId}
+            onFind={() => setTab("find")}
+            // Server-owned meta: state only, nothing to persist (the sync
+            // path ignores the field).
+            onPhoto={(id, photo) => setLibrary((prev) => prev.map((e) => (e.id === id ? { ...e, photo } : e)))}
+          />
         ) : user ? (
           <SettingsTab
             user={user}

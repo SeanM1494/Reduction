@@ -361,16 +361,37 @@ input, select, textarea { font-size: 16px; }
 }
 .rd-grid {
   display: grid; gap: 10px;
-  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  /* Two across on a phone (320px: 2 × 140), more on a desk. */
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
 }
 .rd-card {
-  display: flex; flex-direction: column; align-items: stretch; gap: 7px;
+  display: flex; flex-direction: column; align-items: stretch; gap: 0;
   text-align: left; font: inherit; cursor: pointer;
   background: var(--card); border: 1px solid var(--line);
-  border-radius: 15px; padding: 15px 16px 14px;
+  border-radius: 15px; padding: 0; overflow: hidden;
   box-shadow: 0 1px 2px rgba(var(--shadow-rgb), .18),
               0 9px 22px -11px rgba(var(--shadow-rgb), .34);
   transition: border-color .15s ease, box-shadow .15s ease;
+}
+/* The card's face: 4:3, the picture or the meal-type art, a ★ badge. */
+.rd-card-face { position: relative; display: block; aspect-ratio: 4 / 3; background: var(--ing-bg); }
+.rd-card-body { display: flex; flex-direction: column; gap: 3px; padding: 10px 12px 12px; }
+.rd-card-fav {
+  position: absolute; top: 8px; right: 8px; width: 26px; height: 26px; border-radius: 13px;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: var(--card); color: var(--warm-line); font-size: 14px;
+  box-shadow: 0 1px 2px rgba(var(--shadow-rgb), .2);
+}
+.rd-photo { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block; }
+.rd-photo-art {
+  display: flex; align-items: center; justify-content: center;
+  background: var(--art-bg); color: var(--art-ink);
+}
+:root:not([data-theme="light"]) .rd-photo-art { background: var(--art-bg-dark); color: var(--art-ink-dark); }
+:root[data-theme="light"] .rd-photo-art { background: var(--art-bg); color: var(--art-ink); }
+.rd-photo-preview {
+  position: relative; display: block; aspect-ratio: 4 / 3; border-radius: 11px; overflow: hidden;
+  background: var(--ing-bg); margin-bottom: 4px;
 }
 .rd-card:hover {
   border-color: var(--line-strong);
@@ -869,7 +890,8 @@ input, select, textarea { font-size: 16px; }
     display: inline-flex; align-items: center; justify-content: center;
     min-height: 44px;
   }
-  .rd-grid { grid-template-columns: 1fr; }
+  /* Two across on a phone — the recipe box is browsed by picture. */
+  .rd-grid { grid-template-columns: repeat(2, 1fr); }
   .rd-searchbar { flex-basis: 100%; max-width: none; order: 4; }
 }
 

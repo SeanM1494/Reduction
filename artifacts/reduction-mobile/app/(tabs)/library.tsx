@@ -98,10 +98,42 @@ export default function LibraryScreen() {
 
   return (
     <View style={styles.container}>
+      {/* The category strip, pinned above the list rather than scrolling
+          with it: the point of the recipe box is jumping to a category,
+          and a tab that has scrolled away cannot be jumped to. */}
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        style={styles.chipRow}
+        contentContainerStyle={styles.chipRowContent}
+        testID="library-tabs"
+      >
+        {chips.map((c) => {
+          const on = c.value === effectiveFilter;
+          return (
+            <Pressable
+              key={c.value}
+              accessibilityRole="tab"
+              accessibilityState={{ selected: on }}
+              onPress={() => setFilter(c.value)}
+              style={[styles.chip, on && styles.chipOn]}
+              testID={`library-tab-${c.value}`}
+            >
+              <Text style={[styles.chipText, on && styles.chipTextOn]}>{c.label}</Text>
+            </Pressable>
+          );
+        })}
+      </ScrollView>
       <FlatList
         contentContainerStyle={[styles.content, { paddingBottom: tabBarHeight + 24 }]}
         data={shown}
         keyExtractor={(e) => e.id}
+        // Two columns: a recipe box is browsed by picture, and one card per
+        // row was a list with extra steps. `key` forces a remount if the
+        // column count ever changes, which FlatList requires.
+        numColumns={2}
+        key="grid-2"
+        columnWrapperStyle={styles.row}
         refreshControl={<RefreshControl refreshing={loading} onRefresh={refresh} tintColor={colors.foreground} />}
         ListHeaderComponent={
           <View style={styles.head}>
@@ -123,29 +155,6 @@ export default function LibraryScreen() {
                 {countLabel}
               </Text>
             </View>
-            {/* One row, horizontally scrollable rather than wrapped — a
-                wrapped chip row two deep pushes the recipes below the fold. */}
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              style={styles.chipRow}
-              contentContainerStyle={styles.chipRowContent}
-            >
-              {chips.map((c) => {
-                const on = c.value === effectiveFilter;
-                return (
-                  <Pressable
-                    key={c.value}
-                    accessibilityRole="tab"
-                    accessibilityState={{ selected: on }}
-                    onPress={() => setFilter(c.value)}
-                    style={[styles.chip, on && styles.chipOn]}
-                  >
-                    <Text style={[styles.chipText, on && styles.chipTextOn]}>{c.label}</Text>
-                  </Pressable>
-                );
-              })}
-            </ScrollView>
           </View>
         }
         ListEmptyComponent={
@@ -153,7 +162,7 @@ export default function LibraryScreen() {
             <Text style={styles.emptyText}>Nothing matches that filter.</Text>
           </View>
         }
-        renderItem={({ item }) => <RecipeCard entry={item} onPress={() => router.push(`/recipe/${item.id}`)} />}
+        renderItem={({ item }) => <RecipeCard entry={item} layout="grid" onPress={() => router.push(`/recipe/${item.id}`)} />}
       />
       <SortSheet open={sortOpen} value={sort} onPick={setSort} onClose={() => setSortOpen(false)} />
     </View>
@@ -185,6 +194,7 @@ function makeStyles(colors: Colors) {
     container: { flex: 1, backgroundColor: colors.background },
     center: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.background },
     content: { paddingHorizontal: 16, paddingTop: 12, gap: 10 },
+    row: { gap: 10 },
     head: { gap: 6, marginBottom: 4 },
     sortRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 9 },
     sortBtn: {
@@ -202,8 +212,8 @@ function makeStyles(colors: Colors) {
     sortLabel: { fontSize: 12.5, fontWeight: '600', color: colors.mutedForeground },
     sortValue: { fontSize: 15, color: colors.foreground },
     count: { fontFamily: fonts.mono, fontSize: 11, color: colors.faint },
-    chipRow: { marginHorizontal: -16 },
-    chipRowContent: { paddingHorizontal: 16, paddingTop: 2, paddingBottom: 8, gap: 8 },
+    chipRow: { flexGrow: 0, borderBottomWidth: 1, borderBottomColor: colors.border },
+    chipRowContent: { paddingHorizontal: 16, paddingTop: 10, paddingBottom: 10, gap: 8 },
     chip: {
       minHeight: 44,
       paddingHorizontal: 15,

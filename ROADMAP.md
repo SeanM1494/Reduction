@@ -644,7 +644,19 @@ menu, meal-type fallback otherwise; nothing hotlinked, no backfill.
   account. Eleven route tests. Needs the production DDL in the README
   before the deploy that carries it.
 - **Stage 2 — cards, tab strip, two-column grid, photo menu, both
-  clients.** Next.
+  clients: DONE Sep 22.** The card is its picture (or the meal-type art,
+  `lib/mealTypeArt.ts` on each client — same tints, same Feather glyphs),
+  its name, a ★ when favourite, and one line of meal type and time.
+  DECIDED while building: the progress bar and the step count came off
+  the card — a card in a box is for finding a recipe, its state is on the
+  recipe screen. The category strip is pinned above the mobile list (a
+  tab that scrolls away cannot be jumped to); the web's chips already
+  were. Photo from the recipe's ⋮ menu on both: take/choose/remove on
+  the phone (lib/photo.ts shrinks it), choose/remove on the web (a canvas
+  shrinks it). The photo meta is server-owned: both sync layers take the
+  server's value on refresh and never send it. Verified in Chromium on
+  three profiles, both clients, upload and remove through the real file
+  input on the web; the phone's own picker is the device's to confirm.
 - **Stage 3 — the card stack behind a Library view toggle.** Then shelves,
   after the stack has been tried on the phone (decided: judge one gesture
   before building the second).
