@@ -657,9 +657,22 @@ menu, meal-type fallback otherwise; nothing hotlinked, no backfill.
   server's value on refresh and never send it. Verified in Chromium on
   three profiles, both clients, upload and remove through the real file
   input on the web; the phone's own picker is the device's to confirm.
-- **Stage 3 — the card stack behind a Library view toggle.** Then shelves,
-  after the stack has been tried on the phone (decided: judge one gesture
-  before building the second).
+- **Stage 3 — the card stack: DONE Sep 22, behind a toggle.** One 44px
+  button at the end of the category strip flips Grid ↔ Stack (DECIDED
+  while building: one icon button, not a two-button segment — the sort
+  row is already full at 320px). The choice persists per device
+  (`lib/libraryViewMode.ts`, which also holds the gesture policy under
+  test: a swipe commits when it has gone 35% of the card or is moving
+  faster than 0.6px/ms, in the direction it moved; the ends do not wrap).
+  `components/library/CardStack.tsx` is PanResponder and Animated from
+  React Native itself — no gesture library. The top card is the only
+  responder; two peek behind it; a tap opens; the card's height comes from
+  the screen (list less header and tab bar) so it clears the tab bar on
+  an SE. Verified in Chromium by mouse drag on three profiles: next, the
+  end stop, back, a spring-back, persistence across a reload, tap-to-open.
+  **What the phone has to say**: whether the gesture feels right, and
+  whether the stack earns its place — then shelves (one row per category,
+  a tab scrolls to its row) as the fast-follow, and the loser comes out.
 
 ## 2. Global recipe search inside the app
 

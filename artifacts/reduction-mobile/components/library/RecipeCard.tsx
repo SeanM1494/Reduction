@@ -23,7 +23,19 @@ import type { Entry } from '@/lib/api';
 
 export type CardLayout = 'grid' | 'stack' | 'shelf';
 
-export function RecipeCard({ entry, onPress, layout = 'grid' }: { entry: Entry; onPress: () => void; layout?: CardLayout }) {
+export function RecipeCard({
+  entry,
+  onPress,
+  layout = 'grid',
+  height,
+}: {
+  entry: Entry;
+  onPress: () => void;
+  layout?: CardLayout;
+  /** Stack only: the card's whole height, so it fits the screen it is on;
+   *  the face takes whatever the body leaves. */
+  height?: number;
+}) {
   const colors = useColors();
   const styles = makeStyles(colors);
   const types = sanitizeMealTypes(entry.recipe.mealTypes);
@@ -39,9 +51,9 @@ export function RecipeCard({ entry, onPress, layout = 'grid' }: { entry: Entry; 
       accessibilityLabel={`${entry.recipe.title}${fav ? ', favourite' : ''}${primary ? `, ${MEAL_TYPE_LABELS[primary]}` : ''}`}
       onPress={onPress}
       testID="library-card"
-      style={({ pressed }) => [styles.card, big && styles.cardBig, pressed && styles.cardPressed]}
+      style={({ pressed }) => [styles.card, big && styles.cardBig, height ? { height } : null, pressed && styles.cardPressed]}
     >
-      <View style={[styles.face, big && styles.faceBig]}>
+      <View style={big ? styles.faceStack : styles.face}>
         {photo ? (
           <Image source={photo} style={StyleSheet.absoluteFill} resizeMode="cover" accessibilityIgnoresInvertColors testID="card-photo" />
         ) : (
@@ -78,11 +90,17 @@ function makeStyles(colors: Colors) {
       overflow: 'hidden',
       ...cardShadow,
     },
-    cardBig: { flex: 0 },
+    // In the stack the card is a fixed height inside a column, and a flex
+    // basis of 0% would beat that height (flexbox's main axis rule), so
+    // the basis is auto and nothing grows or shrinks.
+    cardBig: { flexGrow: 0, flexShrink: 0, flexBasis: 'auto' },
     cardPressed: { borderColor: colors.borderStrong },
     // 4:3, the shape of a plated dish photographed from above a table.
     face: { aspectRatio: 4 / 3, backgroundColor: colors.muted, overflow: 'hidden' },
-    faceBig: { aspectRatio: 1 },
+    // In the stack the face is whatever the fixed height leaves the body —
+    // its own style, because an `aspectRatio: undefined` in a later style
+    // would not override the grid face's 4:3 (undefined never overrides).
+    faceStack: { flex: 1, backgroundColor: colors.muted, overflow: 'hidden' },
     favBadge: {
       position: 'absolute',
       top: 8,

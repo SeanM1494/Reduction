@@ -11,7 +11,8 @@
  * its own: one row holds the sort control and the count.
  */
 
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ActivityIndicator, FlatList, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
@@ -28,6 +29,8 @@ import {
   type SortKey,
 } from '@/lib/libraryView';
 import { RecipeCard } from '@/components/library/RecipeCard';
+import { CardStack } from '@/components/library/CardStack';
+import { VIEW_KEY, parseLibraryView, type LibraryView } from '@/lib/libraryViewMode';
 import { SortSheet } from '@/components/library/SortSheet';
 import { SheetButton } from '@/components/Sheet';
 import { useColors, type Colors } from '@/hooks/useColors';
@@ -40,11 +43,31 @@ export default function LibraryScreen() {
   const [filter, setFilter] = useState<Filter>('all');
   const [sort, setSort] = useState<SortKey>('added');
   const [sortOpen, setSortOpen] = useState(false);
+  // Grid or Stack, remembered per device (lib/libraryViewMode.ts). Read
+  // once; until it is read the grid shows, which is the default anyway.
+  const [view, setView] = useState<LibraryView>('grid');
+  // For the stack: how tall the stage under the header can be — the list's
+  // own height (it sits under the strip already) less its header and the
+  // tab bar it pads itself past. Measured on the FlatList: a stage measured
+  // from its own content would only ever measure the card it contains, and
+  // the screen's root View never reports a layout under the navigator.
+  const [listH, setListH] = useState(0);
+  const [headH, setHeadH] = useState(0);
+  useEffect(() => {
+    AsyncStorage.getItem(VIEW_KEY)
+      .then((raw) => setView(parseLibraryView(raw)))
+      .catch(() => {});
+  }, []);
+  const pickView = (next: LibraryView) => {
+    setView(next);
+    AsyncStorage.setItem(VIEW_KEY, next).catch(() => {});
+  };
   const insets = useSafeAreaInsets();
   // The tab bar is absolutely positioned (see (tabs)/_layout.tsx), so the
   // list pads itself past it: the classic bar is 49px plus the home
   // indicator; on web the layout pins it at 84. Over-padding is harmless.
   const tabBarHeight = 84 + insets.bottom;
+  const stageH = Math.max(0, listH - headH - tabBarHeight - 12);
 
   useFocusEffect(
     useCallback(() => {
@@ -101,6 +124,7 @@ export default function LibraryScreen() {
       {/* The category strip, pinned above the list rather than scrolling
           with it: the point of the recipe box is jumping to a category,
           and a tab that has scrolled away cannot be jumped to. */}
+      <View style={styles.stripRow}>
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
@@ -124,9 +148,24 @@ export default function LibraryScreen() {
           );
         })}
       </ScrollView>
+      {/* Grid or Stack: one 44px button at the strip's end, so the sort row
+          stays two things wide (it is full at 320px already). */}
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={view === 'grid' ? 'Show as a stack of cards' : 'Show as a grid'}
+        onPress={() => pickView(view === 'grid' ? 'stack' : 'grid')}
+        style={({ pressed }) => [styles.viewBtn, pressed && { opacity: 0.6 }]}
+        testID="library-view-toggle"
+        // For the check: which view is on.
+        aria-label={view}
+      >
+        <Feather name={view === 'grid' ? 'layers' : 'grid'} size={20} color={colors.foreground} />
+      </Pressable>
+      </View>
       <FlatList
-        contentContainerStyle={[styles.content, { paddingBottom: tabBarHeight + 24 }]}
-        data={shown}
+        onLayout={(e) => setListH(e.nativeEvent.layout.height)}
+        contentContainerStyle={[styles.content, view === 'stack' && styles.contentStack, { paddingBottom: tabBarHeight + 24 }]}
+        data={view === 'stack' ? [] : shown}
         keyExtractor={(e) => e.id}
         // Two columns: a recipe box is browsed by picture, and one card per
         // row was a list with extra steps. `key` forces a remount if the
@@ -136,7 +175,7 @@ export default function LibraryScreen() {
         columnWrapperStyle={styles.row}
         refreshControl={<RefreshControl refreshing={loading} onRefresh={refresh} tintColor={colors.foreground} />}
         ListHeaderComponent={
-          <View style={styles.head}>
+          <View style={styles.head} onLayout={(e) => setHeadH(e.nativeEvent.layout.height)}>
             {error ? <ErrorBox message={error} onRetry={refresh} colors={colors} /> : null}
             {notice?.kind === 'failure' ? <NoticeBox message={notice.message} onDismiss={clearNotice} colors={colors} /> : null}
             <View style={styles.sortRow}>
@@ -158,9 +197,13 @@ export default function LibraryScreen() {
           </View>
         }
         ListEmptyComponent={
-          <View style={styles.empty}>
-            <Text style={styles.emptyText}>Nothing matches that filter.</Text>
-          </View>
+          view === 'stack' && shown.length ? (
+            <CardStack entries={shown} height={stageH} onOpen={(id) => router.push(`/recipe/${id}`)} />
+          ) : (
+            <View style={styles.empty}>
+              <Text style={styles.emptyText}>Nothing matches that filter.</Text>
+            </View>
+          )
         }
         renderItem={({ item }) => <RecipeCard entry={item} layout="grid" onPress={() => router.push(`/recipe/${item.id}`)} />}
       />
@@ -195,6 +238,9 @@ function makeStyles(colors: Colors) {
     center: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.background },
     content: { paddingHorizontal: 16, paddingTop: 12, gap: 10 },
     row: { gap: 10 },
+    contentStack: { flexGrow: 1 },
+    stripRow: { flexDirection: 'row', alignItems: 'stretch', borderBottomWidth: 1, borderBottomColor: colors.border },
+    viewBtn: { width: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center', marginRight: 8, alignSelf: 'center' },
     head: { gap: 6, marginBottom: 4 },
     sortRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 9 },
     sortBtn: {
@@ -212,7 +258,7 @@ function makeStyles(colors: Colors) {
     sortLabel: { fontSize: 12.5, fontWeight: '600', color: colors.mutedForeground },
     sortValue: { fontSize: 15, color: colors.foreground },
     count: { fontFamily: fonts.mono, fontSize: 11, color: colors.faint },
-    chipRow: { flexGrow: 0, borderBottomWidth: 1, borderBottomColor: colors.border },
+    chipRow: { flexGrow: 1, flexShrink: 1 },
     chipRowContent: { paddingHorizontal: 16, paddingTop: 10, paddingBottom: 10, gap: 8 },
     chip: {
       minHeight: 44,
