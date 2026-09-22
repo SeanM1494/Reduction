@@ -393,6 +393,7 @@ recipesRouter.post("/extract", requireExtractionAllowance, async (req: Request, 
         attempts = out.attempts;
         repaired = out.repaired;
         recipe.source = src.siteName;
+        recipe.image = src.image;
         extraction = src.quality;
       } catch (selfErr) {
         // Blocked, JS-rendered, or unreadable. Let Claude fetch it instead —
@@ -645,6 +646,7 @@ recipesRouter.post("/reextract", async (req: Request, res: Response) => {
       attempts = out.attempts;
       repaired = out.repaired;
       recipe.source = src.siteName;
+      recipe.image = src.image;
     } catch {
       mark({ via: "claude" });
       const out = await structureRecipeFromUrl(url);

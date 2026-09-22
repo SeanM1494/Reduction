@@ -59,6 +59,15 @@ export interface Recipe {
    * the extraction cache, the trial claim and the editor for free.
    */
   mealTypes?: string[];
+  /**
+   * The source page's picture, as a URL (schema.org Recipe `image`), when
+   * the page had one. Type-only here for the same reason as mealTypes:
+   * validateRecipe ignores it, and living in the recipe JSON carries it
+   * through the extraction cache and the trial claim for free. It is a
+   * pointer for the SERVER to fetch once at save time (lib/photos.ts) — no
+   * client ever loads this URL; the stored copy is what the card shows.
+   */
+  image?: string | null;
   yieldText?: string | null;
   source?: string | null;
   sourceUrl?: string | null;

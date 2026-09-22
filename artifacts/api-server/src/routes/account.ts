@@ -13,8 +13,9 @@
  *   2. Delete the account, in one transaction: the user row and everything
  *      that cascades from it (identities, sessions, push subscriptions,
  *      timer notifications, allowance, subscription rows, redemptions),
- *      plus the rows keyed on the id without a foreign key — recipes,
- *      access events — and the trial that remembers who claimed it.
+ *      plus the rows keyed on the id without a foreign key — recipes and
+ *      their photos, access events — and the trial that remembers who
+ *      claimed it.
  *      `admin_events` is deliberately kept: it is the audit trail of a
  *      privileged write, names the account only by id, and CLAUDE.md is
  *      explicit that nothing prunes it.
@@ -25,9 +26,9 @@
  */
 
 import { Router, type Request, type Response } from "express";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { getDb } from "../db";
-import { accessEvents, recipes, trials, users } from "@workspace/db";
+import { accessEvents, recipePhotos, recipes, trials, users } from "@workspace/db";
 import { userIdOf } from "../middleware/session";
 import { clearSessionCookie } from "./auth";
 import { cancelSubscriptionsFor } from "../lib/billing/cancel";
@@ -51,6 +52,12 @@ accountRouter.delete("/", async (req: Request, res: Response) => {
 
   try {
     await getDb().transaction(async (tx) => {
+      // Photos first, by join: recipe_photos has no foreign key (see its
+      // schema comment), so nothing cascades.
+      await tx.execute(
+        sql`delete from ${recipePhotos} p using ${recipes} r
+             where p.owner_key = r.owner_key and p.id = r.id and r.user_id = ${userId}`
+      );
       await tx.delete(recipes).where(eq(recipes.userId, userId));
       await tx.delete(accessEvents).where(eq(accessEvents.userId, userId));
       await tx.update(trials).set({ claimedByUserId: null }).where(eq(trials.claimedByUserId, userId));

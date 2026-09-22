@@ -23,6 +23,7 @@ import {
   adminEvents,
   identities,
   pushSubscriptions,
+  recipePhotos,
   recipes,
   sessions,
   subscriptions,
@@ -71,6 +72,9 @@ async function makeAccount(opts: { sub?: { provider: string; status: string; ref
   await db.insert(identities).values({ provider: "google", subject: `g-${id}`, userId: id, email: `${id}@example.test` });
   await db.insert(sessions).values({ idHash: crypto.createHash("sha256").update(id).digest("hex"), userId: id, expiresAt: new Date(Date.now() + 3_600_000) });
   await db.insert(recipes).values({ ownerKey: `user:${id}`, userId: id, id: `r-${id}`, recipe: { title: "Toast", sections: [] } as any });
+  // A photo on the recipe: no foreign key ties it to the row (see the
+  // schema), so the deletion has to remove it in code.
+  await db.insert(recipePhotos).values({ ownerKey: `user:${id}`, id: `r-${id}`, bytes: Buffer.from([0xff, 0xd8, 0xff]), mediaType: "image/jpeg", width: 1, height: 1, source: "user" });
   await db.insert(accountAccess).values({ userId: id, recipeAllowance: 1, recipesUsed: 1 } as any);
   await db.insert(accessEvents).values({ userId: id, action: "save", decision: "allow", reason: "within_allowance", enforced: false });
   await db.insert(pushSubscriptions).values({ userId: id, endpoint: `ExponentPushToken[${id}]`, p256dh: "", auth: "" });
@@ -98,6 +102,7 @@ after(async () => {
   if (!minted.size && !mintedTrials.size && !mintedAdmin.size) return;
   const db = getDb();
   for (const id of minted) {
+    await db.delete(recipePhotos).where(eq(recipePhotos.ownerKey, `user:${id}`));
     await db.delete(recipes).where(eq(recipes.userId, id));
     await db.delete(accessEvents).where(eq(accessEvents.userId, id));
     await db.delete(users).where(eq(users.id, id));
@@ -123,6 +128,7 @@ async function footprint(id: string) {
   return {
     users: await count(db.select().from(users).where(eq(users.id, id))),
     recipes: await count(db.select().from(recipes).where(eq(recipes.userId, id))),
+    photos: await count(db.select().from(recipePhotos).where(eq(recipePhotos.ownerKey, `user:${id}`))),
     sessions: await count(db.select().from(sessions).where(eq(sessions.userId, id))),
     identities: await count(db.select().from(identities).where(eq(identities.userId, id))),
     access: await count(db.select().from(accountAccess).where(eq(accountAccess.userId, id))),
@@ -131,7 +137,7 @@ async function footprint(id: string) {
     subs: await count(db.select().from(subscriptions).where(eq(subscriptions.userId, id))),
   };
 }
-const GONE = { users: 0, recipes: 0, sessions: 0, identities: 0, access: 0, events: 0, push: 0, subs: 0 };
+const GONE = { users: 0, recipes: 0, photos: 0, sessions: 0, identities: 0, access: 0, events: 0, push: 0, subs: 0 };
 
 test("account: signed out is 401 and nothing happens", async (t) => {
   if (!(await needsDatabase(t, ...TABLES))) return;
@@ -180,6 +186,7 @@ test("account: when Stripe refuses, NOTHING is deleted and the client is told", 
   assert.equal(r.body.code, "cancel_failed");
   assert.deepEqual(await footprint(id), before, "the account is intact, subscription row included");
   assert.equal(before.subs, 1);
+  assert.equal(before.photos, 1);
 });
 
 test("account: an App Store subscription cannot be cancelled by a server — deleted, and reported as manual", async (t) => {

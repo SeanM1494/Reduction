@@ -27,6 +27,7 @@ import { accountAccess, recipes, trials } from "@workspace/db";
 import { readCookie, serializeCookie } from "./cookies";
 import { planClaim } from "./claim";
 import { paywallEnforcedGlobally } from "./billing/entitlement";
+import { capturePagePhoto } from "./photos";
 
 export const TRIAL_COOKIE = "rd_trial";
 
@@ -127,6 +128,11 @@ export async function storeTrialRecipe(
     });
     await tx.update(trials).set({ recipeId }).where(eq(trials.id, trialId));
   });
+  // The page's picture, fetched after the row exists and off the response
+  // path (lib/photos.ts). Keyed on the trial's owner_key, which the claim
+  // keeps, so the photo follows the recipe into the account.
+  const imageUrl = (recipe as { image?: unknown } | null)?.image;
+  if (typeof imageUrl === "string" && imageUrl) void capturePagePhoto(trialOwnerKey(trialId), recipeId, imageUrl);
   return recipeId;
 }
 

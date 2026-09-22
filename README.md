@@ -254,6 +254,46 @@ The pages describe what the code does — Stripe on the website, Anthropic for
 extraction, the cache of extracted pages, deletion cancelling what it can.
 If any of that changes, the pages change in the same commit.
 
+### Recipe photos
+
+A recipe's picture lives in `recipe_photos`, keyed on the recipe's
+`(owner_key, id)`, never in the recipe JSON and never on the `recipes` row
+(the library list would otherwise carry megabytes on every load). The list
+carries `photo: { version, source } | null` per entry and the bytes are at
+`GET /api/library/:id/photo?v=<version>`, private and `immutable` because the
+version changes with the picture. Two sources: `page` — the source page's
+schema.org `image` (or `og:image`), recorded by the extractor as
+`recipe.image` and fetched by the SERVER at save time, stored as our copy so
+nothing ever links to the site; and `user` — `PUT /api/library/:id/photo`
+with `{ data, mediaType }`, which a page fetch never overwrites.
+`DELETE /api/library/:id/photo` removes one; `POST
+/api/library/:id/photo/from-source` fetches the page's picture on demand (the
+card calls it once when a recipe has an image URL but no photo). Everything
+stored is JPEG, long edge 1024, via `jimp` (pure JavaScript, no native
+build). Old recipes have no picture until re-extracted or given one; there
+is no backfill, on purpose.
+
+**Production DDL for the table** (schema changes are hand-run, never
+pushed — CLAUDE.md), before deploying anything that imports it:
+
+```sql
+create table recipe_photos (
+  owner_key  text    not null,
+  id         text    not null,
+  bytes      bytea   not null,
+  media_type text    not null,
+  width      integer not null,
+  height     integer not null,
+  source     text    not null,
+  version    integer not null default 1,
+  updated_at timestamptz default now(),
+  primary key (owner_key, id)
+);
+```
+
+No foreign key to `recipes`, deliberately — see the schema comment. The
+library DELETE route and account deletion remove photos in code.
+
 ### A development build for a physical iPhone
 
 `artifacts/reduction-mobile/eas.json` has three profiles. `development` is

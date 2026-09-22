@@ -26,10 +26,42 @@ export interface FetchedSource {
   /** Fallback body text. Populated only when quality is "text". */
   text: string;
   siteName: string | null;
+  /** The page's own picture of the dish (schema.org `image`), one https URL
+   *  or null. A pointer for lib/photos.ts to fetch at save time — never
+   *  handed to a client. */
+  image: string | null;
+}
+
+/**
+ * schema.org allows `image` as a URL string, an ImageObject ({ url }), or an
+ * array of either. One absolute http(s) URL comes out, the first usable
+ * one, or null. Relative URLs are resolved against the page. Anything else
+ * (data: URIs, javascript:, an object with no url) is null: this is a
+ * pointer the server will fetch, so it must be a real web address.
+ */
+export function imageUrlOf(v: unknown, base?: string | URL): string | null {
+  const candidates: unknown[] = Array.isArray(v) ? v : [v];
+  for (const c of candidates) {
+    let raw: unknown = c;
+    if (raw && typeof raw === "object") {
+      const o = raw as Record<string, unknown>;
+      raw = o.url ?? o.contentUrl ?? o["@id"];
+    }
+    if (typeof raw !== "string") continue;
+    const s = raw.trim();
+    if (!s || s.length > 2048) continue;
+    try {
+      const u = new URL(s, base);
+      if (u.protocol === "http:" || u.protocol === "https:") return u.toString();
+    } catch {
+      /* not a URL */
+    }
+  }
+  return null;
 }
 
 /** Blocks the obvious SSRF targets. Keep this in front of every fetch. */
-function assertPublicUrl(raw: string): URL {
+export function assertPublicUrl(raw: string): URL {
   let u: URL;
   try {
     u = new URL(raw);
@@ -190,6 +222,9 @@ export async function fetchSource(rawUrl: string): Promise<FetchedSource> {
         instructions,
         text: "",
         siteName,
+        // The picture, from the same node the ingredients came from. The
+        // og:image is the fallback: many pages that skip `image` set it.
+        image: imageUrlOf(node.image, url) ?? imageUrlOf($('meta[property="og:image"]').attr("content"), url),
       };
     }
   }
@@ -208,5 +243,7 @@ export async function fetchSource(rawUrl: string): Promise<FetchedSource> {
     instructions: [],
     text,
     siteName,
+    // A text-quality page can still have a picture worth keeping.
+    image: imageUrlOf($('meta[property="og:image"]').attr("content"), url),
   };
 }

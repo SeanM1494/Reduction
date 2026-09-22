@@ -15,6 +15,17 @@ import { Router, type Request, type Response, type NextFunction } from "express"
 import { eq, and, desc, isNull, sql, type SQL } from "drizzle-orm";
 import { getDb } from "../db";
 import { recipes } from "@workspace/db";
+import {
+  MAX_PHOTO_UPLOAD_BYTES,
+  UPLOAD_MEDIA_TYPES,
+  capturePagePhoto,
+  deleteRecipePhoto,
+  photoMeta,
+  photoMetaFor,
+  photoRow,
+  storeRecipePhoto,
+  type PhotoMeta,
+} from "../lib/photos";
 import { validateRecipe, type Recipe } from "../shared/layout";
 import { pruneOrderPreference } from "../shared/sequence";
 import { sanitizeMealTypes } from "../shared/mealTypes";
@@ -144,10 +155,14 @@ function scopeOf(req: Request): SQL {
 
 /** The wire shape of one entry. `version` is the concurrency token the
  *  client hands back as `ifVersion`; see shared/sync.ts for the model. */
-function wireEntry(row: typeof recipes.$inferSelect) {
+function wireEntry(row: typeof recipes.$inferSelect, photo: PhotoMeta | null = null) {
   return {
     id: row.id,
     recipe: row.recipe,
+    /** `{ version, source }` when a picture is stored; the bytes are at
+     *  GET /:id/photo?v=<version>. Server-owned: never in a PATCH, never
+     *  merged, never bumps `version` (lib/photos.ts). */
+    photo,
     done: row.done,
     servings: row.servings,
     mode: row.mode,
@@ -158,6 +173,17 @@ function wireEntry(row: typeof recipes.$inferSelect) {
     version: row.version ?? 1,
     savedAt: row.createdAt ? new Date(row.createdAt).getTime() : Date.now(),
   };
+}
+
+/** wireEntry for a set of rows, with one photo lookup for all of them. */
+async function wireEntries(rows: Array<typeof recipes.$inferSelect>) {
+  const metas = await photoMetaFor(rows.map((r) => ({ ownerKey: r.ownerKey, id: r.id })));
+  return rows.map((r) => wireEntry(r, metas.get(`${r.ownerKey}\u0000${r.id}`) ?? null));
+}
+
+/** wireEntry for one row, photo included. */
+async function wireOne(row: typeof recipes.$inferSelect) {
+  return wireEntry(row, await photoMeta(row.ownerKey, row.id));
 }
 
 const isValidCooked = (v: unknown): v is number[] =>
@@ -219,7 +245,7 @@ libraryRouter.get("/", async (req: Request, res: Response) => {
       .from(recipes)
       .where(scopeOf(req))
       .orderBy(desc(recipes.updatedAt));
-    return res.json({ entries: rows.map(wireEntry) });
+    return res.json({ entries: await wireEntries(rows) });
   } catch (e) {
     console.error("[library:list]", e);
     return res.status(500).json({ error: "Could not load your library." });
@@ -331,7 +357,16 @@ libraryRouter.post("/", async (req: Request, res: Response) => {
       }
     }
 
-    return res.status(201).json({ entry: wireEntry(row) });
+    // The page's picture, if the extractor found one: fetched and stored
+    // after this response, because a miss is harmless (lib/photos.ts) and
+    // a save must not wait on a recipe site. Only for a row this POST
+    // actually created — a re-POST of a row that exists changes no photo.
+    const imageUrl = (recipe as { image?: unknown }).image;
+    if (row?.version === 1 && typeof imageUrl === "string" && imageUrl) {
+      void capturePagePhoto(row.ownerKey, row.id, imageUrl);
+    }
+
+    return res.status(201).json({ entry: await wireOne(row) });
   } catch (e) {
     console.error("[library:create]", e);
     return res.status(500).json({ error: "Could not save that recipe." });
@@ -458,14 +493,14 @@ libraryRouter.patch("/:id", async (req: Request, res: Response) => {
       return res.status(409).json({
         error: "This recipe was changed elsewhere.",
         code: "version_conflict",
-        entry: wireEntry(result.current),
+        entry: await wireOne(result.current),
       });
 
     // Only when the request actually carried a timer: an unrelated PATCH
     // (a rating, a mode tap) must not re-schedule or cancel anything.
     if (timer !== undefined) await syncTimerNotification(req, result.row);
 
-    return res.json({ entry: wireEntry(result.row) });
+    return res.json({ entry: await wireOne(result.row) });
   } catch (e) {
     console.error("[library:update]", e);
     return res.status(500).json({ error: "Could not update that recipe." });
@@ -479,9 +514,17 @@ libraryRouter.delete("/:id", async (req: Request, res: Response) => {
     const [row] = await db
       .delete(recipes)
       .where(and(eq(recipes.id, id), scopeOf(req)))
-      .returning({ id: recipes.id });
+      .returning({ id: recipes.id, ownerKey: recipes.ownerKey });
 
     if (!row) return res.status(404).json({ error: "No saved recipe with that id." });
+
+    // The photo goes with the recipe. Explicit, not a cascade: see the
+    // recipe_photos schema for why there is no foreign key.
+    try {
+      await deleteRecipePhoto(row.ownerKey, row.id);
+    } catch (e) {
+      console.error("[library:photo] could not delete with the recipe:", (e as Error).message);
+    }
 
     // A deleted recipe must take its pending buzz with it, or someone gets
     // told to check on a dish whose recipe no longer exists.
@@ -497,5 +540,120 @@ libraryRouter.delete("/:id", async (req: Request, res: Response) => {
   } catch (e) {
     console.error("[library:delete]", e);
     return res.status(500).json({ error: "Could not delete that recipe." });
+  }
+});
+
+// ------------------------------------------------------------- the photo ---
+
+/** The requester's own row for :id, or null. Every photo route goes through
+ *  this, so a photo is exactly as private as its recipe. */
+async function ownRow(req: Request, id: string) {
+  const rows = await getDb()
+    .select()
+    .from(recipes)
+    .where(and(scopeOf(req), eq(recipes.id, id)));
+  return rows[0] ?? null;
+}
+
+/**
+ * GET /api/library/:id/photo?v=<version> — the bytes. The version in the
+ * URL is what lets the client cache for ever: a replaced photo has a new
+ * URL, so `immutable` is honest. Private, because the recipe is.
+ */
+libraryRouter.get("/:id/photo", async (req: Request, res: Response) => {
+  try {
+    const row = await ownRow(req, String(req.params.id));
+    if (!row) return res.status(404).json({ error: "No such recipe." });
+    const photo = await photoRow(row.ownerKey, row.id);
+    if (!photo) return res.status(404).json({ error: "No photo." });
+    res.setHeader("Content-Type", photo.mediaType);
+    res.setHeader("Content-Length", String(photo.bytes.length));
+    res.setHeader("Cache-Control", "private, max-age=31536000, immutable");
+    res.setHeader("ETag", `"p${photo.version}"`);
+    res.setHeader("X-Photo-Source", photo.source);
+    return res.end(photo.bytes);
+  } catch (e) {
+    console.error("[library:photo]", (e as Error).message);
+    return res.status(500).json({ error: "Could not load the photo." });
+  }
+});
+
+/**
+ * PUT /api/library/:id/photo — the person's own picture. Body
+ * { data, mediaType }: base64 (a data: prefix is tolerated) of an image the
+ * client has already shrunk (lib/photo.ts on the phone, a canvas on the
+ * web); the server re-encodes to the stored size regardless, so an unshrunk
+ * upload costs bandwidth, not correctness. Marks the photo `user`, which a
+ * later page fetch can never overwrite.
+ */
+libraryRouter.put("/:id/photo", async (req: Request, res: Response) => {
+  const { data, mediaType } = (req.body ?? {}) as { data?: unknown; mediaType?: unknown };
+  if (typeof data !== "string" || !data.trim())
+    return res.status(422).json({ error: "data (base64) is required." });
+  if (typeof mediaType !== "string" || !UPLOAD_MEDIA_TYPES.has(mediaType.toLowerCase()))
+    return res.status(415).json({ error: "mediaType must be a JPEG, PNG, WebP, GIF, BMP or TIFF." });
+  const clean = data.replace(/^data:[^;]+;base64,/, "");
+  // 3/4 of the base64 length is the byte count, close enough to refuse
+  // before decoding a hundred-megabyte string.
+  if ((clean.length * 3) / 4 > MAX_PHOTO_UPLOAD_BYTES)
+    return res.status(413).json({ error: "That photo is too large. Try a smaller one." });
+  let bytes: Buffer;
+  try {
+    bytes = Buffer.from(clean, "base64");
+  } catch {
+    return res.status(422).json({ error: "data is not valid base64." });
+  }
+  if (bytes.length > MAX_PHOTO_UPLOAD_BYTES)
+    return res.status(413).json({ error: "That photo is too large. Try a smaller one." });
+  try {
+    const row = await ownRow(req, String(req.params.id));
+    if (!row) return res.status(404).json({ error: "No such recipe." });
+    let photo: PhotoMeta;
+    try {
+      photo = await storeRecipePhoto({ ownerKey: row.ownerKey, id: row.id, bytes, source: "user" });
+    } catch (e) {
+      // jimp could not read it: not an image, or a format outside the list.
+      console.warn("[library:photo] upload not decodable:", (e as Error).message);
+      return res.status(422).json({ error: "That file is not an image this app can read." });
+    }
+    return res.json({ photo });
+  } catch (e) {
+    console.error("[library:photo]", (e as Error).message);
+    return res.status(500).json({ error: "Could not save the photo." });
+  }
+});
+
+/** DELETE /api/library/:id/photo — back to the meal-type fallback. */
+libraryRouter.delete("/:id/photo", async (req: Request, res: Response) => {
+  try {
+    const row = await ownRow(req, String(req.params.id));
+    if (!row) return res.status(404).json({ error: "No such recipe." });
+    await deleteRecipePhoto(row.ownerKey, row.id);
+    return res.json({ photo: null });
+  } catch (e) {
+    console.error("[library:photo]", (e as Error).message);
+    return res.status(500).json({ error: "Could not remove the photo." });
+  }
+});
+
+/**
+ * POST /api/library/:id/photo/from-source — fetch the page's picture now.
+ * The self-healing half of the fire-and-forget capture at save: a card that
+ * finds no photo but a recipe with an image URL calls this once. A user
+ * photo already there is returned untouched. 404 with `no_source_image`
+ * when the recipe has no URL to fetch — the card then stops asking.
+ */
+libraryRouter.post("/:id/photo/from-source", async (req: Request, res: Response) => {
+  try {
+    const row = await ownRow(req, String(req.params.id));
+    if (!row) return res.status(404).json({ error: "No such recipe." });
+    const imageUrl = (row.recipe as { image?: unknown }).image;
+    if (typeof imageUrl !== "string" || !imageUrl)
+      return res.status(404).json({ error: "This recipe's page had no picture.", code: "no_source_image" });
+    const photo = await capturePagePhoto(row.ownerKey, row.id, imageUrl);
+    return res.json({ photo });
+  } catch (e) {
+    console.error("[library:photo]", (e as Error).message);
+    return res.status(500).json({ error: "Could not fetch the picture." });
   }
 });

@@ -23,8 +23,17 @@ import {
   uniqueIndex,
   primaryKey,
   bigserial,
+  customType,
 } from "drizzle-orm/pg-core";
 import type { Recipe } from "./layout";
+
+/** Postgres bytea. drizzle has no built-in for it; the driver hands back a
+ *  Buffer either way. */
+const bytea = customType<{ data: Buffer; driverData: Buffer }>({
+  dataType() {
+    return "bytea";
+  },
+});
 
 export const recipes = pgTable(
   "recipes",
@@ -121,6 +130,52 @@ export const recipes = pgTable(
       .on(table.shareSlug)
       .where(sql`${table.shareSlug} is not null`),
   ]
+);
+
+/**
+ * A recipe's picture — the one on the card.
+ *
+ * NOT in the recipe JSON and NOT on the recipes row, on purpose: the library
+ * list returns every entry's full recipe JSON on each load, and bytes in
+ * either place would make that fetch grow by megabytes and ride the sync
+ * merge for nothing. The list carries only `{ version, source }` from here
+ * (a join), and the bytes are served by GET /api/library/:id/photo?v=, with
+ * the version in the URL so the client can cache for ever.
+ *
+ * Keyed on the recipe's (owner_key, id) — the trial claim keeps owner_key
+ * and sets user_id, so a photo parked under a trial survives sign-up.
+ *
+ * DELIBERATELY NO FOREIGN KEY TO recipes. drizzle-kit push drops and
+ * re-creates `recipes_owner_key_id_pk` on EVERY push (verified Sep 22 with
+ * --verbose on a database it had just pushed; it always did, silently,
+ * because the test-db script discards push output), and a foreign key
+ * depending on that index turns every `test:db` start into an error. So
+ * the two places that delete recipes delete photos explicitly — the
+ * library DELETE route and account deletion — and `photos.db.test.ts` and
+ * `account.db.test.ts` each pin that no photo outlives its recipe. If a
+ * third place ever deletes recipes, it deletes photos too.
+ *
+ * `source`: 'page' is the source page's own picture (JSON-LD `image`,
+ * fetched by us and stored as OUR copy — never a link to the site, which
+ * can die or hotlink-block); 'user' is a photo the person attached, which
+ * a later page fetch must never overwrite. Everything stored is JPEG,
+ * long edge 1024 (lib/photos.ts).
+ */
+export const recipePhotos = pgTable(
+  "recipe_photos",
+  {
+    ownerKey: text("owner_key").notNull(),
+    id: text("id").notNull(),
+    bytes: bytea("bytes").notNull(),
+    mediaType: text("media_type").notNull(),
+    width: integer("width").notNull(),
+    height: integer("height").notNull(),
+    source: text("source").notNull(),
+    /** Bumps on every replacement; the cache-busting token in the photo URL. */
+    version: integer("version").notNull().default(1),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),
+  },
+  (table) => [primaryKey({ columns: [table.ownerKey, table.id] })]
 );
 
 export const extractionCache = pgTable(

@@ -236,19 +236,19 @@ them is the whole point:
 
 | result | meaning |
 |---|---|
-| ***n* pass, 113 skipped** | no `DATABASE_URL` at all. Fine on a machine with no Postgres. |
-| ***n*+113 pass, 0 skipped** | a local database with a current schema. This is the real gate — `pnpm run test:db` produces it. |
+| ***n* pass, 118 skipped** | no `DATABASE_URL` at all. Fine on a machine with no Postgres. |
+| ***n*+118 pass, 0 skipped** | a local database with a current schema. This is the real gate — `pnpm run test:db` produces it. |
 | **failures saying "Refusing to run database tests against …"** | `DATABASE_URL` in the shell points somewhere non-local — on Replit, that is production. Working as designed: use `pnpm run test:db`, which ignores the env var entirely. |
 | **failures naming a missing table** | a reachable local database whose schema is behind `lib/db/src/schema/schema.ts`. `test:db` re-pushes on every start, so this means a hand-run database — push it or use the script. |
 
 The total grows as suites are added — pin your expectation to the **skip
 count**, not the pass count (an earlier version of this table hard-coded
 23/39 and went stale within a week, so treat the number above as needing an
-edit whenever a database-backed suite is added). The 113 are ten suites:
+edit whenever a database-backed suite is added). The 118 are eleven suites:
 `claim.db.test.ts` (the anonymous library), `trial.db.test.ts` (the free
 extraction), `cache.db.test.ts` (the URL alias and the "Instant" badge),
 `extractionLog.test.ts` (the cost table), `push.db.test.ts` (timer
-notifications) `access.db.test.ts` (the paywall), `admin.db.test.ts` (the operator lookup), `billingApple.db.test.ts` (the App Store routes), `mobileHandoff.db.test.ts` (the mobile sign-in handoff) and `account.db.test.ts` (account deletion). The first two are transactional guarantees — all-or-nothing
+notifications) `access.db.test.ts` (the paywall), `admin.db.test.ts` (the operator lookup), `billingApple.db.test.ts` (the App Store routes), `mobileHandoff.db.test.ts` (the mobile sign-in handoff), `account.db.test.ts` (account deletion) and `photos.db.test.ts` (recipe pictures). The first two are transactional guarantees — all-or-nothing
 rollback, idempotent repeats, never taking another user's rows. The third is a
 promise about correctness: that a normalised URL never serves a different page.
 The fourth guards a denominator — a cache hit that recorded a `via` would
@@ -259,8 +259,10 @@ somebody can use the app at all, and the seventh guards a route that reads
 other people's accounts, and the eighth guards the second provider's write path
 with Apple's signature stubbed at the adapter's seam, and the ninth guards the
 one-time code that a phone's sign-in rides on, which has to be redeemable by an
-instance that never minted it, and the tenth guards the order of a deletion —
-billing stopped before any row goes, and nothing gone when it cannot be. **The full suite — 403 tests at the time of
+instance that never minted it, the tenth guards the order of a deletion —
+billing stopped before any row goes, and nothing gone when it cannot be — and
+the eleventh guards that a user's photo is never overwritten by a page's and
+that no photo outlives its recipe, which no foreign key promises. **The full suite — 403 tests at the time of
 writing — has been run against a real Postgres and passes 403/0.** The
 forty-nine that are not api-server or model tests are the mobile library's
 filter and sort (`artifacts/reduction-mobile/lib/libraryView.test.ts`), the
@@ -291,6 +293,17 @@ outcome three above, and outcome three looks like "working as designed". The
 package now creates its pool lazily (`getPool()`/`getDb()`), and importing a
 table costs nothing. If you touch that file, run `env -u DATABASE_URL pnpm
 test` once: the skip count above is the assertion.
+
+**drizzle-kit push drops and re-creates `recipes_owner_key_id_pk` on every
+run, and always has.** Verified Sep 22 with `--verbose` against a database it
+had just pushed; nobody saw it because `test-db.sh` discards push output and
+the drop-and-add is harmless with nothing depending on that index. A FOREIGN
+KEY to `recipes` is exactly something depending on it, so the first one
+(`recipe_photos`) turned every `test:db` start into "cannot drop constraint …
+other objects depend on it". The table now has no foreign key and the two
+routes that delete recipes delete photos in code, each pinned by a test. If
+you add a table that references `recipes`, do the same, or fix drizzle-kit
+first; do not "fix" it by giving the push a CASCADE.
 
 **`pnpm test` must never be run against production.** It reads `DATABASE_URL`,
 which on a deployed host is the live database — so running the suite there
@@ -595,6 +608,21 @@ by id without a foreign key) and the trial's `claimed_by_user_id`. What
 stays: `admin_events`, on purpose — the audit trail of who was comped
 outlives the account. The confirm lives on the screen, not the route; the
 route asks nothing twice.
+
+**A recipe's picture is never in the recipe JSON and never on the row.**
+The library list returns every entry's full JSON on each load, so bytes in
+either place grow that fetch by megabytes and ride the sync merge for
+nothing. `recipe_photos` holds them; the list carries `{ version, source }`;
+the bytes are one private, `immutable` URL per version (`lib/photos.ts`,
+README "Recipe photos"). `recipe.image` IS in the JSON — as a URL the SERVER
+fetches once at save, never a client, so the phone never contacts a recipe
+site and the card never depends on one. The fetch after a save is
+fire-and-forget, which the process-memory rule allows because a miss is
+harmless: the card shows the meal-type fallback, and asks `from-source`
+once. A `user` photo beats a `page` photo for ever (the conditional
+upsert); nothing may reorder that. Everything stored is JPEG at long edge
+1024 through `jimp`, chosen over `sharp` because it has no native build for
+the frozen install or EAS to refuse.
 
 **The legal pages describe the code, so a change to what the code does with
 data is a change to `public/privacy.html` in the same commit.** They are

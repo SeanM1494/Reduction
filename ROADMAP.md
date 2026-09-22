@@ -629,6 +629,26 @@ the Lemon Loaf trace above.
   `NotificationSetting` (install instructions, the Safari gesture rules).
   Native push has none of those constraints; it has the Expo token instead.
 
+## Recipe browsing: the recipe box (Sep 22, approved as proposed)
+
+Cards with photo, name and rating everywhere; a category tab strip; a
+two-column grid; a card stack; shelves as a fast-follow once the stack has
+been felt on a device. Photos: `recipe_photos` (README "Recipe photos"),
+page pictures fetched by the server at save, user photos from the recipe's
+menu, meal-type fallback otherwise; nothing hotlinked, no backfill.
+
+- **Stage 1 — server: DONE Sep 22.** Table, extractor capture of
+  `image`/`og:image`, fetch-and-resize through `jimp`, the four photo
+  routes, the fire-and-forget capture at save (library and trial), photo
+  meta on every wire entry, deletion in code with the recipe and the
+  account. Eleven route tests. Needs the production DDL in the README
+  before the deploy that carries it.
+- **Stage 2 — cards, tab strip, two-column grid, photo menu, both
+  clients.** Next.
+- **Stage 3 — the card stack behind a Library view toggle.** Then shelves,
+  after the stack has been tried on the phone (decided: judge one gesture
+  before building the second).
+
 ## 2. Global recipe search inside the app
 
 **Status:** partially built. The header search bar filters your own saved
