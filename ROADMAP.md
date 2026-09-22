@@ -568,6 +568,39 @@ verification, or a decision.
   in this team's App Store Connect, which is why accepting them in
   production is Apple's recommendation and not a hole. Half a day with the
   suite; the notifications route needs the same treatment.
+- **The App Store Server API answers 401 — DEFERRED Sep 22, deliberately,
+  and NOT a submission blocker.** `APPLE_IAP_KEY_ID` / `APPLE_IAP_ISSUER_ID`
+  / `APPLE_IAP_PRIVATE_KEY` are set, the key parses, and Apple still refuses
+  the bearer token with no detail (the usual cause — the `.p8` not being the
+  key the Key ID names — was ruled out: the two private keys hold different
+  contents, and the fingerprint check in `be4d6de` exists for the next time).
+  To be troubleshot in its own session.
+
+  **What this actually blocks is narrower than it sounds**, and the code is
+  the authority: the notifications route is gated on `appleIapConfig()` and
+  the verifier alone and never touches `cfg.api` (verified Sep 22), because
+  Apple SIGNS every notification and the roots are the proof — there is no
+  shared secret and no API key in that path. So **renewals, cancellations,
+  billing failures and refunds still arrive and are still written**. The two
+  things that are off are: `requestAppleTestNotification` (the preflight's
+  round trip — the only way to prove the URL from Apple's side BEFORE a real
+  transaction), and the best-effort status refresh on each verify
+  (`if (ref && cfg.api)`), whose absence means the row reflects the signed
+  transaction the app sent rather than Apple's latest view. A restore on a
+  second device is the case that notices: it records the transaction the
+  phone held, and the next notification corrects it.
+
+  Nothing about the app's push (timers, the Expo arm) is involved — no file
+  in that path reads an `APPLE_IAP_*` variable.
+
+  **The substitute proof, during the TestFlight pass:** sandbox
+  subscriptions renew on a compressed clock, so a purchase produces renewal
+  notifications within minutes. Watch the deployment log for
+  `[billing:apple:notifications]` lines. If none arrive after a sandbox
+  purchase, the URL in App Store Connect is wrong — and that is the failure
+  the test notification would have caught early, so it is the one thing to
+  watch for rather than assume.
+
 - **Sign in with Apple must be live on the deployment — VERIFY.**
   Guideline 4.8: offering Google sign-in requires an equivalent option,
   and Sign in with Apple is the one built (`lib/apple.ts`). The mobile
