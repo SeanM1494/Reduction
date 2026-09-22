@@ -40,8 +40,8 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "Reduction reads the photo you pick to turn a recipe page or card into a cooking diagram. It is sent for extraction and not kept.",
-          "cameraPermission": "Reduction uses the camera to photograph a recipe page or card so it can be turned into a cooking diagram."
+          "photosPermission": "Reduction uses the photo you pick in one of two ways: to read a recipe page into a cooking diagram (that photo is sent for extraction and not kept), or as a recipe\u2019s own picture in your library (that one is kept with the recipe).",
+          "cameraPermission": "Reduction uses the camera to photograph a recipe page for a cooking diagram (not kept), or to take a recipe\u2019s own picture for your library (kept with the recipe)."
         }
       ]
     ],
