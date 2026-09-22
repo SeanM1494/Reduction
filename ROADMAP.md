@@ -588,8 +588,10 @@ verification, or a decision.
 - **The TestFlight pass — VERIFY, the list this whole section has been
   accumulating.** On the production build against the deployment: the
   finish strip through a full cook, VoiceOver over the diagram (items 1
-  and 10, still owed), swipe-back off over the diagram, the Lemon Loaf's
-  `[diagram]` trace, Google sign-in from a store build (the deployment is
+  and 10, still owed), swipe-back off over the diagram (a rightward swipe
+  with the diagram at its left edge must NOT pop the screen), the Lemon
+  Loaf's `[diagram]` trace pasted back so its shape can be read against
+  the fixture, Google sign-in from a store build (the deployment is
   `EXPO_PUBLIC_DOMAIN` there, not the workspace), Apple sign-in, a
   purchase and a restore on a second device, a photo extraction, a timer.
 - **App Store Connect — the metadata, none of it started.** Rename
@@ -609,8 +611,9 @@ verification, or a decision.
   stray `eas.json` at the repo root on Replit (from a wrong-directory
   run — the real one is in `artifacts/reduction-mobile`).
 
-The two entries under "Still open from earlier work" (the component-join
-finish strip, the ready colour) are decisions, not blockers.
+The one entry still open under "Still open from earlier work" (the
+component-join finish strip) is a decision, not a blocker, and it waits on
+the Lemon Loaf trace above.
 
 **Deliberately NOT ported** — each listed so it does not port by inertia:
 
@@ -1479,8 +1482,11 @@ and the text change carries the whole signal.
   "pour glaze over" and the single-input chain under it become strip rows
   and the component's ingredient row leaves the table. It changes both
   renderers and the tuck's count, so it is a decision, not a fix.
-- **"Unchecking a step turns it red" — it is the ready cue; decision
-  needed (Sep 21).** Measured in Chromium: a step unchecked after being
+- ~~**"Unchecking a step turns it red" — it is the ready cue; decision
+  needed (Sep 21).**~~ **DECIDED Sep 22: keep it.** It matches the web and
+  it is correct — an unchecked step's inputs are still done, so it is
+  ready. No change. Left in place as the record of why the report was
+  not a bug: Measured in Chromium: a step unchecked after being
   done renders exactly as a never-checked ready step (`warm-bg`
   rgb(249,214,207), a 2px `warm-line` rgb(185,51,38) ring, `warm-ink`
   label; the same on the web), because unchecking leaves its inputs done,
