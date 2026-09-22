@@ -32,7 +32,6 @@ externalPort = 3003
 [[ports]]
 localPort = 20274
 externalPort = 5000
-exposeLocalhost = true
 
 [[ports]]
 localPort = 22216
