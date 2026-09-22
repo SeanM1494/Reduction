@@ -624,6 +624,19 @@ upsert); nothing may reorder that. Everything stored is JPEG at long edge
 1024 through `jimp`, chosen over `sharp` because it has no native build for
 the frozen install or EAS to refuse.
 
+**A LIST RECYCLES ITS CELLS, so a card may not remember anything about the
+recipe it was showing.** The same component instance is handed recipe B a
+frame after it showed recipe A, and no cleanup function sees it because
+nothing unmounted. Two rules, both in `lib/photoSource.ts` (pure, tested;
+`recipePhoto.ts` imports react-native and cannot be loaded by the runner):
+anything derivable from (id, version) is DERIVED DURING RENDER and never
+stored, because a value set in an effect is one frame late and that frame is
+long enough to paint the previous recipe's photo during a fast scroll; and
+anything that had to be fetched carries the key it was fetched FOR and is
+used only while that key still matches, so a resolution landing after the
+cell moved on is dropped rather than shown. The same reasoning applies to
+any future card that loads something of its own.
+
 **The legal pages describe the code, so a change to what the code does with
 data is a change to `public/privacy.html` in the same commit.** They are
 static HTML on purpose (README "The legal pages"): Apple's reviewer and a
