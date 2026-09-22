@@ -54,23 +54,57 @@ export class ApiError extends Error {
  */
 export const REQUEST_TIMEOUT_MS = 15_000;
 
-async function request(path: string, init?: RequestInit): Promise<any> {
+/**
+ * The exceptions to it, and why each one is an exception.
+ *
+ * The ceiling above is sized for a read or a write — work the server does
+ * in milliseconds. Three routes do not fit that shape, and pointing the
+ * same 15s at them cut good work off mid-flight: an extraction is a model
+ * call the UI already presents as a 10-30 second wait (ExtractionProgress
+ * walks five three-second stages), so a slow page or a retried parse
+ * reached the ceiling routinely and the person saw a failure for a request
+ * that was still working. A timeout has to be a number only a dead
+ * connection reaches, per route, or it is a second failure mode rather than
+ * a safety net.
+ */
+export const EXTRACTION_TIMEOUT_MS = 120_000;
+
+/** A web search is one upstream call plus its cache write: slower than a
+ *  library read, far quicker than an extraction. */
+export const SEARCH_TIMEOUT_MS = 45_000;
+
+/** A photo is fetched from the recipe's page and re-encoded (jimp) before
+ *  the route answers, so the wait is someone else's server plus ours. */
+export const PHOTO_TIMEOUT_MS = 60_000;
+
+async function request(path: string, init?: RequestInit, timeoutMs: number = REQUEST_TIMEOUT_MS): Promise<any> {
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
     ...(init?.headers as Record<string, string> | undefined),
   };
   if (authToken) headers['Authorization'] = `Bearer ${authToken}`;
 
+  let timedOut = false;
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  const timer = setTimeout(() => {
+    timedOut = true;
+    controller.abort();
+  }, timeoutMs);
   let res: Response;
   try {
     res = await fetch(`${baseUrl()}${path}`, { ...init, headers, signal: controller.signal });
   } catch (e) {
+    // Our own timer fired — whatever the platform calls the exception it
+    // raises. Web and Node throw `AbortError`; expo/fetch's native
+    // implementation throws `FetchRequestCanceledException` with a Swift
+    // file and line in the message, which reached the screen verbatim while
+    // this branch tested the name. The flag is the only reliable test,
+    // and this controller is aborted from nowhere else.
+    //
     // No status on purpose: the sync engine keys "offline" on its absence.
     // An aborted write may still have reached the server; the retry then
     // 409s against its own commit and merges, which is the safe outcome.
-    if ((e as Error)?.name === 'AbortError') throw new Error('The request timed out.');
+    if (timedOut || (e as Error)?.name === 'AbortError') throw new Error('The request timed out.');
     throw e;
   } finally {
     clearTimeout(timer);
@@ -209,7 +243,7 @@ export interface ExtractResult {
 }
 
 const extractPost = (body: unknown): Promise<ExtractResult> =>
-  request('/api/recipes/extract', { method: 'POST', body: JSON.stringify(body) });
+  request('/api/recipes/extract', { method: 'POST', body: JSON.stringify(body) }, EXTRACTION_TIMEOUT_MS);
 
 export const extractFromUrl = (url: string) => extractPost({ url });
 export const extractFromText = (text: string) => extractPost({ text });
@@ -217,7 +251,7 @@ export const extractFromFile = (data: string, mediaType: string) =>
   extractPost({ file: { data, mediaType } });
 
 export const reextract = (url: string): Promise<{ recipe: Recipe }> =>
-  request('/api/recipes/reextract', { method: 'POST', body: JSON.stringify({ url }) });
+  request('/api/recipes/reextract', { method: 'POST', body: JSON.stringify({ url }) }, EXTRACTION_TIMEOUT_MS);
 
 export interface SearchResult {
   title: string;
@@ -228,7 +262,7 @@ export interface SearchResult {
 }
 
 export const searchRecipes = (query: string): Promise<{ results: SearchResult[] }> =>
-  request('/api/recipes/search', { method: 'POST', body: JSON.stringify({ query }) });
+  request('/api/recipes/search', { method: 'POST', body: JSON.stringify({ query }) }, SEARCH_TIMEOUT_MS);
 
 // ------------------------------------------------------------ library -----
 
@@ -272,7 +306,11 @@ export const photoHeaders = (): Record<string, string> =>
 
 /** Attach the person's own photo (already shrunk by lib/photo.ts). */
 export const uploadPhoto = (id: string, base64: string, mediaType: string): Promise<{ photo: PhotoMeta }> =>
-  request(`/api/library/${encodeURIComponent(id)}/photo`, { method: 'PUT', body: JSON.stringify({ data: base64, mediaType }) });
+  request(
+    `/api/library/${encodeURIComponent(id)}/photo`,
+    { method: 'PUT', body: JSON.stringify({ data: base64, mediaType }) },
+    PHOTO_TIMEOUT_MS
+  );
 
 export const removePhoto = (id: string): Promise<{ photo: null }> =>
   request(`/api/library/${encodeURIComponent(id)}/photo`, { method: 'DELETE' });
@@ -282,7 +320,7 @@ export const removePhoto = (id: string): Promise<{ photo: null }> =>
  *  worth keeping; the route 404s with `no_source_image` when the recipe
  *  has no URL at all. */
 export const fetchPhotoFromSource = (id: string): Promise<{ photo: PhotoMeta | null }> =>
-  request(`/api/library/${encodeURIComponent(id)}/photo/from-source`, { method: 'POST' });
+  request(`/api/library/${encodeURIComponent(id)}/photo/from-source`, { method: 'POST' }, PHOTO_TIMEOUT_MS);
 
 export const loadLibrary = (): Promise<{ entries: Entry[] }> => request('/api/library');
 

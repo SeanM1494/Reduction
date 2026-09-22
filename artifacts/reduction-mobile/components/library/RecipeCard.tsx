@@ -32,8 +32,9 @@ export function RecipeCard({
   entry: Entry;
   onPress: () => void;
   layout?: CardLayout;
-  /** Stack only: the card's whole height, so it fits the screen it is on;
-   *  the face takes whatever the body leaves. */
+  /** A fixed whole-card height, for a layout that packs cards along its
+   *  main axis (the shelves). The stack does not pass one — its cards fill
+   *  an absolutely positioned layer, so `flex: 1` sizes them. */
   height?: number;
 }) {
   const colors = useColors();
@@ -51,7 +52,7 @@ export function RecipeCard({
       accessibilityLabel={`${entry.recipe.title}${fav ? ', favourite' : ''}${primary ? `, ${MEAL_TYPE_LABELS[primary]}` : ''}`}
       onPress={onPress}
       testID="library-card"
-      style={({ pressed }) => [styles.card, big && styles.cardBig, height ? { height } : null, pressed && styles.cardPressed]}
+      style={({ pressed }) => [styles.card, height ? [styles.cardFixed, { height }] : null, pressed && styles.cardPressed]}
     >
       <View style={big ? styles.faceStack : styles.face}>
         {photo ? (
@@ -90,14 +91,13 @@ function makeStyles(colors: Colors) {
       overflow: 'hidden',
       ...cardShadow,
     },
-    // In the stack the card is a fixed height inside a column, and a flex
-    // basis of 0% would beat that height (flexbox's main axis rule), so
-    // the basis is auto and nothing grows or shrinks.
-    cardBig: { flexGrow: 0, flexShrink: 0, flexBasis: 'auto' },
+    // Where a height IS given, a flex basis of 0% would beat it (flexbox's
+    // main axis rule), so the basis is auto and nothing grows or shrinks.
+    cardFixed: { flexGrow: 0, flexShrink: 0, flexBasis: 'auto' },
     cardPressed: { borderColor: colors.borderStrong },
     // 4:3, the shape of a plated dish photographed from above a table.
     face: { aspectRatio: 4 / 3, backgroundColor: colors.muted, overflow: 'hidden' },
-    // In the stack the face is whatever the fixed height leaves the body —
+    // In the stack the face is whatever the card's height leaves the body —
     // its own style, because an `aspectRatio: undefined` in a later style
     // would not override the grid face's 4:3 (undefined never overrides).
     faceStack: { flex: 1, backgroundColor: colors.muted, overflow: 'hidden' },

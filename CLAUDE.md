@@ -795,6 +795,26 @@ accommodate afterwards.
   absorbing it, so the same line is correct on both paths. When a screenshot
   from the phone has no screen title in it, that is the native path, and it
   is not the same layout you measured.
+- **Stacked cards are absolutely positioned siblings in back-to-front JSX
+  order, and never ordered with `zIndex`.** The card stack's first cut drew
+  the peeks absolutely and the top card in flow, ordering them with
+  `zIndex`/`elevation`. Chromium painted the top card on top (measured with
+  `elementFromPoint`, so the check passed); a real iPhone painted the peeks
+  OVER it, so the card you saw was the one behind, a third card's title
+  ghosted through its translucent neighbour, and the card being dragged was
+  invisible. `zIndex` against a statically positioned sibling is not a
+  promise the three platforms keep the same way — document order among
+  absolute siblings is. The same applies to anything that layers.
+- **A pan surface takes the touch in the CAPTURE phase, and never lives
+  inside a scroll view.** `RecipeCard` is a `Pressable`, so it won the
+  responder on touch-down and `CardStack`'s `PanResponder` never started:
+  swiping did nothing at all. `onStartShouldSetPanResponderCapture` runs
+  root-downward and settles it, and the pan then owns the tap too (the
+  card's own `onPress` is deliberately inert). The stack is also a SIBLING
+  of the library's `FlatList` rather than a cell in it — a pan inside a
+  scroller fights the scroller, and being outside it is what lets the deck
+  take its height from `flex: 1` instead of from a measured layout that
+  arrives a frame late.
 - The landing page section below is part of this rule, not a separate concern.
 
 ### Verify on a real phone viewport, and on production
@@ -1167,8 +1187,8 @@ proofs. The rules that must survive any refactor:
   transport seam; `lib/library-context.tsx` must stay a thin layer over
   it and never grow a second write path.
 - **Offline is a window, not a mode** (mobile only). A write that fails
-  with no HTTP status — the network unreachable, or the 15s request
-  timeout in `lib/api.ts` — is deferred, not rolled back: the optimistic
+  with no HTTP status — the network unreachable, or the request timeout
+  in `lib/api.ts` — is deferred, not rolled back: the optimistic
   state stays, the engine retries on foreground and every 10s, and after
   `OFFLINE_WINDOW_MS` (5 minutes) it gives up exactly the way an immediate
   refusal does. A real refusal (any status) never waits. The queue is
@@ -1177,6 +1197,19 @@ proofs. The rules that must survive any refactor:
   single test of "was that the network"; a transport that throws a status
   for a network error would silently turn every dead-wifi tap back into
   an instant rollback.
+- **The request timeout is per route, and the default is sized for a read.**
+  `REQUEST_TIMEOUT_MS` (15s) is the ceiling for work the server does in
+  milliseconds. Pointing it at an extraction cut good work off mid-flight:
+  the UI itself presents extraction as a 10-30 second wait
+  (`ExtractionProgress` walks five three-second stages), so a slow page or a
+  retried parse reached the ceiling routinely and the person saw a failure
+  for a request that was still working. `EXTRACTION_TIMEOUT_MS`,
+  `SEARCH_TIMEOUT_MS` and `PHOTO_TIMEOUT_MS` are the exceptions; a route
+  that waits on somebody else's server needs one. **And the abort is
+  detected by our own flag, never by the exception's name** — web and Node
+  throw `AbortError`, expo/fetch's native implementation throws
+  `FetchRequestCanceledException`, and that Swift file-and-line message
+  reached the screen verbatim while the branch tested for `AbortError`.
 - **A cancel beats only the timer it cancelled.** `mergeTimer`'s
   "explicit cancel wins" applies when the other side left the timer alone;
   when BOTH sides changed it and one is null, `mergeEntry` keeps the other

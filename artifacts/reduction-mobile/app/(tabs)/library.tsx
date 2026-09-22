@@ -29,6 +29,7 @@ import {
   type SortKey,
 } from '@/lib/libraryView';
 import { RecipeCard } from '@/components/library/RecipeCard';
+import type { Entry } from '@/lib/api';
 import { CardStack } from '@/components/library/CardStack';
 import { VIEW_KEY, parseLibraryView, type LibraryView } from '@/lib/libraryViewMode';
 import { SortSheet } from '@/components/library/SortSheet';
@@ -46,13 +47,6 @@ export default function LibraryScreen() {
   // Grid or Stack, remembered per device (lib/libraryViewMode.ts). Read
   // once; until it is read the grid shows, which is the default anyway.
   const [view, setView] = useState<LibraryView>('grid');
-  // For the stack: how tall the stage under the header can be — the list's
-  // own height (it sits under the strip already) less its header and the
-  // tab bar it pads itself past. Measured on the FlatList: a stage measured
-  // from its own content would only ever measure the card it contains, and
-  // the screen's root View never reports a layout under the navigator.
-  const [listH, setListH] = useState(0);
-  const [headH, setHeadH] = useState(0);
   useEffect(() => {
     AsyncStorage.getItem(VIEW_KEY)
       .then((raw) => setView(parseLibraryView(raw)))
@@ -76,7 +70,6 @@ export default function LibraryScreen() {
   // inset when nothing is (NativeTabs on iOS 26 shows NO header — see
   // (tabs)/_layout.tsx, and it is the path a real iPhone takes while
   // Chromium takes the other one, which is why this was invisible here).
-  const stageH = Math.max(0, listH - headH - tabBarHeight - 12);
 
   useFocusEffect(
     useCallback(() => {
@@ -96,6 +89,10 @@ export default function LibraryScreen() {
   // to everything rather than to an empty list with no chip lit.
   const effectiveFilter = chips.some((c) => c.value === filter) ? filter : 'all';
   const shown = useMemo(() => arrangeLibrary(entries, effectiveFilter, sort), [entries, effectiveFilter, sort]);
+  // An odd last card would otherwise fill its whole row: the card is
+  // `flex: 1` and a row of one has no sibling to halve it. A hole keeps
+  // the grid a grid.
+  const grid = useMemo<Array<Entry | null>>(() => (shown.length % 2 ? [...shown, null] : shown), [shown]);
 
   if (loading && entries.length === 0 && !error) {
     return (
@@ -127,6 +124,37 @@ export default function LibraryScreen() {
     shown.length === entries.length
       ? `${entries.length} ${entries.length === 1 ? 'recipe' : 'recipes'}`
       : `${shown.length} of ${entries.length}`;
+
+  // The sort row, and anything the sync had to say. Shared, because both
+  // views show it: the list as its header, the stack above the deck.
+  const head = (
+    <View style={styles.head}>
+      {error ? <ErrorBox message={error} onRetry={refresh} colors={colors} /> : null}
+      {notice?.kind === 'failure' ? <NoticeBox message={notice.message} onDismiss={clearNotice} colors={colors} /> : null}
+      <View style={styles.sortRow}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`Sort: ${sortLabel(sort)}`}
+          onPress={() => setSortOpen(true)}
+          style={({ pressed }) => [styles.sortBtn, pressed && styles.sortBtnPressed]}
+          testID="library-sort"
+        >
+          <Text style={styles.sortLabel}>Sort</Text>
+          <Text style={styles.sortValue}>{sortLabel(sort)}</Text>
+          <Feather name="chevron-down" size={16} color={colors.mutedForeground} />
+        </Pressable>
+        <Text style={styles.count} testID="library-count">
+          {countLabel}
+        </Text>
+      </View>
+    </View>
+  );
+
+  const emptyFilter = (
+    <View style={styles.empty}>
+      <Text style={styles.emptyText}>Nothing matches that filter.</Text>
+    </View>
+  );
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
@@ -171,51 +199,44 @@ export default function LibraryScreen() {
         <Feather name={view === 'grid' ? 'layers' : 'grid'} size={20} color={colors.foreground} />
       </Pressable>
       </View>
-      <FlatList
-        onLayout={(e) => setListH(e.nativeEvent.layout.height)}
-        contentContainerStyle={[styles.content, view === 'stack' && styles.contentStack, { paddingBottom: tabBarHeight + 24 }]}
-        data={view === 'stack' ? [] : shown}
-        keyExtractor={(e) => e.id}
-        // Two columns: a recipe box is browsed by picture, and one card per
-        // row was a list with extra steps. `key` forces a remount if the
-        // column count ever changes, which FlatList requires.
-        numColumns={2}
-        key="grid-2"
-        columnWrapperStyle={styles.row}
-        refreshControl={<RefreshControl refreshing={loading} onRefresh={refresh} tintColor={colors.foreground} />}
-        ListHeaderComponent={
-          <View style={styles.head} onLayout={(e) => setHeadH(e.nativeEvent.layout.height)}>
-            {error ? <ErrorBox message={error} onRetry={refresh} colors={colors} /> : null}
-            {notice?.kind === 'failure' ? <NoticeBox message={notice.message} onDismiss={clearNotice} colors={colors} /> : null}
-            <View style={styles.sortRow}>
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel={`Sort: ${sortLabel(sort)}`}
-                onPress={() => setSortOpen(true)}
-                style={({ pressed }) => [styles.sortBtn, pressed && styles.sortBtnPressed]}
-                testID="library-sort"
-              >
-                <Text style={styles.sortLabel}>Sort</Text>
-                <Text style={styles.sortValue}>{sortLabel(sort)}</Text>
-                <Feather name="chevron-down" size={16} color={colors.mutedForeground} />
-              </Pressable>
-              <Text style={styles.count} testID="library-count">
-                {countLabel}
-              </Text>
-            </View>
-          </View>
-        }
-        ListEmptyComponent={
-          view === 'stack' && shown.length ? (
-            <CardStack entries={shown} height={stageH} onOpen={(id) => router.push(`/recipe/${id}`)} />
-          ) : (
-            <View style={styles.empty}>
-              <Text style={styles.emptyText}>Nothing matches that filter.</Text>
-            </View>
-          )
-        }
-        renderItem={({ item }) => <RecipeCard entry={item} layout="grid" onPress={() => router.push(`/recipe/${item.id}`)} />}
-      />
+      {view === 'stack' ? (
+        // The stack is a SIBLING of the list, never a cell inside it. Two
+        // reasons, and the first is why a swipe did nothing at all on a real
+        // phone: a pan surface inside a scroll view fights the scroller for
+        // the gesture. The second is height — inside the list the stage had
+        // to be measured from the list's own layout minus its header, a
+        // number that arrives a frame late and is wrong whenever either
+        // changes; out here `flex: 1` gives the deck its height directly.
+        //
+        // What this view gives up is pull-to-refresh. The focus refetch
+        // above still runs on every visit, and the grid is one tap away.
+        <View style={[styles.stackPage, { paddingBottom: tabBarHeight + 8 }]}>
+          {head}
+          {shown.length ? <CardStack entries={shown} onOpen={(id) => router.push(`/recipe/${id}`)} /> : emptyFilter}
+        </View>
+      ) : (
+        <FlatList
+          contentContainerStyle={[styles.content, { paddingBottom: tabBarHeight + 24 }]}
+          data={grid}
+          keyExtractor={(e, i) => e?.id ?? `hole-${i}`}
+          // Two columns: a recipe box is browsed by picture, and one card per
+          // row was a list with extra steps. `key` forces a remount if the
+          // column count ever changes, which FlatList requires.
+          numColumns={2}
+          key="grid-2"
+          columnWrapperStyle={styles.row}
+          refreshControl={<RefreshControl refreshing={loading} onRefresh={refresh} tintColor={colors.foreground} />}
+          ListHeaderComponent={head}
+          ListEmptyComponent={emptyFilter}
+          renderItem={({ item }) =>
+            item ? (
+              <RecipeCard entry={item} layout="grid" onPress={() => router.push(`/recipe/${item.id}`)} />
+            ) : (
+              <View style={styles.hole} />
+            )
+          }
+        />
+      )}
       <SortSheet open={sortOpen} value={sort} onPick={setSort} onClose={() => setSortOpen(false)} />
     </View>
   );
@@ -247,7 +268,8 @@ function makeStyles(colors: Colors) {
     center: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.background },
     content: { paddingHorizontal: 16, paddingTop: 12, gap: 10 },
     row: { gap: 10 },
-    contentStack: { flexGrow: 1 },
+    hole: { flex: 1 },
+    stackPage: { flex: 1, paddingHorizontal: 16, paddingTop: 12 },
     stripRow: { flexDirection: 'row', alignItems: 'stretch', borderBottomWidth: 1, borderBottomColor: colors.border },
     viewBtn: { width: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center', marginRight: 8, alignSelf: 'center' },
     head: { gap: 6, marginBottom: 4 },
