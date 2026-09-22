@@ -795,6 +795,32 @@ accommodate afterwards.
   absorbing it, so the same line is correct on both paths. When a screenshot
   from the phone has no screen title in it, that is the native path, and it
   is not the same layout you measured.
+- **A deck, a carousel or anything else that moves as one thing is driven
+  by ONE continuous position, not by an index plus a per-item offset.**
+  The card stack's `position` is `index + how far through the swipe you
+  are`, and every card's transform is a pure function of
+  `cardIndex - position`. Two things follow that are hard to get any other
+  way: the cards behind rise by exactly as much as the front card has left
+  at every frame rather than snapping when the swipe commits, and nothing
+  is ever RESET — an index-plus-offset model has to zero the offset at the
+  moment the index changes, and whichever order you pick there is one frame
+  where a card is in the wrong place. A second swipe can also interrupt the
+  first, because the gesture starts from wherever the deck actually is.
+  Past the ends the position CLAMPS and the container moves instead
+  (`overscrollPx`): a position outside the range reads, to every item's
+  transform, as the front item being pushed backwards into the deck.
+- **Gestures are gesture-handler's, and the pure policy carries a
+  `'worklet'` directive.** `PanResponder` loses to any `Pressable` inside
+  the thing being dragged, which is how swiping the card stack came to do
+  nothing at all. A `Gesture.Race(pan, tap)` settles that at the native
+  layer, `activeOffsetX` keeps the tap, and the card's own `onPress` is
+  inert. The decision functions in `lib/libraryViewMode.ts` are called from
+  the release worklet, so they carry the directive — it is an inert string
+  under the test runner, so they stay pure and tested. Do NOT hop to JS for
+  the commit decision: that is the frame the feel is judged on.
+  `react-native-reanimated`, `react-native-gesture-handler` and
+  `react-native-worklets` are already dependencies (expo-router brings
+  them) and `GestureHandlerRootView` is already at the app root.
 - **Stacked cards are absolutely positioned siblings in back-to-front JSX
   order, and never ordered with `zIndex`.** The card stack's first cut drew
   the peeks absolutely and the top card in flow, ordering them with
@@ -805,6 +831,11 @@ accommodate afterwards.
   invisible. `zIndex` against a statically positioned sibling is not a
   promise the three platforms keep the same way — document order among
   absolute siblings is. The same applies to anything that layers.
+  `stackWindow` in `lib/libraryViewMode.ts` is that order as a tested
+  function rather than a comment, and it puts `index - 1` ON TOP, not the
+  front card: the item before the front one is both the one sliding in
+  when you swipe back and the one still flying off after a forward swipe
+  commits.
 - **A pan surface takes the touch in the CAPTURE phase, and never lives
   inside a scroll view.** `RecipeCard` is a `Pressable`, so it won the
   responder on touch-down and `CardStack`'s `PanResponder` never started:
@@ -1210,6 +1241,21 @@ proofs. The rules that must survive any refactor:
   throw `AbortError`, expo/fetch's native implementation throws
   `FetchRequestCanceledException`, and that Swift file-and-line message
   reached the screen verbatim while the branch tested for `AbortError`.
+- **A control that can fire again supersedes; it does not lock.** The web
+  search refused a second search while the first was running, so a query
+  you had already replaced held the row hostage for its whole round trip
+  — and then wrote ITS results into a panel under a search box that said
+  something else. `lib/latestRequest.ts` (pure, tested) is the primitive:
+  `begin()` aborts what is in flight and hands back a signal plus an
+  `isCurrent()` that a reply already in the socket still fails. The
+  superseded request is ABORTED rather than merely ignored, because a
+  search is an upstream call the user never pays for. A caller's cancel
+  is `RequestCancelled` — it carries no HTTP status and is NOT a failure
+  to report, and `isNetworkFailure` excludes it by name so a cancelled
+  write can never be queued and replayed as if the wifi had dropped.
+  **Two overlapping requests have never been able to cancel each other**:
+  every `request()` builds its own controller and the caller's signal is
+  chained onto it, never shared.
 - **A cancel beats only the timer it cancelled.** `mergeTimer`'s
   "explicit cancel wins" applies when the other side left the timer alone;
   when BOTH sides changed it and one is null, `mergeEntry` keeps the other

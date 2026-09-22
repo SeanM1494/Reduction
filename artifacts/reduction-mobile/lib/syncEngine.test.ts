@@ -336,6 +336,11 @@ test('isNetworkFailure: no HTTP status means the network, a status means the ser
   assert.equal(isNetworkFailure(Object.assign(new Error('conflict'), { status: 409 })), false);
   assert.equal(isNetworkFailure(Object.assign(new Error('rejected'), { status: 422 })), false);
   assert.equal(isNetworkFailure(Object.assign(new Error('down'), { status: 503 })), false);
+  assert.equal(
+    isNetworkFailure(Object.assign(new Error('cancelled'), { cancelled: true })),
+    false,
+    'a request the caller cancelled has no status either, and must not be queued and replayed'
+  );
 });
 
 test('offline: a tap is kept, not rolled back, and sends itself when the network returns', async () => {

@@ -77,6 +77,25 @@ export const SEARCH_TIMEOUT_MS = 45_000;
  *  the route answers, so the wait is someone else's server plus ours. */
 export const PHOTO_TIMEOUT_MS = 60_000;
 
+/**
+ * A request the CALLER stopped, by aborting the signal it passed in — a
+ * superseded search, a screen going away. It is not a failure: nothing went
+ * wrong and there is nothing to tell anyone. It carries no HTTP status, and
+ * `isNetworkFailure` in lib/syncEngine.ts excludes it by name for exactly
+ * that reason: a write nobody is waiting for must not be queued and retried
+ * the way a dead wifi connection is.
+ */
+export class RequestCancelled extends Error {
+  readonly cancelled = true;
+  constructor() {
+    super('The request was cancelled.');
+    this.name = 'RequestCancelled';
+  }
+}
+
+export const isCancelled = (e: unknown): e is RequestCancelled =>
+  (e as { cancelled?: unknown })?.cancelled === true;
+
 async function request(path: string, init?: RequestInit, timeoutMs: number = REQUEST_TIMEOUT_MS): Promise<any> {
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
@@ -84,8 +103,22 @@ async function request(path: string, init?: RequestInit, timeoutMs: number = REQ
   };
   if (authToken) headers['Authorization'] = `Bearer ${authToken}`;
 
+  // Two things can stop this request and they mean opposite things, so the
+  // controller is ours and the caller's signal is chained onto it: a
+  // timeout is a failure to report, a cancel is a decision to honour
+  // silently. Chaining rather than passing the caller's signal straight
+  // through is what keeps the timeout working for a cancellable call.
+  const external = init?.signal ?? null;
   let timedOut = false;
+  let cancelled = external?.aborted ?? false;
   const controller = new AbortController();
+  if (cancelled) controller.abort();
+  const onExternalAbort = () => {
+    cancelled = true;
+    controller.abort();
+  };
+  external?.addEventListener('abort', onExternalAbort);
+
   const timer = setTimeout(() => {
     timedOut = true;
     controller.abort();
@@ -94,12 +127,14 @@ async function request(path: string, init?: RequestInit, timeoutMs: number = REQ
   try {
     res = await fetch(`${baseUrl()}${path}`, { ...init, headers, signal: controller.signal });
   } catch (e) {
+    // The caller pulled the plug: say nothing, and do not dress it up as a
+    // network failure.
+    if (cancelled) throw new RequestCancelled();
     // Our own timer fired — whatever the platform calls the exception it
     // raises. Web and Node throw `AbortError`; expo/fetch's native
     // implementation throws `FetchRequestCanceledException` with a Swift
     // file and line in the message, which reached the screen verbatim while
-    // this branch tested the name. The flag is the only reliable test,
-    // and this controller is aborted from nowhere else.
+    // this branch tested the name. The flag is the only reliable test.
     //
     // No status on purpose: the sync engine keys "offline" on its absence.
     // An aborted write may still have reached the server; the retry then
@@ -108,7 +143,11 @@ async function request(path: string, init?: RequestInit, timeoutMs: number = REQ
     throw e;
   } finally {
     clearTimeout(timer);
+    external?.removeEventListener('abort', onExternalAbort);
   }
+  // A cancel that lands between the response and its body is still a
+  // cancel: the caller has stopped caring either way.
+  if (cancelled) throw new RequestCancelled();
   const body = await res.json().catch(() => ({}));
   if (!res.ok) {
     throw new ApiError(body.error || `Request failed (${res.status}).`, res.status, {
@@ -261,8 +300,10 @@ export interface SearchResult {
   cached?: boolean;
 }
 
-export const searchRecipes = (query: string): Promise<{ results: SearchResult[] }> =>
-  request('/api/recipes/search', { method: 'POST', body: JSON.stringify({ query }) }, SEARCH_TIMEOUT_MS);
+/** `signal` lets a newer search stop this one — see lib/latestRequest.ts.
+ *  A cancelled call rejects with `RequestCancelled` and nothing else. */
+export const searchRecipes = (query: string, signal?: AbortSignal): Promise<{ results: SearchResult[] }> =>
+  request('/api/recipes/search', { method: 'POST', body: JSON.stringify({ query }), signal }, SEARCH_TIMEOUT_MS);
 
 // ------------------------------------------------------------ library -----
 

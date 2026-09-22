@@ -16,11 +16,12 @@
  * straight away.
  */
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { router } from 'expo-router';
 import { useLibrary } from '@/lib/library-context';
-import { searchRecipes, type SearchResult } from '@/lib/api';
+import { isCancelled, searchRecipes, type SearchResult } from '@/lib/api';
+import { createLatest } from '@/lib/latestRequest';
 import { searchLibrary } from '@/lib/libraryView';
 import { useReductionStage } from '@/components/ExtractionProgress';
 import { useColors, type Colors } from '@/hooks/useColors';
@@ -48,11 +49,24 @@ export function SearchBar({ onPickWebResult, disabled }: Props) {
   const matches = useMemo(() => searchLibrary(entries, query), [entries, query]);
   const open = query.trim().length > 0;
 
-  // A fresh keystroke invalidates whatever the last web search found.
+  // Only the newest search counts (lib/latestRequest.ts, tested). A ref, so
+  // it is the same one for the component's whole life.
+  const search = useRef(createLatest()).current;
+
+  // A fresh keystroke invalidates whatever the last web search found — and
+  // the one still running for the query before it, which would otherwise
+  // land afterwards and fill the panel with results for a search the box no
+  // longer shows. Cancelling rather than ignoring also stops an upstream
+  // call nobody will read; a search is spent on the user's behalf.
   useEffect(() => {
+    search.cancel();
+    setSearching(false);
     setWebResults(null);
     setSearchError(null);
-  }, [query]);
+  }, [query, search]);
+
+  // A search left running when the bar goes away is the same waste.
+  useEffect(() => () => search.cancel(), [search]);
 
   const reset = () => {
     setQuery('');
@@ -62,16 +76,25 @@ export function SearchBar({ onPickWebResult, disabled }: Props) {
 
   const runWebSearch = async () => {
     const q = query.trim();
-    if (q.length < 3 || searching) return;
+    if (q.length < 3) return;
+    // Tapping again supersedes rather than being refused: the old guard
+    // (`|| searching`) locked the row for as long as a stale request took,
+    // which made the person wait on an answer that was already useless.
+    const attempt = search.begin();
     setSearching(true);
     setSearchError(null);
     try {
-      setWebResults((await searchRecipes(q)).results);
+      const { results } = await searchRecipes(q, attempt.signal);
+      if (attempt.isCurrent()) setWebResults(results);
     } catch (e) {
+      // A cancel is a decision, not a failure: the newer search owns the
+      // panel now and this one has nothing to say.
+      if (isCancelled(e) || !attempt.isCurrent()) return;
       setSearchError((e as Error).message);
       setWebResults(null);
     } finally {
-      setSearching(false);
+      attempt.settle();
+      if (attempt.isCurrent()) setSearching(false);
     }
   };
 
@@ -143,8 +166,8 @@ export function SearchBar({ onPickWebResult, disabled }: Props) {
           <Pressable
             accessibilityRole="button"
             onPress={runWebSearch}
-            disabled={searching || query.trim().length < 3}
-            style={({ pressed }) => [styles.webRow, pressed && styles.rowPressed, (searching || query.trim().length < 3) && styles.webRowDisabled]}
+            disabled={query.trim().length < 3}
+            style={({ pressed }) => [styles.webRow, pressed && styles.rowPressed, query.trim().length < 3 && styles.webRowDisabled]}
             testID="search-web"
           >
             <Text style={styles.webRowText} numberOfLines={1}>

@@ -119,8 +119,15 @@ export const OFFLINE_WINDOW_MS = 5 * 60 * 1000;
 
 /** A failure the network caused, not the server: the request never got an
  *  HTTP status. lib/api.ts throws ApiError (with a status) for every reply
- *  the server made, and a bare Error for a refused connection or a timeout. */
+ *  the server made, and a bare Error for a refused connection or a timeout.
+ *
+ *  A request the CALLER cancelled is neither, and must not be read as one:
+ *  it has no status either, so without this it would be deferred into the
+ *  offline queue and retried — a write nobody is waiting for, replayed
+ *  minutes later. No writer passes a signal today; the guard is here
+ *  because the day one does, the symptom would be a resurrected edit. */
 export const isNetworkFailure = (e: unknown): boolean =>
+  (e as { cancelled?: unknown })?.cancelled !== true &&
   typeof (e as { status?: unknown })?.status !== 'number';
 
 const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);

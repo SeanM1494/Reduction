@@ -696,16 +696,53 @@ menu, meal-type fallback otherwise; nothing hotlinked, no backfill.
   row is already full at 320px). The choice persists per device
   (`lib/libraryViewMode.ts`, which also holds the gesture policy under
   test: a swipe commits when it has gone 35% of the card or is moving
-  faster than 0.6px/ms, in the direction it moved; the ends do not wrap).
-  `components/library/CardStack.tsx` is PanResponder and Animated from
-  React Native itself — no gesture library. The top card is the only
-  responder; two peek behind it; a tap opens; the card's height comes from
-  the screen (list less header and tab bar) so it clears the tab bar on
-  an SE. Verified in Chromium by mouse drag on three profiles: next, the
-  end stop, back, a spring-back, persistence across a reload, tap-to-open.
+  faster than 0.6px/ms, in the direction it moved; the ends do not wrap
+  but give 20px and spring back).
+  **Rebuilt Sep 22 on gesture-handler and reanimated**, after the first
+  cut reached a phone broken in two ways this container could not see —
+  see CLAUDE.md for both. `components/library/CardStack.tsx` now drives
+  the whole deck from ONE continuous `position` (`index` plus how far
+  through the swipe you are), so the cards behind rise and grow by exactly
+  as much as the front card has left, at every frame, and nothing is ever
+  reset. The drag runs on the UI thread; a Pan and a Tap race for the
+  touch, which settles the Pressable negotiation natively. Neither library
+  is a new dependency — expo-router already brings both and two components
+  already use them. Chevrons flank the counter so the deck is reachable
+  without a drag; a light haptic marks a commit. Verified in Chromium on
+  three profiles, including mid-drag sampling that the deck moves
+  continuously and that the rubber band gives 20px rather than 300.
   **What the phone has to say**: whether the gesture feels right, and
   whether the stack earns its place — then shelves (one row per category,
   a tab scrolls to its row) as the fast-follow, and the loser comes out.
+- **Photo backfill on a cache hit — a nice-to-have, not queued (Sep 22).**
+  A tree that was cached BEFORE the extractor started recording
+  `recipe.image` has no image URL and never will: `cacheGetUrl` returns
+  the stored tree verbatim and nothing re-checks. So an old row extracted
+  again by anyone shows the meal-type fallback for ever, even though the
+  page itself has a perfectly good picture. (A tree cached since the
+  change carries `image`, and `capturePagePhoto` runs at SAVE, so a cache
+  hit on one of those still gets its photo. The other way to land without
+  one is the `web_fetch` fallback path, which never sees an image URL at
+  all — that one is inherent, not staleness.) Confirmed Sep 22 as the
+  explanation for a photo-less Greek Chicken Gyros; **not a bug, and
+  nothing is blocked on it.**
+
+  Which of the two applies to any given extraction is a query, not a
+  guess:
+
+  ```sql
+  select at, host, cached, via, ok, ms from extraction_events
+   order by at desc limit 20;
+  ```
+
+  `cached = true` is the stale row; `cached = false, via = 'claude'` is the
+  fallback. If it is ever worth doing, the cheap version is to have the
+  save path ask `/photo/from-source` when the tree has no `image` and the
+  entry has a `sourceUrl` — one extra page fetch per recipe, on a save
+  that is already doing one. The expensive version, re-extracting old cache
+  rows to fill `image` in, spends the API budget on pages nobody has asked
+  for and should not be built. The escape hatch that exists today is
+  `/reextract`, which still has no caller on mobile (parity item 6).
 
 ## 2. Global recipe search inside the app
 
