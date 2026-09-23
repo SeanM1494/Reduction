@@ -184,6 +184,7 @@ export default function LibraryScreen() {
           onOpenRecipe={(e) => setPreviewId(e.id)}
           onAddRecipe={() => router.navigate('/')}
           onShowGrid={() => pickView('grid')}
+          onSearchWeb={(q) => router.navigate({ pathname: '/', params: { q } })}
           bottomInset={tabBarHeight}
         />
         <SortSheet open={sortOpen} value={sort} onPick={setSort} onClose={() => setSortOpen(false)} />

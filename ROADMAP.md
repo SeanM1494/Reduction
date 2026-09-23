@@ -857,6 +857,23 @@ DECIDED (Sep 23, after the step-1 push):
     the two buttons close it instantly, because the recipe is being pushed
     underneath. The app's other sheets (sort, meal types, the ⋮ menu) still
     slide the same way and would look the same half open; not changed yet.
+- **NEXT AFTER THE RECIPE BOX (asked Sep 24): a sweep of every other sheet
+  for the sliding wash.** Same cause as the preview: the shared `Sheet`'s
+  Modal slides the scrim up with the card. The recipe screen's ⋮ menu is
+  to become a WINDOW like the preview; the rest at least fade their scrim
+  in place. Tabled until step 8 is done.
+- **Step 5 — search inside the box: DONE Sep 24.** A 16px field under the
+  header; while it has text the shelf is replaced by results (thumbnail,
+  title and rating, book chip, stated time, cooked count). `searchBox`
+  reuses the Find tab's `searchLibrary` and adds the book's NAME, so
+  "dessert" finds the book; removed recipes never match. A result opens
+  its book to its spread with no slide and no turn, and outlines the page
+  in the book's colour for ~1.8s. Nothing found → "Search the web for it"
+  → the Find tab with the query filled in and the web search run once.
+  Measured cost: the field row is 52px, which the book pays only where the
+  stage was already short — as the app, no phone shrinks (iPhone 13 366px,
+  SE 296px); in Safari-sized profiles the iPhone 13 book goes 366 → 343
+  and the SE's 290 → 223, peeks still showing.
 
 ## 2. Global recipe search inside the app
 

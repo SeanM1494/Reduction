@@ -28,7 +28,7 @@
  */
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Platform, Pressable, StyleSheet, Text, View, type LayoutChangeEvent } from 'react-native';
+import { Keyboard, Platform, Pressable, StyleSheet, Text, View, type LayoutChangeEvent } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
   Easing,
@@ -42,6 +42,7 @@ import Animated, {
 import * as Haptics from 'expo-haptics';
 import { Feather } from '@expo/vector-icons';
 import { Book } from '@/components/recipeBox/Book';
+import { BoxResults, BoxSearchField } from '@/components/recipeBox/BoxSearch';
 import {
   CAROUSEL,
   FLIP,
@@ -54,9 +55,12 @@ import {
   clampSpread,
   loopOffset,
   pagesLabel,
+  searchBox,
   shelf,
   shelfIndex,
   spreadCount,
+  spreadOfPage,
+  type BoxHit,
   type Book as BookInfo,
   type BookId,
 } from '@/lib/recipeBox';
@@ -75,10 +79,12 @@ interface Props {
   onAddRecipe: () => void;
   /** Temporary, until Settings' "Recipe box style" (step 7) replaces it. */
   onShowGrid: () => void;
+  /** Nothing in the box matched: hand the query to Find's web search. */
+  onSearchWeb: (query: string) => void;
   bottomInset: number;
 }
 
-export function RecipeBox({ entries, sort, onOpenSort, onOpenRecipe, onAddRecipe, onShowGrid, bottomInset }: Props) {
+export function RecipeBox({ entries, sort, onOpenSort, onOpenRecipe, onAddRecipe, onShowGrid, onSearchWeb, bottomInset }: Props) {
   const colors = useColors();
   const styles = makeStyles(colors);
   const reduceMotion = useReducedMotion();
@@ -87,6 +93,10 @@ export function RecipeBox({ entries, sort, onOpenSort, onOpenRecipe, onAddRecipe
   const [stage, setStage] = useState<{ w: number; h: number } | null>(null);
   const [at, setAt] = useState(0);
   const [spreads, setSpreads] = useState<Partial<Record<BookId, number>>>({});
+  const [query, setQuery] = useState('');
+  const [highlight, setHighlight] = useState<{ book: BookId; page: number; token: number } | null>(null);
+  const searching = query.trim().length > 0;
+  const hits = useMemo(() => searchBox(entries, query, sort), [entries, query, sort]);
 
   const pos = useSharedValue(0);
   const start = useSharedValue(0);
@@ -149,6 +159,27 @@ export function RecipeBox({ entries, sort, onOpenSort, onOpenRecipe, onAddRecipe
     },
     [current]
   );
+
+  // A result picked: its book in front, open to its spread, the page
+  // outlined. No carousel slide and no page turn — the shelf was not on
+  // screen, so nothing is moving from anywhere; it mounts where it lands.
+  const jumpTo = (hit: BoxHit<Entry>) => {
+    const i = books.findIndex((b) => b.book.id === hit.book.id);
+    if (i < 0) return;
+    const next = at - index + i;
+    setAt(next);
+    pos.value = next;
+    setSpreads((s) => ({ ...s, [hit.book.id]: spreadOfPage(hit.page) }));
+    setHighlight({ book: hit.book.id, page: hit.page, token: Date.now() });
+    setQuery('');
+    Keyboard.dismiss();
+  };
+  // Played once; gone before a later turn back to that spread could replay it.
+  useEffect(() => {
+    if (!highlight) return;
+    const t = setTimeout(() => setHighlight(null), 2000);
+    return () => clearTimeout(t);
+  }, [highlight]);
 
   const onStageLayout = (e: LayoutChangeEvent) => {
     const { width: w, height: h } = e.nativeEvent.layout;
@@ -231,6 +262,14 @@ export function RecipeBox({ entries, sort, onOpenSort, onOpenRecipe, onAddRecipe
         </View>
       </View>
 
+      <BoxSearchField value={query} onChange={setQuery} />
+
+      {searching ? (
+        <View style={styles.results}>
+          <BoxResults query={query} hits={hits} onPick={jumpTo} onSearchWeb={onSearchWeb} />
+        </View>
+      ) : (
+      <>
       <GestureDetector gesture={pan}>
         <View style={styles.stage} onLayout={onStageLayout} testID="box-stage">
           {geo && stage
@@ -262,6 +301,7 @@ export function RecipeBox({ entries, sort, onOpenSort, onOpenRecipe, onAddRecipe
                       interactive={front}
                       onNextBook={m >= 2 ? () => goBook(1) : undefined}
                       onPrevBook={m >= 3 ? () => goBook(-1) : undefined}
+                      highlight={front && highlight?.book === entry.book.id ? highlight : null}
                     />
                   </ShelfSlot>
                 );
@@ -310,6 +350,8 @@ export function RecipeBox({ entries, sort, onOpenSort, onOpenRecipe, onAddRecipe
           <Feather name="chevron-right" size={22} color={colors.mutedForeground} />
         </Pressable>
       </View>
+      </>
+      )}
     </View>
   );
 }
@@ -415,6 +457,7 @@ function makeStyles(colors: Colors) {
     // Clips the peeks at its edges: the books above and below are glimpses,
     // and must not paint over the header or the page controls.
     stage: { flex: 1, overflow: 'hidden' },
+    results: { flex: 1 },
     footer: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingTop: 4, paddingBottom: 8 },
     pageBtn: {
       width: 44,

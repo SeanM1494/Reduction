@@ -19,7 +19,7 @@ import {
   type MealType,
   type Recipe,
 } from '@workspace/recipe-model';
-import { arrangeLibrary, ratingOf, type LibraryItem, type SortKey } from './libraryView';
+import { arrangeLibrary, inRecipeBox, ratingOf, searchLibrary, type LibraryItem, type SortKey } from './libraryView';
 
 export type BookId = 'breakfast' | 'lunch' | 'dinner' | 'apps' | 'salads' | 'desserts' | 'other';
 
@@ -201,6 +201,50 @@ export function previewCookedLine(cooked: number[] | null | undefined, rating: n
   const head = list.length ? `Cooked ${list.length}× · last ${shortDate(Math.max(...list))}` : "You haven't cooked this yet";
   const emoji = rating === 1 || rating === 0 || rating === -1 ? RATING_EMOJI[String(rating)] : null;
   return emoji ? `${head} · your rating ${emoji}` : head;
+}
+
+// ---------------------------------------------------------------------------
+// Search inside the box.
+// ---------------------------------------------------------------------------
+
+export interface BoxHit<T> {
+  entry: T;
+  book: Book;
+  /** Its page in the book, as the shelf arranges it — what a tap opens to. */
+  page: number;
+}
+
+/**
+ * The box searched: the Find tab's own `searchLibrary` (title, source,
+ * ingredient names — "what can I make with parmesan" is the point), plus the
+ * NAME OF THE BOOK, so "dessert" finds every dessert whatever it is called.
+ * Hits come in shelf order and page order, each with the page a tap should
+ * open to. Removed recipes never match, whatever the caller passed.
+ */
+export function searchBox<T extends LibraryItem & { removedAt?: number | null }>(
+  entries: T[],
+  query: string,
+  sort: SortKey
+): Array<BoxHit<T>> {
+  const needle = query.trim().toLowerCase();
+  if (!needle) return [];
+  const live = entries.filter(inRecipeBox);
+  const byText = new Set(searchLibrary(live, query));
+  const out: Array<BoxHit<T>> = [];
+  for (const { book, pages } of shelf(live, sort)) {
+    const bookMatches = book.name.toLowerCase().includes(needle);
+    pages.forEach((entry, page) => {
+      if (bookMatches || byText.has(entry)) out.push({ entry, book, page });
+    });
+  }
+  return out;
+}
+
+/** The line under a result's title: the stated time and how often it has
+ *  been cooked, whichever exist — "30 min · cooked 3×", "cooked 1×", "". */
+export function resultMeta(recipe: unknown, cooked: number[] | null | undefined): string {
+  const n = (cooked ?? []).filter((t) => typeof t === 'number' && Number.isFinite(t)).length;
+  return [timeLine(recipe), n ? `cooked ${n}×` : null].filter(Boolean).join(' · ');
 }
 
 const RATING_WORDS: Record<string, string> = { '1': 'rated thumbs up', '0': 'rated OK', '-1': 'rated thumbs down' };

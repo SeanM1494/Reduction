@@ -32,6 +32,8 @@ import {
   turnTarget,
   previewStats,
   previewCookedLine,
+  searchBox,
+  resultMeta,
 } from './recipeBox';
 
 const recipe = (over: Record<string, unknown> = {}) => ({ title: 'X', servings: 4, sections: [], ...over }) as any;
@@ -299,4 +301,32 @@ test('preview cooked line: count and last date, or never — the rating after ei
   assert.equal(previewCookedLine([sep11], null), 'Cooked 1× · last Sep 11');
   assert.equal(previewCookedLine([], null), "You haven't cooked this yet");
   assert.equal(previewCookedLine(null, -1), "You haven't cooked this yet · your rating 👎");
+});
+
+test('search: title, ingredient and BOOK name, in shelf and page order, never a removed recipe', () => {
+  const ing = (name: string) => ({ name: null, ingredients: [{ id: 'i', name }], nodes: [] });
+  const lib = [
+    entry('pasta', { savedAt: 3 }, { title: 'Cacio e pepe', mealTypes: ['dinner'], sections: [ing('Parmesan')] }),
+    entry('salad', { savedAt: 2 }, { title: 'Caesar', mealTypes: ['salad'], sections: [ing('parmesan')] }),
+    entry('cake', { savedAt: 1 }, { title: 'Lemon cake', mealTypes: ['dessert'], sections: [ing('Flour')] }),
+    entry('gone', { savedAt: 4, removedAt: 5 }, { title: 'Parmesan crisps', mealTypes: ['snack'], sections: [] }),
+    entry('stew', { savedAt: 0 }, { title: 'Beef stew', mealTypes: ['dinner'], sections: [ing('Beef')] }),
+  ];
+  const ids = (q: string) => searchBox(lib, q, 'added').map((h) => `${h.entry.id}@${h.book.id}:${h.page}`);
+  // Ingredient match across books, shelf order (Dinner before Salads); the
+  // removed recipe's title matches and it is still left out.
+  assert.deepEqual(ids('PARMESAN'), ['pasta@dinner:0', 'salad@salads:0']);
+  // The book's name finds the whole book, with each recipe's page.
+  assert.deepEqual(ids('dinner'), ['pasta@dinner:0', 'stew@dinner:1']);
+  assert.deepEqual(ids('dessert'), ['cake@desserts:0']);
+  assert.deepEqual(ids('lemon'), ['cake@desserts:0']);
+  assert.deepEqual(ids('   '), []);
+  assert.deepEqual(ids('nothing like it'), []);
+});
+
+test('result meta: stated time and cooked count, whichever exist', () => {
+  assert.equal(resultMeta(recipe({ totalMinutes: 30 }), [1, 2, 3]), '30 min · cooked 3×');
+  assert.equal(resultMeta(recipe({}), [1]), 'cooked 1×');
+  assert.equal(resultMeta(recipe({ totalMinutes: 90 }), []), '1 hr 30 min');
+  assert.equal(resultMeta(recipe({}), null), '');
 });

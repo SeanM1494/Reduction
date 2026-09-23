@@ -33,9 +33,13 @@ interface Props {
   onPickWebResult: (url: string) => Promise<void>;
   /** Anything else on the tab is busy (a pasted extraction running). */
   disabled?: boolean;
+  /** A query handed over from elsewhere — the Recipe Box's "Search the web
+   *  for it" — filled in and searched on the web straight away. A new
+   *  token hands over again, even the same words. */
+  prefill?: { query: string; token: string } | null;
 }
 
-export function SearchBar({ onPickWebResult, disabled }: Props) {
+export function SearchBar({ onPickWebResult, disabled, prefill }: Props) {
   const colors = useColors();
   const styles = makeStyles(colors);
   const { entries } = useLibrary();
@@ -64,6 +68,24 @@ export function SearchBar({ onPickWebResult, disabled }: Props) {
     setWebResults(null);
     setSearchError(null);
   }, [query, search]);
+
+  // A handed-over query: set it, then search once the effect above has run
+  // for it — that effect cancels whatever search is in flight when the query
+  // changes, so starting the search in the same breath would be cancelled by
+  // the keystroke that set it. Effects run in order, so this one comes after.
+  const pendingWeb = useRef<string | null>(null);
+  useEffect(() => {
+    if (!prefill?.query) return;
+    pendingWeb.current = prefill.query;
+    setQuery(prefill.query);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [prefill?.token]);
+  useEffect(() => {
+    if (pendingWeb.current === null || pendingWeb.current !== query) return;
+    pendingWeb.current = null;
+    runWebSearch();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [query]);
 
   // A search left running when the bar goes away is the same waste.
   useEffect(() => () => search.cancel(), [search]);

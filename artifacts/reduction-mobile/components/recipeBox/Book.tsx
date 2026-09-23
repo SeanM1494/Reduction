@@ -40,6 +40,7 @@ import Animated, {
   useReducedMotion,
   useSharedValue,
   withSpring,
+  withSequence,
   withTiming,
   type SharedValue,
 } from 'react-native-reanimated';
@@ -78,12 +79,15 @@ interface Props {
   /** For VoiceOver's next/previous book actions (the shelf wires them). */
   onNextBook?: () => void;
   onPrevBook?: () => void;
+  /** Outline this page in the book's colour, fading over ~1.8s — where a
+   *  search result landed. A new token replays it. */
+  highlight?: { page: number; token: number } | null;
   /** Only the book in front takes touches; the peeking ones are pictures,
    *  drawn with just their two visible pages and hidden from VoiceOver. */
   interactive?: boolean;
 }
 
-export function Book({ book, pages, spread, onSpreadChange, onOpenPage, onBlankPage, width, onNextBook, onPrevBook, interactive = true }: Props) {
+export function Book({ book, pages, spread, onSpreadChange, onOpenPage, onBlankPage, width, onNextBook, onPrevBook, highlight = null, interactive = true }: Props) {
   const colors = useColors();
   const { bookW, pageW, pageH } = bookGeometry(width);
   const reduceMotion = useReducedMotion();
@@ -339,6 +343,15 @@ export function Book({ book, pages, spread, onSpreadChange, onOpenPage, onBlankP
                 style={[styles.spine, { left: pageW - 8, height: pageH }]}
               />
             </View>
+            {highlight && interactive && Math.floor(highlight.page / 2) === spread ? (
+              <PageOutline
+                key={highlight.token}
+                left={highlight.page % 2 === 0 ? 0 : pageW}
+                width={pageW}
+                height={pageH}
+                color={book.color}
+              />
+            ) : null}
             {/* What VoiceOver sees instead: the two visible pages. */}
             {(interactive ? [L, L + 1] : []).map((i, side) =>
               a11yLabel(i) ? (
@@ -358,6 +371,30 @@ export function Book({ book, pages, spread, onSpreadChange, onOpenPage, onBlankP
         </GestureDetector>
       </View>
     </View>
+  );
+}
+
+/** The prototype's search highlight: an outline inset 4px, in the book's
+ *  colour, in over the first 15%, held to 70%, gone by 1.8s. It never
+ *  takes a touch. Reduce Motion keeps it, without the fade in. */
+function PageOutline({ left, width, height, color }: { left: number; width: number; height: number; color: string }) {
+  const reduceMotion = useReducedMotion();
+  const o = useSharedValue(reduceMotion ? 1 : 0);
+  useEffect(() => {
+    o.value = withSequence(
+      withTiming(1, { duration: reduceMotion ? 0 : 270 }),
+      withTiming(1, { duration: 990 }),
+      withTiming(0, { duration: 540 })
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  const style = useAnimatedStyle(() => ({ opacity: o.value }));
+  return (
+    <Animated.View
+      pointerEvents="none"
+      style={[styles.slot, { left: left + 4, top: 4, width: width - 8, height: height - 8, borderRadius: 7, borderWidth: 2.5, borderColor: color }, style]}
+      testID="book-highlight"
+    />
   );
 }
 

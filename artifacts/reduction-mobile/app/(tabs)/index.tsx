@@ -11,9 +11,9 @@
  * cannot use costs their attention and our extraction budget for nothing.
  */
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@/lib/auth-context';
 import { useLibrary } from '@/lib/library-context';
@@ -33,6 +33,15 @@ export default function FindScreen() {
   const { entitlement, refresh } = useAuth();
   const { setDraft, entries } = useLibrary();
   const insets = useSafeAreaInsets();
+  // "Search the web for it" from the Recipe Box arrives as ?q=. Taken once
+  // and cleared, so coming back to this tab later does not search again.
+  const { q } = useLocalSearchParams<{ q?: string }>();
+  const [prefill, setPrefill] = useState<{ query: string; token: string } | null>(null);
+  useEffect(() => {
+    if (!q) return;
+    setPrefill({ query: q, token: `${Date.now()}` });
+    router.setParams({ q: undefined });
+  }, [q]);
 
   const [input, setInput] = useState('');
   const [photo, setPhoto] = useState<PreparedPhoto | null>(null);
@@ -141,7 +150,7 @@ export default function FindScreen() {
           {/* The web's header search, in the tab: the library first, the
               web underneath. Above the paste box because a saved recipe
               is the cheaper answer to "I want to cook X". */}
-          <SearchBar onPickWebResult={pickWebResult} disabled={!!busy} />
+          <SearchBar onPickWebResult={pickWebResult} disabled={!!busy} prefill={prefill} />
           <TextInput
             style={styles.input}
             placeholder="https://example.com/recipe or paste recipe text"
