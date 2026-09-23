@@ -526,16 +526,28 @@ test("the test-notification request is a POST and reports Apple's answer either 
     (r) => (r.method === "POST" ? { status: 200, json: { testNotificationToken: "tok_123" } } : { status: 405, json: {} }),
     async (seen) => {
       const out = await requestAppleTestNotification(apiConfig());
-      assert.deepEqual(out, { ok: true, token: "tok_123" });
+      assert.deepEqual(out, { ok: true, token: "tok_123", environment: "Sandbox" });
       assert.equal(seen[0].url, "/inApps/v1/notifications/test");
     }
   );
   await withApiStub(
-    () => ({ status: 401, json: { errorMessage: "Unauthenticated" } }),
+    () => ({ status: 401, json: { errorMessage: "Unauthenticated", errorCode: 4010000 } }),
     async () => {
       const out = await requestAppleTestNotification(apiConfig());
-      assert.deepEqual(out, { ok: false, status: 401, detail: "Unauthenticated" });
+      assert.equal(out.ok, false);
+      if (out.ok) return;
+      assert.equal(out.status, 401);
+      assert.equal(out.detail, "Unauthenticated");
+      assert.equal(out.errorCode, 4010000);
+      // What was sent, to read against App Store Connect — and never the signature.
+      assert.equal(out.sent?.environment, "Sandbox");
+      assert.deepEqual(out.sent?.tokenHeader, { alg: "ES256", kid: "ABCDEF1234", typ: "JWT" });
+      assert.equal(out.sent?.tokenClaims.iss, "57246542-96fe-1a63-e053-0824d011072a");
+      assert.equal(out.sent?.tokenClaims.aud, "appstoreconnect-v1");
+      assert.equal(out.sent?.tokenClaims.bid, "com.example.reduction");
+      assert.ok(!JSON.stringify(out).includes(appStoreApiJwt(apiConfig()).split(".")[2]), "the signature is never reported");
     }
   );
   assert.equal((await requestAppleTestNotification(apiConfig({ api: null }))).ok, false);
 });
+

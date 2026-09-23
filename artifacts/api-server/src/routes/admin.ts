@@ -571,12 +571,22 @@ adminRouter.get("/preflight/apple-iap", (req: Request, res: Response) => {
  * reachable, and a real Apple-signed payload verifying against the roots this
  * process holds — and it cannot be run from anywhere but a deployment Apple
  * can reach. Look for "TEST acknowledged" in the logs afterwards.
+ * `?environment=sandbox` or `production` picks Apple's host; a refusal
+ * reports the token's header and claims (never its signature).
  */
 adminRouter.post("/preflight/apple-iap/test-notification", async (req: Request, res: Response) => {
   if (!requireAdmin(req, res)) return;
   const cfg = appleIapConfig();
   if (!cfg) return res.status(409).json({ error: "The App Store adapter is not configured.", report: describeAppleIapEnv() });
-  const out = await requestAppleTestNotification(cfg);
+  // ?environment=sandbox|production — the server's own when absent. Asking
+  // both tells a bad key (refused at both) from an environment that does
+  // not know the app (refused at one).
+  const asked = typeof req.query.environment === "string" ? req.query.environment.trim().toLowerCase() : "";
+  if (asked && asked !== "sandbox" && asked !== "production") {
+    return res.status(400).json({ error: "environment must be sandbox or production." });
+  }
+  const environment = asked === "sandbox" ? "Sandbox" : asked === "production" ? "Production" : cfg.environment;
+  const out = await requestAppleTestNotification(cfg, environment);
   if (!out.ok) return res.status(502).json({ error: "Apple refused the request.", ...out });
-  return res.json({ ok: true, testNotificationToken: out.token, next: "Watch the deployment logs for 'TEST acknowledged'." });
+  return res.json({ ok: true, environment: out.environment, testNotificationToken: out.token, next: "Watch the deployment logs for 'TEST acknowledged'." });
 });

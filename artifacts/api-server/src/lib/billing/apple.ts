@@ -663,28 +663,81 @@ export async function fetchAppleSubscriptionStatus(
   }
 }
 
+/** What a Server API request carried, minus the signature: the token's
+ *  header and claims, the host and the server's own clock. Nothing here is
+ *  secret — a Key ID and an Issuer ID are identifiers, not credentials — and
+ *  it is what a 401 with "no detail" leaves to reason from. */
+export interface AppleApiRequestReport {
+  environment: AppleEnvironment;
+  host: string;
+  serverTime: string;
+  tokenHeader: Record<string, unknown>;
+  tokenClaims: Record<string, unknown>;
+}
+
+function describeApiRequest(cfg: AppleIapConfig, environment: AppleEnvironment, token: string): AppleApiRequestReport {
+  const [h, p] = token.split(".");
+  const seg = (x: string) => {
+    try {
+      return JSON.parse(Buffer.from(x, "base64url").toString()) as Record<string, unknown>;
+    } catch {
+      return {};
+    }
+  };
+  return {
+    environment,
+    host: appStoreApiBase(cfg, environment),
+    serverTime: new Date().toISOString(),
+    tokenHeader: seg(h),
+    tokenClaims: seg(p),
+  };
+}
+
 /**
  * Ask Apple to send a TEST notification to the configured notifications
  * URL. The one way to prove, from Apple's side, that the URL is registered,
  * reachable and verifying — which nothing in this container can.
+ *
+ * `environment` picks the host (the server's own by default). Asking both
+ * separates "Apple refuses this key" (401 at both) from "one environment
+ * refuses this app" (one of them 401), which a bare 401 with no detail
+ * cannot. A refusal reports what was sent — the token's header and claims,
+ * never its signature — so the ids can be read against App Store Connect.
  */
 export async function requestAppleTestNotification(
-  cfg: AppleIapConfig
-): Promise<{ ok: true; token: string } | { ok: false; status: number; detail: string }> {
+  cfg: AppleIapConfig,
+  environment: AppleEnvironment = cfg.environment
+): Promise<
+  | { ok: true; token: string; environment: AppleEnvironment }
+  | { ok: false; status: number; detail: string; errorCode?: number; sent?: AppleApiRequestReport }
+> {
   if (!cfg.api) return { ok: false, status: 0, detail: "App Store Server API credentials are not configured." };
+  let bearer: string;
   try {
-    const res = await fetch(`${appStoreApiBase(cfg)}/inApps/v1/notifications/test`, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${appStoreApiJwt(cfg)}`, Accept: "application/json" },
-      signal: AbortSignal.timeout(10_000),
-    });
-    const body = (await res.json().catch(() => ({}))) as { testNotificationToken?: string; errorMessage?: string };
-    if (!res.ok || !body.testNotificationToken) {
-      return { ok: false, status: res.status, detail: body.errorMessage ?? "no detail" };
-    }
-    return { ok: true, token: body.testNotificationToken };
+    bearer = appStoreApiJwt(cfg);
   } catch (e) {
     return { ok: false, status: 0, detail: (e as Error).message };
+  }
+  const sent = describeApiRequest(cfg, environment, bearer);
+  try {
+    const res = await fetch(`${appStoreApiBase(cfg, environment)}/inApps/v1/notifications/test`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${bearer}`, Accept: "application/json" },
+      signal: AbortSignal.timeout(10_000),
+    });
+    const body = (await res.json().catch(() => ({}))) as { testNotificationToken?: string; errorMessage?: string; errorCode?: number };
+    if (!res.ok || !body.testNotificationToken) {
+      return {
+        ok: false,
+        status: res.status,
+        detail: body.errorMessage ?? "no detail",
+        ...(typeof body.errorCode === "number" ? { errorCode: body.errorCode } : {}),
+        sent,
+      };
+    }
+    return { ok: true, token: body.testNotificationToken, environment };
+  } catch (e) {
+    return { ok: false, status: 0, detail: (e as Error).message, sent };
   }
 }
 
