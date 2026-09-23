@@ -895,6 +895,25 @@ DECIDED (Sep 23, after the step-1 push):
     a deliberately stale write the 409-merge resolves in its favour (pinned
     in syncEngine.test.ts). Settings' Restore (step 7) is the same call.
   - The toast sits above the Recipe Box's page controls, not on them.
+- **Step 7 — Settings: DONE Sep 24.** "Recipe box style" (Books · Grid)
+  and "Removed recipes" (with its count). Decided while building it:
+  - **The style has its own key**, `reduction_box_style`, and Books is the
+    default. The old in-library toggle's key is read once as a fallback:
+    it only ever held something someone TAPPED, so a stored 'grid' there is
+    a real choice and is kept; its 'stack' is the books.
+  - **Both in-library toggles are gone**; the setting is shared live
+    between the two tabs (`lib/boxStyle.ts`), so switching in Settings
+    changes the Library without a reload.
+  - **The grid got the box's search** (the spec's "with its search"): the
+    same field and `searchBox`, spanning every category — the category
+    strip hides while it runs — and the same "Search the web for it".
+  - **Removed recipes is its own screen** (`app/removed.tsx`), read from
+    the server each time it opens, because the phone holds no removed rows.
+    Restore is step 6's `restore()`; "Delete forever" confirms in a window
+    and then uses the recipe menu's own delete. Neither refunds the free
+    recipe (`recipes_used` is monotonic, CLAUDE.md).
+  - **An empty library that only had recipes taken out says so**, with a
+    button to Removed recipes, instead of looking like everything was lost.
 
 ## 2. Global recipe search inside the app
 

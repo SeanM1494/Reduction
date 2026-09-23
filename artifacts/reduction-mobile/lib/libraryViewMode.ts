@@ -2,27 +2,33 @@
  * lib/libraryViewMode.ts — which way the Library is browsed, and the card
  * stack's gesture policy. Pure, so the runner can test it.
  *
- * `grid` is the box laid out flat, two across; `stack` is one recipe at a
- * time with the next ones peeking behind it, flipped through by swiping.
- * (Shelves — one row per category — is a fast-follow once the stack has
- * been felt on a device; ROADMAP "Recipe browsing".) The choice persists
- * per device under VIEW_KEY, like the theme.
+ * `books` is the Recipe Box (the default); `grid` is the box laid out flat,
+ * two across. Chosen in Settings, per device, under BOX_STYLE_KEY. (The
+ * card stack's policy below goes with the stack, in step 8.)
  */
 
 export type LibraryView = 'grid' | 'books';
 
-export const VIEW_KEY = 'reduction_library_view';
+/** "Recipe box style" in Settings, per device like the theme. Its own key:
+ *  the Library's old in-screen toggle wrote `reduction_library_view`. */
+export const BOX_STYLE_KEY = 'reduction_box_style';
+export const LEGACY_VIEW_KEY = 'reduction_library_view';
 
-export const LIBRARY_VIEWS: ReadonlyArray<{ view: LibraryView; label: string }> = [
-  { view: 'grid', label: 'Grid' },
+/** Books first: it is the default. */
+export const BOX_STYLES: ReadonlyArray<{ view: LibraryView; label: string }> = [
   { view: 'books', label: 'Books' },
+  { view: 'grid', label: 'Grid' },
 ];
 
-/** The Recipe Box's books replaced the card stack, so a device that had
- *  chosen the stack opens on the books. Anything else is the grid. (Step 7
- *  moves the choice to Settings, under its own key.) */
-export function parseLibraryView(raw: unknown): LibraryView {
-  return raw === 'books' || raw === 'stack' ? 'books' : 'grid';
+/**
+ * The style to open on. Books unless Grid was CHOSEN: the Settings key
+ * first, then the old toggle's key — which only ever held a value someone
+ * tapped (nothing wrote the default), so a stored 'grid' there is a real
+ * choice worth carrying over. Its 'stack' is the books now.
+ */
+export function parseBoxStyle(raw: unknown, legacy?: unknown): LibraryView {
+  if (raw === 'grid' || raw === 'books') return raw;
+  return legacy === 'grid' ? 'grid' : 'books';
 }
 
 /** How much of a drag past either end of the deck the finger actually

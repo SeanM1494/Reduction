@@ -9,14 +9,18 @@
  * a different, permitted thing).
  */
 
-import React, { useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import { Alert, Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import { useAuth } from '@/lib/auth-context';
 import { useLibrary } from '@/lib/library-context';
 import { AccountId } from '@/components/settings/AccountId';
 import { AppearanceCard } from '@/components/settings/AppearanceCard';
+import { BoxStyleCard } from '@/components/settings/BoxStyleCard';
+import { loadRemoved } from '@/lib/api';
+import { removedCountLabel } from '@/lib/recipeBox';
+import { Feather } from '@expo/vector-icons';
 import { CouponBox } from '@/components/CouponBox';
 import { TimersCard } from '@/components/settings/TimersCard';
 import { SubscribeBox } from '@/components/SubscribeBox';
@@ -32,6 +36,17 @@ export default function SettingsScreen() {
   const { entries } = useLibrary();
   const insets = useSafeAreaInsets();
   const [manageError, setManageError] = useState<string | null>(null);
+  // The Removed recipes row's count, re-read whenever Settings comes back
+  // into view (a restore or a delete in that screen changes it). Unknown
+  // until read; a failed read shows no count rather than a wrong one.
+  const [removedCount, setRemovedCount] = useState<number | null>(null);
+  useFocusEffect(
+    useCallback(() => {
+      loadRemoved()
+        .then(({ entries: removed }) => setRemovedCount(removed.length))
+        .catch(() => setRemovedCount(null));
+    }, [])
+  );
 
   const confirmSignOut = () => {
     Alert.alert('Sign out?', undefined, [
@@ -155,6 +170,24 @@ export default function SettingsScreen() {
 
       <TimersCard />
 
+      <BoxStyleCard />
+
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={`Removed recipes${removedCount !== null ? `, ${removedCountLabel(removedCount)}` : ''}`}
+        onPress={() => router.push('/removed')}
+        style={({ pressed }) => [styles.section, styles.navRow, pressed && styles.navRowPressed]}
+        testID="settings-removed"
+      >
+        <View style={styles.navText}>
+          <Text style={styles.label}>Removed recipes</Text>
+          <Text style={styles.value} testID="settings-removed-count">
+            {removedCount === null ? ' ' : removedCountLabel(removedCount)}
+          </Text>
+        </View>
+        <Feather name="chevron-right" size={20} color={colors.mutedForeground} />
+      </Pressable>
+
       <AppearanceCard />
 
       <View style={styles.legal}>
@@ -244,6 +277,9 @@ function makeStyles(colors: Colors) {
     signOutPressed: { borderColor: colors.borderStrong },
     signOutText: { color: colors.dangerInk, fontFamily: fonts.headingMedium, fontSize: 15 },
     legal: { paddingHorizontal: 4 },
+    navRow: { flexDirection: 'row', alignItems: 'center', minHeight: 64 },
+    navRowPressed: { borderColor: colors.borderStrong },
+    navText: { flex: 1, gap: 4 },
     deleteRow: { minHeight: 44, alignItems: 'center', justifyContent: 'center', marginTop: 4 },
     deleteText: { color: colors.mutedForeground, fontSize: 14, textDecorationLine: 'underline' },
   });

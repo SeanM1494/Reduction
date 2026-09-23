@@ -293,6 +293,25 @@ export const keptToast = (bookName: string): string => `Moved to the back of ${b
  */
 export const asksToRemove = (before: number | null | undefined, after: number | null): boolean => after === -1 && before !== -1;
 
+// ---------------------------------------------------------------------------
+// Removed recipes (Settings).
+// ---------------------------------------------------------------------------
+
+/** "Removed Sep 24", under a removed recipe's title. */
+export const removedOn = (removedAt: number | null | undefined): string =>
+  typeof removedAt === 'number' && Number.isFinite(removedAt) ? `Removed ${shortDate(removedAt)}` : 'Removed';
+
+/** The Settings row's count: "None", "1 recipe", "3 recipes". */
+export const removedCountLabel = (n: number): string => (n <= 0 ? 'None' : n === 1 ? '1 recipe' : `${n} recipes`);
+
+/** A restore's toast. It goes back where it was: a 👎 to the back. */
+export const restoredToast = (title: string, bookName: string, rating: number | null | undefined): string =>
+  rating === -1 ? `${title || 'Recipe'} is back, at the back of ${bookName}` : `${title || 'Recipe'} is back in ${bookName}`;
+
+/** What an EMPTY library says when recipes were only taken out, not gone. */
+export const removedWaitingNote = (n: number): string | null =>
+  n <= 0 ? null : n === 1 ? '1 removed recipe is waiting in Settings → Removed recipes.' : `${n} removed recipes are waiting in Settings → Removed recipes.`;
+
 const RATING_WORDS: Record<string, string> = { '1': 'rated thumbs up', '0': 'rated OK', '-1': 'rated thumbs down' };
 export const RATING_EMOJI: Record<string, string> = { '1': '👍', '0': '👌', '-1': '👎' };
 

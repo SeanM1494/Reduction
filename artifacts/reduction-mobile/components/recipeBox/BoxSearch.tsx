@@ -67,21 +67,7 @@ export function BoxResults({
 }) {
   const colors = useColors();
   const styles = makeStyles(colors);
-  if (!hits.length) {
-    return (
-      <View style={styles.empty} testID="box-no-results">
-        <Text style={styles.emptyText}>Nothing in your recipe box matches “{query.trim()}”.</Text>
-        <Pressable
-          accessibilityRole="button"
-          onPress={() => onSearchWeb(query.trim())}
-          style={({ pressed }) => [styles.webBtn, pressed && styles.webBtnPressed]}
-          testID="box-search-web"
-        >
-          <Text style={styles.webBtnText}>Search the web for it</Text>
-        </Pressable>
-      </View>
-    );
-  }
+  if (!hits.length) return <BoxNoMatches query={query} onSearchWeb={onSearchWeb} />;
   return (
     <FlatList
       data={hits}
@@ -97,6 +83,26 @@ export function BoxResults({
       renderItem={({ item }) => <ResultRow hit={item} onPick={onPick} />}
       testID="box-results"
     />
+  );
+}
+
+/** Nothing in the box matched: say so, and offer the web. The grid's
+ *  search ends here too. */
+export function BoxNoMatches({ query, onSearchWeb }: { query: string; onSearchWeb: (q: string) => void }) {
+  const colors = useColors();
+  const styles = makeStyles(colors);
+  return (
+    <View style={styles.empty} testID="box-no-results">
+      <Text style={styles.emptyText}>Nothing in your recipe box matches “{query.trim()}”.</Text>
+      <Pressable
+        accessibilityRole="button"
+        onPress={() => onSearchWeb(query.trim())}
+        style={({ pressed }) => [styles.webBtn, pressed && styles.webBtnPressed]}
+        testID="box-search-web"
+      >
+        <Text style={styles.webBtnText}>Search the web for it</Text>
+      </Pressable>
+    </View>
   );
 }
 

@@ -12,7 +12,6 @@
  */
 
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useState } from 'react';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ActivityIndicator, FlatList, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { router, useFocusEffect, useNavigation } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
@@ -32,7 +31,10 @@ import { RecipeCard } from '@/components/library/RecipeCard';
 import type { Entry } from '@/lib/api';
 import { RecipeBox } from '@/components/recipeBox/RecipeBox';
 import { PreviewSheet } from '@/components/recipeBox/PreviewSheet';
-import { VIEW_KEY, parseLibraryView, type LibraryView } from '@/lib/libraryViewMode';
+import { useBoxStyle } from '@/lib/boxStyle';
+import { removedWaitingNote, searchBox } from '@/lib/recipeBox';
+import { loadRemoved } from '@/lib/api';
+import { BoxNoMatches, BoxSearchField } from '@/components/recipeBox/BoxSearch';
 import { SortSheet } from '@/components/library/SortSheet';
 import { SheetButton } from '@/components/Sheet';
 import { useColors, type Colors } from '@/hooks/useColors';
@@ -45,18 +47,12 @@ export default function LibraryScreen() {
   const [filter, setFilter] = useState<Filter>('all');
   const [sort, setSort] = useState<SortKey>('added');
   const [sortOpen, setSortOpen] = useState(false);
-  // Grid or Stack, remembered per device (lib/libraryViewMode.ts). Read
-  // once; until it is read the grid shows, which is the default anyway.
-  const [view, setView] = useState<LibraryView>('grid');
-  useEffect(() => {
-    AsyncStorage.getItem(VIEW_KEY)
-      .then((raw) => setView(parseLibraryView(raw)))
-      .catch(() => {});
-  }, []);
-  const pickView = (next: LibraryView) => {
-    setView(next);
-    AsyncStorage.setItem(VIEW_KEY, next).catch(() => {});
-  };
+  // Books or Grid: Settings' "Recipe box style", per device (lib/boxStyle.ts).
+  const view = useBoxStyle();
+  // The grid's search — the Recipe Box's own, over the same fields.
+  const [query, setQuery] = useState('');
+  const searching = query.trim().length > 0;
+  const searchWeb = (q: string) => router.navigate({ pathname: '/', params: { q } });
   // The books carry their own header ("Recipe box · Dinner"), and the
   // carousel needs the height for the books above and below to show, so the
   // navigator's "Library" title goes while they are up. It also makes the
@@ -86,6 +82,18 @@ export default function LibraryScreen() {
       refresh();
     }, [refresh])
   );
+  // An EMPTY library may only have had its recipes taken out, not lost:
+  // then it says where they are. Only asked while the shelf is empty.
+  const [removedCount, setRemovedCount] = useState(0);
+  const empty = !loading && entries.length === 0;
+  useFocusEffect(
+    useCallback(() => {
+      if (!empty) return;
+      loadRemoved()
+        .then(({ entries: removed }) => setRemovedCount(removed.length))
+        .catch(() => setRemovedCount(0));
+    }, [empty])
+  );
 
   const chips = useMemo(() => {
     const out: Array<{ value: Filter; label: string }> = [{ value: 'all', label: 'All' }];
@@ -98,7 +106,12 @@ export default function LibraryScreen() {
   // A filter whose chip has gone (the last favourite un-starred) falls back
   // to everything rather than to an empty list with no chip lit.
   const effectiveFilter = chips.some((c) => c.value === filter) ? filter : 'all';
-  const shown = useMemo(() => arrangeLibrary(entries, effectiveFilter, sort), [entries, effectiveFilter, sort]);
+  // Searching spans every category: the strip hides while it runs.
+  const shown = useMemo(() => {
+    if (!searching) return arrangeLibrary(entries, effectiveFilter, sort);
+    const hit = new Set(searchBox(entries, query, sort).map((h) => h.entry.id));
+    return arrangeLibrary(entries.filter((e) => hit.has(e.id)), 'all', sort);
+  }, [entries, effectiveFilter, sort, searching, query]);
   // An odd last card would otherwise fill its whole row: the card is
   // `flex: 1` and a row of one has no sibling to halve it. A hole keeps
   // the grid a grid.
@@ -125,6 +138,14 @@ export default function LibraryScreen() {
             Nothing saved yet. Anything you diagram lands here, with your progress kept.
           </Text>
           <SheetButton label="Find a recipe" onPress={() => router.navigate('/')} testID="library-find" />
+          {removedWaitingNote(removedCount) ? (
+            <>
+              <Text style={styles.emptyText} testID="library-removed-note">
+                {removedWaitingNote(removedCount)}
+              </Text>
+              <SheetButton label="Removed recipes" onPress={() => router.push('/removed')} testID="library-removed" />
+            </>
+          ) : null}
         </View>
       </ScrollView>
     );
@@ -183,8 +204,7 @@ export default function LibraryScreen() {
           onOpenSort={() => setSortOpen(true)}
           onOpenRecipe={(e) => setPreviewId(e.id)}
           onAddRecipe={() => router.navigate('/')}
-          onShowGrid={() => pickView('grid')}
-          onSearchWeb={(q) => router.navigate({ pathname: '/', params: { q } })}
+          onSearchWeb={searchWeb}
           bottomInset={tabBarHeight}
         />
         <SortSheet open={sortOpen} value={sort} onPick={setSort} onClose={() => setSortOpen(false)} />
@@ -205,9 +225,12 @@ export default function LibraryScreen() {
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
+      <BoxSearchField value={query} onChange={setQuery} />
       {/* The category strip, pinned above the list rather than scrolling
           with it: the point of the recipe box is jumping to a category,
-          and a tab that has scrolled away cannot be jumped to. */}
+          and a tab that has scrolled away cannot be jumped to. Hidden while
+          searching, which spans every category. */}
+      {searching ? null : (
       <View style={styles.stripRow}>
       <ScrollView
         horizontal
@@ -232,21 +255,8 @@ export default function LibraryScreen() {
           );
         })}
       </ScrollView>
-      {/* Grid or Books: one 44px button at the strip's end, so the sort row
-          stays two things wide (it is full at 320px already). Temporary:
-          Settings' "Recipe box style" replaces it (ROADMAP, step 7). */}
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel="Show as books"
-        onPress={() => pickView('books')}
-        style={({ pressed }) => [styles.viewBtn, pressed && { opacity: 0.6 }]}
-        testID="library-view-toggle"
-        // For the check: which view is on.
-        aria-label={view}
-      >
-        <Feather name="book-open" size={20} color={colors.foreground} />
-      </Pressable>
       </View>
+      )}
       <FlatList
         contentContainerStyle={[styles.content, { paddingBottom: tabBarHeight + 24 }]}
         data={grid}
@@ -259,7 +269,7 @@ export default function LibraryScreen() {
         columnWrapperStyle={styles.row}
         refreshControl={<RefreshControl refreshing={loading} onRefresh={refresh} tintColor={colors.foreground} />}
         ListHeaderComponent={head}
-        ListEmptyComponent={emptyFilter}
+        ListEmptyComponent={searching ? <BoxNoMatches query={query} onSearchWeb={searchWeb} /> : emptyFilter}
         renderItem={({ item }) =>
           item ? (
             <RecipeCard entry={item} layout="grid" onPress={() => router.push(`/recipe/${item.id}`)} />
@@ -302,7 +312,6 @@ function makeStyles(colors: Colors) {
     hole: { flex: 1 },
     boxError: { paddingHorizontal: 16, paddingTop: 8 },
     stripRow: { flexDirection: 'row', alignItems: 'stretch', borderBottomWidth: 1, borderBottomColor: colors.border },
-    viewBtn: { width: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center', marginRight: 8, alignSelf: 'center' },
     head: { gap: 6, marginBottom: 4 },
     sortRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 9 },
     sortBtn: {

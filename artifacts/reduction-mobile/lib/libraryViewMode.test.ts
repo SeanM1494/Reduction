@@ -6,18 +6,21 @@ import {
   RUBBER_BAND,
   dragPosition,
   overscrollPx,
-  parseLibraryView,
+  parseBoxStyle,
   stackStep,
   stackWindow,
   swipeOutcome,
 } from "./libraryViewMode";
 
-test("the stored view parses to grid unless it says stack", () => {
-  assert.equal(parseLibraryView("books"), "books");
-  assert.equal(parseLibraryView("stack"), "books", "the books replaced the stack");
-  assert.equal(parseLibraryView("grid"), "grid");
-  assert.equal(parseLibraryView(null), "grid");
-  assert.equal(parseLibraryView("shelves"), "grid", "a view that does not exist yet falls back");
+test("the recipe box style: books by default, grid only when chosen", () => {
+  assert.equal(parseBoxStyle("books"), "books");
+  assert.equal(parseBoxStyle("grid"), "grid");
+  assert.equal(parseBoxStyle(null), "books", "books is the default");
+  assert.equal(parseBoxStyle("shelves"), "books", "a style that does not exist falls back to the default");
+  // Carried over from the old in-library toggle, which stored only a tap.
+  assert.equal(parseBoxStyle(null, "grid"), "grid", "a grid chosen with the old toggle is kept");
+  assert.equal(parseBoxStyle(null, "stack"), "books", "the books replaced the stack");
+  assert.equal(parseBoxStyle("books", "grid"), "books", "the Settings key wins over the old one");
 });
 
 test("a swipe commits when far or fast, in the direction it moved, and springs back otherwise", () => {

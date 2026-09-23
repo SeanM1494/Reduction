@@ -77,14 +77,12 @@ interface Props {
   onOpenSort: () => void;
   onOpenRecipe: (entry: Entry) => void;
   onAddRecipe: () => void;
-  /** Temporary, until Settings' "Recipe box style" (step 7) replaces it. */
-  onShowGrid: () => void;
   /** Nothing in the box matched: hand the query to Find's web search. */
   onSearchWeb: (query: string) => void;
   bottomInset: number;
 }
 
-export function RecipeBox({ entries, sort, onOpenSort, onOpenRecipe, onAddRecipe, onShowGrid, onSearchWeb, bottomInset }: Props) {
+export function RecipeBox({ entries, sort, onOpenSort, onOpenRecipe, onAddRecipe, onSearchWeb, bottomInset }: Props) {
   const colors = useColors();
   const styles = makeStyles(colors);
   const reduceMotion = useReducedMotion();
@@ -247,16 +245,6 @@ export function RecipeBox({ entries, sort, onOpenSort, onOpenRecipe, onAddRecipe
               testID="box-sort"
             >
               <Feather name="sliders" size={18} color={colors.foreground} />
-            </Pressable>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Show as a grid"
-              onPress={onShowGrid}
-              style={({ pressed }) => [styles.iconBtn, pressed && styles.iconBtnPressed]}
-              testID="library-view-toggle"
-              aria-label="books"
-            >
-              <Feather name="grid" size={18} color={colors.foreground} />
             </Pressable>
           </View>
         </View>

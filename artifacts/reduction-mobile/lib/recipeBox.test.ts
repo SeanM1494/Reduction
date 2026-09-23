@@ -41,6 +41,10 @@ import {
   ratingPromptCopy,
   removePromptCopy,
   removedToast,
+  removedOn,
+  removedCountLabel,
+  restoredToast,
+  removedWaitingNote,
 } from './recipeBox';
 
 const recipe = (over: Record<string, unknown> = {}) => ({ title: 'X', servings: 4, sections: [], ...over }) as any;
@@ -361,4 +365,15 @@ test('thumbs down: the words, and when the recipe itself asks', () => {
   assert.equal(asksToRemove(-1, -1), false);
   assert.equal(asksToRemove(-1, null), false);
   assert.equal(asksToRemove(0, 1), false);
+});
+
+test('removed recipes: the date, the count, the restore toast and the empty-library note', () => {
+  assert.equal(removedOn(new Date(2026, 8, 24, 12).getTime()), 'Removed Sep 24');
+  assert.equal(removedOn(null), 'Removed');
+  assert.deepEqual([0, 1, 4].map(removedCountLabel), ['None', '1 recipe', '4 recipes']);
+  assert.equal(restoredToast('Chili', 'Dinner', -1), 'Chili is back, at the back of Dinner');
+  assert.equal(restoredToast('Chili', 'Dinner', 1), 'Chili is back in Dinner');
+  assert.equal(removedWaitingNote(0), null);
+  assert.equal(removedWaitingNote(1), '1 removed recipe is waiting in Settings → Removed recipes.');
+  assert.equal(removedWaitingNote(2), '2 removed recipes are waiting in Settings → Removed recipes.');
 });
