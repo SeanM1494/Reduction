@@ -12,6 +12,7 @@
 import React, { useState } from 'react';
 import { Alert, Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { router } from 'expo-router';
 import { useAuth } from '@/lib/auth-context';
 import { useLibrary } from '@/lib/library-context';
 import { AccountId } from '@/components/settings/AccountId';
@@ -159,6 +160,20 @@ export default function SettingsScreen() {
       <View style={styles.legal}>
         <LegalLinks />
       </View>
+
+      {/* Development builds only: the Recipe Box page-flip test, to prove
+          the 3D turn on a real iPhone before the book is built on it. Goes
+          when the book lands (ROADMAP "The Recipe Box: books"). */}
+      {__DEV__ ? (
+        <Pressable
+          accessibilityRole="button"
+          style={({ pressed }) => [styles.signOutButton, pressed && styles.signOutPressed]}
+          onPress={() => router.push('/dev/flip')}
+          testID="settings-dev-flip"
+        >
+          <Text style={styles.signOutText}>Page flip test (development only)</Text>
+        </Pressable>
+      ) : null}
 
       {/* .rd-btn-danger: a real button on the card colour, not a transparent
           box whose only edge is a line within a shade of the page. */}
