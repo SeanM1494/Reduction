@@ -293,7 +293,7 @@ export function Book({ book, pages, spread, onSpreadChange, onOpenPage, onBlankP
               {interactive ? <Face {...leaf} role="bwd-back" content={content(L - 1)} /> : null}
               <LinearGradient
                 pointerEvents="none"
-                colors={['rgba(60,40,20,0)', 'rgba(60,40,20,0.13)', 'rgba(60,40,20,0.22)', 'rgba(60,40,20,0.13)', 'rgba(60,40,20,0)']}
+                colors={['rgba(60,40,20,0)', 'rgba(60,40,20,0.06)', 'rgba(60,40,20,0.1)', 'rgba(60,40,20,0.06)', 'rgba(60,40,20,0)']}
                 locations={[0, 0.42, 0.5, 0.58, 1]}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 0 }}

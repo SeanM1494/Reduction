@@ -25,7 +25,9 @@ import { fonts } from '@/constants/colors';
 import type { Entry } from '@/lib/api';
 
 export const PAPER = '#fbf6ea';
-const PAPER_SPINE = '#ece2cc';
+// Half the prototype's warmth (#ece2cc), over the inner 12% rather than 22%:
+// the fold should read as a fold, not a shadow.
+const PAPER_SPINE = '#f4ecdb';
 const INK = '#2a2118';
 const INK_SOFT = '#5c4d3c';
 const MUTED = '#8a7a66';
@@ -52,7 +54,7 @@ export const BookPage = memo(function BookPage({ content, side, book, width, hei
           a right page. */}
       <LinearGradient
         colors={[PAPER, PAPER, PAPER_SPINE]}
-        locations={[0, 0.78, 1]}
+        locations={[0, 0.88, 1]}
         start={{ x: side === 'left' ? 0 : 1, y: 0 }}
         end={{ x: side === 'left' ? 1 : 0, y: 0 }}
         style={StyleSheet.absoluteFill}
