@@ -7,6 +7,7 @@
  */
 
 import * as cheerio from "cheerio";
+import { parseIsoDuration } from "@workspace/recipe-model";
 
 const UA =
   "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 " +
@@ -30,6 +31,11 @@ export interface FetchedSource {
    *  or null. A pointer for lib/photos.ts to fetch at save time — never
    *  handed to a client. */
   image: string | null;
+  /** schema.org `totalTime`, in whole minutes, when the page STATES one —
+   *  null otherwise. Never computed from prep + cook or from steps
+   *  (recipe-model totalTime.ts says why). Always null on a text page:
+   *  there, a stated total is the model's to read. */
+  totalMinutes: number | null;
 }
 
 /**
@@ -185,7 +191,16 @@ export async function fetchSource(rawUrl: string): Promise<FetchedSource> {
   const buf = await res.arrayBuffer();
   if (buf.byteLength > MAX_BYTES) throw new Error("That page is too large.");
   const html = new TextDecoder("utf-8").decode(buf);
+  return sourceFromHtml(html, url);
+}
 
+/**
+ * Everything fetchSource learns from a page, from its HTML alone: the
+ * structured recipe when there is one, the text when there is not. Split
+ * out of the fetch so the parse can be tested against a page without a
+ * network (fetchSource.test.ts).
+ */
+export function sourceFromHtml(html: string, url: URL): FetchedSource {
   const $ = cheerio.load(html);
   const siteName =
     $('meta[property="og:site_name"]').attr("content")?.trim() || url.hostname;
@@ -225,6 +240,7 @@ export async function fetchSource(rawUrl: string): Promise<FetchedSource> {
         // The picture, from the same node the ingredients came from. The
         // og:image is the fallback: many pages that skip `image` set it.
         image: imageUrlOf(node.image, url) ?? imageUrlOf($('meta[property="og:image"]').attr("content"), url),
+        totalMinutes: parseIsoDuration(node.totalTime),
       };
     }
   }
@@ -245,5 +261,6 @@ export async function fetchSource(rawUrl: string): Promise<FetchedSource> {
     siteName,
     // A text-quality page can still have a picture worth keeping.
     image: imageUrlOf($('meta[property="og:image"]').attr("content"), url),
+    totalMinutes: null,
   };
 }

@@ -28,19 +28,20 @@ const timed = (...minutes: Array<unknown>) => ({
   sections: [{ nodes: minutes.map((m) => ({ minutes: m })) }],
 });
 
-test('totalMinutes sums step minutes and is null when nothing is timed', () => {
-  assert.equal(totalMinutes(item({ id: 'a', recipe: timed(10, 25) })), 35);
-  assert.equal(totalMinutes(item({ id: 'b', recipe: timed(undefined, null) })), null);
-  // A string minute is not a number and contributes nothing — stepMinutes
-  // owns that guard, so "12 min" can never reach the sum as NaN.
-  assert.equal(totalMinutes(item({ id: 'c', recipe: timed('12', 3) })), 3);
+test('totalMinutes is the time the source STATED — never the sum of the steps', () => {
+  assert.equal(totalMinutes(item({ id: 'a', recipe: { totalMinutes: 30 } })), 30);
+  // The recipe that made this a rule: timed steps summing to 2 minutes on
+  // a 30-minute recipe. With no stated total there is no time to show.
+  assert.equal(totalMinutes(item({ id: 'b', recipe: timed(1, 1) })), null);
+  assert.equal(totalMinutes(item({ id: 'c', recipe: { ...timed(1, 1), totalMinutes: 30 } })), 30, 'stated beats steps');
+  assert.equal(totalMinutes(item({ id: 'd', recipe: { totalMinutes: '30 min' } as never })), null, 'junk is no time');
 });
 
-test('recently added is the default order and untimed sorts last by time', () => {
+test('recently added is the default order, and by total time the unstated sort last', () => {
   const lib = [
-    item({ id: 'old', savedAt: 1, recipe: timed(5) }),
-    item({ id: 'new', savedAt: 3, recipe: {} }),
-    item({ id: 'mid', savedAt: 2, recipe: timed(50) }),
+    item({ id: 'old', savedAt: 1, recipe: { totalMinutes: 5 } }),
+    item({ id: 'new', savedAt: 3, recipe: timed(1) }), // timed steps, no stated total
+    item({ id: 'mid', savedAt: 2, recipe: { totalMinutes: 50 } }),
   ];
   assert.deepEqual(arrangeLibrary(lib, 'all', 'added').map((e) => e.id), ['new', 'mid', 'old']);
   assert.deepEqual(arrangeLibrary(lib, 'all', 'time').map((e) => e.id), ['old', 'mid', 'new']);

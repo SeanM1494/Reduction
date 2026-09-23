@@ -10,6 +10,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { SYSTEM_PROMPT, buildUserText, buildRepairText } from "./prompt";
 import { validateRecipe, type Recipe } from "../shared/layout";
 import { sanitizeMealTypes } from "../shared/mealTypes";
+import { setRecipeTotalMinutes } from "@workspace/recipe-model";
 
 let _client: Anthropic | null = null;
 function getClient(): Anthropic {
@@ -128,6 +129,8 @@ export async function structureRecipe(
       // Metadata, not structure: unknowns drop rather than costing a retry
       // round trip, and an empty result renders as "untagged".
       recipe.mealTypes = sanitizeMealTypes(recipe.mealTypes);
+      // A stated total time, through its gate: junk is dropped, not stored.
+      setRecipeTotalMinutes(recipe, (recipe as { totalMinutes?: unknown }).totalMinutes);
       return { recipe, attempts: attempt, repaired };
     }
 

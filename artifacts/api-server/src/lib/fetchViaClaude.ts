@@ -18,6 +18,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { SYSTEM_PROMPT, buildRepairText } from "./prompt";
 import { validateRecipe, type Recipe } from "../shared/layout";
 import { sanitizeMealTypes } from "../shared/mealTypes";
+import { setRecipeTotalMinutes } from "@workspace/recipe-model";
 
 let _client: Anthropic | null = null;
 function getClient(): Anthropic {
@@ -132,6 +133,8 @@ export async function structureRecipeFromUrl(
     if (errors.length === 0) {
       const recipe = parsed as Recipe;
       recipe.mealTypes = sanitizeMealTypes(recipe.mealTypes);
+      // A stated total time, through its gate: junk is dropped, not stored.
+      setRecipeTotalMinutes(recipe, (recipe as { totalMinutes?: unknown }).totalMinutes);
       recipe.sourceUrl = url;
       try {
         recipe.source = new URL(url).hostname.replace(/^www\./, "");

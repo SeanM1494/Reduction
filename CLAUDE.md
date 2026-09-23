@@ -1421,6 +1421,17 @@ It would not have stayed harmless: a null unit selects the countable ladder,
 one of the two that snap unconditionally. If you add a caller that renders an
 amount, decide which of the two it is.
 
+**A recipe's total time is STATED, never computed.** `recipe.totalMinutes`
+(recipe-model `totalTime.ts`, NOT a field on the Recipe type — layout.ts
+stayed untouched) comes from schema.org `totalTime` or a total the source
+writes out, and nowhere else. Never sum the timed steps into it, never add
+prep and cook: the old card showed the step sum and a "30-Minute Mongolian
+Beef" read "2 min". Absent means the clients show NO time. On a
+structured-data page the model is shown only ingredients and steps, so its
+number there is a guess and the route discards it for the page's own. Read
+and write it only through `recipeTotalMinutes`/`setRecipeTotalMinutes`; the
+gate is `sanitizeTotalMinutes`, applied wherever a tree enters the server.
+
 **`minutes` and `tempF` are the only numbers in a stored recipe that
 `validateRecipe` has no opinion on**, and they are now typed by hand. Render
 them through `formatMinutes`/`stepMinutes` in `lib/recipe-model/src/amounts.ts`, never

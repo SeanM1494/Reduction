@@ -764,7 +764,15 @@ DECIDED (Sep 23):
   recipe has none, the time line is HIDDEN; the sum of timed steps is never
   labelled total time anywhere, because on a "30-Minute Mongolian Beef" it
   read "2 min". Timed steps still drive timers and Cook mode. Its own
-  commit, separate from the books.
+  commit, separate from the books. **DONE Sep 23** (recipe-model
+  totalTime.ts): JSON-LD `totalTime` on a structured page — where it is the
+  ONLY source, since the model there never sees the page — and a total the
+  text or photo states outright elsewhere. Prep + cook are never added up.
+  Both clients' cards and the "Total time" sort now use it; cards without
+  one show no time. On the book page, a hidden time line leaves no hole
+  (the lines below flow up, the cooked pill is pinned to the bottom); on a
+  narrow page it buys back the second line of ingredients the SE fix took
+  — measured on the prototype, 0 collisions over 31 pages.
 - **Two books**: the other one always peeks below; swipe up switches,
   swipe down rubber-bands. **One book**: no peeks, no vertical swipe. An
   **empty library** is the existing invitation to find a first recipe.

@@ -25,6 +25,7 @@ import { checkAccess, subscriptionRequired } from "../lib/billing/access";
 import { ensureTrialId, refundTrial, spendTrial, storeTrialRecipe } from "../lib/trial";
 import { urlKeyOf } from "../lib/urlKey";
 import { hostOf, recordExtraction, type ExtractionEvent } from "../lib/extractionLog";
+import { setRecipeTotalMinutes } from "@workspace/recipe-model";
 
 export const recipesRouter = Router();
 
@@ -394,6 +395,12 @@ recipesRouter.post("/extract", requireExtractionAllowance, async (req: Request, 
         repaired = out.repaired;
         recipe.source = src.siteName;
         recipe.image = src.image;
+        // On a structured-data page the model was shown only the ingredients
+        // and steps — never the page — so any total it returned is a guess
+        // from step times. There, the page's own totalTime is the only
+        // source, and its absence clears the model's number. On a text page
+        // the model read the page itself, and its (gated) value stands.
+        if (src.quality === "jsonld") setRecipeTotalMinutes(recipe, src.totalMinutes);
         extraction = src.quality;
       } catch (selfErr) {
         // Blocked, JS-rendered, or unreadable. Let Claude fetch it instead —
@@ -647,6 +654,8 @@ recipesRouter.post("/reextract", async (req: Request, res: Response) => {
       repaired = out.repaired;
       recipe.source = src.siteName;
       recipe.image = src.image;
+      // Same rule as the first extraction: see there.
+      if (src.quality === "jsonld") setRecipeTotalMinutes(recipe, src.totalMinutes);
     } catch {
       mark({ via: "claude" });
       const out = await structureRecipeFromUrl(url);

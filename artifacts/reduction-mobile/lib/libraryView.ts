@@ -13,8 +13,8 @@
 import {
   MEAL_TYPES,
   primaryMealType,
+  recipeTotalMinutes,
   sanitizeMealTypes,
-  stepMinutes,
   type MealType,
 } from '@workspace/recipe-model';
 
@@ -28,6 +28,8 @@ export interface LibraryItem {
     title?: string;
     source?: string | null;
     mealTypes?: string[];
+    /** The stated total time; read only through `totalMinutes`. */
+    totalMinutes?: unknown;
     sections?: Array<{ nodes?: Array<{ minutes?: unknown }>; ingredients?: Array<{ name?: string }> }>;
   };
 }
@@ -60,21 +62,16 @@ export const SORTS: Array<[SortKey, string]> = [
 export const sortLabel = (key: SortKey): string =>
   SORTS.find(([k]) => k === key)?.[1] ?? SORTS[0][1];
 
-/** Sum of every step's minutes — the honest lower bound on hands-on-to-done.
- *  Null when no step carries a time, which sorts after everything timed. */
+/**
+ * The recipe's total time as its SOURCE stated it, or null — and null means
+ * the card shows no time at all (recipe-model totalTime.ts). It used to be
+ * the sum of the timed steps, which is not a total and read as one: on a
+ * "30-Minute Mongolian Beef" it said "2 min". The step times still drive
+ * timers and Cook mode; they are just never presented as this number.
+ * Null sorts after everything with a stated time.
+ */
 export function totalMinutes(entry: LibraryItem): number | null {
-  let sum = 0;
-  let any = false;
-  for (const s of entry.recipe.sections ?? []) {
-    for (const n of s.nodes ?? []) {
-      const m = stepMinutes(n.minutes);
-      if (m != null) {
-        sum += m;
-        any = true;
-      }
-    }
-  }
-  return any ? sum : null;
+  return recipeTotalMinutes(entry.recipe);
 }
 
 export const lastCooked = (e: LibraryItem): number =>

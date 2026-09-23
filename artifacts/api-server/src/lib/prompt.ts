@@ -17,6 +17,7 @@ SHAPE
   "servings": number | null,
   "yieldText": string | null,
   "mealTypes": string[],
+  "totalMinutes": number | null,
   "sections": [
     {
       "name": string,
@@ -58,6 +59,10 @@ Standing oven instructions go in the section "header", not in a step.
 MEAL TYPES
 
 "mealTypes" is 1 to 3 values from exactly this list: breakfast, lunch, dinner, dessert, snack, side, drink, baking. The most natural one comes FIRST — it is the primary. A recipe can genuinely be several (chili is dinner and lunch; muffins are breakfast and snack); do not pad to 3 when one is honest. Appetizers count as snack; soups and salads as dinner or side by their role; anything oven-baked that is not dessert leans baking.
+
+TOTAL TIME
+
+"totalMinutes" is the recipe's total time in minutes ONLY when the source states a total outright — a line like "Total time: 45 min" or "Ready in 1 hour 15 minutes". Convert it to minutes: 1 hour 15 minutes is 75. Otherwise it is null. Never estimate it, never add up the step times, and never add prep time and cook time together: a source that says "Prep 15 min, Cook 30 min" and gives no total gets null.
 
 AMOUNTS
 

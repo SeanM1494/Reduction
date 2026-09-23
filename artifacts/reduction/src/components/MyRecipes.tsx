@@ -10,7 +10,7 @@
 
 import React, { useMemo, useState } from "react";
 import type { Entry, PhotoMeta } from "../lib/storage";
-import { stepMinutes } from "../shared/amounts";
+import { recipeTotalMinutes } from "@workspace/recipe-model";
 import RecipePhoto from "./RecipePhoto";
 import {
   MEAL_TYPES,
@@ -44,21 +44,12 @@ const SORTS: Array<[SortKey, string]> = [
   ["rating", "Favourites first"],
 ];
 
-/** Sum of every step's minutes — the honest lower bound on hands-on-to-done.
- *  Null when no step carries a time, which sorts after everything timed. */
+/** The recipe's total time as its source STATED it, or null — and null
+ *  shows no time at all (recipe-model totalTime.ts). Never the sum of the
+ *  timed steps, which is not a total and read as one ("2 min" on a
+ *  30-minute recipe). Null sorts after everything with a stated time. */
 function totalMinutes(entry: Entry): number | null {
-  let sum = 0;
-  let any = false;
-  for (const s of entry.recipe.sections ?? []) {
-    for (const n of s.nodes ?? []) {
-      const m = stepMinutes(n.minutes);
-      if (m != null) {
-        sum += m;
-        any = true;
-      }
-    }
-  }
-  return any ? sum : null;
+  return recipeTotalMinutes(entry.recipe);
 }
 
 const lastCooked = (e: Entry): number =>
