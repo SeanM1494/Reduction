@@ -18,16 +18,17 @@
  * screen can produce (see the web's "Writes are confirmed, not assumed").
  */
 
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Stack, router, useLocalSearchParams } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import { useLibrary, type EntryPatch } from '@/lib/library-context';
 import { RecipeScreen } from '@/components/RecipeScreen';
 import { MealTypeSheet } from '@/components/recipe/MealTypeSheet';
-import { Sheet, SheetButton, SheetNote } from '@/components/Sheet';
+import { Window } from '@/components/Window';
 import { useAuth } from '@/lib/auth-context';
 import { useColors, type Colors } from '@/hooks/useColors';
+import { fonts } from '@/constants/colors';
 import { PhotoSheet } from '@/components/recipe/PhotoSheet';
 import { FinishPrompt, type FinishStage } from '@/components/recipeBox/FinishPrompt';
 import { useToast } from '@/components/Toast';
@@ -57,6 +58,12 @@ export default function RecipeDetailScreen() {
   const [mealSheetOpen, setMealSheetOpen] = useState(false);
   const [photoSheetOpen, setPhotoSheetOpen] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  // What a menu item opens once the menu has finished closing.
+  const afterMenu = useRef<(() => void) | null>(null);
+  const menuThen = (next: () => void) => {
+    afterMenu.current = next;
+    setMenuOpen(false);
+  };
   const [deleting, setDeleting] = useState(false);
   const [syncError, setSyncError] = useState<string | null>(null);
   // The diagram scrolls sideways. At its leftmost position a swipe to the
@@ -224,24 +231,28 @@ export default function RecipeDetailScreen() {
         }}
       />
 
-      <Sheet open={menuOpen} title={recipeTitle} closeLabel="Close" onClose={() => setMenuOpen(false)}>
-        <View style={styles.menu}>
-          <MenuItem
-            label="Meal types"
-            onPress={() => {
-              setMenuOpen(false);
-              setMealSheetOpen(true);
-            }}
-            colors={colors}
-          />
-          <MenuItem
-            label="Photo"
-            onPress={() => {
-              setMenuOpen(false);
-              setPhotoSheetOpen(true);
-            }}
-            colors={colors}
-          />
+      {/* A WINDOW, like every dialog that asks something (Sep 24, on the
+          phone): the old sheet slid its dark scrim up the screen. An item
+          that opens another dialog opens it from onClosed — after this one
+          is gone — because iOS can refuse, or take down, a Modal presented
+          while another is still dismissing. */}
+      <Window
+        open={menuOpen}
+        onClose={() => setMenuOpen(false)}
+        onClosed={() => {
+          const next = afterMenu.current;
+          afterMenu.current = null;
+          next?.();
+        }}
+        maxWidth={360}
+        testID="recipe-menu-window"
+      >
+        <Text style={styles.menuTitle} numberOfLines={2} accessibilityRole="header">
+          {recipeTitle}
+        </Text>
+        <View style={styles.menu} accessibilityRole="menu">
+          <MenuItem label="Meal types" onPress={() => menuThen(() => setMealSheetOpen(true))} colors={colors} testID="menu-meal-types" />
+          <MenuItem label="Photo" onPress={() => menuThen(() => setPhotoSheetOpen(true))} colors={colors} testID="menu-photo" />
           <MenuItem
             label="Clear progress"
             onPress={() => {
@@ -249,18 +260,19 @@ export default function RecipeDetailScreen() {
               write({ done: [] });
             }}
             colors={colors}
+            testID="menu-clear"
           />
-          <MenuItem
-            label="Delete recipe"
-            danger
-            onPress={() => {
-              setMenuOpen(false);
-              setConfirmDelete(true);
-            }}
-            colors={colors}
-          />
+          <MenuItem label="Delete recipe" danger onPress={() => menuThen(() => setConfirmDelete(true))} colors={colors} testID="menu-delete" />
         </View>
-      </Sheet>
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => setMenuOpen(false)}
+          style={({ pressed }) => [styles.menuClose, pressed && styles.menuItemPressed]}
+          testID="menu-close"
+        >
+          <Text style={styles.menuCloseText}>Close</Text>
+        </Pressable>
+      </Window>
 
       <PhotoSheet open={photoSheetOpen} entry={entry} onClose={() => setPhotoSheetOpen(false)} />
 
@@ -276,38 +288,51 @@ export default function RecipeDetailScreen() {
       {/* Confirmed rather than immediate, unlike the web: a thumb on a phone
           reaches "Delete" far more easily than a mouse does, and there is no
           undo for it. */}
-      <Sheet open={confirmDelete} title="Delete this recipe?" closeLabel="Keep it" onClose={() => setConfirmDelete(false)}>
-        <SheetNote>
+      <Window open={confirmDelete} onClose={() => setConfirmDelete(false)} instant={deleting} maxWidth={400} testID="recipe-delete-window">
+        <Text style={styles.confirmHeading} accessibilityRole="header">
+          Delete this recipe?
+        </Text>
+        <Text style={styles.confirmBody}>
           {recipeTitle} and its progress are removed from your library. There is no undo.
-        </SheetNote>
-        <View style={styles.confirmRow}>
-          <SheetButton
-            label={deleting ? 'Deleting…' : 'Delete recipe'}
-            danger
-            disabled={deleting}
-            testID="recipe-delete-confirm"
-            onPress={async () => {
-              setDeleting(true);
-              // Optimistic: the row is gone from the list now; a failed
-              // delete brings it back with a notice on the library.
-              await remove(entry.id);
-              setConfirmDelete(false);
-              setDeleting(false);
-              router.back();
-            }}
-          />
-        </View>
-      </Sheet>
+        </Text>
+        <Pressable
+          accessibilityRole="button"
+          disabled={deleting}
+          onPress={async () => {
+            setDeleting(true);
+            // Optimistic: the row is gone from the list now; a failed
+            // delete brings it back with a notice on the library.
+            await remove(entry.id);
+            setConfirmDelete(false);
+            // Opened from a link there may be nothing to go back to.
+            if (router.canGoBack()) router.back();
+            else router.replace('/library');
+          }}
+          style={({ pressed }) => [styles.dangerBtn, (pressed || deleting) && { opacity: 0.85 }]}
+          testID="recipe-delete-confirm"
+        >
+          <Text style={styles.dangerBtnText}>{deleting ? 'Deleting…' : 'Delete recipe'}</Text>
+        </Pressable>
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => setConfirmDelete(false)}
+          style={({ pressed }) => [styles.keepBtn, pressed && { borderColor: colors.borderStrong }]}
+          testID="recipe-delete-keep"
+        >
+          <Text style={styles.keepBtnText}>Keep it</Text>
+        </Pressable>
+      </Window>
     </>
   );
 }
 
-function MenuItem({ label, onPress, danger, colors }: { label: string; onPress: () => void; danger?: boolean; colors: Colors }) {
+function MenuItem({ label, onPress, danger, colors, testID }: { label: string; onPress: () => void; danger?: boolean; colors: Colors; testID?: string }) {
   const styles = makeStyles(colors);
   return (
     <Pressable
       accessibilityRole="menuitem"
       onPress={onPress}
+      testID={testID}
       style={({ pressed }) => [styles.menuItem, pressed && styles.menuItemPressed]}
     >
       <Text style={[styles.menuText, danger && { color: colors.dangerInk }]}>{label}</Text>
@@ -323,6 +348,25 @@ function makeStyles(colors: Colors) {
     menuItem: { minHeight: 48, justifyContent: 'center', paddingHorizontal: 6, borderRadius: colors.radius },
     menuItemPressed: { backgroundColor: colors.muted },
     menuText: { fontSize: 16, color: colors.foreground },
-    confirmRow: { marginTop: 16, marginBottom: 6, flexDirection: 'row' },
+    menuTitle: { fontFamily: fonts.heading, fontSize: 17, lineHeight: 22, color: colors.foreground, marginBottom: 8, paddingHorizontal: 6 },
+    menuClose: { marginTop: 6, minHeight: 44, alignItems: 'center', justifyContent: 'center', borderRadius: colors.radius },
+    menuCloseText: { fontSize: 15, color: colors.mutedForeground },
+    confirmHeading: { fontFamily: fonts.heading, fontSize: 20, lineHeight: 25, textAlign: 'center', color: colors.foreground },
+    confirmBody: { marginTop: 10, fontSize: 15, lineHeight: 21, textAlign: 'center', color: colors.foreground },
+    // A fixed dark red in both themes: dark mode's danger ink is a light
+    // pink, and white on it would not read.
+    dangerBtn: { marginTop: 18, minHeight: 48, borderRadius: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: '#92351b' },
+    dangerBtnText: { fontSize: 15, fontWeight: '600', color: '#fff' },
+    keepBtn: {
+      marginTop: 8,
+      minHeight: 48,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: colors.border,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: colors.card,
+    },
+    keepBtnText: { fontSize: 15, fontWeight: '600', color: colors.foreground },
   });
 }

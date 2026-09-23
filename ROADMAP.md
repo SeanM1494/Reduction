@@ -933,9 +933,18 @@ DECIDED (Sep 23, after the step-1 push):
     lessons and the incidents that taught them are unchanged.
   Kept, because the books use them: reanimated, gesture-handler and
   expo-haptics (all were already dependencies).
-- **Next, as asked Sep 24: the sheet sweep** (above) — every remaining
-  bottom sheet to stop sliding its scrim, and the recipe's ⋮ menu to open
-  as a window.
+- **The sheet sweep: DONE Sep 24.** Fixed at the source: the shared
+  `Sheet` no longer lets its Modal animate. The scrim fades where it is and
+  only the card slides up (and back down on close), so sort, meal types,
+  photo and every edit sheet lost the wash at once. The recipe's ⋮ menu and
+  its "Delete this recipe?" are now windows, like every dialog that asks
+  something. A menu item that opens another dialog opens it from the
+  menu's `onClosed` — after the menu's Modal is gone — because iOS can
+  refuse, or take down, a Modal presented while another is dismissing.
+  Left alone on purpose: ErrorFallback's slide-up details view, which only
+  exists in development builds. Also fixed on the way: deleting a recipe
+  opened from a link had nothing to go back to and stayed on a recipe that
+  no longer existed; it now lands in the library.
 
 ## 2. Global recipe search inside the app
 

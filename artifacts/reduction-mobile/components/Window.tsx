@@ -31,10 +31,15 @@ interface Props {
   /** Padding inside the card; the preview's photo wants less. */
   padding?: number;
   testID?: string;
+  /** After it has finished closing and its Modal is gone. Open the NEXT
+   *  dialog from here, never in the same breath as closing this one: iOS
+   *  can refuse to present a Modal while another is still dismissing, or
+   *  take the new one down with the old. */
+  onClosed?: () => void;
   children: React.ReactNode;
 }
 
-export function Window({ open, onClose, instant = false, maxWidth = 440, padding = 18, testID, children }: Props) {
+export function Window({ open, onClose, instant = false, maxWidth = 440, padding = 18, testID, onClosed, children }: Props) {
   const colors = useColors();
   const styles = makeStyles(colors);
   const insets = useSafeAreaInsets();
@@ -42,6 +47,13 @@ export function Window({ open, onClose, instant = false, maxWidth = 440, padding
   const reduceMotion = useReducedMotion();
   const progress = useSharedValue(0);
   const [mounted, setMounted] = useState(open);
+  const onClosedRef = useRef(onClosed);
+  onClosedRef.current = onClosed;
+  const wasMounted = useRef(open);
+  useEffect(() => {
+    if (wasMounted.current && !mounted) onClosedRef.current?.();
+    wasMounted.current = mounted;
+  }, [mounted]);
   // What was shown, kept on screen while it fades out after the parent has
   // already moved on to nothing.
   const last = useRef<React.ReactNode>(children);

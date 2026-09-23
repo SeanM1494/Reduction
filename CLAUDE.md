@@ -883,6 +883,15 @@ accommodate afterwards.
   is a SIBLING of anything scrollable, never a cell in one — a pan inside a
   scroller fights the scroller — and its search results REPLACE the shelf
   rather than scrolling over it.
+- **A dialog that asks something is a centred WINDOW
+  (`components/Window.tsx`); a list of choices or a form is a `Sheet`; and
+  no Modal animates itself.** A Modal's own "slide" moves the whole layer,
+  so the dark scrim visibly rose up the screen behind the card — "the
+  wash", reported on the phone (Sep 24). Both components fade the scrim in
+  place and animate only the card, from one progress value. **Open the next
+  dialog from the first one's `onClosed`**, never in the same breath as
+  closing it: iOS can refuse to present a Modal while another is still
+  dismissing, or take the new one down with the old.
 - The landing page section below is part of this rule, not a separate concern.
 
 ### Verify on a real phone viewport, and on production
