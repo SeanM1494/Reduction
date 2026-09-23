@@ -402,11 +402,13 @@ const styles = StyleSheet.create({
     paddingTop: 7,
     paddingHorizontal: 7,
     paddingBottom: 9,
+    // Lighter than the prototype's (0.28 / 13 / 12): with three books on
+    // screen, three full drop shadows read as heavy.
     shadowColor: '#28190a',
-    shadowOpacity: 0.28,
-    shadowRadius: 13,
-    shadowOffset: { width: 0, height: 12 },
-    elevation: 8,
+    shadowOpacity: 0.14,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 5 },
+    elevation: 4,
   },
   // A drop shadow vanishes on a dark page, so the book gets a faint light
   // edge instead to sit apart from it.
