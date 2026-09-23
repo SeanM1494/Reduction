@@ -294,6 +294,35 @@ create table recipe_photos (
 No foreign key to `recipes`, deliberately — see the schema comment. The
 library DELETE route and account deletion remove photos in code.
 
+### The recipe box
+
+A recipe can be taken out of the recipe box without being deleted:
+`recipes.removed_at` is set, the library list leaves the row out, and
+`GET /api/library/removed` lists it for Settings → Removed recipes.
+Restoring is a PATCH of `removedAt: null`; deleting forever is the
+ordinary DELETE. Hand-run DDL, like every production schema change:
+
+```sql
+alter table recipes add column removed_at timestamptz;
+```
+
+**Run it BEFORE the deploy that carries it — and before pulling that commit
+into the Replit workspace, whose dev server uses the production database.**
+Nullable with no default, so it is instant and the code already running is
+unaffected. The other order is not: drizzle's `select()` names every schema
+column, so code that knows `removed_at` fails every recipes query against a
+database without it, and the app shows an empty shelf. Measured by renaming
+the column under a booted server: `/api/library` answered 500.
+
+`GET /api/health` reports this: its `schema` field lists any hand-run
+column or table the running code needs and the database lacks, with the
+README section holding its DDL, and the same line is logged at boot
+(`lib/schemaCheck.ts`, which is where new hand-run DDL is registered):
+
+```json
+{"ok":true,"commit":"…","schema":{"ok":false,"missing":["recipes.removed_at (README \"The recipe box\")"]}}
+```
+
 ### A development build for a physical iPhone
 
 `artifacts/reduction-mobile/eas.json` has three profiles. `development` is

@@ -352,3 +352,60 @@ test("order: clearing back to the recipe's own order is a change like any other"
   const theirs = entry({ order: { sections: ["Gravy"] } });
   assert.equal(mergeEntry(base, mine, theirs).merged.order, null);
 });
+
+// -------------------------------------------------------------- removedAt --
+
+test("removedAt: one side took it out of the box, the removal is adopted", () => {
+  const base = entry({ removedAt: null });
+  assert.equal(mergeEntry(base, entry({ removedAt: null }), entry({ removedAt: 5000 })).merged.removedAt, 5000);
+  assert.equal(mergeEntry(base, entry({ removedAt: 4000 }), entry({ removedAt: null })).merged.removedAt, 4000);
+});
+
+test("removedAt: one side restored it, the restore is adopted", () => {
+  const base = entry({ removedAt: 5000 });
+  assert.equal(mergeEntry(base, entry({ removedAt: null }), entry({ removedAt: 5000 })).merged.removedAt, null);
+  assert.equal(mergeEntry(base, entry({ removedAt: 5000 }), entry({ removedAt: null })).merged.removedAt, null);
+});
+
+test("removedAt: both removed it — agreement, not a conflict, and the server's stamp is kept", () => {
+  // Mine is this device's clock (a write still in flight); theirs is the
+  // time the server stamped for the other device. Different numbers, same
+  // state: comparing timestamps would have called this a disagreement.
+  const merged = mergeEntry(entry({ removedAt: null }), entry({ removedAt: 4100 }), entry({ removedAt: 5000 })).merged;
+  assert.equal(merged.removedAt, 5000);
+});
+
+test("removedAt: the server re-stamping my removal is not read as the other side changing it", () => {
+  // Base and theirs carry the server's stamp, mine still carries my clock's.
+  // All three say "removed": nothing changed, so theirs (the server) stands.
+  const merged = mergeEntry(entry({ removedAt: 5000 }), entry({ removedAt: 4100 }), entry({ removedAt: 5000 })).merged;
+  assert.equal(merged.removedAt, 5000);
+});
+
+test("removedAt: removed here and restored there — mine wins, like rating", () => {
+  const base = entry({ removedAt: null });
+  assert.equal(mergeEntry(base, entry({ removedAt: 4000 }), entry({ removedAt: null })).merged.removedAt, 4000);
+  const removedBase = entry({ removedAt: 5000 });
+  // The other device restored and removed again (a new stamp); I restored.
+  assert.equal(mergeEntry(removedBase, entry({ removedAt: null }), entry({ removedAt: 9000 })).merged.removedAt, null);
+});
+
+test("removedAt: every other field merges as it would for a recipe still in the box", () => {
+  // The other device removed it while this one — not yet told — finished
+  // cooking and rated it. The removal stands AND the cook and the rating
+  // survive: removal is not a reason to drop somebody's work.
+  const base = entry({ removedAt: null, rating: null, cooked: [] });
+  const mine = entry({ removedAt: null, rating: 1, cooked: [7_000_000] });
+  const theirs = entry({ removedAt: 5000, rating: null, cooked: [] });
+  const merged = mergeEntry(base, mine, theirs).merged;
+  assert.equal(merged.removedAt, 5000);
+  assert.equal(merged.rating, 1);
+  assert.deepEqual(merged.cooked, [7_000_000]);
+});
+
+test("removedAt: absent on both sides reads as not removed (clients that predate it)", () => {
+  // A build that has never heard of removedAt sends entries without it; the
+  // merge must treat undefined as null rather than as a change.
+  const merged = mergeEntry(entry(), entry(), entry()).merged;
+  assert.equal(merged.removedAt, null);
+});

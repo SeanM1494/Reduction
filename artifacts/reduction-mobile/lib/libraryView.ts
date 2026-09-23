@@ -32,6 +32,17 @@ export interface LibraryItem {
   };
 }
 
+/**
+ * Is this entry in the recipe box, or was it taken out? The server already
+ * leaves removed recipes out of the library list; this is the client's half,
+ * for the moments that list is not the whole story — a removal made here and
+ * not yet confirmed, an offline write to a recipe another device removed
+ * (its reply carries the row, `removedAt` and all), and a cache written
+ * before the removal. Absent reads as "in the box": entries from a cache or
+ * a server that predate the field are not removed.
+ */
+export const inRecipeBox = (e: { removedAt?: number | null }): boolean => e.removedAt == null;
+
 export type SortKey = 'added' | 'cooked' | 'time' | 'source' | 'type' | 'rating';
 export type Filter = MealType | 'all' | 'untagged' | 'favourites';
 

@@ -12,7 +12,7 @@
  */
 
 import { Router, type Request, type Response, type NextFunction } from "express";
-import { eq, and, desc, isNull, sql, type SQL } from "drizzle-orm";
+import { eq, and, desc, isNull, isNotNull, sql, type SQL } from "drizzle-orm";
 import { getDb } from "../db";
 import { recipes } from "@workspace/db";
 import {
@@ -170,6 +170,10 @@ function wireEntry(row: typeof recipes.$inferSelect, photo: PhotoMeta | null = n
     cooked: row.cooked ?? [],
     rating: row.rating ?? null,
     order: row.cardOrder ?? null,
+    /** Epoch ms when it was taken out of the recipe box, or null. Only the
+     *  Removed list (and a write to a removed row) ever carries a non-null
+     *  one: the library list excludes removed rows. */
+    removedAt: row.removedAt ? new Date(row.removedAt).getTime() : null,
     version: row.version ?? 1,
     savedAt: row.createdAt ? new Date(row.createdAt).getTime() : Date.now(),
   };
@@ -258,18 +262,50 @@ export function isValidOrder(
 const isValidRating = (v: unknown): v is number | null =>
   v === null || v === -1 || v === 0 || v === 1;
 
+/** The removal INTENT: null restores, a timestamp removes. The value itself
+ *  is the client's clock and is not stored — see the column comment. */
+const isValidRemovedAt = (v: unknown): v is number | null =>
+  v === null || (typeof v === "number" && Number.isFinite(v) && v > 0);
+
+/**
+ * The recipe box: everything this owner has NOT taken out. Removed rows are
+ * excluded HERE, on the server, rather than filtered by each client, so a
+ * build already installed on someone's phone — which has never heard of
+ * `removed_at` — hides them too. Web included, with no web change.
+ */
 libraryRouter.get("/", async (req: Request, res: Response) => {
   try {
     const db = getDb();
     const rows = await db
       .select()
       .from(recipes)
-      .where(scopeOf(req))
+      .where(and(scopeOf(req), isNull(recipes.removedAt)))
       .orderBy(desc(recipes.updatedAt));
     return res.json({ entries: await wireEntries(rows) });
   } catch (e) {
     console.error("[library:list]", e);
     return res.status(500).json({ error: "Could not load your library." });
+  }
+});
+
+/**
+ * GET /api/library/removed — what the person took out, most recently
+ * removed first, for Settings → Removed recipes. Same wire shape as the
+ * list, photo meta included, so the Settings row can show its thumbnail.
+ * Registered before any `/:id` GET so "removed" is never read as an id.
+ */
+libraryRouter.get("/removed", async (req: Request, res: Response) => {
+  try {
+    const db = getDb();
+    const rows = await db
+      .select()
+      .from(recipes)
+      .where(and(scopeOf(req), isNotNull(recipes.removedAt)))
+      .orderBy(desc(recipes.removedAt));
+    return res.json({ entries: await wireEntries(rows) });
+  } catch (e) {
+    console.error("[library:removed]", e);
+    return res.status(500).json({ error: "Could not load your removed recipes." });
   }
 });
 
@@ -396,7 +432,7 @@ libraryRouter.post("/", async (req: Request, res: Response) => {
 
 libraryRouter.patch("/:id", async (req: Request, res: Response) => {
   const id = String(req.params.id);
-  const { recipe, done, servings, mode, timer, cooked, rating, order, ifVersion } =
+  const { recipe, done, servings, mode, timer, cooked, rating, order, removedAt, ifVersion } =
     req.body ?? {};
   if (ifVersion !== undefined && typeof ifVersion !== "number")
     return res.status(400).json({ error: "ifVersion must be a number." });
@@ -406,6 +442,8 @@ libraryRouter.patch("/:id", async (req: Request, res: Response) => {
     return res.status(400).json({ error: "rating must be -1, 0, 1, or null." });
   if (order !== undefined && !isValidOrder(order))
     return res.status(400).json({ error: "order must be {sections?, branches?} or null." });
+  if (removedAt !== undefined && !isValidRemovedAt(removedAt))
+    return res.status(400).json({ error: "removedAt must be a timestamp or null." });
   const patch: Partial<typeof recipes.$inferInsert> = {
     updatedAt: new Date(),
     version: sql`${recipes.version} + 1` as unknown as number,
@@ -487,6 +525,18 @@ libraryRouter.patch("/:id", async (req: Request, res: Response) => {
       }
 
       /**
+       * Removal. The server stamps the time and keeps the FIRST one, so a
+       * second device removing the same recipe (or a retried write) changes
+       * nothing. Taking a recipe out also stops its timer, here rather than
+       * trusting the client to send `timer: null`: a removed recipe must
+       * never buzz a phone, whichever client removed it.
+       */
+      if (removedAt !== undefined) {
+        patch.removedAt = removedAt === null ? null : (current.removedAt ?? new Date());
+        if (removedAt !== null && current.timer) patch.timer = null;
+      }
+
+      /**
        * The preference is pruned against whatever tree the row ends up
        * holding — the same place, and for the same reason, that `done` is
        * reconciled above: the stored value has to be correct even when the
@@ -517,9 +567,11 @@ libraryRouter.patch("/:id", async (req: Request, res: Response) => {
         entry: await wireOne(result.current),
       });
 
-    // Only when the request actually carried a timer: an unrelated PATCH
-    // (a rating, a mode tap) must not re-schedule or cancel anything.
-    if (timer !== undefined) await syncTimerNotification(req, result.row);
+    // Only when the timer actually changed — the request carried one, or a
+    // removal cleared it: an unrelated PATCH (a rating, a mode tap) must not
+    // re-schedule or cancel anything.
+    if (timer !== undefined || (removedAt != null && result.row.timer === null))
+      await syncTimerNotification(req, result.row);
 
     return res.json({ entry: await wireOne(result.row) });
   } catch (e) {

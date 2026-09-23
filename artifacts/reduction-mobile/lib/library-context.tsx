@@ -41,6 +41,7 @@ import {
 } from './api';
 import { createSyncEngine, type EngineApi, type SyncEngine } from './syncEngine';
 import { clearLibraryCache, readLibraryCache, writeLibraryCache } from './libraryCache';
+import { inRecipeBox } from './libraryView';
 import { useAuth } from './auth-context';
 
 export type EntryPatch = Partial<{
@@ -152,7 +153,9 @@ export function LibraryProvider({ children }: { children: React.ReactNode }) {
         setNotice({ id: f.id, kind: 'failure', message: `${what} (${why}). ${f.kind === 'delete' ? 'It is still here.' : 'It has been undone.'}` });
       },
       onSyncedChange: (synced) => {
-        if (userId) void writeLibraryCache(userId, synced);
+        // Never cache a removed recipe: the cache is what the shelf shows
+        // first on the next launch, before the network has said anything.
+        if (userId) void writeLibraryCache(userId, synced.filter(inRecipeBox));
       },
       onDeferredChange: (ids) => setQueued(ids),
     });
@@ -182,7 +185,9 @@ export function LibraryProvider({ children }: { children: React.ReactNode }) {
     setNotice(null);
     if (!userId) return;
     (async () => {
-      const cached = await readLibraryCache(userId);
+      // Filtered on the way in as well as on the way out, for caches written
+      // by a build that stored whatever it had.
+      const cached = (await readLibraryCache(userId))?.filter(inRecipeBox);
       if (cancelled) return;
       if (cached?.length) {
         engine.hydrate(cached);
@@ -262,10 +267,18 @@ export function LibraryProvider({ children }: { children: React.ReactNode }) {
 
   const clearNotice = useCallback(() => setNotice(null), []);
 
+  // What every screen sees: the recipe box, without what was taken out.
+  // The unfiltered list stays inside, because a removal is still a pending
+  // write until the server confirms it, and the engine has to hold the entry
+  // to send it (and to merge it if it meets a 409). `getEntry` reads the
+  // unfiltered list, so a recipe removed while its screen is open does not
+  // vanish out from under the person looking at it.
+  const inBox = useMemo(() => entries.filter(inRecipeBox), [entries]);
+
   const value = useMemo<LibraryState>(
-    () => ({ entries, loading, error, refresh, getEntry, saveRecipe, update,
+    () => ({ entries: inBox, loading, error, refresh, getEntry, saveRecipe, update,
       setPhoto, remove, notice, clearNotice, queued, draft, setDraft }),
-    [entries, loading, error, refresh, getEntry, saveRecipe, update, setPhoto, remove, notice, clearNotice, queued, draft]
+    [inBox, loading, error, refresh, getEntry, saveRecipe, update, setPhoto, remove, notice, clearNotice, queued, draft]
   );
 
   return <LibraryContext.Provider value={value}>{children}</LibraryContext.Provider>;

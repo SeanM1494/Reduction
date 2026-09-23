@@ -45,6 +45,9 @@ export interface SyncableEntry {
   /** -1 | 0 | 1, or null when unrated. Last writer wins. */
   rating?: number | null;
   order?: OrderPreference | null;
+  /** Epoch ms when taken out of the recipe box, or null. Merged on WHETHER
+   *  it is removed, never on the timestamp — see mergeEntry. */
+  removedAt?: number | null;
 }
 
 export interface MergeResult {
@@ -250,6 +253,36 @@ export function mergeEntry(
   // walk meanwhile.
   const order = pick("order", () => mine.order ?? null);
 
+  /**
+   * Removal merges on whether the recipe is removed, NEVER on when. The
+   * timestamp is the server's stamp once a write lands but this device's own
+   * clock until then, so comparing values would call two devices that both
+   * removed it a conflict, and would read "the server stamped my removal" as
+   * the other side changing something.
+   *
+   * One side changed it: that side wins, like every other field. Both did
+   * and agree: take theirs, which is the server-stamped time. Both did and
+   * DISAGREE — removed on one device, restored on the other: mine wins, the
+   * same rule and reasoning as rating. It is a deliberate tap, and nothing
+   * is destroyed either way — a removed recipe keeps its progress, rating
+   * and photo, and is one tap from coming back in Settings.
+   *
+   * Nothing else depends on it: done, rating, cooked and the tree merge
+   * exactly as they would for a recipe still in the box, so an edit made on
+   * a device that had not heard of the removal is kept, not dropped.
+   */
+  const isRemoved = (e: SyncableEntry | null) => (e?.removedAt ?? null) !== null;
+  const removedChangedMine = !base || isRemoved(mine) !== isRemoved(base);
+  const removedChangedTheirs = !base || isRemoved(theirs) !== isRemoved(base);
+  const removedAt: number | null =
+    removedChangedMine && removedChangedTheirs
+      ? isRemoved(mine) === isRemoved(theirs)
+        ? (theirs.removedAt ?? null)
+        : (mine.removedAt ?? null)
+      : removedChangedMine
+        ? (mine.removedAt ?? null)
+        : (theirs.removedAt ?? null);
+
   // Whatever tree won: done is reconciled against it (no id the tree lost),
   // then closure-repaired (no done step with an undone input — see
   // enforceClosure for why honouring removals makes this necessary).
@@ -265,6 +298,7 @@ export function mergeEntry(
       cooked,
       rating: rating ?? null,
       order: order ?? null,
+      removedAt,
     },
     treeConflict,
   };

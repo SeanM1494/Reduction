@@ -46,14 +46,19 @@ const entry = (over: Partial<E> = {}): E => ({
 
 /** The route in miniature. `log` records every call so a test can assert
  *  what went on the wire, and `delay` lets a test hold a request open. */
+/** The time the fake server stamps a removal with — deliberately not any
+ *  number a client sends, so a test can tell whose clock it is reading. */
+const SERVER_STAMP = 9_000_000;
+
 function server(initial: E[] = []) {
   const rows = new Map(initial.map((e) => [e.id, e]));
   const log: Array<{ op: string; id?: string; body?: Record<string, unknown> }> = [];
   let hold: Promise<void> | null = null;
   const api: EngineApi<E> = {
+    // The real route leaves removed rows out of the list (routes/library.ts).
     async list() {
       log.push({ op: 'list' });
-      return [...rows.values()];
+      return [...rows.values()].filter((r) => r.removedAt == null);
     },
     async create(e) {
       log.push({ op: 'create', id: e.id });
@@ -70,6 +75,9 @@ function server(initial: E[] = []) {
         throw Object.assign(new Error('conflict'), { status: 409, entry: cur });
       }
       const { ifVersion: _v, ...fields } = body;
+      // The real route stamps removals itself and keeps the FIRST stamp; the
+      // client's number is intent only.
+      if ('removedAt' in fields) fields.removedAt = fields.removedAt === null ? null : (cur.removedAt ?? SERVER_STAMP);
       const next = { ...cur, ...fields, version: cur.version + 1 } as E;
       rows.set(id, next);
       return next;
@@ -477,4 +485,68 @@ test('a real server refusal while others wait is still immediate', async () => {
   await h.engine.idle();
   assert.equal(h.failures.length, 1);
   assert.deepEqual(h.engine.deferredIds(), []);
+});
+
+// ------------------------------------------------------------ removedAt --
+
+test('buildPatch: a removal and a restore are sent; the server re-stamping one is not a change', () => {
+  const base = entry({ version: 3 });
+  assert.deepEqual(buildPatch(base, { ...base, removedAt: 1234 }), { removedAt: 1234, ifVersion: 3 });
+  const removed = entry({ version: 4, removedAt: SERVER_STAMP });
+  assert.deepEqual(buildPatch(removed, { ...removed, removedAt: null }), { removedAt: null, ifVersion: 4 });
+  // This device still holds its own clock's number; the server stamped its
+  // own. Same state — nothing to send, however many later writes follow.
+  assert.equal(buildPatch(removed, { ...removed, removedAt: 1234 }), null);
+  assert.deepEqual(buildPatch(removed, { ...removed, removedAt: 1234, rating: -1 }), { rating: -1, ifVersion: 4 });
+});
+
+test('removal: the write lands, the next refresh leaves it out, and nothing is re-sent', async () => {
+  const h = harness([entry({ id: 'keep' }), entry({ id: 'out' })]);
+  const loaded = await h.engine.load();
+  const removed = { ...loaded.find((e) => e.id === 'out')!, removedAt: 1234, rating: -1 };
+  h.engine.save(removed);
+  await h.engine.idle();
+  assert.equal(h.rows.get('out')!.removedAt, SERVER_STAMP, 'the server stamped it');
+  assert.equal(h.rows.get('out')!.rating, -1, 'and the thumbs-down landed with it');
+  const out = await h.engine.refresh([loaded.find((e) => e.id === 'keep')!, removed]);
+  assert.deepEqual(out.map((e) => e.id), ['keep']);
+  const patches = h.log.filter((l) => l.op === 'patch');
+  assert.equal(patches.length, 1, 'one write, no echo');
+  assert.equal(h.rows.has('out'), true, 'removed is not deleted: the row is still there');
+});
+
+test('removal made offline survives a refresh that happens before it can be sent', async () => {
+  const h = harness([entry()]);
+  const loaded = await h.engine.load();
+  const online = offline(h);
+  const removed = { ...loaded[0], removedAt: 1234 };
+  h.engine.save(removed);
+  await h.engine.idle();
+  // The list still works and the server still has it in the box.
+  const out = await h.engine.refresh([removed]);
+  assert.equal(out.length, 1);
+  assert.equal(out[0].removedAt, 1234, 'the pending removal is not undone by a refresh');
+  online();
+  h.engine.retry();
+  await h.engine.idle();
+  assert.equal(h.rows.get('r1')!.removedAt, SERVER_STAMP);
+});
+
+test('removed on another device while this one had an edit waiting: the edit still lands, and it stays removed', async () => {
+  const h = harness([entry()]);
+  const loaded = await h.engine.load();
+  const online = offline(h);
+  // This device rated it and cannot send yet.
+  h.engine.save({ ...loaded[0], rating: 1 });
+  await h.engine.idle();
+  // Meanwhile the other device took it out of the box.
+  h.external('r1', { removedAt: SERVER_STAMP });
+  const out = await h.engine.refresh([{ ...loaded[0], rating: 1 }]);
+  assert.deepEqual(out, [], 'gone from this shelf at the next refresh');
+  online();
+  h.engine.retry();
+  await h.engine.idle();
+  const row = h.rows.get('r1')!;
+  assert.equal(row.rating, 1, 'the rating was not thrown away');
+  assert.equal(row.removedAt, SERVER_STAMP, 'and the write did not quietly restore it');
 });

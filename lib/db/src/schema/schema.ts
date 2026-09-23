@@ -108,6 +108,25 @@ export const recipes = pgTable(
       sections?: string[];
       branches?: Record<string, string[]>;
     } | null>(),
+    /**
+     * When the person took this recipe out of their recipe box, or null.
+     * REMOVED IS NOT DELETED: the row, its progress, its rating and its
+     * photo all stay, and restoring is setting this back to null. The
+     * library list excludes these rows (so every client, including builds
+     * already installed on phones, hides them without an update);
+     * GET /api/library/removed lists them for Settings.
+     *
+     * Server-stamped: a PATCH carries only the intent (non-null or null),
+     * and the server keeps the FIRST removal time, so repeats are
+     * idempotent and no client clock is trusted. It never refunds the free
+     * allowance — `account_access.recipes_used` is monotonic.
+     *
+     * HAND-RUN DDL (README "The recipe box"), and it must run BEFORE the
+     * deploy that carries this column: drizzle's `select()` names every
+     * schema column, so code that knows `removed_at` fails every recipes
+     * query against a database that does not have it.
+     */
+    removedAt: timestamp("removed_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),
   },

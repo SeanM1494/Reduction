@@ -141,9 +141,17 @@ export const toSyncable = (e: SyncableEntry): SyncableEntry => ({
   cooked: e.cooked ?? [],
   rating: e.rating ?? null,
   order: e.order ?? null,
+  removedAt: e.removedAt ?? null,
 });
 
-const SYNCED_KEYS: Array<keyof SyncableEntry> = ['recipe', 'done', 'servings', 'mode', 'timer', 'cooked', 'rating', 'order'];
+const SYNCED_KEYS: Array<keyof SyncableEntry> = ['recipe', 'done', 'servings', 'mode', 'timer', 'cooked', 'rating', 'order', 'removedAt'];
+
+/** Did this field change? By value — except removal, which is compared on
+ *  WHETHER it is removed. Its timestamp is this device's clock until the
+ *  write lands and the server's after, so a value compare would re-send a
+ *  removal on every later write for no reason (shared/sync.ts, mergeEntry). */
+const differs = (k: keyof SyncableEntry, a: SyncableEntry, b: SyncableEntry): boolean =>
+  k === 'removedAt' ? (a.removedAt != null) !== (b.removedAt != null) : !same(a[k], b[k]);
 
 /** Only the fields that changed against `base`, plus the version the write
  *  was computed from. Null when nothing changed. */
@@ -152,7 +160,12 @@ export function buildPatch(base: SyncEntry | null, entry: SyncEntry): Record<str
   const mine = toSyncable(entry);
   const theirs = base ? toSyncable(base) : null;
   for (const k of SYNCED_KEYS) {
-    if (!theirs || !same(mine[k], theirs[k])) body[k] = mine[k];
+    // A create has nothing to diff against. Everything goes, except a
+    // removal nobody asked for: `removedAt: null` on a brand-new row says
+    // nothing, and leaving it out keeps a create's body what it always was.
+    if (!theirs) {
+      if (k !== 'removedAt' || mine.removedAt != null) body[k] = mine[k];
+    } else if (differs(k, mine, theirs)) body[k] = mine[k];
   }
   if (Object.keys(body).length === 0) return null;
   if (base) body.ifVersion = base.version;

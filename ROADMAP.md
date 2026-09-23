@@ -744,6 +744,49 @@ menu, meal-type fallback otherwise; nothing hotlinked, no backfill.
   for and should not be built. The escape hatch that exists today is
   `/reextract`, which still has no caller on mobile (parity item 6).
 
+## The Recipe Box: books (Sep 23, designed with an interactive prototype)
+
+Replaces the card stack as the default Library view; the two-column grid
+stays as an alternative chosen in Settings. Seven books, a display grouping
+over the meal types (a recipe sits in the book of its PRIMARY type, never
+two): Breakfast · Lunch · Dinner · Apps & Snacks (snack) · Salads (a new
+ninth type) · Desserts · Other (side, drink, baking, untagged). A spread is
+two recipes; a swipe turns a page with a real 3D flip; a vertical swipe
+changes book in an endless loop. Built in eight steps, each committed and
+verified; the design is the prototype, the tuned numbers are the handoff's.
+
+DECIDED (Sep 23):
+- **Sort** is persisted per device and shared by both views, with a 44px
+  sort button in the Books header row. 👎 always goes to the back of its
+  book whatever the sort.
+- **Total time** is captured at extraction (JSON-LD `totalTime`, or a time
+  the page states outright — never estimated), new recipes only. Where a
+  recipe has none, the time line is HIDDEN; the sum of timed steps is never
+  labelled total time anywhere, because on a "30-Minute Mongolian Beef" it
+  read "2 min". Timed steps still drive timers and Cook mode. Its own
+  commit, separate from the books.
+- **Two books**: the other one always peeks below; swipe up switches,
+  swipe down rubber-bands. **One book**: no peeks, no vertical swipe. An
+  **empty library** is the existing invitation to find a first recipe.
+- **Removed is not deleted.** A 👎 can take a recipe out of the box;
+  `recipes.removed_at`, restorable from Settings, never refunds the free
+  allowance. Merged on whether it is removed, never on when (shared/sync.ts).
+
+OPEN, needed by step 2: four of the prototype's seven cover colours fail
+AA contrast for the 11px white tab text (Breakfast 3.03:1) — proposed:
+the same hues, darkened in lightness only to 4.6:1. And the pages do not
+fit an iPhone SE at the tuned numbers (19 of 31 prototype pages put the
+cooked pill on the page number) — proposed: below ~160px page width, one
+line of ingredients and "2× · Sep 5", measured at 0 collisions.
+
+- **Step 1 — removed_at, server and sync: DONE Sep 23.** Hand-run DDL (README
+  "The recipe box") that must run BEFORE the deploy; `/api/health` now
+  reports missing hand-run DDL by name. **Known gap, deliberate: the web
+  hides removed recipes (the server leaves them out of the list) but has no
+  Removed list and no restore.** A recipe removed on the phone simply
+  disappears from the website until it is restored on the phone. Worth
+  building when the web gets the books; not before.
+
 ## 2. Global recipe search inside the app
 
 **Status:** partially built. The header search bar filters your own saved

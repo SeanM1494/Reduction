@@ -10,6 +10,7 @@ import {
   arrangeLibrary,
   hasFavourites,
   hasUntagged,
+  inRecipeBox,
   presentMealTypes,
   progressOf,
   searchLibrary,
@@ -103,4 +104,11 @@ test("searchLibrary: title, source and ingredient names, case-insensitive; blank
   assert.deepEqual(titles(""), []);
   assert.deepEqual(titles("   "), []);
   assert.deepEqual(titles("zzz"), []);
+});
+
+test('inRecipeBox: removed entries are out; absent reads as in (caches and servers that predate it)', () => {
+  assert.equal(inRecipeBox({ removedAt: null }), true);
+  assert.equal(inRecipeBox({}), true, 'an entry from before the field existed is in the box');
+  assert.equal(inRecipeBox({ removedAt: 1234 }), false);
+  assert.equal(inRecipeBox({ removedAt: 0 }), false, 'any timestamp at all means removed, even a falsy one');
 });

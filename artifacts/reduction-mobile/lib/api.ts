@@ -334,6 +334,11 @@ export interface Entry {
   version: number;
   savedAt: number;
   photo?: PhotoMeta | null;
+  /** Epoch ms when taken out of the recipe box, or null/absent while it is
+   *  in. The library list never carries a removed entry; the Removed list
+   *  and a write to a removed row do. `inRecipeBox` (lib/libraryView.ts) is
+   *  the one test of it. */
+  removedAt?: number | null;
 }
 
 /** The photo's URL for an <Image>: private, so it needs the bearer token
@@ -364,6 +369,11 @@ export const fetchPhotoFromSource = (id: string): Promise<{ photo: PhotoMeta | n
   request(`/api/library/${encodeURIComponent(id)}/photo/from-source`, { method: 'POST' }, PHOTO_TIMEOUT_MS);
 
 export const loadLibrary = (): Promise<{ entries: Entry[] }> => request('/api/library');
+
+/** What the person took out of their recipe box, most recently removed
+ *  first — Settings → Removed recipes. Restoring is an ordinary PATCH of
+ *  `removedAt: null` through the sync engine, not a route of its own. */
+export const loadRemoved = (): Promise<{ entries: Entry[] }> => request('/api/library/removed');
 
 export const createEntry = (entry: {
   id: string;

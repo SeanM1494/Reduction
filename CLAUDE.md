@@ -244,19 +244,19 @@ them is the whole point:
 
 | result | meaning |
 |---|---|
-| ***n* pass, 118 skipped** | no `DATABASE_URL` at all. Fine on a machine with no Postgres. |
-| ***n*+118 pass, 0 skipped** | a local database with a current schema. This is the real gate — `pnpm run test:db` produces it. |
+| ***n* pass, 129 skipped** | no `DATABASE_URL` at all. Fine on a machine with no Postgres. |
+| ***n*+129 pass, 0 skipped** | a local database with a current schema. This is the real gate — `pnpm run test:db` produces it. |
 | **failures saying "Refusing to run database tests against …"** | `DATABASE_URL` in the shell points somewhere non-local — on Replit, that is production. Working as designed: use `pnpm run test:db`, which ignores the env var entirely. |
 | **failures naming a missing table** | a reachable local database whose schema is behind `lib/db/src/schema/schema.ts`. `test:db` re-pushes on every start, so this means a hand-run database — push it or use the script. |
 
 The total grows as suites are added — pin your expectation to the **skip
 count**, not the pass count (an earlier version of this table hard-coded
 23/39 and went stale within a week, so treat the number above as needing an
-edit whenever a database-backed suite is added). The 118 are eleven suites:
+edit whenever a database-backed suite is added). The 129 are twelve suites:
 `claim.db.test.ts` (the anonymous library), `trial.db.test.ts` (the free
 extraction), `cache.db.test.ts` (the URL alias and the "Instant" badge),
 `extractionLog.test.ts` (the cost table), `push.db.test.ts` (timer
-notifications) `access.db.test.ts` (the paywall), `admin.db.test.ts` (the operator lookup), `billingApple.db.test.ts` (the App Store routes), `mobileHandoff.db.test.ts` (the mobile sign-in handoff), `account.db.test.ts` (account deletion) and `photos.db.test.ts` (recipe pictures). The first two are transactional guarantees — all-or-nothing
+notifications) `access.db.test.ts` (the paywall), `admin.db.test.ts` (the operator lookup), `billingApple.db.test.ts` (the App Store routes), `mobileHandoff.db.test.ts` (the mobile sign-in handoff), `account.db.test.ts` (account deletion), `photos.db.test.ts` (recipe pictures) and `removed.db.test.ts` (taking a recipe out of the box). The first two are transactional guarantees — all-or-nothing
 rollback, idempotent repeats, never taking another user's rows. The third is a
 promise about correctness: that a normalised URL never serves a different page.
 The fourth guards a denominator — a cache hit that recorded a `via` would
@@ -270,8 +270,10 @@ one-time code that a phone's sign-in rides on, which has to be redeemable by an
 instance that never minted it, the tenth guards the order of a deletion —
 billing stopped before any row goes, and nothing gone when it cannot be — and
 the eleventh guards that a user's photo is never overwritten by a page's and
-that no photo outlives its recipe, which no foreign key promises. **The full suite — 403 tests at the time of
-writing — has been run against a real Postgres and passes 403/0.** The
+that no photo outlives its recipe, which no foreign key promises, and the
+twelfth guards that removed is not deleted — out of the list, restorable,
+its timer stopped, and never a refund of the free recipe. **The full suite — 487 tests at the time of
+writing — has been run against a real Postgres and passes 487/0.** The
 forty-nine that are not api-server or model tests are the mobile library's
 filter and sort (`artifacts/reduction-mobile/lib/libraryView.test.ts`), the
 photo size bounds (`photoSize.test.ts`), the push state machine
@@ -347,6 +349,23 @@ needs.
 and 500s in production.** It is what broke Google sign-in: `createAuthState`
 began writing `auth_states.trial_id`, the column was never pushed, and the
 insert failed into the `start_failed` branch.
+
+**`GET /api/health` now says whether the schema is behind**, so that
+suspicion is one request instead of a day. Its `schema` field lists every
+hand-run column or table the running code needs and the database lacks,
+naming the README section with the DDL, and the same line is logged at
+boot. The registry is `REQUIRED_SCHEMA` in `lib/schemaCheck.ts`: **when you
+add hand-run DDL, add it there in the same commit.** `recipe_photos` took a
+day to diagnose as "photos never appear" before the registry existed.
+
+**A new column's DDL runs BEFORE the deploy, never after.** Drizzle's
+`select()` names every column in the schema, so code that knows a column
+fails EVERY query on that table against a database without it — for
+`recipes`, an empty shelf. Measured Sep 23 by renaming `removed_at` under a
+booted server: `/api/library` answered 500. A nullable column with no
+default is safe the other way round (the old code never names it), so the
+order is always DDL, then deploy — and in the Replit workspace, whose
+DATABASE_URL is production, DDL before even pulling the commit.
 
 **Report the commit hash after every push**, so it can be verified against
 what actually landed rather than trusted.

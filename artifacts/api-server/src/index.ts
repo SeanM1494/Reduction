@@ -3,6 +3,7 @@ import app from "./app";
 import { logger } from "./lib/logger";
 import { startSessionSweep } from "./lib/sessions";
 import { startTimerDispatch } from "./lib/timerDispatch";
+import { logSchemaAtBoot } from "./lib/schemaCheck";
 import { cleanupSeedRecipes } from "./cleanupSeed";
 
 const rawPort = process.env["PORT"];
@@ -34,3 +35,5 @@ startSessionSweep();
 // an autoscaled deployment that means "while the app is in use", which is a
 // bandaid and is documented as one — see lib/timerDispatch.ts.
 startTimerDispatch();
+// Hand-run DDL the code needs and the database lacks, named at boot.
+void logSchemaAtBoot();

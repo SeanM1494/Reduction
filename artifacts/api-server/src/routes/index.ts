@@ -1,5 +1,6 @@
 import { Router, type IRouter } from "express";
 import healthRouter from "./health";
+import { schemaForHealth } from "../lib/schemaCheck";
 import { BUILD_COMMIT } from "../lib/buildInfo";
 import { authRouter } from "./auth";
 import { recipesRouter } from "./recipes";
@@ -16,7 +17,12 @@ const router: IRouter = Router();
 router.use(healthRouter);
 // `commit` is the one fact that tells two deployments apart from outside —
 // see lib/buildInfo.ts for the sign-in trace that needed it.
-router.get("/health", (_req, res) => res.json({ ok: true, commit: BUILD_COMMIT }));
+// `schema` names any hand-run DDL this build needs and the database lacks
+// (lib/schemaCheck.ts). `ok` stays about the process, so a platform health
+// probe is never failed by a missing column it can do nothing about.
+router.get("/health", async (_req, res) =>
+  res.json({ ok: true, commit: BUILD_COMMIT, schema: await schemaForHealth() })
+);
 
 router.use("/auth", authRouter);
 router.use("/account", accountRouter);
