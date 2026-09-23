@@ -13,10 +13,11 @@
  * `previewCookedLine`, `keyIngredients`), under test.
  */
 
-import React from 'react';
-import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import React, { useEffect, useRef, useState } from 'react';
+import { Image, Modal, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import Animated, { Easing, runOnJS, useAnimatedStyle, useReducedMotion, useSharedValue, withTiming } from 'react-native-reanimated';
 import { Feather } from '@expo/vector-icons';
-import { Sheet } from '@/components/Sheet';
 import { MealTypeArt } from '@/components/library/MealTypeArt';
 import { useRecipePhoto } from '@/lib/recipePhoto';
 import { sanitizeMealTypes } from '@/shared/mealTypes';
@@ -36,17 +37,93 @@ import type { Entry } from '@/lib/api';
 export type PreviewAction = 'overview' | 'cook';
 
 interface Props {
-  /** The recipe to preview; null closes the sheet. */
+  /** The recipe to preview; null closes it. */
   entry: Entry | null;
   onClose: () => void;
   onOpen: (entry: Entry, view: PreviewAction) => void;
 }
 
+const IN_MS = 220;
+const OUT_MS = 160;
+
+/**
+ * A WINDOW, not a bottom sheet (decided on the phone, Sep 24): the first cut
+ * used the app's Sheet, whose Modal slides the whole layer up from the
+ * bottom edge — the dark scrim included, so the shading itself rose up the
+ * screen behind the card. Here the Modal does no animation of its own; the
+ * scrim FADES where it is and the card fades in from 94% scale, both from
+ * one progress value, and the reverse on close. Reduce Motion drops the
+ * scale and keeps a short fade.
+ *
+ * "View diagram" and "Start cooking" close it INSTANTLY: the recipe screen
+ * is being pushed underneath, and a card still fading out over it is the
+ * same kind of seam this replaced.
+ */
 export function PreviewSheet({ entry, onClose, onOpen }: Props) {
+  const colors = useColors();
+  const styles = makeStyles(colors);
+  const insets = useSafeAreaInsets();
+  const { width, height } = useWindowDimensions();
+  const reduceMotion = useReducedMotion();
+  const progress = useSharedValue(0);
+  const open = entry !== null;
+  const [mounted, setMounted] = useState(open);
+  // What the card shows while it fades out, after the parent has let go.
+  const last = useRef<Entry | null>(entry);
+  if (entry) last.current = entry;
+  const instant = useRef(false);
+
+  useEffect(() => {
+    if (open) {
+      setMounted(true);
+      progress.value = 0;
+      progress.value = withTiming(1, { duration: reduceMotion ? 150 : IN_MS, easing: Easing.out(Easing.cubic) });
+    } else if (instant.current) {
+      instant.current = false;
+      progress.value = 0;
+      setMounted(false);
+    } else {
+      progress.value = withTiming(0, { duration: OUT_MS, easing: Easing.in(Easing.cubic) }, (done) => {
+        if (done) runOnJS(setMounted)(false);
+      });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
+
+  const scrimStyle = useAnimatedStyle(() => ({ opacity: progress.value }));
+  const cardStyle = useAnimatedStyle(() => ({
+    opacity: progress.value,
+    transform: [{ scale: reduceMotion ? 1 : 0.94 + 0.06 * progress.value }],
+  }));
+
+  const shown = entry ?? last.current;
+  if (!mounted || !shown) return null;
   return (
-    <Sheet open={entry !== null} onClose={onClose}>
-      {entry ? <PreviewBody entry={entry} onClose={onClose} onOpen={onOpen} /> : null}
-    </Sheet>
+    <Modal visible transparent animationType="none" onRequestClose={onClose} statusBarTranslucent>
+      <Animated.View style={[StyleSheet.absoluteFill, styles.scrim, scrimStyle]}>
+        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} accessibilityLabel="Close" testID="preview-scrim" />
+      </Animated.View>
+      <View
+        pointerEvents="box-none"
+        style={[styles.center, { paddingTop: insets.top + 16, paddingBottom: insets.bottom + 16 }]}
+      >
+        <Animated.View
+          style={[styles.card, { width: Math.min(width - 32, 440), maxHeight: height - insets.top - insets.bottom - 32 }, cardStyle]}
+          accessibilityViewIsModal
+        >
+          <ScrollView bounces={false} contentContainerStyle={styles.cardContent}>
+            <PreviewBody
+              entry={shown}
+              onClose={onClose}
+              onOpen={(e, v) => {
+                instant.current = true;
+                onOpen(e, v);
+              }}
+            />
+          </ScrollView>
+        </Animated.View>
+      </View>
+    </Modal>
   );
 }
 
@@ -152,6 +229,21 @@ function PreviewBody({ entry, onClose, onOpen }: { entry: Entry; onClose: () => 
 
 function makeStyles(colors: Colors) {
   return StyleSheet.create({
+    scrim: { backgroundColor: 'rgba(33, 29, 24, 0.42)' },
+    center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+    card: {
+      backgroundColor: colors.card,
+      borderRadius: 20,
+      borderWidth: 1,
+      borderColor: colors.border,
+      overflow: 'hidden',
+      shadowColor: '#3a2418',
+      shadowOpacity: 0.22,
+      shadowRadius: 24,
+      shadowOffset: { width: 0, height: 10 },
+      elevation: 12,
+    },
+    cardContent: { padding: 14 },
     // No centring here: MealTypeArt fills its box with flex, and centring
     // shrank it to a stripe the width of its glyph.
     photo: { height: 150, borderRadius: 12, overflow: 'hidden' },

@@ -19,9 +19,7 @@ import { fonts } from '@/constants/colors';
 
 interface Props {
   open: boolean;
-  /** Omitted, the sheet has no title row at all and its content is
-   *  responsible for a way to close it (the scrim still closes it too). */
-  title?: string;
+  title: string;
   onClose: () => void;
   /** Label of the head's one action; it always closes. */
   closeLabel?: string;
@@ -41,12 +39,10 @@ export function Sheet({ open, title, onClose, closeLabel = 'Done', avoidKeyboard
         <Pressable style={StyleSheet.absoluteFill} onPress={onClose} accessibilityLabel="Close" />
         <View style={[styles.sheet, { maxHeight: height * 0.86, paddingBottom: 18 + insets.bottom }]}>
           <View style={styles.grab} />
-          {title !== undefined ? (
-            <View style={styles.head}>
-              <Text style={styles.title}>{title}</Text>
-              <SheetButton label={closeLabel} onPress={onClose} />
-            </View>
-          ) : null}
+          <View style={styles.head}>
+            <Text style={styles.title}>{title}</Text>
+            <SheetButton label={closeLabel} onPress={onClose} />
+          </View>
           <ScrollView bounces={false} keyboardShouldPersistTaps="handled">
             {children}
           </ScrollView>

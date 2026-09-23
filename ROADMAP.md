@@ -850,6 +850,13 @@ DECIDED (Sep 23, after the step-1 push):
     asked for. So the grid, which still opens on the stored tab, is
     unaffected.
   - **Six ingredients** before "+N more" (the page has room for three).
+  - **A centred window, not a bottom sheet** (decided on the phone, Sep 24).
+    The first cut used the app's Sheet, whose Modal slides the WHOLE layer
+    up — so the dark shading itself rose up the screen behind the card. Now
+    the shading fades where it is and the card fades in from 94% scale;
+    the two buttons close it instantly, because the recipe is being pushed
+    underneath. The app's other sheets (sort, meal types, the ⋮ menu) still
+    slide the same way and would look the same half open; not changed yet.
 
 ## 2. Global recipe search inside the app
 
