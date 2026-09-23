@@ -198,12 +198,27 @@ interface SectionDiagramProps {
   drag?: SectionDrag | null;
 }
 
+/** The width a cell's content wraps at: its column(s), less the padding
+ *  and, for an ingredient, the rule down its left edge. */
+const contentWidth = (cellWidth: number, kind: Cell["kind"]): number =>
+  Math.max(0, cellWidth - CELL_PAD_H * 2 - (kind === "ingredient" ? ING_RULE : 0));
+
+/**
+ * A cell's content, at an EXPLICIT width (`w`). Every text in a cell used
+ * to take its width from the cell by stretch, and on a real iPhone a step
+ * label sometimes did not: "thread onto v…" was laid out as one long line
+ * and clipped by the next cell, and its row was measured one line tall
+ * (Sep 24; Chromium wraps it correctly, so it never showed here). Saying
+ * the width on the content itself, the same number in the measuring pass
+ * and the drawn pass, leaves no layout path that can hand it more.
+ */
 function cellContent(
   c: Cell,
   scale: number,
   colors: Colors,
   st: CellState,
-  measuring: boolean
+  measuring: boolean,
+  w: number
 ) {
   // Gap cells are the layout's whitespace — the web paints them as empty
   // rd-gap tds. Nothing to render; the Pressable shell paints background.
@@ -211,7 +226,7 @@ function cellContent(
   const struck = st.isDone ? styles.struck : null;
   if (c.kind === "ingredient" && c.ingredient) {
     return (
-      <View style={styles.ingBody}>
+      <View style={[styles.ingBody, { width: w }]}>
         <Text style={[styles.amount, { color: st.isDone ? colors.coolInk : colors.mutedForeground }]}>
           {formatAmount(c.ingredient, scale)}
         </Text>
@@ -230,7 +245,7 @@ function cellContent(
     // and a chip is not that step any more — it is the whole branch, done.
     // What it folds is still in the accessibility label (cellAccessibility).
     return (
-      <View style={styles.chipBody}>
+      <View style={[styles.chipBody, { width: w }]}>
         <Text style={[styles.chipMark, { color: colors.coolInk }]}>✓</Text>
         <Text style={[styles.opLabel, { color: colors.coolInk, fontWeight: "600" }]}>Combined</Text>
       </View>
@@ -242,7 +257,7 @@ function cellContent(
   const weight = measuring || st.ready ? "600" : "500";
   const color = st.isDone ? colors.coolInk : st.ready ? colors.warmInk : colors.text;
   return (
-    <Text style={[styles.opLabel, { color, fontWeight: weight }, struck]}>
+    <Text style={[styles.opLabel, { width: w, color, fontWeight: weight }, struck]}>
       {label}
     </Text>
   );
@@ -338,19 +353,10 @@ const DiagramCell = memo(function DiagramCell({
   const tappable = c.kind !== "gap";
   const a11y = cellAccessibility(c, st, scale, editing);
   if (onMeasure) {
+    const w = contentWidth(colWidth(c.col, c.colSpan, METRICS), c.kind);
     return (
-      <View
-        style={{
-          position: "absolute",
-          width:
-            colWidth(c.col, c.colSpan, METRICS) -
-            CELL_PAD_H * 2 -
-            (c.kind === "ingredient" ? ING_RULE : 0),
-          opacity: 0,
-        }}
-        pointerEvents="none"
-      >
-        <View onLayout={onMeasure(c.key)}>{cellContent(c, scale, colors, st, true)}</View>
+      <View style={{ position: "absolute", width: w, opacity: 0 }} pointerEvents="none">
+        <View onLayout={onMeasure(c.key)}>{cellContent(c, scale, colors, st, true, w)}</View>
       </View>
     );
   }
@@ -401,7 +407,7 @@ const DiagramCell = memo(function DiagramCell({
         borderLeftColor: isDone ? colors.coolLine : colors.borderStrong,
       }}
     >
-      {cellContent(c, scale, colors, st, false)}
+      {cellContent(c, scale, colors, st, false, contentWidth(rect!.width, c.kind))}
       {ready ? (
         <>
           <View
