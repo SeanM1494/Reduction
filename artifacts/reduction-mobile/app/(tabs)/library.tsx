@@ -272,7 +272,7 @@ export default function LibraryScreen() {
         ListEmptyComponent={searching ? <BoxNoMatches query={query} onSearchWeb={searchWeb} /> : emptyFilter}
         renderItem={({ item }) =>
           item ? (
-            <RecipeCard entry={item} layout="grid" onPress={() => router.push(`/recipe/${item.id}`)} />
+            <RecipeCard entry={item} onPress={() => router.push(`/recipe/${item.id}`)} />
           ) : (
             <View style={styles.hole} />
           )

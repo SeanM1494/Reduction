@@ -27,7 +27,7 @@
  * Touch: gesture-handler's Pan and Tap race for the spread; no page is ever a
  * Pressable. The pan's direction locks on the first update that has actually
  * MOVED — the one that activates it can report 0, which read every drag as
- * backwards until the flip test caught it.
+ * backwards until the page-flip test screen (since retired) caught it.
  */
 
 import React, { useCallback, useEffect, useMemo, useRef } from 'react';

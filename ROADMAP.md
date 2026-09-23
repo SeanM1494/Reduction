@@ -711,9 +711,10 @@ menu, meal-type fallback otherwise; nothing hotlinked, no backfill.
   without a drag; a light haptic marks a commit. Verified in Chromium on
   three profiles, including mid-drag sampling that the deck moves
   continuously and that the rubber band gives 20px rather than 300.
-  **What the phone has to say**: whether the gesture feels right, and
-  whether the stack earns its place — then shelves (one row per category,
-  a tab scrolls to its row) as the fast-follow, and the loser comes out.
+  **RETIRED Sep 24** — the Recipe Box's books replaced it (step 8 of "The
+  Recipe Box: books" below lists what was removed). Its lessons live on in
+  CLAUDE.md's gesture rules, now pointing at the books. Shelves were never
+  built and are not queued: the books ARE one book per category.
 - **Photo backfill on a cache hit — a nice-to-have, not queued (Sep 22).**
   A tree that was cached BEFORE the extractor started recording
   `recipe.image` has no image URL and never will: `cacheGetUrl` returns
@@ -796,7 +797,7 @@ DECIDED (Sep 23, after the step-1 push):
   angle. The prototype's nested leaf (both faces in one view, the back
   culled by backfaceVisibility) mirrors the front through the page in
   Chromium, because React Native renders each view as a flat layer. The
-  test screen (app/dev/flip.tsx) goes when the book lands.
+  test screen (app/dev/flip.tsx) that proved it is gone with step 8.
 
 - **The ninth meal type, salad: DONE Sep 23.** Appended to MEAL_TYPES so no
   existing order moved; its own art on both clients; the prompt now puts a
@@ -914,6 +915,27 @@ DECIDED (Sep 23, after the step-1 push):
     recipe (`recipes_used` is monotonic, CLAUDE.md).
   - **An empty library that only had recipes taken out says so**, with a
     button to Removed recipes, instead of looking like everything was lost.
+- **Step 8 — the card stack retired: DONE Sep 24. The Recipe Box is
+  complete.** Removed, and nothing of it was shared with the books:
+  - `components/library/CardStack.tsx` — the deck, its pan/tap gesture and
+    its spring and layout constants (GAP, RISE, SHRINK, FADE, SPRING).
+  - From `lib/libraryViewMode.ts`: the stack's gesture policy and tuning —
+    `dragPosition`, `overscrollPx`, `swipeOutcome`, `stackStep`,
+    `stackWindow`, `RUBBER_BAND`, `OVERSCROLL_MAX_PX`, `PEEK`,
+    `TAP_SLOP_PX` — and their five tests. What stays there is the box style
+    (`parseBoxStyle`), which still reads an old 'stack' choice as the books.
+  - `RecipeCard`'s `layout` and `height` props: the 'stack' face and title,
+    and the never-built 'shelf'. It is the grid's card now, nothing else.
+  - The page-flip test screen (`app/dev/flip.tsx`) and its development-only
+    row in Settings.
+  - CLAUDE.md's gesture rules, rewritten to point at the books' code
+    (Book.tsx, RecipeBox.tsx, lib/recipeBox.ts) instead of the stack's; the
+    lessons and the incidents that taught them are unchanged.
+  Kept, because the books use them: reanimated, gesture-handler and
+  expo-haptics (all were already dependencies).
+- **Next, as asked Sep 24: the sheet sweep** (above) — every remaining
+  bottom sheet to stop sliding its scrim, and the recipe's ⋮ menu to open
+  as a window.
 
 ## 2. Global recipe search inside the app
 

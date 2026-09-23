@@ -272,8 +272,8 @@ billing stopped before any row goes, and nothing gone when it cannot be — and
 the eleventh guards that a user's photo is never overwritten by a page's and
 that no photo outlives its recipe, which no foreign key promises, and the
 twelfth guards that removed is not deleted — out of the list, restorable,
-its timer stopped, and never a refund of the free recipe. **The full suite — 523 tests at the time of
-writing — has been run against a real Postgres and passes 523/0.** The
+its timer stopped, and never a refund of the free recipe. **The full suite — 518 tests at the time of
+writing — has been run against a real Postgres and passes 518/0.** The
 ones that are not api-server or model tests include the mobile library's
 filter and sort (`artifacts/reduction-mobile/lib/libraryView.test.ts`), the
 recipe box's books and page arithmetic (`recipeBox.test.ts`), the
@@ -817,27 +817,34 @@ accommodate afterwards.
   is not the same layout you measured.
 - **A deck, a carousel or anything else that moves as one thing is driven
   by ONE continuous position, not by an index plus a per-item offset.**
-  The card stack's `position` is `index + how far through the swipe you
-  are`, and every card's transform is a pure function of
-  `cardIndex - position`. Two things follow that are hard to get any other
-  way: the cards behind rise by exactly as much as the front card has left
-  at every frame rather than snapping when the swipe commits, and nothing
-  is ever RESET — an index-plus-offset model has to zero the offset at the
-  moment the index changes, and whichever order you pick there is one frame
-  where a card is in the wrong place. A second swipe can also interrupt the
-  first, because the gesture starts from wherever the deck actually is.
-  Past the ends the position CLAMPS and the container moves instead
-  (`overscrollPx`): a position outside the range reads, to every item's
-  transform, as the front item being pushed backwards into the deck.
+  Learned on the card stack (retired Sep 24; the Recipe Box's books
+  replaced it) and built into both halves of the books: a book's `pos` is
+  `spread + how far through the turn`, and every page face derives its
+  angle from `pos − the spread it belongs to` (Book.tsx); the shelf's `pos`
+  is an unbounded number of books, and every book is placed by
+  `loopOffset(index, pos)` (RecipeBox.tsx). Two things follow that are hard
+  to get any other way: everything behind moves by exactly as much as the
+  thing in front at every frame rather than snapping when the swipe
+  commits, and nothing is ever RESET — an index-plus-offset model has to
+  zero the offset at the moment the index changes, and whichever order you
+  pick there is one frame where an item is in the wrong place. Past an end
+  the position does not run on: the book's spread gives a few pixels and
+  springs back (`FLIP.edgeRubber`), and with two books a swipe down does
+  the same (`CAROUSEL.edgeRubber`) — a position outside the range would
+  read, to every item's transform, as something that is not there.
 - **Gestures are gesture-handler's, and the pure policy carries a
   `'worklet'` directive.** `PanResponder` loses to any `Pressable` inside
   the thing being dragged, which is how swiping the card stack came to do
   nothing at all. A `Gesture.Race(pan, tap)` settles that at the native
-  layer, `activeOffsetX` keeps the tap, and the card's own `onPress` is
-  inert. The decision functions in `lib/libraryViewMode.ts` are called from
-  the release worklet, so they carry the directive — it is an inert string
-  under the test runner, so they stay pure and tested. Do NOT hop to JS for
-  the commit decision: that is the frame the feel is judged on.
+  layer, `activeOffsetX`/`activeOffsetY` keep the tap, and no page is ever
+  a Pressable. The decision functions in `lib/recipeBox.ts` (`flipProgress`,
+  `flipCommits`, `turnTarget`, `carouselDrag`, `bookSwipeCommits`,
+  `loopOffset`, `carouselPlacement`) are called from worklets, so they
+  carry the directive — it is an inert string under the test runner, so
+  they stay pure and tested. Do NOT hop to JS for the commit decision: that
+  is the frame the feel is judged on. The book's horizontal pan fails on
+  vertical movement and the shelf's vertical pan fails on horizontal, so
+  the first 8px decide which a drag is.
   `react-native-reanimated`, `react-native-gesture-handler` and
   `react-native-worklets` are already dependencies (expo-router brings
   them) and `GestureHandlerRootView` is already at the app root.
@@ -849,7 +856,7 @@ accommodate afterwards.
   over mid-settle, started from a fractional position, landed between two
   spreads (two empty pages) and locked the book for good (Sep 24, a real
   phone). `turnTarget` only ever names a whole spread.
-- **Stacked cards are absolutely positioned siblings in back-to-front JSX
+- **Layered things are absolutely positioned siblings in back-to-front JSX
   order, and never ordered with `zIndex`.** The card stack's first cut drew
   the peeks absolutely and the top card in flow, ordering them with
   `zIndex`/`elevation`. Chromium painted the top card on top (measured with
@@ -858,22 +865,24 @@ accommodate afterwards.
   ghosted through its translucent neighbour, and the card being dragged was
   invisible. `zIndex` against a statically positioned sibling is not a
   promise the three platforms keep the same way — document order among
-  absolute siblings is. The same applies to anything that layers.
-  `stackWindow` in `lib/libraryViewMode.ts` is that order as a tested
-  function rather than a comment, and it puts `index - 1` ON TOP, not the
-  front card: the item before the front one is both the one sliding in
-  when you swipe back and the one still flying off after a forward swipe
-  commits.
-- **A pan surface takes the touch in the CAPTURE phase, and never lives
-  inside a scroll view.** `RecipeCard` is a `Pressable`, so it won the
-  responder on touch-down and `CardStack`'s `PanResponder` never started:
-  swiping did nothing at all. `onStartShouldSetPanResponderCapture` runs
-  root-downward and settles it, and the pan then owns the tap too (the
-  card's own `onPress` is deliberately inert). The stack is also a SIBLING
-  of the library's `FlatList` rather than a cell in it — a pan inside a
-  scroller fights the scroller, and being outside it is what lets the deck
-  take its height from `flex: 1` instead of from a measured layout that
-  arrives a frame late.
+  absolute siblings is. The book's page turn is the live example: the pages
+  underneath, then the backward leaf's front, the forward leaf's front, the
+  forward leaf's back, the backward leaf's back — ONE order that is right
+  for a turn in either direction, worked through in Book.tsx's header. The
+  shelf's books never overlap at all (`carouselGeometry` keeps a tab's
+  height between covers, tested over every phone-sized stage), which is
+  the other way to make order not matter.
+- **A 3D page turn is SPLIT FACES** (decided on a real iPhone, Sep 23):
+  each face of the turning leaf is its own view with one `rotateY` about
+  the spine, shown by angle. One view holding both faces with the back
+  culled by `backfaceVisibility` mirrors the front THROUGH the page on
+  iOS, because React Native renders each view as a flat layer.
+- **A pan surface never lives inside a scroll view.** `RecipeCard` is a
+  `Pressable`, so it won the responder on touch-down and the card stack's
+  `PanResponder` never started: swiping did nothing at all. The Recipe Box
+  is a SIBLING of anything scrollable, never a cell in one — a pan inside a
+  scroller fights the scroller — and its search results REPLACE the shelf
+  rather than scrolling over it.
 - The landing page section below is part of this rule, not a separate concern.
 
 ### Verify on a real phone viewport, and on production
