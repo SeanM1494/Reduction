@@ -9,10 +9,19 @@
  * A Modal rather than a library sheet: nothing here needs gestures, and a
  * Modal works on iOS, Android and react-native-web alike, which is what lets
  * the Chromium sweep exercise it.
+ *
+ * THE MODAL DOES NO ANIMATION OF ITS OWN (Sep 24, on the phone). Its
+ * "slide" moved the whole layer — the dark scrim included — so the shading
+ * visibly rose up the screen behind the card: "the wash". Now the scrim
+ * FADES where it is and only the card slides up, both from one progress
+ * value, and closing reverses it before the Modal goes. Reduce Motion
+ * keeps a short fade and does not slide. A dialog that asks something is a
+ * centred window instead (components/Window.tsx).
  */
 
-import React from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import Animated, { Easing, runOnJS, useAnimatedStyle, useReducedMotion, useSharedValue, withTiming } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useColors, type Colors } from '@/hooks/useColors';
 import { fonts } from '@/constants/colors';
@@ -25,28 +34,78 @@ interface Props {
   closeLabel?: string;
   /** A sheet with text fields rises above the keyboard. */
   avoidKeyboard?: boolean;
+  /** After it has finished closing and its Modal is gone — where the NEXT
+   *  dialog opens from (see components/Window.tsx for why). */
+  onClosed?: () => void;
   children: React.ReactNode;
 }
 
-export function Sheet({ open, title, onClose, closeLabel = 'Done', avoidKeyboard, children }: Props) {
+const IN_MS = 260;
+const OUT_MS = 200;
+
+export function Sheet({ open, title, onClose, closeLabel = 'Done', avoidKeyboard, onClosed, children }: Props) {
   const colors = useColors();
   const styles = makeStyles(colors);
   const insets = useSafeAreaInsets();
   const { height } = useWindowDimensions();
+  const reduceMotion = useReducedMotion();
+  const progress = useSharedValue(0);
+  const [mounted, setMounted] = useState(open);
+  const onClosedRef = useRef(onClosed);
+  onClosedRef.current = onClosed;
+  const wasMounted = useRef(open);
+  useEffect(() => {
+    if (wasMounted.current && !mounted) onClosedRef.current?.();
+    wasMounted.current = mounted;
+  }, [mounted]);
+  // What the sheet showed, kept on screen while it slides away after the
+  // caller has already moved on.
+  const last = useRef<{ title: string; children: React.ReactNode }>({ title, children });
+  if (open) last.current = { title, children };
+
+  useEffect(() => {
+    if (open) {
+      setMounted(true);
+      progress.value = 0;
+      progress.value = withTiming(1, { duration: reduceMotion ? 150 : IN_MS, easing: Easing.out(Easing.cubic) });
+    } else {
+      progress.value = withTiming(0, { duration: reduceMotion ? 120 : OUT_MS, easing: Easing.in(Easing.cubic) }, (done) => {
+        if (done) runOnJS(setMounted)(false);
+      });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
+
+  const scrimStyle = useAnimatedStyle(() => ({ opacity: progress.value }));
+  // The card travels its own full height at most: the screen's height is
+  // always enough to start it below the bottom edge.
+  const cardStyle = useAnimatedStyle(() =>
+    reduceMotion ? { opacity: progress.value } : { transform: [{ translateY: (1 - progress.value) * height }] }
+  );
+
+  if (!mounted) return null;
+  const shown = open ? { title, children } : last.current;
   return (
-    <Modal visible={open} transparent animationType="slide" onRequestClose={onClose}>
-      <KeyboardAvoidingView style={styles.scrim} behavior={avoidKeyboard && Platform.OS === 'ios' ? 'padding' : undefined} enabled={!!avoidKeyboard}>
+    <Modal visible transparent animationType="none" onRequestClose={onClose} statusBarTranslucent>
+      <Animated.View style={[StyleSheet.absoluteFill, styles.scrimTint, scrimStyle]}>
         <Pressable style={StyleSheet.absoluteFill} onPress={onClose} accessibilityLabel="Close" />
-        <View style={[styles.sheet, { maxHeight: height * 0.86, paddingBottom: 18 + insets.bottom }]}>
+      </Animated.View>
+      <KeyboardAvoidingView
+        pointerEvents="box-none"
+        style={styles.scrim}
+        behavior={avoidKeyboard && Platform.OS === 'ios' ? 'padding' : undefined}
+        enabled={!!avoidKeyboard}
+      >
+        <Animated.View style={[styles.sheet, { maxHeight: height * 0.86, paddingBottom: 18 + insets.bottom }, cardStyle]}>
           <View style={styles.grab} />
           <View style={styles.head}>
-            <Text style={styles.title}>{title}</Text>
+            <Text style={styles.title}>{shown.title}</Text>
             <SheetButton label={closeLabel} onPress={onClose} />
           </View>
           <ScrollView bounces={false} keyboardShouldPersistTaps="handled">
-            {children}
+            {shown.children}
           </ScrollView>
-        </View>
+        </Animated.View>
       </KeyboardAvoidingView>
     </Modal>
   );
@@ -149,7 +208,8 @@ export function SheetNote({ children }: { children: React.ReactNode }) {
 
 function makeStyles(colors: Colors) {
   return StyleSheet.create({
-    scrim: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(33, 29, 24, 0.42)' },
+    scrim: { flex: 1, justifyContent: 'flex-end' },
+    scrimTint: { backgroundColor: 'rgba(33, 29, 24, 0.42)' },
     sheet: {
       backgroundColor: colors.card,
       borderTopLeftRadius: 18,
