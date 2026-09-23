@@ -34,6 +34,13 @@ import {
   previewCookedLine,
   searchBox,
   resultMeta,
+  RATING_CHOICES,
+  asksForRating,
+  asksToRemove,
+  keptToast,
+  ratingPromptCopy,
+  removePromptCopy,
+  removedToast,
 } from './recipeBox';
 
 const recipe = (over: Record<string, unknown> = {}) => ({ title: 'X', servings: 4, sections: [], ...over }) as any;
@@ -329,4 +336,29 @@ test('result meta: stated time and cooked count, whichever exist', () => {
   assert.equal(resultMeta(recipe({}), [1]), 'cooked 1×');
   assert.equal(resultMeta(recipe({ totalMinutes: 90 }), []), '1 hr 30 min');
   assert.equal(resultMeta(recipe({}), null), '');
+});
+
+test('the rating prompt: asked exactly when a cook is stamped, worded for rated and unrated', () => {
+  assert.equal(asksForRating([1], [1, 2]), true);
+  // stampCooked returned the same list: inside the six-hour window, or not a finish.
+  assert.equal(asksForRating([1, 2], [1, 2]), false);
+  assert.equal(asksForRating([], []), false);
+  assert.deepEqual(RATING_CHOICES.map((c) => c.value), [-1, 0, 1]);
+  assert.deepEqual(ratingPromptCopy('Chili', null), { heading: 'How was Chili?', sub: 'Your rating decides where it sits in your recipe box.' });
+  assert.equal(ratingPromptCopy('Chili', 0).sub, 'You can keep your rating or change it.');
+});
+
+test('thumbs down: the words, and when the recipe itself asks', () => {
+  assert.deepEqual(removePromptCopy('Chili', 'Dinner'), {
+    heading: 'Take it out of your box?',
+    body: 'You gave Chili a thumbs down. Want it gone, or kept at the back of Dinner?',
+    note: 'Removed recipes wait in Settings → Removed recipes. You can bring them back anytime.',
+  });
+  assert.equal(removedToast('Chili'), 'Removed Chili');
+  assert.equal(keptToast('Dinner'), 'Moved to the back of Dinner');
+  assert.equal(asksToRemove(1, -1), true);
+  assert.equal(asksToRemove(null, -1), true);
+  assert.equal(asksToRemove(-1, -1), false);
+  assert.equal(asksToRemove(-1, null), false);
+  assert.equal(asksToRemove(0, 1), false);
 });

@@ -874,6 +874,27 @@ DECIDED (Sep 23, after the step-1 push):
   stage was already short — as the app, no phone shrinks (iPhone 13 366px,
   SE 296px); in Safari-sized profiles the iPhone 13 book goes 366 → 343
   and the SE's 290 → 223, peeks still showing.
+- **Step 6 — rating on finish, 👎 → remove or keep, undo: DONE Sep 24.**
+  The prompt hangs off the cooked STAMP (stampCooked), so it fires from the
+  diagram and from Cook mode alike and never twice inside six hours. Both
+  questions are one window with two stages (`FinishPrompt`), because iOS
+  will not present a Modal while another is dismissing. Decided while
+  building it:
+  - **Windows, not sheets**, for every new dialog (`components/Window.tsx`,
+    extracted from the preview) — the direction set on the phone.
+  - **From the cooking prompt, 👎 always asks** "take it out?", even if it
+    was 👎 before: a fresh verdict on a fresh cook. **From the recipe's own
+    rating control, only a change TO 👎 asks**; re-tapping 👎 clears it
+    (the control's toggle) and asks nothing.
+  - **Remove goes back to where you came from** (the library) and the
+    "Removed … Undo" snackbar waits there for 5s: the recipe's own screen is
+    the one place it can no longer be. Keep stays on the recipe with a toast.
+  - **Undo works even after the library has refreshed** — which drops the
+    removed row, since the server leaves it out: `restore(entry)` adopts the
+    entry as it was removed and writes `removedAt: null` through the engine,
+    a deliberately stale write the 409-merge resolves in its favour (pinned
+    in syncEngine.test.ts). Settings' Restore (step 7) is the same call.
+  - The toast sits above the Recipe Box's page controls, not on them.
 
 ## 2. Global recipe search inside the app
 

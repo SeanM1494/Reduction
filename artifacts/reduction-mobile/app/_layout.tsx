@@ -8,6 +8,7 @@ import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { AuthProvider, useAuth } from '@/lib/auth-context';
 import { ThemeProvider } from '@/lib/theme-context';
 import { LibraryProvider } from '@/lib/library-context';
+import { ToastProvider } from '@/components/Toast';
 import { SignInScreen } from '@/components/SignInScreen';
 import { DemoScreen } from '@/components/DemoScreen';
 import { useColors } from '@/hooks/useColors';
@@ -103,7 +104,11 @@ function Gate() {
   }
   return (
     <LibraryProvider>
-      <RootLayoutNav />
+      {/* Around the navigator, so a snackbar outlives the screen that raised
+          it — a removed recipe's Undo waits in the library it lands in. */}
+      <ToastProvider>
+        <RootLayoutNav />
+      </ToastProvider>
     </LibraryProvider>
   );
 }

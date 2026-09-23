@@ -550,3 +550,26 @@ test('removed on another device while this one had an edit waiting: the edit sti
   assert.equal(row.rating, 1, 'the rating was not thrown away');
   assert.equal(row.removedAt, SERVER_STAMP, 'and the write did not quietly restore it');
 });
+
+test('undo after the refresh dropped it: the snapshot taken at removal is adopted and restored, via a 409-merge', async () => {
+  // library-context's restore(): the list no longer holds the row, so the
+  // entry as it was removed is hydrated as the base and the restore sent.
+  // That snapshot carries the version from BEFORE the removal landed, so the
+  // write is stale on purpose — the merge must still restore it, because
+  // this device changed removed-ness against its base and the server did not.
+  const h = harness([entry({ id: 'keep' }), entry({ id: 'out' })]);
+  const loaded = await h.engine.load();
+  const snapshot = { ...loaded.find((e) => e.id === 'out')!, removedAt: 1234, rating: -1 };
+  h.engine.save(snapshot);
+  await h.engine.idle();
+  const out = await h.engine.refresh([loaded.find((e) => e.id === 'keep')!, snapshot]);
+  assert.deepEqual(out.map((e) => e.id), ['keep'], 'the refresh left it out');
+  h.engine.hydrate([snapshot]);
+  h.engine.save({ ...snapshot, removedAt: null });
+  await h.engine.idle();
+  const row = h.rows.get('out')!;
+  assert.equal(row.removedAt, null, 'back in the box');
+  assert.equal(row.rating, -1, 'with its thumbs-down kept');
+  const again = await h.engine.refresh(out);
+  assert.deepEqual(again.map((e) => e.id).sort(), ['keep', 'out'], 'and on the shelf at the next refresh');
+});

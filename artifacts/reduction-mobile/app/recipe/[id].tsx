@@ -29,6 +29,10 @@ import { Sheet, SheetButton, SheetNote } from '@/components/Sheet';
 import { useAuth } from '@/lib/auth-context';
 import { useColors, type Colors } from '@/hooks/useColors';
 import { PhotoSheet } from '@/components/recipe/PhotoSheet';
+import { FinishPrompt, type FinishStage } from '@/components/recipeBox/FinishPrompt';
+import { useToast } from '@/components/Toast';
+import { asksToRemove, bookById, bookOf, keptToast, removedToast } from '@/lib/recipeBox';
+import type { Entry } from '@/lib/api';
 
 export default function RecipeDetailScreen() {
   // `view` is the Recipe Box preview's choice of tab for this visit.
@@ -36,7 +40,16 @@ export default function RecipeDetailScreen() {
   const initialView = viewParam === 'cook' || viewParam === 'overview' ? viewParam : undefined;
   const colors = useColors();
   const styles = makeStyles(colors);
-  const { draft, setDraft, getEntry, update, remove, saveRecipe, notice, clearNotice, queued } = useLibrary();
+  const { draft, setDraft, getEntry, update, remove, restore, saveRecipe, notice, clearNotice, queued } = useLibrary();
+  const toast = useToast();
+  // The Recipe Box's finish prompt: 'rate' when a cook is stamped, 'remove'
+  // after a 👎. Remove closes it instantly, because it navigates.
+  const [finish, setFinish] = useState<FinishStage | null>(null);
+  const [finishInstant, setFinishInstant] = useState(false);
+  const ask = (stage: FinishStage) => {
+    setFinishInstant(false);
+    setFinish(stage);
+  };
   const { refresh: refreshAccount } = useAuth();
   const [saving, setSaving] = useState(false);
   const [draftServings, setDraftServings] = useState<number | null>(null);
@@ -166,6 +179,49 @@ export default function RecipeDetailScreen() {
           clearNotice();
         }}
         offlineQueued={queued.includes(entry.id)}
+        onCooked={() => ask('rate')}
+        onRate={(r) => {
+          const before = entry.rating;
+          write({ rating: r });
+          if (asksToRemove(before, r)) ask('remove');
+        }}
+      />
+
+      <FinishPrompt
+        stage={finish}
+        title={entry.recipe.title}
+        bookName={bookById(bookOf(entry)).name}
+        rating={entry.rating}
+        instant={finishInstant}
+        onRate={(r) => {
+          write({ rating: r });
+          // From the cooking prompt a 👎 always asks: a fresh verdict on a
+          // fresh cook, even if it was 👎 before.
+          if (r === -1) ask('remove');
+          else setFinish(null);
+        }}
+        onSkip={() => setFinish(null)}
+        onKeep={() => {
+          setFinish(null);
+          toast({ message: keptToast(bookById(bookOf(entry)).name) });
+        }}
+        onRemove={() => {
+          // The entry as it goes out, for Undo: the list may not hold it by
+          // the time Undo is tapped (a refresh drops removed rows), and
+          // restore() adopts it back from this.
+          const removedAt = Date.now();
+          const snapshot: Entry = { ...entry, rating: -1, removedAt };
+          write({ removedAt });
+          setFinishInstant(true);
+          setFinish(null);
+          if (router.canGoBack()) router.back();
+          else router.replace('/library');
+          toast({
+            message: removedToast(entry.recipe.title),
+            action: { label: 'Undo', onPress: () => restore(snapshot) },
+            durationMs: 5000,
+          });
+        }}
       />
 
       <Sheet open={menuOpen} title={recipeTitle} closeLabel="Close" onClose={() => setMenuOpen(false)}>

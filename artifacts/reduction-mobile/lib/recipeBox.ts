@@ -247,6 +247,52 @@ export function resultMeta(recipe: unknown, cooked: number[] | null | undefined)
   return [timeLine(recipe), n ? `cooked ${n}×` : null].filter(Boolean).join(' · ');
 }
 
+// ---------------------------------------------------------------------------
+// Finishing a recipe: the rating prompt, and what a 👎 asks.
+// ---------------------------------------------------------------------------
+
+/** The three answers, worst first — the order they sit in on screen. */
+export const RATING_CHOICES: ReadonlyArray<{ value: -1 | 0 | 1; emoji: string; label: string }> = [
+  { value: -1, emoji: '👎', label: 'Not for me' },
+  { value: 0, emoji: '👌', label: 'It was fine' },
+  { value: 1, emoji: '👍', label: 'Loved it' },
+];
+
+/**
+ * Whether finishing just now asks for a rating: exactly when the cook was
+ * STAMPED — a new entry in `cooked`. That is stampCooked's six-hour dedupe
+ * doing the deciding, so un-checking and re-checking the last step, or a
+ * second device logging the same dinner, never asks twice.
+ */
+export const asksForRating = (before: readonly number[], after: readonly number[]): boolean => after.length > before.length;
+
+export function ratingPromptCopy(title: string, rating: number | null | undefined): { heading: string; sub: string } {
+  const rated = rating === 1 || rating === 0 || rating === -1;
+  return {
+    heading: `How was ${title || 'it'}?`,
+    sub: rated ? 'You can keep your rating or change it.' : 'Your rating decides where it sits in your recipe box.',
+  };
+}
+
+export function removePromptCopy(title: string, bookName: string): { heading: string; body: string; note: string } {
+  return {
+    heading: 'Take it out of your box?',
+    body: `You gave ${title || 'this recipe'} a thumbs down. Want it gone, or kept at the back of ${bookName}?`,
+    note: 'Removed recipes wait in Settings → Removed recipes. You can bring them back anytime.',
+  };
+}
+
+export const removedToast = (title: string): string => `Removed ${title || 'recipe'}`;
+export const keptToast = (bookName: string): string => `Moved to the back of ${bookName}`;
+
+/**
+ * Whether a rating change in the recipe itself asks "take it out?": only a
+ * change TO 👎. Re-tapping 👎 clears it (the control's toggle), and moving
+ * off 👎 is the opposite of wanting it gone. From the cooking prompt,
+ * choosing 👎 always asks — that is a fresh verdict on a fresh cook.
+ */
+export const asksToRemove = (before: number | null | undefined, after: number | null): boolean => after === -1 && before !== -1;
+
 const RATING_WORDS: Record<string, string> = { '1': 'rated thumbs up', '0': 'rated OK', '-1': 'rated thumbs down' };
 export const RATING_EMOJI: Record<string, string> = { '1': '👍', '0': '👌', '-1': '👎' };
 

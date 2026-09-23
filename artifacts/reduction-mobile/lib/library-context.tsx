@@ -53,6 +53,9 @@ export type EntryPatch = Partial<{
   cooked: number[];
   rating: number | null;
   order: OrderPreference | null;
+  /** Out of the recipe box (a stamp) or back in (null). The server keeps
+   *  its own stamp; what syncs is whether it is removed. */
+  removedAt: number | null;
 }>;
 
 export interface LibraryNotice {
@@ -79,6 +82,12 @@ interface LibraryState {
    *  and never rides a PATCH, so this does not touch the sync engine. */
   setPhoto: (id: string, photo: PhotoMeta | null) => void;
   remove: (id: string) => Promise<void>;
+  /** Back into the box: a removed recipe's Undo, and (step 7) Settings'
+   *  Restore. Takes the entry as it was when removed, because the list may
+   *  no longer hold it — a refresh drops removed rows, the server leaving
+   *  them out — and writes `removedAt: null` through the engine like any
+   *  other change, adopting the row first if it had gone. */
+  restore: (entry: Entry) => void;
   /** The latest thing the sync path had to say — a lost conflict, a
    *  remote change, a refused write. Shown by the screen it concerns. */
   notice: LibraryNotice | null;
@@ -258,6 +267,17 @@ export function LibraryProvider({ children }: { children: React.ReactNode }) {
     [engine]
   );
 
+  const restore = useCallback(
+    (snapshot: Entry) => {
+      const current = entriesRef.current.find((e) => e.id === snapshot.id);
+      if (!current) engine.hydrate([snapshot]);
+      const next = { ...(current ?? snapshot), removedAt: null } as Entry;
+      setEntries((prev) => (prev.some((e) => e.id === next.id) ? prev.map((e) => (e.id === next.id ? next : e)) : [next, ...prev]));
+      engine.save(next);
+    },
+    [engine]
+  );
+
   // Sign-out: nothing of this account stays on disk.
   const prevUser = useRef<string | null>(null);
   useEffect(() => {
@@ -277,8 +297,8 @@ export function LibraryProvider({ children }: { children: React.ReactNode }) {
 
   const value = useMemo<LibraryState>(
     () => ({ entries: inBox, loading, error, refresh, getEntry, saveRecipe, update,
-      setPhoto, remove, notice, clearNotice, queued, draft, setDraft }),
-    [inBox, loading, error, refresh, getEntry, saveRecipe, update, setPhoto, remove, notice, clearNotice, queued, draft]
+      setPhoto, remove, restore, notice, clearNotice, queued, draft, setDraft }),
+    [inBox, loading, error, refresh, getEntry, saveRecipe, update, setPhoto, remove, restore, notice, clearNotice, queued, draft]
   );
 
   return <LibraryContext.Provider value={value}>{children}</LibraryContext.Provider>;

@@ -33,6 +33,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { DiagramView } from '@/components/diagram/DiagramView';
 import { ServingsRow } from '@/components/recipe/ServingsRow';
 import { RatingControl } from '@/components/recipe/RatingControl';
+import { asksForRating } from '@/lib/recipeBox';
 import { StepsMode } from '@/components/recipe/StepsMode';
 import { EditSheet, type EditTarget } from '@/components/edit/EditSheet';
 import { SheetButton } from '@/components/Sheet';
@@ -165,6 +166,14 @@ interface RecipeScreenProps {
    *  every open would be a sync round trip nobody asked for. A tap on the
    *  other tab still writes, as always. */
   initialView?: 'overview' | 'cook';
+  /** A cook was just STAMPED — the last step done, outside stampCooked's
+   *  six-hour window — from the diagram or from Cook mode alike. The route
+   *  asks for a rating here (the Recipe Box's finish prompt). */
+  onCooked?: () => void;
+  /** The recipe's own rating control, when the route wants to hear about
+   *  it (a change to 👎 asks whether to take it out of the box). Without
+   *  it the rating is simply written. */
+  onRate?: (rating: number | null) => void;
 }
 
 type ViewMode = 'overview' | 'cook';
@@ -196,6 +205,8 @@ export function RecipeScreen({
   showServings = true,
   onViewChange,
   initialView,
+  onCooked,
+  onRate,
 }: RecipeScreenProps) {
   const colors = useColors();
   const styles = makeStyles(colors);
@@ -250,6 +261,7 @@ export function RecipeScreen({
     const next = toggleDone(recipe, done, id);
     const stamped = stampCooked(cooked, done.length, next.length, total);
     onUpdate(stamped === cooked ? { done: next } : { done: next, cooked: stamped });
+    if (asksForRating(cooked, stamped)) onCooked?.();
   };
   /** Cook mode's "Next Step": done (if not already) and the step's timer
    *  cleared, as one write — see StepsMode's onMarkDone. */
@@ -260,6 +272,7 @@ export function RecipeScreen({
     if (stamped !== cooked) patch.cooked = stamped;
     if (timer?.stepId === stepId) patch.timer = null;
     onUpdate(patch);
+    if (asksForRating(cooked, stamped)) onCooked?.();
   };
   const doneSet = useMemo(() => new Set(done), [done]);
   const types = sanitizeMealTypes(recipe.mealTypes);
@@ -379,7 +392,7 @@ export function RecipeScreen({
               it would collect an opinion about a web page. */}
           {canEdit && !editing ? (
             <View style={styles.factsRow}>
-              {cooked.length > 0 ? <RatingControl rating={rating} onChange={(r) => onUpdate({ rating: r })} /> : null}
+              {cooked.length > 0 ? <RatingControl rating={rating} onChange={(r) => (onRate ? onRate(r) : onUpdate({ rating: r }))} /> : null}
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel="Edit meal types"
