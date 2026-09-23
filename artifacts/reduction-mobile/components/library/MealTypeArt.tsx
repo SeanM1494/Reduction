@@ -11,10 +11,20 @@ import { mealTypeArt } from '@/lib/mealTypeArt';
 import { useColors } from '@/hooks/useColors';
 import type { MealType } from '@/shared/mealTypes';
 
-export function MealTypeArt({ type, size = 36 }: { type: MealType | null; size?: number }) {
+export function MealTypeArt({
+  type,
+  size = 36,
+  tone: fixed,
+}: {
+  type: MealType | null;
+  size?: number;
+  /** Force a tone instead of following the theme — the Recipe Box's pages
+   *  stay cream in dark mode, and a dark tile on cream paper reads badly. */
+  tone?: 'light' | 'dark';
+}) {
   const colors = useColors();
   const art = mealTypeArt(type);
-  const tone = colors.scheme === 'dark' ? art.dark : art.light;
+  const tone = (fixed ?? colors.scheme) === 'dark' ? art.dark : art.light;
   return (
     <View style={[styles.box, { backgroundColor: tone.bg }]} testID="card-art" accessibilityElementsHidden>
       <Feather name={art.icon as never} size={size} color={tone.ink} />

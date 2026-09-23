@@ -9,17 +9,20 @@
  * per device under VIEW_KEY, like the theme.
  */
 
-export type LibraryView = 'grid' | 'stack';
+export type LibraryView = 'grid' | 'books';
 
 export const VIEW_KEY = 'reduction_library_view';
 
 export const LIBRARY_VIEWS: ReadonlyArray<{ view: LibraryView; label: string }> = [
   { view: 'grid', label: 'Grid' },
-  { view: 'stack', label: 'Stack' },
+  { view: 'books', label: 'Books' },
 ];
 
+/** The Recipe Box's books replaced the card stack, so a device that had
+ *  chosen the stack opens on the books. Anything else is the grid. (Step 7
+ *  moves the choice to Settings, under its own key.) */
 export function parseLibraryView(raw: unknown): LibraryView {
-  return raw === 'stack' ? 'stack' : 'grid';
+  return raw === 'books' || raw === 'stack' ? 'books' : 'grid';
 }
 
 /** How much of a drag past either end of the deck the finger actually

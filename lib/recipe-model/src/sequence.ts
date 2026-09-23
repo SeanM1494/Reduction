@@ -75,14 +75,7 @@ const norm = (s: string | null | undefined) => (s ?? "").trim().toLowerCase();
  * someone's cooking for no reason.
  */
 export function componentLinks(recipe: Recipe): Map<number, Set<number>> {
-  const byName = new Map<string, number>();
-  recipe.sections.forEach((s, i) => {
-    const key = norm(s.name);
-    // First section to claim a name wins; a duplicate name is ambiguous and
-    // silently picking the later one would be a coin toss.
-    if (key && !byName.has(key)) byName.set(key, i);
-  });
-
+  const byName = sectionsByName(recipe);
   const deps = new Map<number, Set<number>>();
   recipe.sections.forEach((s, i) => {
     const set = new Set<number>();
@@ -93,6 +86,38 @@ export function componentLinks(recipe: Recipe): Map<number, Set<number>> {
     deps.set(i, set);
   });
   return deps;
+}
+
+/** Section index by normalised name — the one matching rule, shared by
+ *  componentLinks and componentIngredientIds so they can never disagree. */
+function sectionsByName(recipe: Recipe): Map<string, number> {
+  const byName = new Map<string, number>();
+  recipe.sections.forEach((s, i) => {
+    const key = norm(s.name);
+    // First section to claim a name wins; a duplicate name is ambiguous and
+    // silently picking the later one would be a coin toss.
+    if (key && !byName.has(key)) byName.set(key, i);
+  });
+  return byName;
+}
+
+/**
+ * The ids of ingredients that are really another section's finished result
+ * ("Dry ingredients" in the Dough section) — by exactly the rule
+ * componentLinks orders sections by, never a copy of it. For anything that
+ * lists a recipe's ingredients to a person (the Recipe Box's "key
+ * ingredients"): a section name is not something you buy.
+ */
+export function componentIngredientIds(recipe: Recipe): Set<string> {
+  const byName = sectionsByName(recipe);
+  const out = new Set<string>();
+  recipe.sections.forEach((s, i) => {
+    for (const ing of s.ingredients ?? []) {
+      const from = byName.get(norm(ing.name));
+      if (from != null && from !== i) out.add(ing.id);
+    }
+  });
+  return out;
 }
 
 /**

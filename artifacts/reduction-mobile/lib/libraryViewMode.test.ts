@@ -13,7 +13,8 @@ import {
 } from "./libraryViewMode";
 
 test("the stored view parses to grid unless it says stack", () => {
-  assert.equal(parseLibraryView("stack"), "stack");
+  assert.equal(parseLibraryView("books"), "books");
+  assert.equal(parseLibraryView("stack"), "books", "the books replaced the stack");
   assert.equal(parseLibraryView("grid"), "grid");
   assert.equal(parseLibraryView(null), "grid");
   assert.equal(parseLibraryView("shelves"), "grid", "a view that does not exist yet falls back");

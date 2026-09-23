@@ -16,6 +16,7 @@ import {
   applyBranchPreference,
   branchChoices,
   cardSequence,
+  componentIngredientIds,
   componentLinks,
   freeSectionIndices,
   pruneOrderPreference,
@@ -202,6 +203,21 @@ test("componentLinks matches section names case- and space-insensitively", () =>
   recipe.sections[1].name = "  DRY INGREDIENTS ";
   assert.deepEqual([...(componentLinks(recipe).get(0) ?? [])], [1]);
   assert.deepEqual(sectionOrder(recipe), [1, 0]);
+});
+
+test("componentIngredientIds names exactly the ingredients componentLinks links by", () => {
+  const recipe = SPLIT_COOKIE();
+  const ids = componentIngredientIds(recipe);
+  // The one link in SPLIT_COOKIE: the Dough section's "Dry ingredients".
+  const linked = recipe.sections.flatMap((s) => s.ingredients).filter((i) => ids.has(i.id));
+  assert.deepEqual(linked.map((i) => i.name.trim().toLowerCase()), ["dry ingredients"]);
+  // Same rule, same answer, however the name is dressed.
+  recipe.sections[1].name = "  DRY INGREDIENTS ";
+  assert.equal(componentIngredientIds(recipe).size, 1);
+  // Break the link and there is nothing to skip.
+  recipe.sections[0].ingredients[3].name = "dry mix (already made)";
+  assert.equal(componentIngredientIds(recipe).size, 0);
+  assert.equal([...(componentLinks(recipe).get(0) ?? [])].length, 0, "and the two never disagree");
 });
 
 test("a recipe with no component links keeps its original section order", () => {

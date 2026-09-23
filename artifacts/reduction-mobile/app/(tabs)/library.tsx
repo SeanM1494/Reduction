@@ -30,7 +30,7 @@ import {
 } from '@/lib/libraryView';
 import { RecipeCard } from '@/components/library/RecipeCard';
 import type { Entry } from '@/lib/api';
-import { CardStack } from '@/components/library/CardStack';
+import { RecipeBox } from '@/components/recipeBox/RecipeBox';
 import { VIEW_KEY, parseLibraryView, type LibraryView } from '@/lib/libraryViewMode';
 import { SortSheet } from '@/components/library/SortSheet';
 import { SheetButton } from '@/components/Sheet';
@@ -125,8 +125,8 @@ export default function LibraryScreen() {
       ? `${entries.length} ${entries.length === 1 ? 'recipe' : 'recipes'}`
       : `${shown.length} of ${entries.length}`;
 
-  // The sort row, and anything the sync had to say. Shared, because both
-  // views show it: the list as its header, the stack above the deck.
+  // The sort row, and anything the sync had to say: the grid's header. (The
+  // Recipe Box has its own header, with the sort in it.)
   const head = (
     <View style={styles.head}>
       {error ? <ErrorBox message={error} onRetry={refresh} colors={colors} /> : null}
@@ -155,6 +155,31 @@ export default function LibraryScreen() {
       <Text style={styles.emptyText}>Nothing matches that filter.</Text>
     </View>
   );
+
+  // The Recipe Box: its own layout, not the grid's. No category strip — the
+  // books ARE the categories — and it is a sibling of nothing scrollable,
+  // because the page turn is a pan (CLAUDE.md).
+  if (view === 'books') {
+    return (
+      <View style={[styles.container, { paddingTop: insets.top }]}>
+        {error ? (
+          <View style={styles.boxError}>
+            <ErrorBox message={error} onRetry={refresh} colors={colors} />
+          </View>
+        ) : null}
+        <RecipeBox
+          entries={entries}
+          sort={sort}
+          onOpenSort={() => setSortOpen(true)}
+          onOpenRecipe={(e) => router.push(`/recipe/${e.id}`)}
+          onAddRecipe={() => router.navigate('/')}
+          onShowGrid={() => pickView('grid')}
+          bottomInset={tabBarHeight}
+        />
+        <SortSheet open={sortOpen} value={sort} onPick={setSort} onClose={() => setSortOpen(false)} />
+      </View>
+    );
+  }
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
@@ -185,58 +210,42 @@ export default function LibraryScreen() {
           );
         })}
       </ScrollView>
-      {/* Grid or Stack: one 44px button at the strip's end, so the sort row
-          stays two things wide (it is full at 320px already). */}
+      {/* Grid or Books: one 44px button at the strip's end, so the sort row
+          stays two things wide (it is full at 320px already). Temporary:
+          Settings' "Recipe box style" replaces it (ROADMAP, step 7). */}
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel={view === 'grid' ? 'Show as a stack of cards' : 'Show as a grid'}
-        onPress={() => pickView(view === 'grid' ? 'stack' : 'grid')}
+        accessibilityLabel="Show as books"
+        onPress={() => pickView('books')}
         style={({ pressed }) => [styles.viewBtn, pressed && { opacity: 0.6 }]}
         testID="library-view-toggle"
         // For the check: which view is on.
         aria-label={view}
       >
-        <Feather name={view === 'grid' ? 'layers' : 'grid'} size={20} color={colors.foreground} />
+        <Feather name="book-open" size={20} color={colors.foreground} />
       </Pressable>
       </View>
-      {view === 'stack' ? (
-        // The stack is a SIBLING of the list, never a cell inside it. Two
-        // reasons, and the first is why a swipe did nothing at all on a real
-        // phone: a pan surface inside a scroll view fights the scroller for
-        // the gesture. The second is height — inside the list the stage had
-        // to be measured from the list's own layout minus its header, a
-        // number that arrives a frame late and is wrong whenever either
-        // changes; out here `flex: 1` gives the deck its height directly.
-        //
-        // What this view gives up is pull-to-refresh. The focus refetch
-        // above still runs on every visit, and the grid is one tap away.
-        <View style={[styles.stackPage, { paddingBottom: tabBarHeight + 8 }]}>
-          {head}
-          {shown.length ? <CardStack entries={shown} onOpen={(id) => router.push(`/recipe/${id}`)} /> : emptyFilter}
-        </View>
-      ) : (
-        <FlatList
-          contentContainerStyle={[styles.content, { paddingBottom: tabBarHeight + 24 }]}
-          data={grid}
-          keyExtractor={(e, i) => e?.id ?? `hole-${i}`}
-          // Two columns: a recipe box is browsed by picture, and one card per
-          // row was a list with extra steps. `key` forces a remount if the
-          // column count ever changes, which FlatList requires.
-          numColumns={2}
-          key="grid-2"
-          columnWrapperStyle={styles.row}
-          refreshControl={<RefreshControl refreshing={loading} onRefresh={refresh} tintColor={colors.foreground} />}
-          ListHeaderComponent={head}
-          ListEmptyComponent={emptyFilter}
-          renderItem={({ item }) =>
-            item ? (
-              <RecipeCard entry={item} layout="grid" onPress={() => router.push(`/recipe/${item.id}`)} />
-            ) : (
-              <View style={styles.hole} />
-            )
-          }
-        />
-      )}
+      <FlatList
+        contentContainerStyle={[styles.content, { paddingBottom: tabBarHeight + 24 }]}
+        data={grid}
+        keyExtractor={(e, i) => e?.id ?? `hole-${i}`}
+        // Two columns: a recipe box is browsed by picture, and one card per
+        // row was a list with extra steps. `key` forces a remount if the
+        // column count ever changes, which FlatList requires.
+        numColumns={2}
+        key="grid-2"
+        columnWrapperStyle={styles.row}
+        refreshControl={<RefreshControl refreshing={loading} onRefresh={refresh} tintColor={colors.foreground} />}
+        ListHeaderComponent={head}
+        ListEmptyComponent={emptyFilter}
+        renderItem={({ item }) =>
+          item ? (
+            <RecipeCard entry={item} layout="grid" onPress={() => router.push(`/recipe/${item.id}`)} />
+          ) : (
+            <View style={styles.hole} />
+          )
+        }
+      />
       <SortSheet open={sortOpen} value={sort} onPick={setSort} onClose={() => setSortOpen(false)} />
     </View>
   );
@@ -269,7 +278,7 @@ function makeStyles(colors: Colors) {
     content: { paddingHorizontal: 16, paddingTop: 12, gap: 10 },
     row: { gap: 10 },
     hole: { flex: 1 },
-    stackPage: { flex: 1, paddingHorizontal: 16, paddingTop: 12 },
+    boxError: { paddingHorizontal: 16, paddingTop: 8 },
     stripRow: { flexDirection: 'row', alignItems: 'stretch', borderBottomWidth: 1, borderBottomColor: colors.border },
     viewBtn: { width: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center', marginRight: 8, alignSelf: 'center' },
     head: { gap: 6, marginBottom: 4 },
