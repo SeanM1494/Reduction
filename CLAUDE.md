@@ -272,8 +272,8 @@ billing stopped before any row goes, and nothing gone when it cannot be — and
 the eleventh guards that a user's photo is never overwritten by a page's and
 that no photo outlives its recipe, which no foreign key promises, and the
 twelfth guards that removed is not deleted — out of the list, restorable,
-its timer stopped, and never a refund of the free recipe. **The full suite — 514 tests at the time of
-writing — has been run against a real Postgres and passes 514/0.** The
+its timer stopped, and never a refund of the free recipe. **The full suite — 515 tests at the time of
+writing — has been run against a real Postgres and passes 515/0.** The
 ones that are not api-server or model tests include the mobile library's
 filter and sort (`artifacts/reduction-mobile/lib/libraryView.test.ts`), the
 recipe box's books and page arithmetic (`recipeBox.test.ts`), the
@@ -841,6 +841,14 @@ accommodate afterwards.
   `react-native-reanimated`, `react-native-gesture-handler` and
   `react-native-worklets` are already dependencies (expo-router brings
   them) and `GestureHandlerRootView` is already at the app root.
+  **Build a gesture ONCE (`useMemo`), with the JS it calls behind refs,
+  and ignore a touch that lands while the thing is still settling.** The
+  book rebuilt its Pan and Tap on every render; a turn landing re-rendered
+  it mid-touch, and a quick second swipe came out as a TAP (on the last
+  spread, "Room for one more" — Find opened). The same second swipe, taken
+  over mid-settle, started from a fractional position, landed between two
+  spreads (two empty pages) and locked the book for good (Sep 24, a real
+  phone). `turnTarget` only ever names a whole spread.
 - **Stacked cards are absolutely positioned siblings in back-to-front JSX
   order, and never ordered with `zIndex`.** The card stack's first cut drew
   the peeks absolutely and the top card in flow, ordering them with

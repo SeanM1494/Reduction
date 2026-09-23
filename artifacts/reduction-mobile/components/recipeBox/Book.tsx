@@ -30,7 +30,7 @@
  * backwards until the flip test caught it.
  */
 
-import React, { useCallback, useEffect, useMemo } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef } from 'react';
 import { Platform, StyleSheet, Text, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
@@ -53,6 +53,7 @@ import {
   flipProgress,
   flipSettleMs,
   pageA11yLabel,
+  turnTarget,
   spreadCount,
   type Book as BookInfo,
 } from '@/lib/recipeBox';
@@ -98,14 +99,42 @@ export function Book({ book, pages, spread, onSpreadChange, onOpenPage, onBlankP
   const t0 = useSharedValue(0);
   const nudge = useSharedValue(0);
   const fade = useSharedValue(1);
+  const ignored = useSharedValue(false);
+  const tapIgnored = useSharedValue(false);
+
+  // The JS side of the gestures, read through refs so that the gestures
+  // themselves are built ONCE (below). Rebuilding them on every render
+  // replaced the handlers mid-touch whenever a turn landed and re-rendered
+  // the book — a quick second swipe then ended as a TAP, and on the last
+  // spread that tap was "Room for one more", which opened Find.
+  const spreadRef = useRef(spread);
+  spreadRef.current = spread;
+  const onSpreadChangeRef = useRef(onSpreadChange);
+  onSpreadChangeRef.current = onSpreadChange;
+  const openAtRef = useRef<(x: number) => void>(() => {});
+  openAtRef.current = (x: number) => {
+    const i = 2 * spread + (x < pageW ? 0 : 1);
+    if (i < n) onOpenPage(pages[i]);
+    else if (i === n && n % 2 === 1) onBlankPage();
+  };
 
   const committed = useCallback(
     (to: number) => {
       if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
-      onSpreadChange(to);
+      onSpreadChangeRef.current(to);
+      // `busy` is released when the new spread arrives as a prop. If it never
+      // does — the parent chose otherwise — go back to the spread the parent
+      // says we are on rather than stay locked on a page nobody can see.
+      setTimeout(() => {
+        if (spreadRef.current !== to) {
+          pos.value = spreadRef.current;
+          busy.value = false;
+        }
+      }, 150);
     },
-    [onSpreadChange]
+    [pos, busy]
   );
+  const openAt = useCallback((x: number) => openAtRef.current(x), []);
 
   // The spread changed from outside (the ‹ › buttons, a search jump, a
   // VoiceOver action): turn to it. One spread away animates as a real turn;
@@ -134,73 +163,83 @@ export function Book({ book, pages, spread, onSpreadChange, onOpenPage, onBlankP
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [spread]);
 
-  const pan = Gesture.Pan()
-    .enabled(interactive)
-    .activeOffsetX([-FLIP.axisLockPx, FLIP.axisLockPx])
-    .failOffsetY([-FLIP.axisLockPx, FLIP.axisLockPx])
-    .onBegin(() => {
-      start.value = pos.value;
-      dir.value = 0;
-      t0.value = Date.now();
-    })
-    .onUpdate((e) => {
-      if (busy.value) return;
-      if (dir.value === 0) {
-        if (Math.abs(e.translationX) < 1) return;
-        dir.value = e.translationX < 0 ? 1 : -1;
-      }
-      const d = dir.value as 1 | -1;
-      const open = d > 0 ? start.value < lastSV.value : start.value > 0;
-      if (!open) {
-        // The first or last spread: the spread gives a little, no turn.
-        nudge.value = e.translationX * FLIP.edgeRubber;
-        return;
-      }
-      if (reduceMotion) return; // nothing turns under the finger; it fades on release
-      pos.value = start.value + d * flipProgress(e.translationX, d, bookW);
-    })
-    .onEnd((e) => {
-      if (nudge.value !== 0) nudge.value = withSpring(0, { damping: 18, stiffness: 220 });
-      if (busy.value || dir.value === 0) return;
-      const d = dir.value as 1 | -1;
-      const open = d > 0 ? start.value < lastSV.value : start.value > 0;
-      if (!open) return;
-      const p = flipProgress(e.translationX, d, bookW);
-      const commit = flipCommits(p, Date.now() - t0.value, e.translationX);
-      const to = start.value + (commit ? d : 0);
-      if (reduceMotion) {
-        if (!commit) return;
+  // A touch that lands while a page is still settling is IGNORED, pan and
+  // tap alike, as the prototype did. Letting it take over mid-settle is what
+  // broke the book on the phone: it started from a fractional position, the
+  // turn landed between two spreads (two empty pages), and nothing could
+  // ever release it. `turnTarget` also only ever names a whole spread.
+  const gesture = useMemo(() => {
+    const pan = Gesture.Pan()
+      .enabled(interactive)
+      .activeOffsetX([-FLIP.axisLockPx, FLIP.axisLockPx])
+      .failOffsetY([-FLIP.axisLockPx, FLIP.axisLockPx])
+      .onBegin(() => {
+        ignored.value = busy.value;
+        start.value = Math.round(pos.value);
+        dir.value = 0;
+        t0.value = Date.now();
+      })
+      .onUpdate((e) => {
+        if (ignored.value || busy.value) return;
+        if (dir.value === 0) {
+          if (Math.abs(e.translationX) < 1) return;
+          dir.value = e.translationX < 0 ? 1 : -1;
+        }
+        const d = dir.value as 1 | -1;
+        if (turnTarget(start.value, d, lastSV.value) === null) {
+          // The first or last spread: the spread gives a little, no turn.
+          nudge.value = e.translationX * FLIP.edgeRubber;
+          return;
+        }
+        if (reduceMotion) return; // nothing turns under the finger; it fades on release
+        pos.value = start.value + d * flipProgress(e.translationX, d, bookW);
+      })
+      .onEnd((e) => {
+        if (nudge.value !== 0) nudge.value = withSpring(0, { damping: 18, stiffness: 220 });
+        if (ignored.value || busy.value || dir.value === 0) return;
+        const d = dir.value as 1 | -1;
+        const target = turnTarget(start.value, d, lastSV.value);
+        if (target === null) return;
+        const p = flipProgress(e.translationX, d, bookW);
+        const commit = flipCommits(p, Date.now() - t0.value, e.translationX);
+        const to = commit ? target : start.value;
         busy.value = true;
-        fade.value = withTiming(0.4, { duration: 90 }, () => {
-          pos.value = to;
-          runOnJS(committed)(to);
-          fade.value = withTiming(1, { duration: 180 });
+        if (reduceMotion) {
+          if (!commit) {
+            busy.value = false;
+            return;
+          }
+          fade.value = withTiming(0.4, { duration: 90 }, () => {
+            pos.value = to;
+            runOnJS(committed)(to);
+            fade.value = withTiming(1, { duration: 180 });
+          });
+          return;
+        }
+        // Busy for the whole settle, either way; a commit stays busy until
+        // the new spread arrives as a prop (the effect above releases it).
+        pos.value = withTiming(to, { duration: flipSettleMs(p, commit), easing: EASE }, (done) => {
+          if (commit) runOnJS(committed)(to);
+          else busy.value = false;
+          void done;
         });
-        return;
-      }
-      if (commit) busy.value = true;
-      pos.value = withTiming(to, { duration: flipSettleMs(p, commit), easing: EASE }, (done) => {
-        if (done && commit) runOnJS(committed)(to);
       });
-    });
 
-  const openAt = useCallback(
-    (x: number) => {
-      const i = 2 * spread + (x < pageW ? 0 : 1);
-      if (i < n) onOpenPage(pages[i]);
-      else if (i === n && n % 2 === 1) onBlankPage();
-    },
-    [spread, pageW, n, pages, onOpenPage, onBlankPage]
-  );
+    const tap = Gesture.Tap()
+      .enabled(interactive)
+      .maxDistance(FLIP.axisLockPx)
+      .onBegin(() => {
+        tapIgnored.value = busy.value;
+      })
+      .onEnd((e, ok) => {
+        if (ok && !busy.value && !tapIgnored.value) runOnJS(openAt)(e.x);
+      });
 
-  const tap = Gesture.Tap()
-    .enabled(interactive)
-    .maxDistance(FLIP.axisLockPx)
-    .onEnd((e, ok) => {
-      if (ok && !busy.value) runOnJS(openAt)(e.x);
-    });
+    return Gesture.Race(pan, tap);
+    // The shared values and the two stable callbacks never change identity.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [interactive, bookW, reduceMotion]);
 
-  const gesture = Gesture.Race(pan, tap);
 
   const content = useCallback(
     (i: number): PageContent => {

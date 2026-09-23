@@ -29,6 +29,7 @@ import {
   spreadOfPage,
   stepCount,
   timeLine,
+  turnTarget,
 } from './recipeBox';
 
 const recipe = (over: Record<string, unknown> = {}) => ({ title: 'X', servings: 4, sections: [], ...over }) as any;
@@ -259,4 +260,17 @@ test('carousel window: every book on a small shelf, two either side on a big one
   assert.equal(shelfIndex(-1, 3), 2);
   assert.equal(shelfIndex(7, 3), 1);
   assert.equal(shelfIndex(5, 0), 0);
+});
+
+test('a turn always lands on a whole spread, and never past either end', () => {
+  assert.equal(turnTarget(0, 1, 2), 1);
+  assert.equal(turnTarget(2, 1, 2), null);
+  assert.equal(turnTarget(0, -1, 2), null);
+  assert.equal(turnTarget(1, -1, 2), 0);
+  // The phone bug: a second swipe that began mid-settle, at 0.8.
+  assert.equal(turnTarget(0.8, 1, 2), 2);
+  assert.equal(turnTarget(0.8, 1, 1), null);
+  assert.equal(clampSpread(1.8, 5), 2);
+  assert.equal(clampSpread(1.8, 3), 1);
+  assert.ok(Number.isInteger(clampSpread(0.4, 9)));
 });

@@ -90,7 +90,10 @@ export function shelf<T extends LibraryItem>(entries: T[], sort: SortKey): Array
 /** A spread is two pages: pages 2k and 2k+1. An odd book ends on a blank. */
 export const spreadCount = (pages: number): number => Math.max(1, Math.ceil(pages / 2));
 export const spreadOfPage = (index: number): number => Math.floor(index / 2);
-export const clampSpread = (k: number, pages: number): number => Math.min(Math.max(0, k), spreadCount(pages) - 1);
+/** Always a whole spread: a fractional one draws the leaves half-turned, as
+ *  two empty pages (the Sep 24 bug), so it is rounded here too. */
+export const clampSpread = (k: number, pages: number): number =>
+  Math.min(Math.max(0, Math.round(k)), spreadCount(pages) - 1);
 
 /** "Pages 3–4 of 7"; "Page 7 of 7" when the right-hand page is the blank. */
 export function pagesLabel(k: number, pages: number): string {
@@ -207,6 +210,16 @@ export function flipProgress(dx: number, dir: 1 | -1, bookWidth: number): number
   'worklet';
   const p = (dir > 0 ? -dx : dx) / (bookWidth * 0.85);
   return p < 0 ? 0 : p > 1 ? 1 : p;
+}
+
+/** The spread a turn from `start` in direction `dir` lands on, or null at
+ *  the first or last spread. Always a WHOLE spread: a turn that started
+ *  mid-settle once landed on 1.8 — between two spreads, drawn as two empty
+ *  pages — and the book could never be released from it. */
+export function turnTarget(start: number, dir: 1 | -1, last: number): number | null {
+  'worklet';
+  const to = Math.round(start) + dir;
+  return to < 0 || to > last ? null : to;
 }
 
 /** Past 40%, or a flick (under 300ms, over 40px) past 6%. */
