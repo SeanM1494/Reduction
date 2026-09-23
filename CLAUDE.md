@@ -272,8 +272,8 @@ billing stopped before any row goes, and nothing gone when it cannot be — and
 the eleventh guards that a user's photo is never overwritten by a page's and
 that no photo outlives its recipe, which no foreign key promises, and the
 twelfth guards that removed is not deleted — out of the list, restorable,
-its timer stopped, and never a refund of the free recipe. **The full suite — 515 tests at the time of
-writing — has been run against a real Postgres and passes 515/0.** The
+its timer stopped, and never a refund of the free recipe. **The full suite — 517 tests at the time of
+writing — has been run against a real Postgres and passes 517/0.** The
 ones that are not api-server or model tests include the mobile library's
 filter and sort (`artifacts/reduction-mobile/lib/libraryView.test.ts`), the
 recipe box's books and page arithmetic (`recipeBox.test.ts`), the

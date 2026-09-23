@@ -31,6 +31,7 @@ import {
 import { RecipeCard } from '@/components/library/RecipeCard';
 import type { Entry } from '@/lib/api';
 import { RecipeBox } from '@/components/recipeBox/RecipeBox';
+import { PreviewSheet } from '@/components/recipeBox/PreviewSheet';
 import { VIEW_KEY, parseLibraryView, type LibraryView } from '@/lib/libraryViewMode';
 import { SortSheet } from '@/components/library/SortSheet';
 import { SheetButton } from '@/components/Sheet';
@@ -60,6 +61,7 @@ export default function LibraryScreen() {
   // carousel needs the height for the books above and below to show, so the
   // navigator's "Library" title goes while they are up. It also makes the
   // two tab layouts the same screen: NativeTabs never had a header here.
+  const [previewId, setPreviewId] = useState<string | null>(null);
   const navigation = useNavigation();
   useLayoutEffect(() => {
     navigation.setOptions({ headerShown: view !== 'books' });
@@ -179,12 +181,23 @@ export default function LibraryScreen() {
           entries={entries}
           sort={sort}
           onOpenSort={() => setSortOpen(true)}
-          onOpenRecipe={(e) => router.push(`/recipe/${e.id}`)}
+          onOpenRecipe={(e) => setPreviewId(e.id)}
           onAddRecipe={() => router.navigate('/')}
           onShowGrid={() => pickView('grid')}
           bottomInset={tabBarHeight}
         />
         <SortSheet open={sortOpen} value={sort} onPick={setSort} onClose={() => setSortOpen(false)} />
+        {/* A page opens a preview, not the recipe: a look before committing,
+            and the choice of the diagram or straight into cooking. The
+            entry is looked up fresh, so a sync landing underneath shows. */}
+        <PreviewSheet
+          entry={previewId ? entries.find((e) => e.id === previewId) ?? null : null}
+          onClose={() => setPreviewId(null)}
+          onOpen={(e, v) => {
+            setPreviewId(null);
+            router.push(`/recipe/${e.id}?view=${v}`);
+          }}
+        />
       </View>
     );
   }

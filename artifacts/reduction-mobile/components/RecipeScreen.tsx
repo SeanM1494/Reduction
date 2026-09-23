@@ -159,6 +159,12 @@ interface RecipeScreenProps {
   /** Which view is up, for the route: the diagram scrolls sideways, and a
    *  swipe on it at its left edge must not be iOS's swipe-back. */
   onViewChange?: (view: 'overview' | 'cook') => void;
+  /** Which tab to open on, overriding the stored `mode` for THIS visit —
+   *  the Recipe Box preview's "View diagram" and "Start cooking". Not
+   *  written back: opening a recipe is not choosing a tab, and a write on
+   *  every open would be a sync round trip nobody asked for. A tap on the
+   *  other tab still writes, as always. */
+  initialView?: 'overview' | 'cook';
 }
 
 type ViewMode = 'overview' | 'cook';
@@ -189,12 +195,13 @@ export function RecipeScreen({
   overviewFooter,
   showServings = true,
   onViewChange,
+  initialView,
 }: RecipeScreenProps) {
   const colors = useColors();
   const styles = makeStyles(colors);
   // The stored mode picks the opening tab; a tap writes it back so the next
   // open (and the other device) lands where this one left off.
-  const [view, setView] = useState<ViewMode>(mode === 'steps' ? 'cook' : 'overview');
+  const [view, setView] = useState<ViewMode>(initialView ?? (mode === 'steps' ? 'cook' : 'overview'));
   useEffect(() => {
     onViewChange?.(view);
   }, [view, onViewChange]);

@@ -172,6 +172,37 @@ export function pageLayout(pageWidth: number, hasTime: boolean): { narrow: boole
   return { narrow, ingredientLines: narrow && hasTime ? 1 : 2, shortPill: narrow };
 }
 
+// ---------------------------------------------------------------------------
+// The preview sheet (tap a page).
+// ---------------------------------------------------------------------------
+
+/** How many ingredients the preview lists before "+N more": the page has
+ *  room for three, the sheet for a couple of rows of chips. */
+export const PREVIEW_INGREDIENTS = 6;
+
+/** The preview's stat tiles. Total time only when the recipe STATES one —
+ *  the same rule as the page (ROADMAP, decided Sep 23) — so a recipe without
+ *  one gets two tiles, never a guessed or blank third. */
+export function previewStats(recipe: Recipe): Array<{ value: string; label: string }> {
+  const out: Array<{ value: string; label: string }> = [];
+  const time = timeLine(recipe);
+  if (time) out.push({ value: time, label: 'total time' });
+  const serves = typeof recipe.servings === 'number' && recipe.servings > 0 ? recipe.servings : null;
+  if (serves) out.push({ value: String(serves), label: serves === 1 ? 'serving' : 'servings' });
+  const steps = stepCount(recipe);
+  out.push({ value: String(steps), label: steps === 1 ? 'step' : 'steps' });
+  return out;
+}
+
+/** "Cooked 3× · last Sep 11 · your rating 👍", or "You haven't cooked this
+ *  yet" — with the rating after it either way, when there is one. */
+export function previewCookedLine(cooked: number[] | null | undefined, rating: number | null | undefined): string {
+  const list = (cooked ?? []).filter((t) => typeof t === 'number' && Number.isFinite(t));
+  const head = list.length ? `Cooked ${list.length}× · last ${shortDate(Math.max(...list))}` : "You haven't cooked this yet";
+  const emoji = rating === 1 || rating === 0 || rating === -1 ? RATING_EMOJI[String(rating)] : null;
+  return emoji ? `${head} · your rating ${emoji}` : head;
+}
+
 const RATING_WORDS: Record<string, string> = { '1': 'rated thumbs up', '0': 'rated OK', '-1': 'rated thumbs down' };
 export const RATING_EMOJI: Record<string, string> = { '1': '👍', '0': '👌', '-1': '👎' };
 

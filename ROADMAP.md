@@ -836,6 +836,20 @@ DECIDED (Sep 23, after the step-1 push):
     rises into the slot below** — the other book always waits below, so
     the book you leave goes to the back of the pile rather than sitting
     above you.
+- **A page turn can no longer strand the book (Sep 24, ba43693)** — a quick
+  second swipe landed between two spreads; see CLAUDE.md's gesture rule.
+- **Step 4 — the preview sheet: DONE Sep 24.** Tapping a page opens it;
+  "View diagram" and "Start cooking" open the recipe on that tab. Decided
+  while building it:
+  - **No stated time, two tiles.** The total-time tile follows the page's
+    rule, so a recipe without one shows servings and steps only, never a
+    blank or guessed third tile.
+  - **The tab the preview opens is not saved.** RecipeScreen still writes
+    its tab when you TAP one; opening from the preview is a choice for this
+    visit, and a write on every open would be a sync round trip nobody
+    asked for. So the grid, which still opens on the stored tab, is
+    unaffected.
+  - **Six ingredients** before "+N more" (the page has room for three).
 
 ## 2. Global recipe search inside the app
 

@@ -30,6 +30,8 @@ import {
   stepCount,
   timeLine,
   turnTarget,
+  previewStats,
+  previewCookedLine,
 } from './recipeBox';
 
 const recipe = (over: Record<string, unknown> = {}) => ({ title: 'X', servings: 4, sections: [], ...over }) as any;
@@ -273,4 +275,28 @@ test('a turn always lands on a whole spread, and never past either end', () => {
   assert.equal(clampSpread(1.8, 5), 2);
   assert.equal(clampSpread(1.8, 3), 1);
   assert.ok(Number.isInteger(clampSpread(0.4, 9)));
+});
+
+test('preview tiles: total time only when stated, then servings and steps', () => {
+  const sections = [{ name: null, ingredients: [{ id: 'a', name: 'Flour' }], nodes: [{ id: 's1', label: 'Mix', inputs: ['a'] }, { id: 's2', label: 'Bake', inputs: ['s1'] }] }];
+  assert.deepEqual(previewStats(recipe({ servings: 4, totalMinutes: 30, sections })), [
+    { value: '30 min', label: 'total time' },
+    { value: '4', label: 'servings' },
+    { value: '2', label: 'steps' },
+  ]);
+  // No stated time: two tiles, never a sum of the steps.
+  assert.deepEqual(previewStats(recipe({ servings: 1, sections: [{ ...sections[0], nodes: [{ id: 's1', label: 'Mix', inputs: ['a'], minutes: 12 }] }] })), [
+    { value: '1', label: 'serving' },
+    { value: '1', label: 'step' },
+  ]);
+  assert.deepEqual(previewStats(recipe({ servings: null, sections })), [{ value: '2', label: 'steps' }]);
+});
+
+test('preview cooked line: count and last date, or never — the rating after either', () => {
+  const sep11 = new Date(2026, 8, 11, 19).getTime();
+  const sep2 = new Date(2026, 8, 2, 19).getTime();
+  assert.equal(previewCookedLine([sep2, sep11, sep2], 1), 'Cooked 3× · last Sep 11 · your rating 👍');
+  assert.equal(previewCookedLine([sep11], null), 'Cooked 1× · last Sep 11');
+  assert.equal(previewCookedLine([], null), "You haven't cooked this yet");
+  assert.equal(previewCookedLine(null, -1), "You haven't cooked this yet · your rating 👎");
 });
