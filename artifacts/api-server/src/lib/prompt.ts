@@ -58,7 +58,7 @@ Standing oven instructions go in the section "header", not in a step.
 
 MEAL TYPES
 
-"mealTypes" is 1 to 3 values from exactly this list: breakfast, lunch, dinner, dessert, snack, side, drink, baking. The most natural one comes FIRST — it is the primary. A recipe can genuinely be several (chili is dinner and lunch; muffins are breakfast and snack); do not pad to 3 when one is honest. Appetizers count as snack; soups and salads as dinner or side by their role; anything oven-baked that is not dessert leans baking.
+"mealTypes" is 1 to 3 values from exactly this list: breakfast, lunch, dinner, dessert, snack, side, drink, baking, salad. The most natural one comes FIRST — it is the primary. A recipe can genuinely be several (chili is dinner and lunch; muffins are breakfast and snack); do not pad to 3 when one is honest. Appetizers count as snack. A salad — leafy, grain, pasta or fruit — is salad first, whatever meal it is served at; a main-course salad may add dinner or lunch after it. Soups are dinner or side by their role. Anything oven-baked that is not dessert leans baking.
 
 TOTAL TIME
 

@@ -780,13 +780,32 @@ DECIDED (Sep 23):
   `recipes.removed_at`, restorable from Settings, never refunds the free
   allowance. Merged on whether it is removed, never on when (shared/sync.ts).
 
-OPEN, needed by step 2: four of the prototype's seven cover colours fail
-AA contrast for the 11px white tab text (Breakfast 3.03:1) — proposed:
-the same hues, darkened in lightness only to 4.6:1. And the pages do not
-fit an iPhone SE at the tuned numbers (19 of 31 prototype pages put the
-cooked pill on the page number) — proposed: below ~160px page width, one
-line of ingredients and "2× · Sep 5", measured at 0 collisions.
+DECIDED (Sep 23, after the step-1 push):
+- **Cover colours**: the prototype's hues, darkened in lightness only to
+  4.6:1 for the 11px white tab text — Breakfast `#986d29`, Lunch `#657c51`,
+  Apps & Snacks `#477d7b`, Salads `#5a7f43`; Dinner `#a94f3a`, Desserts
+  `#8e4f6f` and Other `#6a6575` already passed and are unchanged. The
+  prototype's Breakfast was 3.03:1.
+- **Narrow pages** (under ~160px wide — an iPhone SE): one line of
+  ingredients and the cooked pill as "2× · Sep 5", which took the
+  prototype's SE pages from 19 of 31 colliding to none. When a recipe has no
+  stated time its line is hidden, and the ingredients get their second line
+  back — still no collisions.
+- **The page flip is SPLIT FACES**, tested on a real iPhone: each face of the
+  turning leaf is its own view, one rotation about the spine, shown by
+  angle. The prototype's nested leaf (both faces in one view, the back
+  culled by backfaceVisibility) mirrors the front through the page in
+  Chromium, because React Native renders each view as a flat layer. The
+  test screen (app/dev/flip.tsx) goes when the book lands.
 
+- **The ninth meal type, salad: DONE Sep 23.** Appended to MEAL_TYPES so no
+  existing order moved; its own art on both clients; the prompt now puts a
+  salad first as salad whatever meal it is served at. The list grew from 8 to
+  9 for the Salads book — the split ROADMAP #8 kept the list small to make
+  cheap. Existing recipes are NOT re-tagged: a salad saved before this sits
+  in Dinner or Other until it is re-extracted or re-tagged by hand. A build
+  already installed on a phone drops "salad" silently (its sanitizer does
+  not know it) until it is rebuilt.
 - **Step 1 — removed_at, server and sync: DONE Sep 23.** Hand-run DDL (README
   "The recipe box") that must run BEFORE the deploy; `/api/health` now
   reports missing hand-run DDL by name. **Known gap, deliberate: the web

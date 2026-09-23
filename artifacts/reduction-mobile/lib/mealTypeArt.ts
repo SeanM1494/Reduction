@@ -24,6 +24,9 @@ const ART: Record<MealType | 'untagged', MealTypeArt> = {
   side: { icon: 'layers', light: { bg: '#e2ead4', ink: '#4b6b3a' }, dark: { bg: '#2a3a24', ink: '#aacb92' } },
   drink: { icon: 'coffee', light: { bg: '#d9e6ea', ink: '#2f5c6b' }, dark: { bg: '#213a42', ink: '#9ccbd8' } },
   baking: { icon: 'box', light: { bg: '#efe0c8', ink: '#7a5528' }, dark: { bg: '#44341f', ink: '#e0be8c' } },
+  // A brighter leaf green than snack's olive and side's sage: three greens
+  // in the palette, and this one must not read as either.
+  salad: { icon: 'feather', light: { bg: '#d9efd3', ink: '#2f7a3b' }, dark: { bg: '#1f3a24', ink: '#9fdca7' } },
   untagged: { icon: 'book-open', light: { bg: '#f7f0df', ink: '#6b6154' }, dark: { bg: '#3a342c', ink: '#b3a898' } },
 };
 

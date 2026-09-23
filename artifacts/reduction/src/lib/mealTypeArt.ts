@@ -23,6 +23,7 @@ const F = {
   layers: '<polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/>',
   coffee: '<path d="M18 8h1a4 4 0 0 1 0 8h-1"/><path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z"/><line x1="6" y1="1" x2="6" y2="4"/><line x1="10" y1="1" x2="10" y2="4"/><line x1="14" y1="1" x2="14" y2="4"/>',
   box: '<path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/>',
+  feather: '<path d="M20.24 12.24a6 6 0 0 0-8.49-8.49L5 10.5V19h8.5z"/><line x1="16" y1="8" x2="2" y2="22"/><line x1="17.5" y1="15" x2="9" y2="15"/>',
   bookOpen: '<path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>',
 };
 
@@ -35,6 +36,7 @@ const ART: Record<MealType | "untagged", MealTypeArt> = {
   side: { svg: F.layers, light: { bg: "#e2ead4", ink: "#4b6b3a" }, dark: { bg: "#2a3a24", ink: "#aacb92" } },
   drink: { svg: F.coffee, light: { bg: "#d9e6ea", ink: "#2f5c6b" }, dark: { bg: "#213a42", ink: "#9ccbd8" } },
   baking: { svg: F.box, light: { bg: "#efe0c8", ink: "#7a5528" }, dark: { bg: "#44341f", ink: "#e0be8c" } },
+  salad: { svg: F.feather, light: { bg: "#d9efd3", ink: "#2f7a3b" }, dark: { bg: "#1f3a24", ink: "#9fdca7" } },
   untagged: { svg: F.bookOpen, light: { bg: "#f7f0df", ink: "#6b6154" }, dark: { bg: "#3a342c", ink: "#b3a898" } },
 };
 

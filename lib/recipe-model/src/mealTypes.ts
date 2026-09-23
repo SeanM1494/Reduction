@@ -1,10 +1,13 @@
 /**
- * shared/mealTypes.ts — the eight meal types, and the one gate they pass.
+ * shared/mealTypes.ts — the nine meal types, and the one gate they pass.
  *
- * Eight, deliberately fewer than the obvious list: appetizers fold into
- * snacks, soups and salads into mains or sides. Eight fits a filter row on a
- * phone, and splitting a category later is easy where merging one after
- * people have filtered by it is not (ROADMAP #8).
+ * Nine, deliberately fewer than the obvious list: appetizers fold into
+ * snacks, soups into mains or sides. It was eight until Sep 23, when salad
+ * was split out of dinner and side for the Recipe Box, which gives salads a
+ * book of their own — the split the original eight were kept small to make
+ * cheap (ROADMAP #8). APPENDED, not inserted, so no existing order or index
+ * moved. Splitting a category later stays easy; merging one after people
+ * have filtered by it does not.
  *
  * A recipe carries several types with ONE PRIMARY — the first element of
  * `recipe.mealTypes`. The primary drives sorting and display; the rest widen
@@ -28,6 +31,7 @@ export const MEAL_TYPES = [
   "side",
   "drink",
   "baking",
+  "salad",
 ] as const;
 
 export type MealType = (typeof MEAL_TYPES)[number];
@@ -41,6 +45,7 @@ export const MEAL_TYPE_LABELS: Record<MealType, string> = {
   side: "Side",
   drink: "Drink",
   baking: "Baking",
+  salad: "Salad",
 };
 
 const KNOWN = new Set<string>(MEAL_TYPES);

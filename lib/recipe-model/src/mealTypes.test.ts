@@ -31,9 +31,9 @@ test("malformed input is untagged, never an error", () => {
   assert.equal(primaryMealType(undefined), null);
 });
 
-test("the list is exactly the eight, in display order", () => {
+test("the list is exactly the nine, in display order — salad appended, nothing moved", () => {
   assert.deepEqual(
     [...MEAL_TYPES],
-    ["breakfast", "lunch", "dinner", "dessert", "snack", "side", "drink", "baking"]
+    ["breakfast", "lunch", "dinner", "dessert", "snack", "side", "drink", "baking", "salad"]
   );
 });
