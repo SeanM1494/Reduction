@@ -3,8 +3,18 @@ import assert from 'node:assert/strict';
 import { MEAL_TYPES } from '@workspace/recipe-model';
 import {
   BOOKS,
+  CAROUSEL,
   arrangeBook,
+  bookGeometry,
   bookOf,
+  bookSettleMs,
+  bookSwipeCommits,
+  carouselDrag,
+  carouselGeometry,
+  carouselPlacement,
+  carouselWindow,
+  loopOffset,
+  shelfIndex,
   clampSpread,
   cookedLabel,
   flipCommits,
@@ -153,4 +163,100 @@ test('page turn: progress, the commit rule and the settle times, as tuned', () =
   assert.equal(flipSettleMs(0, true), 600);
   assert.equal(flipSettleMs(1, true), 140);
   assert.equal(flipSettleMs(0.5, false), 300);
+});
+
+test('book geometry: the prototype\'s proportions', () => {
+  assert.deepEqual(bookGeometry(366), { bookW: 366, pageW: 176, pageH: 293, coverH: 309 });
+  assert.deepEqual(bookGeometry(296), { bookW: 296, pageW: 141, pageH: 237, coverH: 253 });
+});
+
+test('carousel geometry: the prototype\'s book and spacing where there is room, a smaller book where there is not', () => {
+  // An iPhone 13 as the app gets it: the prototype, untouched.
+  const roomy = carouselGeometry(390, 530, 3);
+  assert.equal(roomy.bookW, 366);
+  assert.equal(roomy.step, 0.92 * (309 + 40));
+  // Too short for the neighbours to show at that size: the book narrows.
+  const tight = carouselGeometry(320, 354, 3);
+  assert.ok(tight.bookW < 296, `book ${tight.bookW}`);
+  assert.ok(tight.bookW >= CAROUSEL.minBookPx);
+  // One book has no neighbours to make room for.
+  assert.equal(carouselGeometry(320, 354, 1).bookW, 296);
+  // A preposterous stage keeps a readable book and gives up the peeks.
+  assert.equal(carouselGeometry(390, 200, 3).bookW, CAROUSEL.minBookPx);
+});
+
+test('carousel geometry: over every phone-ish stage, covers never overlap and a neighbour always shows', () => {
+  for (let w = 300; w <= 440; w += 10) {
+    for (let h = 300; h <= 800; h += 7) {
+      const g = carouselGeometry(w, h, 3);
+      if (g.bookW === CAROUSEL.minBookPx && g.bookW < Math.min(w - 24, 380)) continue; // the preposterous case
+      const far = 1 - CAROUSEL.shrink;
+      const gapBetween = g.step - (g.coverH / 2 + (far * g.coverH) / 2);
+      assert.ok(gapBetween >= CAROUSEL.tabPx + 4 - 1e-9, `${w}x${h}: gap ${gapBetween}`);
+      const peek = h / 2 - (g.step - (far * g.coverH) / 2);
+      assert.ok(peek >= CAROUSEL.minPeekPx - 1e-9, `${w}x${h}: peek ${peek}`);
+      assert.ok(g.top >= 0, `${w}x${h}: tab above the stage`);
+    }
+  }
+});
+
+test('loop offset: each book at its nearest copy, the handoff where it cannot be seen', () => {
+  // Three books, front = 0: the other two either side.
+  assert.deepEqual([0, 1, 2].map((i) => loopOffset(i, 0, 3)), [0, 1, -1]);
+  // Half way to book 1, book 2 is handed from above to below, at ±1.5.
+  assert.equal(loopOffset(2, 0.49, 3), -1.49);
+  assert.equal(loopOffset(2, 0.51, 3), 1.49);
+  // Endless: position 7 on a shelf of three is book 1 in front.
+  assert.equal(loopOffset(1, 7, 3), 0);
+  // Two books: the other one is BELOW, and stays below through the rubber band.
+  assert.equal(loopOffset(1, 0, 2), 1);
+  assert.equal(loopOffset(1, -0.12, 2), 1.12);
+  assert.equal(loopOffset(0, 1, 2), 1);
+  // …and the front one, leaving upwards, goes round to the back at half way.
+  assert.ok(loopOffset(0, 0.49, 2) < 0);
+  assert.ok(loopOffset(0, 0.51, 2) > 1);
+  assert.equal(loopOffset(0, 0.3, 1), -0.3);
+});
+
+test('placement: the prototype between neighbours, gone where the loop hands a book over', () => {
+  const p0 = carouselPlacement(0, 300, 3);
+  assert.deepEqual(p0, { translateY: 0, scale: 1, rotateX: -0, opacity: 1, bottomTab: 0 });
+  const below = carouselPlacement(1, 300, 3);
+  assert.equal(below.translateY, 300);
+  assert.equal(below.scale, 0.86);
+  assert.equal(below.rotateX, -10);
+  assert.ok(Math.abs(below.opacity - 0.55) < 1e-9);
+  assert.equal(below.bottomTab, 0);
+  const above = carouselPlacement(-1, 300, 3);
+  assert.equal(above.bottomTab, 1);
+  assert.equal(carouselPlacement(1.5, 300, 3).opacity, 0);
+  assert.equal(carouselPlacement(-1.5, 300, 3).opacity, 0);
+  // Two books: the one leaving upwards is gone by half way.
+  assert.equal(carouselPlacement(-0.5, 300, 2).opacity, 0);
+  assert.ok(carouselPlacement(0.5, 300, 2).opacity > 0.7);
+});
+
+test('book swipe: 22% of the step or a flick; two books rubber-band downwards', () => {
+  assert.equal(carouselDrag(-150, 300, true), 0.5);
+  assert.equal(carouselDrag(-900, 300, true), 1);
+  assert.equal(carouselDrag(150, 300, true), -0.5);
+  assert.ok(Math.abs(carouselDrag(150, 300, false) - -0.06) < 1e-9);
+  assert.equal(carouselDrag(-150, 300, false), 0.5);
+  assert.equal(bookSwipeCommits(-67, 1000, 300), true);
+  assert.equal(bookSwipeCommits(-65, 1000, 300), false);
+  assert.equal(bookSwipeCommits(-45, 200, 300), true);
+  assert.equal(bookSwipeCommits(-35, 200, 300), false);
+  assert.equal(bookSettleMs(0), 420);
+  assert.equal(bookSettleMs(0.5), 210);
+  assert.equal(bookSettleMs(0.9), 180);
+});
+
+test('carousel window: every book on a small shelf, two either side on a big one', () => {
+  assert.deepEqual(carouselWindow(0, 0), []);
+  assert.deepEqual(carouselWindow(4, 3), [0, 1, 2]);
+  assert.deepEqual(carouselWindow(0, 7), [0, 1, 2, 5, 6]);
+  assert.deepEqual(carouselWindow(-8, 7), [0, 1, 4, 5, 6]);
+  assert.equal(shelfIndex(-1, 3), 2);
+  assert.equal(shelfIndex(7, 3), 1);
+  assert.equal(shelfIndex(5, 0), 0);
 });

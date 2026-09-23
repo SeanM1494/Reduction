@@ -813,6 +813,29 @@ DECIDED (Sep 23, after the step-1 push):
   Removed list and no restore.** A recipe removed on the phone simply
   disappears from the website until it is restored on the phone. Worth
   building when the web gets the books; not before.
+- **Step 2 — the book view: DONE Sep 23** (b01d3c3).
+- **Step 3 — the carousel between books: DONE Sep 23.** Decided while
+  building it:
+  - **The navigator's "Library" title is hidden in Books view.** The books
+    carry their own header, and on a phone the classic header cost the
+    peeks nearly all their room (31px above the book on an iPhone 13's
+    Safari-sized viewport with it hidden, ~0 with it shown). It also makes
+    the classic and native tab layouts the same screen: NativeTabs never
+    had a header there.
+  - **The book shrinks before the peeks vanish.** Width is the prototype's
+    min(screen − 24, 380) unless the stage is too short for a neighbour to
+    show 28px of cover plus its tab; then the book narrows, never below
+    220px (`carouselGeometry`). As the app (no URL bar) no phone measured
+    shrinks — iPhone 13 peeks 98/119px, SE 52/73px; only the SE's
+    Safari-sized viewport does, 296 → 290px.
+  - **The shelf dots are a picture, not a control.** Seven 7px dots cannot
+    each be a 44px target in the room between the page arrows; a peek, a
+    swipe and (step 5) search reach any book, and VoiceOver has next/previous
+    book actions on the pages.
+  - **With two books the one leaving upwards fades out by half way and
+    rises into the slot below** — the other book always waits below, so
+    the book you leave goes to the back of the pile rather than sitting
+    above you.
 
 ## 2. Global recipe search inside the app
 

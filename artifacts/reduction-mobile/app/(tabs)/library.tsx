@@ -11,10 +11,10 @@
  * its own: one row holds the sort control and the count.
  */
 
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ActivityIndicator, FlatList, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { router, useFocusEffect } from 'expo-router';
+import { router, useFocusEffect, useNavigation } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLibrary } from '@/lib/library-context';
@@ -56,6 +56,14 @@ export default function LibraryScreen() {
     setView(next);
     AsyncStorage.setItem(VIEW_KEY, next).catch(() => {});
   };
+  // The books carry their own header ("Recipe box · Dinner"), and the
+  // carousel needs the height for the books above and below to show, so the
+  // navigator's "Library" title goes while they are up. It also makes the
+  // two tab layouts the same screen: NativeTabs never had a header here.
+  const navigation = useNavigation();
+  useLayoutEffect(() => {
+    navigation.setOptions({ headerShown: view !== 'books' });
+  }, [navigation, view]);
   const insets = useSafeAreaInsets();
   // The tab bar is absolutely positioned (see (tabs)/_layout.tsx), so the
   // list pads itself past it: the classic bar is 49px plus the home

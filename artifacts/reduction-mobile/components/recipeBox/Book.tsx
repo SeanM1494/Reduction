@@ -46,22 +46,21 @@ import Animated, {
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 import { BookPage, type PageContent } from '@/components/recipeBox/BookPage';
-import { FLIP, flipCommits, flipProgress, flipSettleMs, pageA11yLabel, spreadCount, type Book as BookInfo } from '@/lib/recipeBox';
+import {
+  FLIP,
+  bookGeometry,
+  flipCommits,
+  flipProgress,
+  flipSettleMs,
+  pageA11yLabel,
+  spreadCount,
+  type Book as BookInfo,
+} from '@/lib/recipeBox';
 import { useColors } from '@/hooks/useColors';
 import type { Entry } from '@/lib/api';
 
 const EASE = Easing.inOut(Easing.cubic);
 const SHADE = '#3a2a18';
-
-/** The tuned geometry: book = min(screen − 24, 380); each page half of it;
- *  page height = page width × 1.6; the cover frames the pages by 7px (9 at
- *  the foot). */
-export function bookGeometry(screenWidth: number) {
-  const bookW = Math.min(screenWidth - 24, 380);
-  const pageW = (bookW - 14) / 2;
-  const pageH = Math.round((bookW / 2) * 1.6);
-  return { bookW, pageW, pageH, coverH: pageH + 16 };
-}
 
 interface Props {
   book: BookInfo;
@@ -72,17 +71,20 @@ interface Props {
   onSpreadChange: (k: number) => void;
   onOpenPage: (entry: Entry) => void;
   onBlankPage: () => void;
-  screenWidth: number;
+  /** The book's width; everything else follows (`bookGeometry`). The
+   *  carousel picks it to fit the stage. */
+  width: number;
   /** For VoiceOver's next/previous book actions (the shelf wires them). */
   onNextBook?: () => void;
   onPrevBook?: () => void;
-  /** Only the book in front takes touches; the peeking ones are pictures. */
+  /** Only the book in front takes touches; the peeking ones are pictures,
+   *  drawn with just their two visible pages and hidden from VoiceOver. */
   interactive?: boolean;
 }
 
-export function Book({ book, pages, spread, onSpreadChange, onOpenPage, onBlankPage, screenWidth, onNextBook, onPrevBook, interactive = true }: Props) {
+export function Book({ book, pages, spread, onSpreadChange, onOpenPage, onBlankPage, width, onNextBook, onPrevBook, interactive = true }: Props) {
   const colors = useColors();
-  const { bookW, pageW, pageH } = bookGeometry(screenWidth);
+  const { bookW, pageW, pageH } = bookGeometry(width);
   const reduceMotion = useReducedMotion();
   const n = pages.length;
   const last = spreadCount(n) - 1;
@@ -272,18 +274,23 @@ export function Book({ book, pages, spread, onSpreadChange, onOpenPage, onBlankP
         <GestureDetector gesture={gesture}>
           <Animated.View style={[{ width: pageW * 2, height: pageH }, spreadStyle]} testID="book-spread">
             <View style={StyleSheet.absoluteFill} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
-              {/* 1. Underneath: what a turn reveals. Covered at rest. */}
-              <View style={[styles.slot, { left: 0 }]}>
-                <BookPage content={content(L - 2)} side="left" book={book} width={pageW} height={pageH} />
-              </View>
-              <View style={[styles.slot, { left: pageW }]}>
-                <BookPage content={content(L + 3)} side="right" book={book} width={pageW} height={pageH} />
-              </View>
+              {/* 1. Underneath: what a turn reveals. Covered at rest, and a
+                  peeking book never turns, so it draws only its two faces. */}
+              {interactive ? (
+                <>
+                  <View style={[styles.slot, { left: 0 }]}>
+                    <BookPage content={content(L - 2)} side="left" book={book} width={pageW} height={pageH} />
+                  </View>
+                  <View style={[styles.slot, { left: pageW }]}>
+                    <BookPage content={content(L + 3)} side="right" book={book} width={pageW} height={pageH} />
+                  </View>
+                </>
+              ) : null}
               {/* 2–5: the four faces, in the one order right for both ways. */}
               <Face {...leaf} role="bwd-front" content={content(L)} />
               <Face {...leaf} role="fwd-front" content={content(L + 1)} />
-              <Face {...leaf} role="fwd-back" content={content(L + 2)} />
-              <Face {...leaf} role="bwd-back" content={content(L - 1)} />
+              {interactive ? <Face {...leaf} role="fwd-back" content={content(L + 2)} /> : null}
+              {interactive ? <Face {...leaf} role="bwd-back" content={content(L - 1)} /> : null}
               <LinearGradient
                 pointerEvents="none"
                 colors={['rgba(60,40,20,0)', 'rgba(60,40,20,0.13)', 'rgba(60,40,20,0.22)', 'rgba(60,40,20,0.13)', 'rgba(60,40,20,0)']}
@@ -294,7 +301,7 @@ export function Book({ book, pages, spread, onSpreadChange, onOpenPage, onBlankP
               />
             </View>
             {/* What VoiceOver sees instead: the two visible pages. */}
-            {[L, L + 1].map((i, side) =>
+            {(interactive ? [L, L + 1] : []).map((i, side) =>
               a11yLabel(i) ? (
                 <View
                   key={i}

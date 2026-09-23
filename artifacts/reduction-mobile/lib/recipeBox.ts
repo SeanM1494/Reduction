@@ -222,3 +222,157 @@ export function flipSettleMs(progress: number, commit: boolean): number {
   'worklet';
   return commit ? (1 - progress) * 460 + 140 : progress * 360 + 120;
 }
+
+// ---------------------------------------------------------------------------
+// The book, measured, and the carousel between books.
+// ---------------------------------------------------------------------------
+
+/** The prototype's geometry for a book `bookW` wide: each page half of it
+ *  less the cover's 7px frame, page height = page width × 1.6, and the
+ *  cover 16px taller than a page (7 at the head, 9 at the foot). */
+export function bookGeometry(bookW: number): { bookW: number; pageW: number; pageH: number; coverH: number } {
+  const pageW = (bookW - 14) / 2;
+  const pageH = Math.round((bookW / 2) * 1.6);
+  return { bookW, pageW, pageH, coverH: pageH + 16 };
+}
+
+/** The carousel's tuning: the prototype's numbers, plus the one thing the
+ *  prototype did not need — a floor on how much of a neighbour shows. */
+export const CAROUSEL = {
+  /** Neighbours sit this fraction of (cover + gap) away. */
+  spacing: 0.92,
+  gap: 40,
+  shrink: 0.14,
+  tiltDeg: 10,
+  fade: 0.45,
+  /** A swipe past this fraction of the step changes book; so does a flick. */
+  commitAt: 0.22,
+  flickMs: 300,
+  flickPx: 40,
+  settleMs: 420,
+  minSettleMs: 180,
+  cancelMs: 260,
+  /** With two books, a swipe DOWN gives this much and springs back. */
+  edgeRubber: 0.12,
+  /** The least of a neighbour's cover that must show; its tab adds ~19px
+   *  more, which makes the peek a 44px target. */
+  minPeekPx: 28,
+  tabPx: 22,
+  maxBookPx: 380,
+  /** Below this a book stops being readable; a stage that small loses its
+   *  peeks before it loses its book. */
+  minBookPx: 220,
+} as const;
+
+/**
+ * The book's width and the distance between books, for a stage of
+ * stageW × stageH holding a shelf of `books`.
+ *
+ * The width is the prototype's — min(stage − 24, 380) — unless the stage is
+ * too short to show the neighbours, and then the book gets narrower rather
+ * than the peeks vanishing. On a phone the app has the room (the prototype's
+ * size survives everywhere measured); a small window does not.
+ *
+ * Two constraints, both on the cover height c:
+ *  - adjacent covers never overlap and leave room for one tab between them:
+ *    step ≥ 0.93c + 22 + 4. One tab, not two — the front book's tab is at
+ *    its top LEFT and the book above's at its bottom RIGHT, side by side;
+ *  - a neighbour shows at least `minPeekPx` of its cover:
+ *    step ≤ stageH/2 + 0.43c − minPeekPx.
+ * Together: c ≤ stageH − 2·minPeek − 52. The prototype's spacing sits
+ * between the two on every phone measured, so it is what governs there.
+ */
+export function carouselGeometry(stageW: number, stageH: number, books: number) {
+  const { shrink, tabPx, minPeekPx, spacing, gap, maxBookPx, minBookPx } = CAROUSEL;
+  const far = 1 - shrink; // a neighbour's scale
+  const clearance = tabPx + 4;
+  const widthCap = Math.min(stageW - 24, maxBookPx);
+  const coverMax =
+    books <= 1
+      ? stageH - tabPx - 16
+      : (stageH / 2 - minPeekPx - clearance) / ((1 + far) / 2 - far / 2);
+  const fromHeight = Math.floor((coverMax - 16.5) / 0.8);
+  const bookW = Math.max(Math.min(widthCap, minBookPx), Math.min(widthCap, fromHeight));
+  const g = bookGeometry(bookW);
+  const noOverlap = ((1 + far) / 2) * g.coverH + clearance;
+  const showsPeek = stageH / 2 + (far / 2) * g.coverH - minPeekPx;
+  const step = Math.max(noOverlap, Math.min(spacing * (g.coverH + gap), showsPeek));
+  return { ...g, step, top: Math.round(stageH / 2 - g.coverH / 2 - tabPx) };
+}
+
+/**
+ * A book's offset from the carousel's position `pos`, in books: 0 in front,
+ * 1 the next one down, −1 the one above. The loop is endless, so each book
+ * is drawn at the copy of itself NEAREST the position — which is what lets
+ * three books fill both neighbours and a fourth rise into place from below
+ * without anything ever being re-assigned at a moment that could show.
+ *
+ * Two books break the symmetry on purpose (ROADMAP): the other one always
+ * waits BELOW, so its copy is the one in (pos − 0.5, pos + 1.5]. The front
+ * book leaving upwards fades out by half way (`carouselPlacement`) and
+ * rises into the slot below — the book going to the back of the pile.
+ */
+export function loopOffset(index: number, pos: number, count: number): number {
+  'worklet';
+  if (count <= 1) return index - pos;
+  if (count === 2) return index + 2 * Math.floor((pos + 1.5 - index) / 2) - pos;
+  return index + count * Math.round((pos - index) / count) - pos;
+}
+
+/** Where a book at offset `o` is drawn: the prototype's translateY o × step,
+ *  scale 1 − 0.14|o|, rotateX −10°·o and opacity 1 − 0.45|o| between the
+ *  neighbours; beyond them it is gone by 1.5, which is exactly where the
+ *  loop hands a book from one end to the other. With two books the one
+ *  above is gone by 0.5 (see `loopOffset`). The tab under a book appears
+ *  once it is above the front one. */
+export function carouselPlacement(o: number, step: number, count: number) {
+  'worklet';
+  const a = o < 0 ? -o : o;
+  let opacity = a <= 1 ? 1 - CAROUSEL.fade * a : (1 - CAROUSEL.fade) * Math.max(0, (1.5 - a) / 0.5);
+  if (count === 2 && o < 0) opacity = Math.max(0, 1 - 2 * a);
+  return {
+    translateY: o * step,
+    scale: 1 - CAROUSEL.shrink * Math.min(a, 1.5),
+    rotateX: -o * CAROUSEL.tiltDeg,
+    opacity,
+    bottomTab: o < -0.3 ? Math.min(1, (-o - 0.3) * 3) : 0,
+  };
+}
+
+/** How far through a book change a vertical drag of `dy` is, −1…1 (+ is the
+ *  next book, dragged up). With two books there is no book above: the drag
+ *  gives a little and springs back. */
+export function carouselDrag(dy: number, step: number, canGoBack: boolean): number {
+  'worklet';
+  let f = -dy / step;
+  f = f < -1 ? -1 : f > 1 ? 1 : f;
+  if (f < 0 && !canGoBack) f *= CAROUSEL.edgeRubber;
+  return f;
+}
+
+/** Past 22% of the step, or a flick (under 300ms, over 40px). */
+export function bookSwipeCommits(dy: number, elapsedMs: number, step: number): boolean {
+  'worklet';
+  const ady = dy < 0 ? -dy : dy;
+  return ady > step * CAROUSEL.commitAt || (elapsedMs < CAROUSEL.flickMs && ady > CAROUSEL.flickPx);
+}
+
+/** The rest of a book change: 420ms for a whole one, never under 180. */
+export function bookSettleMs(travelled: number): number {
+  'worklet';
+  const t = travelled < 0 ? -travelled : travelled;
+  return Math.max(CAROUSEL.minSettleMs, (1 - Math.min(1, t)) * CAROUSEL.settleMs);
+}
+
+/** Which shelf positions are mounted around the one in front: every book on
+ *  a shelf of five or fewer, else the two either side — enough for any
+ *  position a settle can pass through. Ascending, so the order is stable. */
+export function carouselWindow(at: number, count: number): number[] {
+  if (count <= 0) return [];
+  const mod = (x: number) => ((x % count) + count) % count;
+  if (count <= 5) return Array.from({ length: count }, (_, i) => i);
+  return [...new Set([-2, -1, 0, 1, 2].map((r) => mod(at + r)))].sort((a, b) => a - b);
+}
+
+/** The shelf position a carousel position stands on. */
+export const shelfIndex = (at: number, count: number): number => (count ? ((at % count) + count) % count : 0);
