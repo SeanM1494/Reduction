@@ -655,7 +655,12 @@ verification, or a decision.
   "Reduction Mobile" to Recipe Reduction (rename the old record out of
   the way first, then remove it — it has no build, so it can go; the
   name is released on removal and anyone can take it, hence the order);
-  screenshots for the required iPhone sizes (no iPad: `supportsTablet` is
+  The Home Screen name is a different field and is DECIDED (Sep 23):
+  "Reduction", from `expo.name` in `app.json` — it is compiled into the
+  binary as the bundle's display name, so changing it costs a build, and
+  the store name ("Recipe Reduction") stays in App Store Connect. The
+  slug and the EAS project are untouched by it.
+  Screenshots for the required iPhone sizes (no iPad: `supportsTablet` is
   false); description, keywords, support URL, marketing URL, the privacy
   policy URL from above; the App Privacy questionnaire (name, email,
   user id, purchases; photos are sent for extraction and not kept — say
