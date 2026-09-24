@@ -261,6 +261,58 @@ The pages describe what the code does — Stripe on the website, Anthropic for
 extraction, the cache of extracted pages, deletion cancelling what it can.
 If any of that changes, the pages change in the same commit.
 
+### Over-the-air updates (EAS Update)
+
+The phone app's JavaScript and assets can ship without a new build. A build
+carries `expo-updates` (added Sep 24), and on every cold launch it asks
+`u.expo.dev` for a newer bundle on its **channel** — named after the
+`eas.json` profile it was built with, so TestFlight and App Store builds
+(one binary, the production profile) share `production`. A new bundle
+downloads in the background and runs from the **next** cold launch
+(`fallbackToCacheTimeout: 0`: nobody waits on the network at start), so a
+published change reaches a phone on its second launch after publishing. A
+bundle that crashes on launch is rolled back to the previous one by
+`expo-updates` itself.
+
+**Publish with the script, never with bare `eas update`:**
+
+```sh
+cd artifacts/reduction-mobile
+node scripts/publish-update.mjs --message "What changed"            # production
+node scripts/publish-update.mjs --message "What changed" --dry-run  # show, don't send
+```
+
+`eas update` bakes in the SHELL's `EXPO_PUBLIC_DOMAIN`, not the build
+profile's; in the Replit workspace that is the dev server or nothing, and
+either would ship every installed app a bundle that cannot reach the real
+server. The script reads the domain from the channel's profile in
+`eas.json` and refuses without one.
+
+**What cannot ship this way:** anything native — a package with native
+code, a config plugin, an `app.json` field that lands in Info.plist, a new
+permission. That needs `eas build`, and **`expo.version` bumped in the same
+commit**: `runtimeVersion.policy` is `appVersion`, so an update reaches only
+builds whose version matches, and the bump is what keeps a bundle written
+for new native code off binaries that lack it. `appVersion` rather than
+`fingerprint` because the fingerprint is computed twice — on EAS's macOS
+builders and on whichever shell runs `eas update` — and a monorepo's
+`node_modules` differing between the two makes them disagree silently.
+
+To inspect what a build will carry, `npx expo prebuild -p ios --no-install`
+writes `ios/Reduction/Supporting/Expo.plist` (runtime version, update URL)
+— and ALSO copies `expo`, `react` and `react-native` into the mobile
+`package.json`'s `dependencies`, which breaks the frozen install
+(`ERR_PNPM_OUTDATED_LOCKFILE`). `ios/` is gitignored; delete it and revert
+`package.json` before committing.
+
+**App Review.** Apple permits downloaded interpreted code (Developer
+Program License Agreement 3.3.2, Review Guideline 2.5.2) as long as it does
+not change the app's primary purpose or add features inconsistent with what
+was reviewed. Fixes, copy, layout and tweaks to existing features are what
+it is for. A new feature of substance goes through a build and review.
+Never use it to change how purchases are made (3.1.1). A reviewer running
+the production binary receives production updates too.
+
 ### Search
 
 `POST /api/recipes/search` answers with **at most five** results: up to

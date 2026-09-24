@@ -671,6 +671,12 @@ verification, or a decision.
   version); review notes saying how to sign in (Sign in with Apple with
   their own Apple ID, which is why the item above must be true first).
   Export compliance is already declared in `app.json`.
+- **Over-the-air updates — DONE Sep 24, in the build that follows TestFlight
+  build 3.** `expo-updates` with channels per `eas.json` profile and
+  `runtimeVersion` following `expo.version` (README "Over-the-air
+  updates"). DECIDED: publishes go through `scripts/publish-update.mjs`
+  only, and a native change bumps the version in the same commit. From
+  here a label change is a publish, not a build and a review.
 - **Housekeeping.** The yearly product appearing in the sandbox; the
   stray `eas.json` at the repo root on Replit (from a wrong-directory
   run — the real one is in `artifacts/reduction-mobile`).

@@ -907,6 +907,16 @@ accommodate afterwards.
   in an absolute box with no height and reports its own height into the row
   solve. Anything else that puts text in a fixed-height box can fail the
   same way; `yoga-layout` from npm reproduces the measurement in node.
+- **The phone app updates over the air, and two rules keep that safe**
+  (README "Over-the-air updates"). **Publish only with
+  `scripts/publish-update.mjs`, never bare `eas update`**: the CLI bakes in
+  the shell's `EXPO_PUBLIC_DOMAIN`, which in the Replit workspace is the
+  dev server or unset, so a bare publish ships every installed app a
+  bundle that cannot reach production. **Bump `expo.version` in the same
+  commit as any native change** (a package with native code, a plugin, an
+  Info.plist field): the runtime version follows it, and without the bump a
+  bundle written for new native code is offered to binaries that lack it.
+  A pure JS change needs neither a build nor a bump.
 - The landing page section below is part of this rule, not a separate concern.
 
 ### Verify on a real phone viewport, and on production
