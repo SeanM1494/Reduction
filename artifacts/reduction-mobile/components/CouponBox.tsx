@@ -101,6 +101,11 @@ function makeStyles(colors: Colors) {
     row: { flexDirection: 'row', gap: 8, alignItems: 'center' },
     input: {
       flex: 1,
+      // Lets the field give way to the Redeem button. Yoga never holds a
+      // text input at its intrinsic width, but a browser does (min-width:
+      // auto), and on a 320pt screen that pushed Redeem off the card in the
+      // web build. Harmless on native.
+      minWidth: 0,
       minHeight: 44,
       backgroundColor: colors.card,
       borderWidth: 1,
