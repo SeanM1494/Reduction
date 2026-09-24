@@ -799,7 +799,7 @@ accommodate afterwards.
   swipe on it is, to iOS, the interactive pop gesture — the screen went
   back to the library under a finger that was reading a table (Sep 21, a
   real device). `app/recipe/[id].tsx` sets `gestureEnabled: !overview` from
-  `RecipeScreen`'s `onViewChange`; Cook mode has nothing horizontal and
+  `RecipeScreen`'s `onViewChange`; Step-by-Step has nothing horizontal and
   keeps the gesture, and the header's back button always works. Chromium
   cannot exercise this; it is the phone's to confirm.
 - **There are TWO tab layouts and Chromium can only ever reach one of

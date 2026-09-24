@@ -5,7 +5,7 @@
  *   completing a step marks everything upstream of it done
  *   undoing a step clears everything downstream, which is no longer valid
  *
- * Opening a recipe leads with a Diagram / Step-by-step chooser rather than
+ * Opening a recipe leads with a Diagram / Step-by-Step chooser rather than
  * dropping straight into a view with every control on screen at once.
  * Once a mode is picked, the header collapses to a thin bar (back, title,
  * progress, overflow menu) and the chosen view fills the rest of the
@@ -382,7 +382,7 @@ export default function RecipeView({
             </button>
             <button className="rfx-choose-card" onClick={() => pickMode("steps")}>
               <span className="rfx-choose-glyph"><StepsGlyph /></span>
-              <span className="rfx-choose-card-title">Step-by-step</span>
+              <span className="rfx-choose-card-title">Step-by-Step</span>
               <span className="rfx-choose-card-desc">
                 One instruction at a time, in order — ingredients folded
                 right into the step that needs them.
@@ -411,7 +411,7 @@ export default function RecipeView({
           &larr;
         </button>
         <span className="rfx-bar-title">{recipe.title}</span>
-        <span className="rfx-bar-mode">{phase === "diagram" ? "Diagram" : "Steps"}</span>
+        <span className="rfx-bar-mode">{phase === "diagram" ? "Diagram" : "Step-by-Step"}</span>
 
         <div className="rfx-bar-progress" title={`${done.size} of ${total} done`}>
           <span className="rfx-bar-track">

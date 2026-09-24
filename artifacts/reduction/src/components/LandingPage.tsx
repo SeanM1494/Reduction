@@ -340,7 +340,7 @@ export default function LandingPage({
                       aria-pressed={mode === "steps"}
                       onClick={() => pickMode("steps")}
                     >
-                      Steps
+                      Step-by-Step
                     </button>
                   </div>
                   <div className="rd-demo-actions">

@@ -44,7 +44,7 @@ interface Props {
 
 /**
  * A WINDOW, not a bottom sheet (decided on the phone, Sep 24) — see
- * components/Window.tsx. "View diagram" and "Start cooking" close it
+ * components/Window.tsx. "Diagram" and "Step-by-Step" close it
  * INSTANTLY: the recipe screen is being pushed underneath, and a card still
  * fading out over it is the same kind of seam the window replaced.
  */
@@ -157,7 +157,7 @@ function PreviewBody({ entry, onClose, onOpen }: { entry: Entry; onClose: () => 
           style={({ pressed }) => [styles.btn, pressed && styles.btnPressed]}
           testID="preview-diagram"
         >
-          <Text style={styles.btnText}>View diagram</Text>
+          <Text style={styles.btnText}>Diagram</Text>
         </Pressable>
         <Pressable
           accessibilityRole="button"
@@ -165,7 +165,7 @@ function PreviewBody({ entry, onClose, onOpen }: { entry: Entry; onClose: () => 
           style={({ pressed }) => [styles.btn, styles.btnPrimary, pressed && styles.btnPrimaryPressed]}
           testID="preview-cook"
         >
-          <Text style={[styles.btnText, styles.btnPrimaryText]}>Start cooking</Text>
+          <Text style={[styles.btnText, styles.btnPrimaryText]}>Step-by-Step</Text>
         </Pressable>
       </View>
     </View>

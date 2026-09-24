@@ -164,7 +164,7 @@ interface RecipeScreenProps {
    *  swipe on it at its left edge must not be iOS's swipe-back. */
   onViewChange?: (view: 'overview' | 'cook') => void;
   /** Which tab to open on, overriding the stored `mode` for THIS visit —
-   *  the Recipe Box preview's "View diagram" and "Start cooking". Not
+   *  the Recipe Box preview's "Diagram" and "Step-by-Step". Not
    *  written back: opening a recipe is not choosing a tab, and a write on
    *  every open would be a sync round trip nobody asked for. A tap on the
    *  other tab still writes, as always. */
@@ -353,8 +353,8 @@ export function RecipeScreen({
           </Text>
         </View>
         <View style={styles.modeSwitch}>
-          <ModeTab label="Overview" active={view === 'overview'} onPress={() => pickView('overview')} colors={colors} />
-          <ModeTab label="Cook" active={view === 'cook'} onPress={() => pickView('cook')} colors={colors} />
+          <ModeTab label="Diagram" active={view === 'overview'} onPress={() => pickView('overview')} colors={colors} />
+          <ModeTab label="Step-by-Step" active={view === 'cook'} onPress={() => pickView('cook')} colors={colors} />
         </View>
       </View>
 

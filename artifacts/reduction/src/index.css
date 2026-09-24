@@ -1553,6 +1553,13 @@ input, select, textarea { font-size: 16px; }
   .rd-landing .rd-section-head { display: none; }
   .rd-landing-demo { padding: 14px; }
   .rd-seg { padding: 6px 10px; }
+  /* "Step-by-Step" (Sep 24) is 41px wider than the "Steps" it replaced, and
+     put the demo head on two rows on 390-393px phones: 349px of controls in
+     a 336px row. Two pixels a side off each of its four buttons buys 16px
+     back; heights stay at the 44px floor. The SE (320px) wrapped before and
+     still does. */
+  .rd-landing-demo-head .rd-seg { padding-left: 8px; padding-right: 8px; }
+  .rd-landing-demo-head .rd-demo-actions .rd-btn { padding-left: 11px; padding-right: 11px; }
   .rd-legend { margin-top: 10px; }
   .rd-cta-form { max-width: none; }
 }

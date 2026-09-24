@@ -69,7 +69,7 @@ export default function RecipeDetailScreen() {
   // The diagram scrolls sideways. At its leftmost position a swipe to the
   // right on it is, to iOS, the interactive pop gesture — and the screen
   // went back to the library under a finger that was reading a table. So
-  // the swipe-back is off while the Overview is up and on again in Cook,
+  // the swipe-back is off while the Diagram is up and on again in Step-by-Step,
   // which has nothing horizontal. The header's back button always works.
   const [overview, setOverview] = useState(initialView !== 'cook');
 
