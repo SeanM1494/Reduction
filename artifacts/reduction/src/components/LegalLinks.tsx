@@ -4,8 +4,9 @@
  * Privacy Policy, in the binary as well as the metadata), and that any
  * account screen owes people anyway.
  *
- * The pages are static HTML in public/ (served at /privacy and /terms —
- * see api-server/src/app.ts), so a link here is a plain anchor. `terms`
+ * The pages are static HTML in public/, so a link here is a plain anchor
+ * — to the FILE (/terms.html), because the published site's static
+ * hosting answers /terms with the app itself (README "The legal pages"). `terms`
  * adds the one sentence Apple wants beside a price: what renews, and
  * where it is cancelled.
  */
@@ -28,8 +29,8 @@ export default function LegalLinks({ terms = false, className = "" }: Props) {
         </p>
       ) : null}
       <p className="rd-legal-links">
-        <a href="/terms">Terms of Use</a>
-        <a href="/privacy">Privacy Policy</a>
+        <a href="/terms.html">Terms of Use</a>
+        <a href="/privacy.html">Privacy Policy</a>
       </p>
     </div>
   );

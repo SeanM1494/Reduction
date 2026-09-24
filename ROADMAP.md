@@ -538,7 +538,9 @@ verification, or a decision.
   and a real Stripe cancel.
 - ~~**No Terms of Use and no privacy policy — BUILD, after a DECISION.**~~
   **Done Sep 21.** Written in-house (decided: no generator subscription),
-  as static pages at `/privacy` and `/terms`, linked beside every price, in
+  as static pages at `/privacy.html` and `/terms.html` (the short names
+  opened the web app on the published site, Sep 24 — README "The legal
+  pages"; linked by file name since), linked beside every price, in
   both Settings, on the mobile sign-in screen and under the landing CTA
   (README "The legal pages" says where each thing goes in App Store
   Connect). Two things the pages say that the brief simplified, kept

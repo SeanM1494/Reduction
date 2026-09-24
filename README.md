@@ -229,10 +229,17 @@ and App Review's are exactly those), then a purchase from the wall and a
 ### The legal pages
 
 The Privacy Policy and Terms of Use are static HTML in
-`artifacts/reduction/public/privacy.html` and `terms.html`, served at
-`/privacy` and `/terms` (the static middleware's `extensions: ["html"]`, in
-`artifacts/api-server/src/app.ts` — no router on the web, and Apple's
-reviewer needs them reachable without JavaScript). The mobile app links them
+`artifacts/reduction/public/privacy.html` and `terms.html`, and every link
+names the FILE: `/privacy.html`, `/terms.html`. No router on the web, and
+Apple's reviewer needs them reachable without JavaScript. **The published
+site does not serve them the way `app.ts` does**: it is Replit's static
+hosting (`artifacts/reduction/.replit-artifact/artifact.toml`), whose
+catch-all rewrite answers any path without a file with the web app — so
+`/terms` opened the recipe library on the first TestFlight build (Sep 24),
+though `app.ts`'s `extensions: ["html"]` serves it fine locally. The
+artifact file now rewrites `/terms` and `/privacy` to their files ahead of
+the catch-all, for the short URLs already given out; the links do not
+depend on that. The mobile app links them
 through `lib/legal.ts`: `webUrl` from `/api/billing/config` (this server's
 `PUBLIC_BASE_URL`) with `https://recipereduction.com` as the fallback, so the
 pages must exist on whichever host that names. The links appear beside every
@@ -242,8 +249,8 @@ sign-in screen and under the landing page's call to action — Apple's 3.1.2
 wants them in the binary as well as the metadata.
 
 What to put in App Store Connect: **App Information → Privacy Policy URL** =
-`https://recipereduction.com/privacy`; the version's **License Agreement**
-field, or a line in the description, = `https://recipereduction.com/terms`.
+`https://recipereduction.com/privacy.html`; the version's **License Agreement**
+field, or a line in the description, = `https://recipereduction.com/terms.html`.
 The **App Privacy** questionnaire has to say what the policy says: name,
 email and an identifier from sign-in; the recipes and progress people save;
 purchase records; a push token when timers are on; server logs. Photos are

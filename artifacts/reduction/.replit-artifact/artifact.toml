@@ -19,6 +19,18 @@ build = [ "pnpm", "--filter", "@workspace/reduction", "run", "build" ]
 serve = "static"
 publicDir = "artifacts/reduction/dist/public"
 
+# The legal pages by their short names, for the URLs already given out
+# (App Store Connect, the first TestFlight build). Before the catch-all,
+# which would otherwise answer them with the app. The clients link the
+# .html files, which need no rule.
+[[services.production.rewrites]]
+from = "/terms"
+to = "/terms.html"
+
+[[services.production.rewrites]]
+from = "/privacy"
+to = "/privacy.html"
+
 [[services.production.rewrites]]
 from = "/*"
 to = "/index.html"
