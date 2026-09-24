@@ -65,7 +65,7 @@ export function Paywall({ recipeTitle, onOpenRecipe, context = 'generic' }: Prop
         unlock here automatically.
       </Text>
 
-      <SubscribeBox />
+      <SubscribeBox center />
 
       {showCode ? (
         <CouponBox onRedeemed={() => setShowCode(false)} />

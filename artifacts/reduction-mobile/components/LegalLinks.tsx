@@ -15,7 +15,8 @@ import { fonts } from '@/constants/colors';
 
 interface Props {
   terms?: boolean;
-  /** Centre the row (the sign-in screen); default is start-aligned. */
+  /** Centre the row and the renewal line (the sign-in screen, the wall);
+   *  default is start-aligned. */
   center?: boolean;
 }
 
@@ -26,7 +27,7 @@ export function LegalLinks({ terms = false, center = false }: Props) {
   const open = (page: 'terms' | 'privacy') => Linking.openURL(legalUrl(webUrl, page)).catch(() => {});
   return (
     <View testID="legal-links">
-      {terms ? <Text style={styles.terms}>{RENEWAL_TERMS}</Text> : null}
+      {terms ? <Text style={[styles.terms, center && styles.centerText]}>{RENEWAL_TERMS}</Text> : null}
       <View style={[styles.row, center && styles.center]}>
         <Pressable accessibilityRole="link" onPress={() => open('terms')} style={styles.link} testID="legal-terms">
           <Text style={styles.linkText}>Terms of Use</Text>
@@ -44,6 +45,7 @@ function makeStyles(colors: Colors) {
     terms: { fontSize: 13.5, lineHeight: 19, color: colors.mutedForeground },
     row: { flexDirection: 'row', flexWrap: 'wrap', columnGap: 18 },
     center: { justifyContent: 'center' },
+    centerText: { textAlign: 'center' },
     link: { minHeight: 44, justifyContent: 'center' },
     linkText: { fontSize: 14, color: colors.mutedForeground, fontFamily: fonts.headingMedium, textDecorationLine: 'underline' },
   });

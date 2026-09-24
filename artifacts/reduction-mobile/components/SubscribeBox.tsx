@@ -24,7 +24,11 @@ import { LegalLinks } from '@/components/LegalLinks';
 import { useColors, type Colors } from '@/hooks/useColors';
 import { fonts } from '@/constants/colors';
 
-export function SubscribeBox() {
+export function SubscribeBox({ center = false }: {
+  /** Centre everything under the wall's centred copy; Settings' Plan card
+   *  keeps the start alignment of the card it sits in. */
+  center?: boolean;
+} = {}) {
   const colors = useColors();
   const styles = makeStyles(colors);
   const { user, refresh } = useAuth();
@@ -89,8 +93,8 @@ export function SubscribeBox() {
 
   return (
     <View style={styles.box} testID="subscribe-box">
-      <Text style={styles.label}>Unlimited recipes</Text>
-      <View style={optionRow}>
+      <Text style={[styles.label, center && styles.centerText]}>Unlimited recipes</Text>
+      <View style={[optionRow, center && styles.centerRow]}>
         {offers.map((o) => (
           <SheetButton
             key={o.plan}
@@ -101,17 +105,17 @@ export function SubscribeBox() {
           />
         ))}
       </View>
-      <Pressable accessibilityRole="button" onPress={restore} disabled={!!busy} style={styles.restore} testID="subscribe-restore">
+      <Pressable accessibilityRole="button" onPress={restore} disabled={!!busy} style={[styles.restore, center && styles.centerSelf]} testID="subscribe-restore">
         <Text style={styles.restoreText}>{busy === 'restore' ? 'Checking the App Store…' : 'Restore purchases'}</Text>
       </Pressable>
       {message ? (
-        <Text style={[styles.message, { color: message.ok ? colors.coolInk : colors.dangerInk }]} accessibilityLiveRegion="polite" testID="subscribe-message">
+        <Text style={[styles.message, center && styles.centerText, { color: message.ok ? colors.coolInk : colors.dangerInk }]} accessibilityLiveRegion="polite" testID="subscribe-message">
           {message.text}
         </Text>
       ) : null}
       {/* Beside the price, always: what renews, where it is cancelled, and
           the two pages Apple requires a link to (guideline 3.1.2). */}
-      <LegalLinks terms />
+      <LegalLinks terms center={center} />
     </View>
   );
 }
@@ -123,5 +127,8 @@ function makeStyles(colors: Colors) {
     restore: { minHeight: 44, justifyContent: 'center' },
     restoreText: { fontSize: 14, color: colors.coolInk, fontFamily: fonts.headingMedium, textDecorationLine: 'underline' },
     message: { fontSize: 13.5, lineHeight: 19 },
+    centerText: { textAlign: 'center' },
+    centerRow: { justifyContent: 'center' },
+    centerSelf: { alignSelf: 'center' },
   });
 }
