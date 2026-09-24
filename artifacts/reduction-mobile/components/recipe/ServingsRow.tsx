@@ -30,6 +30,7 @@ export function ServingsRow({
   entryServings,
   yieldText,
   onChange,
+  aside = null,
 }: {
   /** What the recipe makes. Null when the extraction did not find one. */
   base: number | null;
@@ -37,6 +38,9 @@ export function ServingsRow({
   entryServings: number | null;
   yieldText?: string | null;
   onChange: (servings: number | null) => void;
+  /** Beside the block, top-aligned: the recipe's photo. Rendered even when
+   *  there is no stepper, so a picture never depends on a serving count. */
+  aside?: React.ReactNode;
 }) {
   const colors = useColors();
   const styles = makeStyles(colors);
@@ -45,11 +49,13 @@ export function ServingsRow({
   // No base means no ratio, so a stepper would be a control that does
   // nothing. The recipe's own words are still worth showing if it has any.
   if (typeof base !== 'number' || base <= 0) {
-    return yieldLine ? (
-      <View style={styles.plainWrap}>
-        <Text style={styles.note}>{yieldLine}</Text>
+    if (!yieldLine && !aside) return null;
+    return (
+      <View style={[styles.plainWrap, styles.row]}>
+        <View style={styles.main}>{yieldLine ? <Text style={styles.note}>{yieldLine}</Text> : null}</View>
+        {aside}
       </View>
-    ) : null;
+    );
   }
 
   const current = entryServings ?? base;
@@ -63,43 +69,46 @@ export function ServingsRow({
   };
 
   return (
-    <View style={styles.wrap} testID="servings-row">
-      <View style={styles.set}>
-        <Text style={styles.label}>MAKING</Text>
-        <View style={styles.stepper}>
-          <StepButton glyph="−" label={`${step} fewer`} disabled={current <= MIN} onPress={() => set(current - step)} colors={colors} />
-          <Text style={styles.value} accessibilityLiveRegion="polite" testID="servings-value">
-            {formatQty(current)}
-          </Text>
-          <StepButton glyph="+" label={`${step} more`} disabled={current >= MAX} onPress={() => set(current + step)} colors={colors} />
+    <View style={[styles.wrap, styles.row]} testID="servings-row">
+      <View style={styles.main}>
+        <View style={styles.set}>
+          <Text style={styles.label}>MAKING</Text>
+          <View style={styles.stepper}>
+            <StepButton glyph="−" label={`${step} fewer`} disabled={current <= MIN} onPress={() => set(current - step)} colors={colors} />
+            <Text style={styles.value} accessibilityLiveRegion="polite" testID="servings-value">
+              {formatQty(current)}
+            </Text>
+            <StepButton glyph="+" label={`${step} more`} disabled={current >= MAX} onPress={() => set(current + step)} colors={colors} />
+          </View>
         </View>
+        {scale === 1 ? (
+          <Text style={styles.note}>{yieldLine ?? `Recipe makes ${formatQty(base)}`}</Text>
+        ) : (
+          <View style={styles.noteRow}>
+            <Text style={styles.note}>
+              <Text style={styles.scale}>×{formatQty(scale)}</Text>
+              {' from a recipe for '}
+              {formatQty(base)}
+            </Text>
+            {/* A real button, not a tappable run of text. It is 44px tall,
+                but pulls its extra height back in with negative margins so
+                the line still lays out at 18px and the diagram below does not
+                move on an iPhone SE, where this block's height is budgeted
+                (CLAUDE.md). */}
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Reset to the recipe's own servings"
+              hitSlop={{ left: 8, right: 8 }}
+              onPress={() => onChange(null)}
+              style={styles.resetBtn}
+              testID="servings-reset"
+            >
+              <Text style={styles.reset}>Reset</Text>
+            </Pressable>
+          </View>
+        )}
       </View>
-      {scale === 1 ? (
-        <Text style={styles.note}>{yieldLine ?? `Recipe makes ${formatQty(base)}`}</Text>
-      ) : (
-        <View style={styles.noteRow}>
-          <Text style={styles.note}>
-            <Text style={styles.scale}>×{formatQty(scale)}</Text>
-            {' from a recipe for '}
-            {formatQty(base)}
-          </Text>
-          {/* A real button, not a tappable run of text. It is 44px tall,
-              but pulls its extra height back in with negative margins so
-              the line still lays out at 18px and the diagram below does not
-              move on an iPhone SE, where this block's height is budgeted
-              (CLAUDE.md). */}
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Reset to the recipe's own servings"
-            hitSlop={{ left: 8, right: 8 }}
-            onPress={() => onChange(null)}
-            style={styles.resetBtn}
-            testID="servings-reset"
-          >
-            <Text style={styles.reset}>Reset</Text>
-          </Pressable>
-        </View>
-      )}
+      {aside}
     </View>
   );
 }
@@ -133,7 +142,9 @@ function StepButton({
 
 function makeStyles(colors: Colors) {
   return StyleSheet.create({
-    wrap: { gap: 6, paddingBottom: 12, marginBottom: 12, borderBottomWidth: 1, borderBottomColor: colors.border },
+    row: { flexDirection: 'row', alignItems: 'flex-start', gap: 12 },
+    main: { flex: 1, gap: 6 },
+    wrap: { paddingBottom: 12, marginBottom: 12, borderBottomWidth: 1, borderBottomColor: colors.border },
     plainWrap: { paddingBottom: 12, marginBottom: 12, borderBottomWidth: 1, borderBottomColor: colors.border },
     set: { flexDirection: 'row', alignItems: 'center', gap: 11, flexWrap: 'wrap' },
     label: { fontFamily: fonts.mono, fontSize: 10.5, letterSpacing: 0.95, color: colors.mutedForeground },

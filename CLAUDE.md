@@ -1417,6 +1417,12 @@ the diagram — a note, a timer, a second control — has to either replace
 something or go somewhere else, and the honest options are the overflow menu,
 the edit bar (which exists only in edit mode and already absorbed a button at
 zero cost), or below the diagram. Measure before adding, and say the number.
+The recipe's photo (Sep 24) took the other honest option — width, not
+height: it sits beside the servings stepper, sized from the screen
+(`thumbSize` in `RecipePhotoThumb.tsx`), 68pt on an SE, which is the
+height the servings block already had, so the SE's first table stays at
+y=308 (measured with and without a photo); 128pt on a 390pt phone, which
+moves its diagram down 58pt, spent where there is room.
 
 **The servings stepper writes `entry.servings` ONLY**, and lives above the
 first section rather than in the badge row — it is the control that changes

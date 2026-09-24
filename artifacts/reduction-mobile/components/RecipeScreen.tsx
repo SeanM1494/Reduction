@@ -32,6 +32,7 @@ import { Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-na
 import { LinearGradient } from 'expo-linear-gradient';
 import { DiagramView } from '@/components/diagram/DiagramView';
 import { ServingsRow } from '@/components/recipe/ServingsRow';
+import { RecipePhotoThumb } from '@/components/recipe/RecipePhotoThumb';
 import { RatingControl } from '@/components/recipe/RatingControl';
 import { asksForRating } from '@/lib/recipeBox';
 import { StepsMode } from '@/components/recipe/StepsMode';
@@ -45,7 +46,7 @@ import { MEAL_TYPE_LABELS, sanitizeMealTypes } from '@/shared/mealTypes';
 import { countAll } from '@/shared/amounts';
 import { useColors, type Colors } from '@/hooks/useColors';
 import { fonts } from '@/constants/colors';
-import type { StepTimer } from '@/lib/api';
+import type { Entry, StepTimer } from '@/lib/api';
 import type { EntryPatch } from '@/lib/library-context';
 
 // ------------------------------------------------------------ done logic ---
@@ -157,6 +158,8 @@ interface RecipeScreenProps {
   /** The demo hides the stepper: it is about tonight, and nobody is cooking
    *  the demo — and the small phone needs the 80px above the diagram. */
   showServings?: boolean;
+  /** The saved entry, for its photo beside the servings (a draft has none). */
+  photoEntry?: Pick<Entry, 'id' | 'photo' | 'recipe'> | null;
   /** Which view is up, for the route: the diagram scrolls sideways, and a
    *  swipe on it at its left edge must not be iOS's swipe-back. */
   onViewChange?: (view: 'overview' | 'cook') => void;
@@ -203,6 +206,7 @@ export function RecipeScreen({
   above,
   overviewFooter,
   showServings = true,
+  photoEntry = null,
   onViewChange,
   initialView,
   onCooked,
@@ -436,6 +440,7 @@ export function RecipeScreen({
               entryServings={servings}
               yieldText={recipe.yieldText}
               onChange={(next) => onUpdate({ servings: next })}
+              aside={photoEntry ? <RecipePhotoThumb entry={photoEntry} /> : null}
             />
           ) : null}
           <DiagramView

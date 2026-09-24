@@ -171,6 +171,7 @@ export default function RecipeDetailScreen() {
         onViewChange={(v) => setOverview(v === 'overview')}
         initialView={initialView}
         recipe={entry.recipe}
+        photoEntry={entry}
         done={entry.done}
         servings={entry.servings}
         timer={entry.timer}
