@@ -892,6 +892,18 @@ accommodate afterwards.
   dialog from the first one's `onClosed`**, never in the same breath as
   closing it: iOS can refuse to present a Modal while another is still
   dismissing, or take the new one down with the old.
+- **Native text inside a box of definite height is measured AGAINST that
+  height, and iOS then draws only the lines that fit, the last one cut
+  mid-word.** Yoga lays out a child of a fixed-height parent with the
+  parent's height as a ceiling (FitContent, `CalculateLayout.cpp`), and
+  RN's iOS text layout clips the last line (`NSLineBreakByClipping`), so a
+  diagram label taller than its row came out as "thread onto v" on a real
+  iPhone — twice, the first "fix" having set the width, which was never the
+  problem (Sep 24). The browser does not measure this way, so Chromium
+  showed a wrapped label every time. The diagram's drawn content now sits
+  in an absolute box with no height and reports its own height into the row
+  solve. Anything else that puts text in a fixed-height box can fail the
+  same way; `yoga-layout` from npm reproduces the measurement in node.
 - The landing page section below is part of this rule, not a separate concern.
 
 ### Verify on a real phone viewport, and on production

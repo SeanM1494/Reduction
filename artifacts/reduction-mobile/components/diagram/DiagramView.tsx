@@ -204,13 +204,10 @@ const contentWidth = (cellWidth: number, kind: Cell["kind"]): number =>
   Math.max(0, cellWidth - CELL_PAD_H * 2 - (kind === "ingredient" ? ING_RULE : 0));
 
 /**
- * A cell's content, at an EXPLICIT width (`w`). Every text in a cell used
- * to take its width from the cell by stretch, and on a real iPhone a step
- * label sometimes did not: "thread onto v…" was laid out as one long line
- * and clipped by the next cell, and its row was measured one line tall
- * (Sep 24; Chromium wraps it correctly, so it never showed here). Saying
- * the width on the content itself, the same number in the measuring pass
- * and the drawn pass, leaves no layout path that can hand it more.
+ * A cell's content, at an EXPLICIT width (`w`), the same number in the
+ * measuring pass and the drawn pass. The drawn pass also puts it in a box
+ * with NO height (see DiagramCell): that, not the width, is what the
+ * "thread onto v" report came down to.
  */
 function cellContent(
   c: Cell,
@@ -315,6 +312,10 @@ interface DiagramCellProps {
   pulse: Animated.Value;
   onToggle: (id: string) => void;
   onMeasure: ((key: string) => (e: LayoutChangeEvent) => void) | null;
+  /** The drawn copy reports its content's height too (see DiagramCell). */
+  onDrawn: ((key: string) => (e: LayoutChangeEvent) => void) | null;
+  /** The content's measured height, to centre it in the cell; 0 until known. */
+  contentH: number;
   drop: DropState;
   /** Edit mode: a tap opens fields, so the cell is a plain button. */
   editing: boolean;
@@ -345,6 +346,8 @@ const DiagramCell = memo(function DiagramCell({
   pulse,
   onToggle,
   onMeasure,
+  onDrawn,
+  contentH,
   drop,
   editing,
   a11yHidden,
@@ -407,7 +410,28 @@ const DiagramCell = memo(function DiagramCell({
         borderLeftColor: isDone ? colors.coolLine : colors.borderStrong,
       }}
     >
-      {cellContent(c, scale, colors, st, false, contentWidth(rect!.width, c.kind))}
+      {/* The content sits in an absolute box with no height, centred by
+          arithmetic rather than by justifyContent. Inside a box of definite
+          height, Yoga measures a child text against that height (FitContent
+          — CalculateLayout.cpp) and iOS lays out only the lines that fit,
+          drawing the last one with NSLineBreakByClipping: a label taller
+          than its row came out as ONE line cut mid-word, "thread onto v"
+          (a real iPhone, Sep 24, twice). The browser never measures that
+          way, which is why Chromium could not show it. With no height the
+          text is measured whole, and its onLayout feeds the row solve, so a
+          row can never end up shorter than what is drawn in it. */}
+      <View
+        pointerEvents="none"
+        onLayout={onDrawn ? onDrawn(c.key) : undefined}
+        style={{
+          position: "absolute",
+          left: CELL_PAD_H,
+          top: Math.max(CELL_PAD_V, (rect!.height - (c.startsBranch ? BRANCH_RULE : 0) - contentH) / 2),
+          width: contentWidth(rect!.width, c.kind),
+        }}
+      >
+        {cellContent(c, scale, colors, st, false, contentWidth(rect!.width, c.kind))}
+      </View>
       {ready ? (
         <>
           <View
@@ -507,6 +531,16 @@ export function SectionDiagram({ section, done, onToggle, scale = 1, edit = null
   const [measuredVersion, setMeasuredVersion] = useState(0);
   const pending = useRef(new Set(cells.map((c) => c.key)));
 
+  // What the DRAWN copy reports, kept apart so the two passes never
+  // overwrite each other; the row solve takes the larger of the two.
+  const drawnRef = useRef(new Map<string, number>());
+  const onDrawn = useCallback((key: string) => (e: LayoutChangeEvent) => {
+    const h = Math.ceil(e.nativeEvent.layout.height) + CELL_PAD_V * 2;
+    if (drawnRef.current.get(key) === h) return;
+    drawnRef.current.set(key, h);
+    setMeasuredVersion((v) => v + 1);
+  }, []);
+
   const onMeasure = useCallback((key: string) => (e: LayoutChangeEvent) => {
     const h = Math.ceil(e.nativeEvent.layout.height) + CELL_PAD_V * 2;
     const prev = heightsRef.current.get(key);
@@ -531,9 +565,14 @@ export function SectionDiagram({ section, done, onToggle, scale = 1, edit = null
     [layout.totalCols, frameInnerW]
   );
   // eslint-disable-next-line react-hooks/exhaustive-deps
+  const contentHeights = useMemo(() => {
+    const m = new Map(heightsRef.current);
+    for (const [k, h] of drawnRef.current) if (h > (m.get(k) ?? 0)) m.set(k, h);
+    return m;
+  }, [measuredVersion]);
   const geometry = useMemo(
-    () => diagramRects(layout, heightsRef.current, metrics),
-    [layout, metrics, measuredVersion]
+    () => diagramRects(layout, contentHeights, metrics),
+    [layout, metrics, contentHeights]
   );
   const placed = measuredVersion > 0;
 
@@ -815,6 +854,8 @@ export function SectionDiagram({ section, done, onToggle, scale = 1, edit = null
         pulse={pulse}
         onToggle={c.kind === "collapsed" ? stableExpand : stableToggle}
         onMeasure={opts.measuring ? onMeasure : null}
+        onDrawn={opts.measuring ? null : onDrawn}
+        contentH={opts.measuring ? 0 : Math.max(0, (contentHeights.get(c.key) ?? 0) - CELL_PAD_V * 2)}
         drop={dropFor(c)}
         editing={!!edit}
         a11yHidden={!!opts.a11yHidden}
