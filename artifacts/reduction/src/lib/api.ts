@@ -75,8 +75,12 @@ export interface SearchResult {
   site: string;
   note: string;
   /** The server already has a tree for this URL: it opens with no extraction,
-   *  and it does not spend the free one. */
+   *  and it does not spend the free one. Drives the progress line; not shown. */
   cached?: boolean;
+  /** How people have found it — "Saved by 12 people · cooked 40 times" — or
+   *  null while the numbers are too small to mean anything (the server's
+   *  floors, api-server lib/searchLibrary.ts). Shown as given. */
+  proof?: string | null;
 }
 
 export async function searchRecipes(query: string): Promise<SearchResult[]> {

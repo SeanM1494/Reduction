@@ -244,19 +244,19 @@ them is the whole point:
 
 | result | meaning |
 |---|---|
-| ***n* pass, 129 skipped** | no `DATABASE_URL` at all. Fine on a machine with no Postgres. |
-| ***n*+129 pass, 0 skipped** | a local database with a current schema. This is the real gate — `pnpm run test:db` produces it. |
+| ***n* pass, 132 skipped** | no `DATABASE_URL` at all. Fine on a machine with no Postgres. |
+| ***n*+132 pass, 0 skipped** | a local database with a current schema. This is the real gate — `pnpm run test:db` produces it. |
 | **failures saying "Refusing to run database tests against …"** | `DATABASE_URL` in the shell points somewhere non-local — on Replit, that is production. Working as designed: use `pnpm run test:db`, which ignores the env var entirely. |
 | **failures naming a missing table** | a reachable local database whose schema is behind `lib/db/src/schema/schema.ts`. `test:db` re-pushes on every start, so this means a hand-run database — push it or use the script. |
 
 The total grows as suites are added — pin your expectation to the **skip
 count**, not the pass count (an earlier version of this table hard-coded
 23/39 and went stale within a week, so treat the number above as needing an
-edit whenever a database-backed suite is added). The 129 are twelve suites:
+edit whenever a database-backed suite is added). The 132 are thirteen suites:
 `claim.db.test.ts` (the anonymous library), `trial.db.test.ts` (the free
-extraction), `cache.db.test.ts` (the URL alias and the "Instant" badge),
+extraction), `cache.db.test.ts` (the URL alias and the cached flag),
 `extractionLog.test.ts` (the cost table), `push.db.test.ts` (timer
-notifications) `access.db.test.ts` (the paywall), `admin.db.test.ts` (the operator lookup), `billingApple.db.test.ts` (the App Store routes), `mobileHandoff.db.test.ts` (the mobile sign-in handoff), `account.db.test.ts` (account deletion), `photos.db.test.ts` (recipe pictures) and `removed.db.test.ts` (taking a recipe out of the box). The first two are transactional guarantees — all-or-nothing
+notifications) `access.db.test.ts` (the paywall), `admin.db.test.ts` (the operator lookup), `billingApple.db.test.ts` (the App Store routes), `mobileHandoff.db.test.ts` (the mobile sign-in handoff), `account.db.test.ts` (account deletion), `photos.db.test.ts` (recipe pictures), `removed.db.test.ts` (taking a recipe out of the box) and `searchLibrary.db.test.ts` (the cached half of a search and its counts). The first two are transactional guarantees — all-or-nothing
 rollback, idempotent repeats, never taking another user's rows. The third is a
 promise about correctness: that a normalised URL never serves a different page.
 The fourth guards a denominator — a cache hit that recorded a `via` would
@@ -272,8 +272,11 @@ billing stopped before any row goes, and nothing gone when it cannot be — and
 the eleventh guards that a user's photo is never overwritten by a page's and
 that no photo outlives its recipe, which no foreign key promises, and the
 twelfth guards that removed is not deleted — out of the list, restorable,
-its timer stopped, and never a refund of the free recipe. **The full suite — 518 tests at the time of
-writing — has been run against a real Postgres and passes 518/0.** The
+its timer stopped, and never a refund of the free recipe, and the
+thirteenth guards that a search only ever surfaces somebody else's cached
+page when it was read from a public-looking URL, and that its counts are
+per account and per page however the URL was spelled. **The full suite — 527 tests at the time of
+writing — has been run against a real Postgres and passes 527/0.** The
 ones that are not api-server or model tests include the mobile library's
 filter and sort (`artifacts/reduction-mobile/lib/libraryView.test.ts`), the
 recipe box's books and page arithmetic (`recipeBox.test.ts`), the

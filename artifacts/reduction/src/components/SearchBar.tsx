@@ -214,15 +214,12 @@ function WebResultCard({
       onClick={onPick}
       disabled={loading}
     >
-      <span className="rd-search-row-title">
-        {r.title}
-        {/* "Instant" says what the user gets, not what happened behind it —
-            nobody needs to know that somebody else read this page first, and
-            the promise the badge makes is the one that matters: tapping it
-            opens straight away. */}
-        {r.cached ? <span className="rd-search-instant">Instant</span> : null}
-      </span>
+      <span className="rd-search-row-title">{r.title}</span>
       <span className="rd-search-row-meta">{r.site}</span>
+      {/* How people found it, worded and floored by the server; absent while
+          the numbers are too small to mean anything. No "already read"
+          badge: that was how it worked, not why anyone would pick it. */}
+      {r.proof ? <span className="rd-search-proof">{r.proof}</span> : null}
       {r.note ? <span className="rd-search-web-note">{r.note}</span> : null}
       {loading ? (
         <span className="rd-search-web-status" role="status" aria-live="polite">

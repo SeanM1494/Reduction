@@ -19,6 +19,7 @@ import { fetchSource } from "../lib/fetchSource";
 import { structureRecipe } from "../lib/structureRecipe";
 import { structureRecipeFromUrl } from "../lib/fetchViaClaude";
 import { searchRecipes, type SearchResult } from "../lib/searchRecipes";
+import { libraryMatches, mergeResults, proofLine, usageFor, type UsageStats } from "../lib/searchLibrary";
 import type { Recipe } from "../shared/layout";
 import { userIdOf } from "../middleware/session";
 import { checkAccess, subscriptionRequired } from "../lib/billing/access";
@@ -711,15 +712,28 @@ recipesRouter.post("/search", async (req: Request, res: Response) => {
     return res.status(400).json({ error: "That search is too long." });
 
   const key = hash(`search:${trimmed}`);
-  const cached = searchCacheGet(key);
-  if (cached) return res.json({ results: await withCacheFlags(cached) });
 
-  try {
+  // Both halves start now and are awaited together: the cached half is a
+  // database read, so it finishes inside the web call and costs no time
+  // (lib/searchLibrary.ts). A failure in it only means fewer results.
+  const libraryP = libraryMatches(trimmed).catch((e) => {
+    console.error("[search:library]", e);
+    return [] as SearchResult[];
+  });
+  const webP: Promise<{ ok: true; results: SearchResult[] } | { ok: false; error: Error }> = (async () => {
+    const hit = searchCacheGet(key);
+    if (hit) return { ok: true as const, results: hit };
     const results = await searchRecipes(trimmed);
     searchCache.set(key, { results, at: Date.now() });
-    return res.json({ results: await withCacheFlags(results) });
-  } catch (e) {
-    const err = e as Error;
+    return { ok: true as const, results };
+  })().catch((e) => ({ ok: false as const, error: e as Error }));
+
+  const [library, web] = await Promise.all([libraryP, webP]);
+
+  // The web search failing is only an error when there is nothing to show:
+  // recipes somebody already read are an answer on their own.
+  if (!web.ok && !library.length) {
+    const err = web.error;
     const isUserFacing = /too short|too long|different search/i.test(err.message);
     if (!isUserFacing) console.error("[recipes/search]", err);
     return res.status(isUserFacing ? 422 : 500).json({
@@ -728,4 +742,15 @@ recipesRouter.post("/search", async (req: Request, res: Response) => {
         : "Something went wrong searching for recipes.",
     });
   }
+  if (!web.ok) console.error("[recipes/search] web half failed, serving the cached half", web.error);
+
+  const merged = mergeResults(library, web.ok ? await withCacheFlags(web.results) : []);
+  let usage = new Map<string, UsageStats>();
+  try {
+    usage = await usageFor(merged.map((r) => r.url));
+  } catch (e) {
+    // Counts are decoration; a failure leaves every result without one.
+    console.error("[search:usage]", e);
+  }
+  return res.json({ results: merged.map((r) => ({ ...r, proof: proofLine(usage.get(r.url)) })) });
 });

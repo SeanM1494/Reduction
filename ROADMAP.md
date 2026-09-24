@@ -1181,11 +1181,20 @@ successful extraction.
 That one genuinely is about cost — it exists to cap API spend, and a cache hit
 has none to cap. Do not collapse the two: they answer different questions.
 
-**Stage two — the count.** "3 other people saved this" as a ranking
-signal and a badge on a result. This is where one account's behaviour
-becomes visible to another, in aggregate only. Needs a saved-count per
-canonical recipe, which is derivable from `recipes` rather than a new
-table.
+**Stage two — the count. Built Sep 24, together with a five-result
+search** (README "Search"). DECIDED: the "Instant" badge is gone — it
+described how the app works, not why anyone would pick a result — and a
+result carries one line instead: saved by N people, cooked N times, N%
+loved it, derived from `recipes` with no new table. DECIDED: each part has
+a floor (3 accounts, 5 cooks, 5 ratings) and below it nothing is said,
+because a count of one looks broken and is close to naming a person; at
+TestFlight-scale usage that means almost no result carries a line yet,
+which is the honest state. DECIDED: search now also returns up to three
+cached pages matched on title — the first time a page reaches someone
+because somebody ELSE read it, not because the web returned it — so only
+pages read from a URL, and only URLs that look public, may surface; the
+privacy policy says so. Not yet a RANKING signal: cached results come
+first, in title-match order, and the web's keep the web's order.
 
 Ratings (#8) are the natural companion to stage two: "people cooked this
 twice" is a better sort than relevance, and better than a raw save count.

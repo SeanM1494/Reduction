@@ -2089,16 +2089,9 @@ button.rd-section-head:focus-visible {
 .rd-field-error > .rd-link-warn + .rd-link-warn,
 .rd-field-error > ul + .rd-link-warn { margin-top: 6px; }
 
-/* The cached-result badge. Sits inline after the title so it wraps with it
- * rather than reserving a column that is empty on most rows. */
-.rd-search-instant {
-  display: inline-block; margin-left: 8px; vertical-align: middle;
-  font-family: "Space Mono", ui-monospace, monospace;
-  font-size: 10px; letter-spacing: .08em; text-transform: uppercase;
-  padding: 2px 7px; border-radius: 999px;
-  color: var(--cool-ink); background: var(--cool-bg);
-  border: 1px solid var(--cool-line);
-}
+/* How people found a search result ("Saved by 12 people · cooked 40
+ * times"). One line, in the cool ink the app uses for "done by people". */
+.rd-search-proof { font-size: 12.5px; font-weight: 500; color: var(--cool-ink); }
 
 /* The extraction progress line.
  *

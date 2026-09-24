@@ -28,8 +28,12 @@ export interface SearchResult {
   site: string;
   note: string;
   /** Set by the route, not by the model: true when a tree for this URL is
-   *  already in extraction_cache, so opening it costs no API call. */
+   *  already in extraction_cache, so opening it costs no API call (the
+   *  clients skip the staged "reading the page" messages for it). Not shown. */
   cached?: boolean;
+  /** Set by the route: how people have found it, or null below the floors
+   *  (lib/searchLibrary.ts `proofLine`). */
+  proof?: string | null;
 }
 
 function textFrom(msg: Anthropic.Message): string {
@@ -94,7 +98,7 @@ export async function searchRecipes(query: string): Promise<SearchResult[]> {
       {
         role: "user",
         content:
-          `Find 6 to 8 real recipe pages for: ${query}\n\n` +
+          `Find 5 real recipe pages for: ${query}\n\n` +
           `Prefer distinct domains, and pages that are a single recipe rather ` +
           `than a roundup or listicle. Every url in your answer must be one ` +
           `that a search call actually returned.\n\n` +
@@ -104,7 +108,7 @@ export async function searchRecipes(query: string): Promise<SearchResult[]> {
           `that version — e.g. "brown butter, chilled overnight".`,
       },
     ],
-    tools: [{ type: "web_search_20250305", name: "web_search", max_uses: 3 }],
+    tools: [{ type: "web_search_20250305", name: "web_search", max_uses: 2 }],
   });
 
   const searchedUrls = urlsFromSearchResults(msg);

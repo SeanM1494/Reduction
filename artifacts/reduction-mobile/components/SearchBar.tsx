@@ -10,10 +10,10 @@
  * the one place the web differs, where a picked result goes straight into
  * the library (MOBILE_PARITY, "Extraction does not save").
  *
- * The "Instant" badge says what the user gets, not what happened behind
- * it: nobody needs to know somebody else read this page first, and the
- * promise the badge makes is the one that matters — tapping it opens
- * straight away.
+ * At most five results: up to three pages the app has already read, then
+ * the web's. A result may carry one line on how people found it (`proof`,
+ * worded and floored by the server); there is no badge for "already read"
+ * any more — that was how it worked, not why anyone would pick it.
  */
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
@@ -244,25 +244,23 @@ function WebResultCard({
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel={`${r.title}, ${r.site}${r.cached ? ', opens instantly' : ''}`}
+      accessibilityLabel={`${r.title}, ${r.site}${r.proof ? `, ${r.proof}` : ''}`}
       onPress={onPick}
       disabled={loading}
       style={({ pressed }) => [styles.card, pressed && styles.rowPressed, loading && styles.cardLoading, error && styles.cardError]}
       testID="search-result"
     >
-      <View style={styles.cardTitleRow}>
-        <Text style={styles.rowTitle} numberOfLines={2}>
-          {r.title}
-        </Text>
-        {r.cached ? (
-          <View style={styles.instant} testID="search-instant">
-            <Text style={styles.instantText}>INSTANT</Text>
-          </View>
-        ) : null}
-      </View>
+      <Text style={styles.rowTitle} numberOfLines={2}>
+        {r.title}
+      </Text>
       <Text style={styles.rowMeta} numberOfLines={1}>
         {r.site}
       </Text>
+      {r.proof ? (
+        <Text style={styles.proof} numberOfLines={1} testID="search-proof">
+          {r.proof}
+        </Text>
+      ) : null}
       {r.note ? (
         <Text style={styles.note} numberOfLines={2}>
           {r.note}
@@ -334,9 +332,7 @@ function makeStyles(colors: Colors) {
     },
     cardLoading: { borderStyle: 'solid', borderColor: colors.coolLine },
     cardError: { borderStyle: 'solid', borderColor: colors.dangerLine },
-    cardTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-    instant: { borderRadius: 99, paddingHorizontal: 7, paddingVertical: 2, backgroundColor: colors.coolBg, borderWidth: 1, borderColor: colors.coolLine },
-    instantText: { fontFamily: fonts.mono, fontSize: 9.5, letterSpacing: 0.5, color: colors.coolInk },
+    proof: { fontSize: 12.5, lineHeight: 17, color: colors.coolInk, fontFamily: fonts.headingMedium },
     note: { fontSize: 12.5, lineHeight: 17, color: colors.mutedForeground },
     status: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 4, minHeight: 22 },
     statusText: { fontSize: 13, color: colors.mutedForeground },

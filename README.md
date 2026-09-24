@@ -261,6 +261,49 @@ The pages describe what the code does — Stripe on the website, Anthropic for
 extraction, the cache of extracted pages, deletion cancelling what it can.
 If any of that changes, the pages change in the same commit.
 
+### Search
+
+`POST /api/recipes/search` answers with **at most five** results: up to
+three pages the app has already read (`extraction_cache`, matched on the
+recipe's title with English stemming, every word required), then the live
+web search's results in their own order, minus any page already offered,
+until there are five. Fewer than three cached matches means more from the
+web. The web half is one model call with web search, now asked for five
+results with at most two searches (it was six to eight, with three).
+
+**Only public-looking pages from a URL ever surface** (`surfaceableUrl` in
+`lib/searchLibrary.ts`): a pasted or photographed recipe is cached without a
+`sourceUrl` and never matches, and a query string, a document or drive host,
+an IP address or an unusual port keeps a page out, because somebody's shared
+document must not reach a stranger searching the dish's name.
+
+**Each result may carry one line on how people found it** (`proof`):
+"Saved by 12 people · cooked 40 times", or a loved percentage. Counts are
+across signed-in accounts, from boxes only (a removed recipe is not saved),
+and a page saved under a variant URL counts for the same page. Each part is
+said only above a floor — 3 accounts, 5 cooks, 5 ratings (`PROOF_FLOOR`) —
+because "Saved by 1 person" looks broken and is close enough to a person to
+be worth not publishing. Below every floor the result says nothing extra.
+The old "Instant" badge is gone; `cached` still travels, and only decides
+whether the clients show the staged "reading the page" wait.
+
+**Why this does not slow search down.** The cached half starts before the
+web call and is awaited alongside it; the counts are one read over at most
+five URLs after both land. Measured on 20,000 cached pages and 20,000 saved
+recipes, no indexes: the cached half 49ms (hidden inside the web call), the
+counts 103ms (added). With the two indexes below: 5.6ms and 15ms. The web
+call is seconds, so neither matters today; the indexes are for when the
+tables are large. Optional, hand-run, and nothing in `REQUIRED_SCHEMA`,
+because the queries are correct without them:
+
+```sql
+CREATE EXTENSION IF NOT EXISTS pg_trgm;
+CREATE INDEX IF NOT EXISTS extraction_cache_title_fts_idx
+  ON extraction_cache USING gin (to_tsvector('english', coalesce(recipe->>'title', '')));
+CREATE INDEX IF NOT EXISTS recipes_source_url_trgm_idx
+  ON recipes USING gin ((recipe->>'sourceUrl') gin_trgm_ops);
+```
+
 ### Recipe photos
 
 A recipe's picture lives in `recipe_photos`, keyed on the recipe's
