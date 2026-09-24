@@ -173,6 +173,17 @@ neither visible:
   out unsigned, however well the CLI is logged in. It has none today, and the
   script says so at every start.
 
+**That script must never replace a login it did not write.** eas-cli keeps
+its login in the same `~/.expo/state.json`, so the first version — which
+wrote Replit's session on every Run — silently signed `eas build` in as
+Replit's partner account after any Run that followed an `eas login`, and
+the build died on "Entity not authorized: AppEntity[…] (viewer =
+PartnerProvisionedActorViewerContext…)" (Sep 24). It now records the secret
+it wrote at the top level of `state.json` (where `eas login` never writes)
+and refreshes only that; any other session is left alone, and
+`npx eas-cli logout` hands the file back. When a build says "not
+authorized", run `npx eas-cli whoami` first: it must say `seans-apps`.
+
 Until both hold, the way to open the app is with **Expo Go signed out**
 (Profile → Sign out, then scan the QR again): a signed-out Expo Go does not
 ask for a signature. Replit's QR flow signs the phone in, which is how a

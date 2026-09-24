@@ -87,6 +87,26 @@ try {
   state = {};
 }
 const prev = state.auth && typeof state.auth === "object" ? state.auth : {};
+
+// NEVER REPLACE A LOGIN THIS SCRIPT DID NOT WRITE. eas-cli keeps its login
+// in this same file, so writing Replit's session over an `eas login` as the
+// project's owner silently signed every later `eas build` in as Replit's
+// partner account — which cannot see the project: "Entity not authorized:
+// AppEntity[…] (viewer = PartnerProvisionedActorViewerContext…)" (Sep 24,
+// on the first build after a Run). The secret this script last wrote is
+// kept at the TOP level of state.json, where `eas login` (which rewrites
+// `auth`) never touches it; a session that is not that secret is somebody's
+// own, and is left alone. `npx eas-cli logout` hands the file back.
+const MARK = "reductionReplitSessionSecret";
+const ours = !prev.sessionSecret || prev.sessionSecret === state[MARK] || prev.sessionSecret === secret;
+if (!ours) {
+  console.log(
+    "[expo-session] Expo CLI already has its own login (eas login); leaving it in place. " +
+      "Run `npx eas-cli logout` and restart to use Replit's session for Expo Go instead."
+  );
+  process.exit(0);
+}
+state[MARK] = secret;
 const sameSecret = prev.sessionSecret === secret;
 state.auth = {
   // Keep the cached identity when the secret has not changed; drop it when it
