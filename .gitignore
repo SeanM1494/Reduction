@@ -67,3 +67,6 @@ Thumbs.db
 *.p8
 *.pem
 *.key
+
+# The extraction comparison's output (src/eval): recipe data from real pages, per run.
+eval-out/

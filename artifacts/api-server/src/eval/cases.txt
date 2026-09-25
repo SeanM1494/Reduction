@@ -1,0 +1,19 @@
+# The extraction comparison's cases (evalExtraction.ts). One per line:
+#   a URL · text:<file> (pasted text) · photo:<file> (jpg, png, webp, pdf)
+# Paths are relative to this file. Aim for 10–20, weighted to the MESSY:
+# the point is to check the changes against what is likely to break.
+#
+# 1. Links that were slow for real. Paste the url column of README
+#    "Extraction speed"'s second query (the slowest recent links) here.
+https://tastesbetterfromscratch.com/easy-no-fuss-thanksgiving-turkey/
+#
+# 2. Pages with no structured data, and pages that block our fetch (the
+#    report's path column says which each one turned out to be).
+#
+# 3. A few ordinary structured-data pages, as the control.
+#
+# 4. Pasted text — the model reads raw text, exactly the path of a page
+#    with no structured data, and these are known messy on purpose:
+text:fixtures/blog-paste.txt
+text:fixtures/odd-ingredients.txt
+text:fixtures/two-part.txt

@@ -289,8 +289,8 @@ page when it was read from a public-looking URL, and that its counts are
 per account and per page however the URL was spelled, and the
 fourteenth guards that a recipe's original wording is its account's alone,
 filled once and never re-fetched on every open, and gone with the recipe
-and the account. **The full suite — 555 tests at the time of
-writing — has been run against a real Postgres and passes 555/0.** The
+and the account. **The full suite — 573 tests at the time of
+writing — has been run against a real Postgres and passes 573/0.** The
 ones that are not api-server or model tests include the mobile library's
 filter and sort (`artifacts/reduction-mobile/lib/libraryView.test.ts`), the
 recipe box's books and page arithmetic (`recipeBox.test.ts`), the

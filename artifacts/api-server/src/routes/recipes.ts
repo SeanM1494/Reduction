@@ -49,7 +49,7 @@ const ALLOWED_MEDIA = new Set([
   "application/pdf",
 ]);
 
-const MAX_TEXT = 30_000;
+export const MAX_TEXT = 30_000;
 const MAX_FILE_BYTES = 8 * 1024 * 1024;
 
 /**

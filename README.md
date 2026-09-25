@@ -446,6 +446,30 @@ select e.at, round(e.ms/1000.0,1) secs, e.via, e.attempts, e.ok, e.host,
  order by e.ms desc nulls last limit 15;
 ```
 
+**The comparison that decides the two secrets** is
+`artifacts/api-server/src/eval/evalExtraction.ts`. It runs every case in a
+cases file through production's own extraction code under four configs —
+**A** the old 8,000 cap, **B** the 16,000 cap (production now), **C** B at
+low effort, **S** B with source step tags — and writes a report: time,
+model calls per run (a retry or a fallback shows as more than one), cap
+hits and cost per config; every case side by side; and every tag checked
+against the sentence it names (out of range, no words in common, or
+numbered before a step it depends on). It never touches a database — it
+deletes `DATABASE_URL` before loading anything — and spends real money,
+so it prints an estimate and does nothing without `--yes`. Run it in the
+workspace, which has the API key and the open internet:
+
+```sh
+node --import tsx artifacts/api-server/src/eval/evalExtraction.ts \
+  artifacts/api-server/src/eval/cases.txt --yes
+# --configs A,B (a subset) · --concurrency 2 · --out eval-out (gitignored)
+```
+
+`cases.txt` holds links (add the slow ones from the query above), and
+three pasted recipes written to be awkward: a blog post around its recipe,
+a notes-app ingredient list with a run-on method, and a two-part recipe
+whose steps interleave.
+
 ### Original wording
 
 Beside the diagram, a recipe's ingredient lines and steps as its source
