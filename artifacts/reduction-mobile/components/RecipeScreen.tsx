@@ -38,6 +38,7 @@ import { asksForRating } from '@/lib/recipeBox';
 import { StepsMode } from '@/components/recipe/StepsMode';
 import { EditSheet, type EditTarget } from '@/components/edit/EditSheet';
 import { SheetButton } from '@/components/Sheet';
+import { Window } from '@/components/Window';
 import { validateRecipe, type Recipe } from '@/shared/layout';
 import { applyEdit, type EditOp } from '@/shared/edits';
 import { reconcileDone } from '@/shared/progress';
@@ -139,6 +140,10 @@ interface RecipeScreenProps {
   /** False turns off every write that is about the recipe rather than about
    *  tonight — rating and tagging — which is the draft's case. */
   canEdit?: boolean;
+  /** Bumped by the route's ⋮ "Edit recipe": opens edit mode on the Diagram.
+   *  Edit lives in the menu (Sep 25); the row it used to sit in holds
+   *  Clear progress. */
+  editRequest?: number;
   /** A write the server refused, shown until dismissed (see the web's
    *  "Writes are confirmed, not assumed"). */
   notice?: string | null;
@@ -197,6 +202,7 @@ export function RecipeScreen({
   onUpdate,
   onEditMealTypes,
   canEdit = true,
+  editRequest = 0,
   notice,
   onDismissNotice,
   offlineQueued,
@@ -237,6 +243,16 @@ export function RecipeScreen({
   const [sheetFor, setSheetFor] = useState<EditTarget | null>(null);
   const [undoStack, setUndoStack] = useState<Array<{ recipe: Recipe; done: string[] }>>([]);
   const [editError, setEditError] = useState<string | null>(null);
+  useEffect(() => {
+    if (!editRequest || !canEdit) return;
+    setView('overview');
+    setEditing(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editRequest]);
+
+  // Clear progress asks first: it wipes every check on the recipe, and the
+  // button sits where a thumb reaches for other things.
+  const [confirmClear, setConfirmClear] = useState(false);
 
   // The diagram's press-and-hold drag: the page must not scroll under it,
   // and it scrolls the page itself while the finger is near an edge. The
@@ -410,7 +426,7 @@ export function RecipeScreen({
                 {types.length > 1 ? <Text style={styles.tagMore}>+{types.length - 1}</Text> : null}
               </Pressable>
               <View style={styles.factsSpacer} />
-              <SheetButton label="Edit" onPress={() => setEditing(true)} testID="recipe-edit" />
+              <SheetButton label="Clear progress" onPress={() => setConfirmClear(true)} disabled={done.length === 0 && !timer} testID="recipe-clear" />
             </View>
           ) : null}
           {/* The mode has to announce itself. Someone who wanders into edit
@@ -503,6 +519,35 @@ export function RecipeScreen({
 
       {editing ? <EditSheet recipe={recipe} target={sheetFor} onApply={applyOp} onClose={() => setSheetFor(null)} /> : null}
 
+      {/* A window, like the delete confirmation: it asks something. */}
+      <Window open={confirmClear} onClose={() => setConfirmClear(false)} maxWidth={400} testID="clear-window">
+        <Text style={styles.confirmHeading} accessibilityRole="header">
+          Clear all progress on this recipe?
+        </Text>
+        <Text style={styles.confirmBody}>Every checked step is unchecked and any running timer stops. This can't be undone.</Text>
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => {
+            // Progress only: the cooking history and the rating are the
+            // recipe's record, not tonight's, and stay.
+            onUpdate({ done: [], timer: null });
+            setConfirmClear(false);
+          }}
+          style={({ pressed }) => [styles.dangerBtn, pressed && { opacity: 0.85 }]}
+          testID="clear-confirm"
+        >
+          <Text style={styles.dangerBtnText}>Clear</Text>
+        </Pressable>
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => setConfirmClear(false)}
+          style={({ pressed }) => [styles.keepBtn, pressed && { borderColor: colors.borderStrong }]}
+          testID="clear-cancel"
+        >
+          <Text style={styles.keepBtnText}>Cancel</Text>
+        </Pressable>
+      </Window>
+
       {isDraft ? (
         <View style={styles.saveBar}>
           <Pressable style={styles.saveButton} onPress={onSave} disabled={saving} accessibilityRole="button">
@@ -525,17 +570,25 @@ function ModeTab({
   onPress: () => void;
   colors: Colors;
 }) {
+  // The app's language for "one of these" (SheetOption: the Books/Grid
+  // choice, the meal types): both segments are filled, bordered controls,
+  // and the current one is the cool tint. The first cut was a dark pill
+  // beside bare text, and the bare one did not read as tappable (Sep 25).
   return (
     <Pressable
       onPress={onPress}
       accessibilityRole="tab"
       accessibilityState={{ selected: active }}
-      style={[
+      testID={`mode-${label === 'Diagram' ? 'diagram' : 'steps'}`}
+      style={({ pressed }) => [
         styles2.tab,
-        { backgroundColor: active ? colors.primary : 'transparent', borderColor: active ? colors.primary : colors.border },
+        active
+          ? { backgroundColor: colors.coolBg, borderColor: colors.coolLine }
+          : { backgroundColor: colors.card, borderColor: pressed ? colors.borderStrong : colors.border },
+        pressed && !active && { backgroundColor: colors.muted },
       ]}
     >
-      <Text style={{ color: active ? colors.primaryForeground : colors.mutedForeground, fontFamily: active ? fonts.heading : fonts.headingMedium, fontSize: 14 }}>
+      <Text style={{ color: active ? colors.coolInk : colors.foreground, fontFamily: active ? fonts.heading : fonts.headingMedium, fontSize: 15 }}>
         {label}
       </Text>
     </Pressable>
@@ -544,7 +597,7 @@ function ModeTab({
 const styles2 = StyleSheet.create({
   // 44px is the touch-target floor (CLAUDE.md); the scaffold's 40px tab was
   // a desktop button that happened to be on a phone.
-  tab: { flex: 1, minHeight: 44, paddingVertical: 10, borderRadius: 99, alignItems: 'center', justifyContent: 'center', borderWidth: 1 },
+  tab: { flex: 1, minHeight: 48, paddingVertical: 10, borderRadius: 12, alignItems: 'center', justifyContent: 'center', borderWidth: 1 },
 });
 
 // ---------------------------------------------------------------- styles ---
@@ -558,6 +611,13 @@ function makeStyles(colors: Colors) {
     progressFill: { height: '100%', borderRadius: 99 },
     progressCount: { fontFamily: fonts.mono, fontSize: 11, color: colors.mutedForeground },
     modeSwitch: { flexDirection: 'row', gap: 8 },
+    confirmHeading: { fontFamily: fonts.heading, fontSize: 20, lineHeight: 25, textAlign: 'center', color: colors.foreground },
+    confirmBody: { marginTop: 10, fontSize: 15, lineHeight: 21, textAlign: 'center', color: colors.foreground },
+    // The delete confirmation's red, fixed in both themes (app/recipe/[id].tsx).
+    dangerBtn: { marginTop: 18, minHeight: 48, borderRadius: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: '#92351b' },
+    dangerBtnText: { fontSize: 15, fontWeight: '600', color: '#fff' },
+    keepBtn: { marginTop: 8, minHeight: 48, borderRadius: 12, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: colors.border, backgroundColor: colors.card },
+    keepBtnText: { fontSize: 15, fontWeight: '600', color: colors.foreground },
     above: { paddingHorizontal: 20 },
     notice: {
       marginHorizontal: 20,

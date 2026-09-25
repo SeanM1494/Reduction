@@ -58,6 +58,8 @@ export default function RecipeDetailScreen() {
   const [mealSheetOpen, setMealSheetOpen] = useState(false);
   const [photoSheetOpen, setPhotoSheetOpen] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  // "Edit recipe" in the menu opens edit mode in RecipeScreen, which owns it.
+  const [editRequest, setEditRequest] = useState(0);
   // What a menu item opens once the menu has finished closing.
   const afterMenu = useRef<(() => void) | null>(null);
   const menuThen = (next: () => void) => {
@@ -171,6 +173,7 @@ export default function RecipeDetailScreen() {
       <RecipeScreen
         initialView={initialView}
         recipe={entry.recipe}
+        editRequest={editRequest}
         photoEntry={entry}
         done={entry.done}
         servings={entry.servings}
@@ -252,17 +255,9 @@ export default function RecipeDetailScreen() {
           {recipeTitle}
         </Text>
         <View style={styles.menu} accessibilityRole="menu">
+          <MenuItem label="Edit recipe" onPress={() => menuThen(() => setEditRequest((n) => n + 1))} colors={colors} testID="menu-edit" />
           <MenuItem label="Meal types" onPress={() => menuThen(() => setMealSheetOpen(true))} colors={colors} testID="menu-meal-types" />
           <MenuItem label="Photo" onPress={() => menuThen(() => setPhotoSheetOpen(true))} colors={colors} testID="menu-photo" />
-          <MenuItem
-            label="Clear progress"
-            onPress={() => {
-              setMenuOpen(false);
-              write({ done: [] });
-            }}
-            colors={colors}
-            testID="menu-clear"
-          />
           <MenuItem label="Delete recipe" danger onPress={() => menuThen(() => setConfirmDelete(true))} colors={colors} testID="menu-delete" />
         </View>
         <Pressable
