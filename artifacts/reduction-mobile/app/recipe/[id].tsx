@@ -18,9 +18,10 @@
  * screen can produce (see the web's "Writes are confirmed, not assumed").
  */
 
-import React, { useCallback, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
-import { Stack, router, useLocalSearchParams } from 'expo-router';
+import { Stack, router, useLocalSearchParams, useNavigation } from 'expo-router';
+import { usePreventRemove } from 'expo-router/react-navigation';
 import { Feather } from '@expo/vector-icons';
 import { useLibrary, type EntryPatch } from '@/lib/library-context';
 import { RecipeScreen } from '@/components/RecipeScreen';
@@ -79,6 +80,55 @@ export default function RecipeDetailScreen() {
 
   const isDraft = id === 'draft';
   const entry = isDraft ? null : getEntry(id);
+
+  // LEAVING A PREVIEW ASKS (Sep 25). The draft lives in memory only, so
+  // back from it used to throw the recipe away without a word. Saving turns
+  // the guard off first (savedId), then moves to the saved recipe from an
+  // effect, so the save's own navigation is never the thing that is asked.
+  //
+  // Discarding works the same way: a re-dispatched action meets the same
+  // guard and would be stopped again, so the guard goes off (discarding)
+  // and the pending action is dispatched from an effect once it has.
+  const navigation = useNavigation();
+  const [savedId, setSavedId] = useState<string | null>(null);
+  const [leaveOpen, setLeaveOpen] = useState(false);
+  const [discarding, setDiscarding] = useState(false);
+  const pendingLeave = useRef<unknown>(null);
+  const discardOnClose = useRef(false);
+  usePreventRemove(isDraft && !!draft && !savedId && !discarding, ({ data }) => {
+    pendingLeave.current = data.action;
+    setLeaveOpen(true);
+  });
+  useEffect(() => {
+    if (!savedId) return;
+    setDraft(null);
+    router.replace(`/recipe/${savedId}`);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [savedId]);
+  useEffect(() => {
+    if (!discarding || !pendingLeave.current) return;
+    navigation.dispatch(pendingLeave.current as never);
+    pendingLeave.current = null;
+  }, [discarding, navigation]);
+  const saveDraft = async () => {
+    if (!draft || saving) return;
+    setSaving(true);
+    try {
+      const saved = await saveRecipe(draft.recipe);
+      // The SAVE is what spends the free allowance (the server counts
+      // a created row, not an extraction), so the entitlement the
+      // Find tab and Settings read has to be re-read here. Without
+      // this, Settings said "Free recipe available" after the first
+      // recipe was already saved and counted.
+      await refreshAccount();
+      setSavedId(saved.id);
+    } catch {
+      // saveRecipe surfaces its own error via LibraryContext.error; the
+      // draft stays put so the user can retry.
+    } finally {
+      setSaving(false);
+    }
+  };
   const recipeTitle = (isDraft ? draft?.recipe.title : entry?.recipe.title) || 'Recipe';
 
   // Writes go through the sync engine (lib/library-context.tsx); a refused
@@ -117,26 +167,48 @@ export default function RecipeDetailScreen() {
           }}
           isDraft
           saving={saving}
-          onSave={async () => {
-            setSaving(true);
-            try {
-              const saved = await saveRecipe(draft.recipe);
-              setDraft(null);
-              // The SAVE is what spends the free allowance (the server counts
-              // a created row, not an extraction), so the entitlement the
-              // Find tab and Settings read has to be re-read here. Without
-              // this, Settings said "Free recipe available" after the first
-              // recipe was already saved and counted.
-              await refreshAccount();
-              router.replace(`/recipe/${saved.id}`);
-            } catch {
-              // saveRecipe surfaces its own error via LibraryContext.error; the
-              // draft stays put so the user can retry.
-            } finally {
-              setSaving(false);
-            }
-          }}
+          onSave={saveDraft}
         />
+        <Window
+          open={leaveOpen}
+          onClose={() => setLeaveOpen(false)}
+          onClosed={() => {
+            // Left from here, after the window is gone: it is a Modal, and
+            // it goes before the screen does.
+            if (!discardOnClose.current) return;
+            discardOnClose.current = false;
+            setDiscarding(true);
+          }}
+          maxWidth={400}
+          testID="leave-window"
+        >
+          <Text style={styles.confirmHeading} accessibilityRole="header">
+            Leave without saving?
+          </Text>
+          <Text style={styles.confirmBody}>{recipeTitle} won't be kept. Save it to find it in your library later.</Text>
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => {
+              setLeaveOpen(false);
+              void saveDraft();
+            }}
+            style={({ pressed }) => [styles.primaryBtn, pressed && { opacity: 0.85 }]}
+            testID="leave-save"
+          >
+            <Text style={styles.primaryBtnText}>Save to Library</Text>
+          </Pressable>
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => {
+              discardOnClose.current = true;
+              setLeaveOpen(false);
+            }}
+            style={({ pressed }) => [styles.keepBtn, pressed && { borderColor: colors.borderStrong }]}
+            testID="leave-discard"
+          >
+            <Text style={[styles.keepBtnText, { color: colors.dangerInk }]}>Discard</Text>
+          </Pressable>
+        </Window>
       </>
     );
   }
@@ -364,5 +436,7 @@ function makeStyles(colors: Colors) {
       backgroundColor: colors.card,
     },
     keepBtnText: { fontSize: 15, fontWeight: '600', color: colors.foreground },
+    primaryBtn: { marginTop: 18, minHeight: 48, borderRadius: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.primary },
+    primaryBtnText: { fontSize: 15, fontWeight: '600', color: colors.primaryForeground },
   });
 }

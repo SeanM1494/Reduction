@@ -39,6 +39,7 @@ import { StepsMode } from '@/components/recipe/StepsMode';
 import { EditSheet, type EditTarget } from '@/components/edit/EditSheet';
 import { SheetButton } from '@/components/Sheet';
 import { Window } from '@/components/Window';
+import { useToast } from '@/components/Toast';
 import { validateRecipe, type Recipe } from '@/shared/layout';
 import { applyEdit, type EditOp } from '@/shared/edits';
 import { countDone, reconcileDone } from '@/shared/progress';
@@ -199,7 +200,7 @@ export function RecipeScreen({
   rating,
   mode,
   order = null,
-  onUpdate,
+  onUpdate: onUpdateProp,
   onEditMealTypes,
   canEdit = true,
   editRequest = 0,
@@ -220,6 +221,21 @@ export function RecipeScreen({
 }: RecipeScreenProps) {
   const colors = useColors();
   const styles = makeStyles(colors);
+  const toast = useToast();
+  // A preview keeps nothing: checking a step, a timer or a card order on it
+  // would be progress with nowhere to go. Those taps used to be swallowed
+  // silently, which read as broken; now they say why (Sep 25). Servings
+  // still work — they are how someone sizes a recipe before saving it.
+  const onUpdate = useCallback(
+    (patch: EntryPatch) => {
+      if (isDraft && ('done' in patch || 'timer' in patch || 'order' in patch || 'cooked' in patch)) {
+        toast({ message: 'Save the recipe to check off steps.' });
+        return;
+      }
+      onUpdateProp(patch);
+    },
+    [isDraft, onUpdateProp, toast]
+  );
   // The stored mode picks the opening tab; a tap writes it back so the next
   // open (and the other device) lands where this one left off.
   const [view, setView] = useState<ViewMode>(initialView ?? (mode === 'steps' ? 'cook' : 'overview'));
@@ -357,6 +373,16 @@ export function RecipeScreen({
   return (
     <View style={styles.container}>
       <View style={styles.top}>
+        {isDraft ? (
+          // Unmissable, and on both views: a preview is thrown away the moment
+          // someone leaves it, and the Save bar alone did not say so.
+          <View style={styles.draftBanner} accessibilityRole="alert" testID="draft-banner">
+            <Text style={styles.draftBannerText}>
+              <Text style={styles.draftBannerStrong}>Preview — not saved.</Text> Save it to keep it and to check off steps.
+              Leaving this screen or closing the app discards it.
+            </Text>
+          </View>
+        ) : null}
         <View style={styles.progressRow} accessibilityLabel={`${doneCount} of ${total} done`}>
           <View style={styles.progressTrack}>
             <LinearGradient
@@ -682,6 +708,16 @@ function makeStyles(colors: Colors) {
     source: { minHeight: 44, justifyContent: 'center', marginBottom: 8 },
     sourceText: { fontSize: 12, color: colors.faint },
     sourceLink: { color: colors.mutedForeground, textDecorationLine: 'underline' },
+    draftBanner: {
+      borderWidth: 2,
+      borderColor: colors.warmLine,
+      backgroundColor: colors.warmBg,
+      borderRadius: 12,
+      paddingVertical: 10,
+      paddingHorizontal: 14,
+    },
+    draftBannerText: { fontSize: 14, lineHeight: 20, color: colors.warmInk },
+    draftBannerStrong: { fontFamily: fonts.heading },
     saveBar: {
       position: 'absolute',
       bottom: 0,
