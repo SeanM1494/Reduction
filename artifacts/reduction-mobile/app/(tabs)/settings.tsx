@@ -188,6 +188,22 @@ export default function SettingsScreen() {
         <Feather name="chevron-right" size={20} color={colors.mutedForeground} />
       </Pressable>
 
+      {/* Signed out, the demo is the first screen; signed in, this is the
+          way back to it (app/demo.tsx). */}
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="How it works: replay the guacamole demo"
+        onPress={() => router.push('/demo')}
+        style={({ pressed }) => [styles.section, styles.navRow, pressed && styles.navRowPressed]}
+        testID="settings-demo"
+      >
+        <View style={styles.navText}>
+          <Text style={styles.label}>How it works</Text>
+          <Text style={styles.value}>Replay the guacamole demo</Text>
+        </View>
+        <Feather name="chevron-right" size={20} color={colors.mutedForeground} />
+      </Pressable>
+
       <AppearanceCard />
 
       <View style={styles.legal}>

@@ -13,6 +13,12 @@
  * slots and never reaches into it. Everything lives in component state and
  * dies with it — no API calls, no rows (CLAUDE.md, "Demo state never
  * persists").
+ *
+ * It has a second home once someone is signed in: `app/demo.tsx`, reached
+ * from Settings › "How it works" and from an empty library, pushes it as an
+ * ordinary screen. There the navigator's header carries the back button,
+ * the title and the DEMO tag, so this screen drops its own header row and
+ * its top inset — `onSignIn` absent is what says which home it is in.
  */
 
 import React, { useCallback, useMemo, useState } from 'react';
@@ -36,7 +42,7 @@ import { useColors, type Colors } from '@/hooks/useColors';
 import { fonts } from '@/constants/colors';
 import type { StepTimer } from '@/lib/api';
 
-export function DemoScreen({ onSignIn }: { onSignIn: () => void }) {
+export function DemoScreen({ onSignIn }: { onSignIn?: () => void }) {
   const colors = useColors();
   const styles = makeStyles(colors);
   const section = DEMO_RECIPE.sections[0];
@@ -65,16 +71,18 @@ export function DemoScreen({ onSignIn }: { onSignIn: () => void }) {
   }, [stop, resetTips]);
 
   return (
-    <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
-      <View style={styles.header}>
-        <DemoTag />
-        <Text style={styles.title} numberOfLines={1}>
-          {DEMO_RECIPE.title}
-        </Text>
-        <Pressable accessibilityRole="button" onPress={onSignIn} style={styles.signIn} testID="demo-sign-in">
-          <Text style={styles.signInText}>Sign in →</Text>
-        </Pressable>
-      </View>
+    <SafeAreaView style={styles.container} edges={onSignIn ? ['top', 'bottom'] : ['bottom']}>
+      {onSignIn ? (
+        <View style={styles.header}>
+          <DemoTag />
+          <Text style={styles.title} numberOfLines={1}>
+            {DEMO_RECIPE.title}
+          </Text>
+          <Pressable accessibilityRole="button" onPress={onSignIn} style={styles.signIn} testID="demo-sign-in">
+            <Text style={styles.signInText}>Sign in →</Text>
+          </Pressable>
+        </View>
+      ) : null}
       <RecipeScreen
         recipe={DEMO_RECIPE}
         done={done}

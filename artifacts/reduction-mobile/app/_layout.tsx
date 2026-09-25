@@ -71,6 +71,7 @@ function RootLayoutNav() {
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
       <Stack.Screen name="recipe/[id]" options={{ title: '' }} />
       <Stack.Screen name="removed" options={{ title: 'Removed recipes' }} />
+      <Stack.Screen name="demo" options={{ title: '' }} />
     </Stack>
   );
 }

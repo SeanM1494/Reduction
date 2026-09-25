@@ -140,6 +140,7 @@ export default function LibraryScreen() {
             Nothing saved yet. Anything you diagram lands here, with your progress kept.
           </Text>
           <SheetButton label="Find a recipe" onPress={() => router.navigate('/')} testID="library-find" />
+          <SheetButton label="See how it works" onPress={() => router.push('/demo')} testID="library-demo" />
           {removedWaitingNote(removedCount) ? (
             <>
               <Text style={styles.emptyText} testID="library-removed-note">
