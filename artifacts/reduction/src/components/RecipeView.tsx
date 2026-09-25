@@ -28,7 +28,7 @@ import RatingControl from "./RatingControl";
 import ServingsRow from "./ServingsRow";
 import { MEAL_TYPE_LABELS, sanitizeMealTypes } from "../shared/mealTypes";
 import { applyEdit, type EditOp } from "../shared/edits";
-import { reconcileDone } from "../shared/progress";
+import { countDone, reconcileDone } from "../shared/progress";
 import { reextract } from "../lib/api";
 import ExtractionProgress from "./ExtractionProgress";
 import { lastAcceptedEntry, onSyncFailure } from "../lib/storage";
@@ -293,7 +293,9 @@ export default function RecipeView({
        * devices logging the same meal also collapse to one.
        */
       let cooked = entry.cooked ?? [];
-      if (total > 0 && next.size === total && done.size < total) {
+      // countDone, not size: a checked section header (the phone can tick
+      // "Oven 425°F") is in the set and is never part of the total.
+      if (total > 0 && countDone(next) === total && countDone(done) < total) {
         const now = Date.now();
         const last = cooked.length ? cooked[cooked.length - 1] : 0;
         if (now - last > 6 * 60 * 60 * 1000) cooked = [...cooked, now];
@@ -304,7 +306,8 @@ export default function RecipeView({
     [done, parents, upstreamOf, entry, onUpdate, total]
   );
 
-  const pct = total ? Math.round((done.size / total) * 100) : 0;
+  const doneCount = countDone(done);
+  const pct = total ? Math.round((doneCount / total) * 100) : 0;
 
   const saveAsImage = useCallback(async () => {
     if (!captureRef.current || savingImage) return;
@@ -390,9 +393,9 @@ export default function RecipeView({
             </button>
           </div>
 
-          {done.size > 0 ? (
+          {doneCount > 0 ? (
             <p className="rfx-choose-resume">
-              {done.size} / {total} already done — picking up where you left off.
+              {doneCount} / {total} already done — picking up where you left off.
             </p>
           ) : null}
         </div>
@@ -413,12 +416,12 @@ export default function RecipeView({
         <span className="rfx-bar-title">{recipe.title}</span>
         <span className="rfx-bar-mode">{phase === "diagram" ? "Diagram" : "Step-by-Step"}</span>
 
-        <div className="rfx-bar-progress" title={`${done.size} of ${total} done`}>
+        <div className="rfx-bar-progress" title={`${doneCount} of ${total} done`}>
           <span className="rfx-bar-track">
             <span className="rfx-bar-fill" style={{ width: `${pct}%` }} />
           </span>
           <span className="rfx-bar-count">
-            {done.size}/{total}
+            {doneCount}/{total}
           </span>
         </div>
 

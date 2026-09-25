@@ -69,6 +69,7 @@ import type { Recipe, Section, Cell } from "@/shared/layout";
 import { deriveDiagramState } from "@/shared/collapse";
 import { computeLayout } from "@/shared/layout";
 import { formatAmount } from "@/shared/amounts";
+import { headerDoneId } from "@/shared/progress";
 import { noTargetsReason, validMoveTargets } from "@/shared/edits";
 import { edgeDir, rectAt, stepAt, toContent, type WindowRect } from "./dragMath";
 import { FinishStrip, type StripDrop } from "./FinishStrip";
@@ -1012,6 +1013,54 @@ export function SectionDiagram({ section, done, onToggle, scale = 1, edit = null
   );
 }
 
+/**
+ * A section's standing instruction ("Oven 425°F") as a row that checks off,
+ * in the finish strip's row language: a card with a circle, amber while it
+ * can be done (a preheat always can), cool and struck through with a ✓ once
+ * it is (Sep 25). Its `done` id comes from shared/progress.ts's
+ * `headerDoneId`, which is also what keeps the server from pruning it and
+ * what keeps it out of every count. In edit mode it is plain text again:
+ * a tap there means "edit", and the header is edited from the section.
+ */
+function SectionHeaderRow({
+  section,
+  done,
+  onToggle,
+  editing,
+  colors,
+}: {
+  section: Section;
+  done: Set<string>;
+  onToggle: (id: string) => void;
+  editing: boolean;
+  colors: Colors;
+}) {
+  const id = headerDoneId(section);
+  if (!id || editing) {
+    return <Text style={[styles.sectionHeader, { color: colors.mutedForeground }]}>{section.header}</Text>;
+  }
+  const isDone = done.has(id);
+  const bg = isDone ? colors.coolBg : colors.warmBg;
+  const line = isDone ? colors.coolLine : colors.warmLine;
+  const ink = isDone ? colors.coolInk : colors.warmInk;
+  return (
+    <Pressable
+      onPress={() => onToggle(id)}
+      accessibilityRole="togglebutton"
+      accessibilityLabel={`${section.header}, ${isDone ? "done" : "not done yet"}`}
+      aria-checked={isDone}
+      accessibilityHint={isDone ? "Marks it not done" : "Marks it done"}
+      testID={`header-${section.root}`}
+      style={[styles.headerRow, { backgroundColor: bg, borderColor: line }, !isDone && { borderWidth: 2 }]}
+    >
+      <View style={[styles.headerCircle, { borderColor: line }]}>
+        {isDone ? <Text style={[styles.headerCheck, { color: ink }]}>✓</Text> : null}
+      </View>
+      <Text style={[styles.headerText, { color: ink }, isDone && styles.headerStruck]}>{section.header}</Text>
+    </Pressable>
+  );
+}
+
 interface DiagramViewProps {
   recipe: Recipe;
   done: Set<string>;
@@ -1060,7 +1109,9 @@ export function DiagramView({ recipe, done, onToggle, scale, edit = null }: Diag
           ) : recipe.sections.length > 1 ? (
             <Text style={[styles.sectionName, { color: colors.text }]}>{s.name}</Text>
           ) : null}
-          {s.header ? <Text style={[styles.sectionHeader, { color: colors.mutedForeground }]}>{s.header}</Text> : null}
+          {s.header ? (
+            <SectionHeaderRow section={s} done={done} onToggle={onToggle} editing={!!edit} colors={colors} />
+          ) : null}
           <SectionDiagram section={s} done={done} onToggle={onToggle} scale={scale} edit={edit} drag={dragFor(i)} />
         </View>
       ))}
@@ -1117,6 +1168,23 @@ const styles = StyleSheet.create({
   },
   sectionEditHint: { fontSize: 13, fontWeight: "600" },
   sectionHeader: { fontSize: 13, fontStyle: "italic", marginBottom: 8 },
+  // The finish strip's row (FinishStrip.tsx: card, 12px radius, 11/14
+  // padding, a 19px circle), 44px+ tall.
+  headerRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 9,
+    minHeight: 44,
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingVertical: 11,
+    paddingHorizontal: 14,
+    marginBottom: 10,
+  },
+  headerCircle: { width: 19, height: 19, borderRadius: 10, borderWidth: 1, alignItems: "center", justifyContent: "center" },
+  headerCheck: { fontSize: 11, fontWeight: "700" },
+  headerText: { flex: 1, fontSize: 14, lineHeight: 17.5, fontWeight: "600" },
+  headerStruck: { textDecorationLine: "line-through", opacity: 0.78, fontWeight: "500" },
   ghost: {
     position: "absolute",
     top: 0,

@@ -41,7 +41,7 @@ import { SheetButton } from '@/components/Sheet';
 import { Window } from '@/components/Window';
 import { validateRecipe, type Recipe } from '@/shared/layout';
 import { applyEdit, type EditOp } from '@/shared/edits';
-import { reconcileDone } from '@/shared/progress';
+import { countDone, reconcileDone } from '@/shared/progress';
 import type { OrderPreference } from '@/shared/sequence';
 import { MEAL_TYPE_LABELS, sanitizeMealTypes } from '@/shared/mealTypes';
 import { countAll } from '@/shared/amounts';
@@ -272,14 +272,16 @@ export function RecipeScreen({
     return moved;
   };
 
-  const doneCount = done.length;
+  // countDone, never done.length: a ticked section header ("Oven 425°F")
+  // is in `done` and is never part of the total.
+  const doneCount = countDone(done);
   const total = countAll(recipe);
   const pct = total ? Math.round((doneCount / total) * 100) : 0;
   const scale = servings && recipe.servings ? servings / recipe.servings : 1;
 
   const toggle = (id: string) => {
     const next = toggleDone(recipe, done, id);
-    const stamped = stampCooked(cooked, done.length, next.length, total);
+    const stamped = stampCooked(cooked, doneCount, countDone(next), total);
     onUpdate(stamped === cooked ? { done: next } : { done: next, cooked: stamped });
     if (asksForRating(cooked, stamped)) onCooked?.();
   };
@@ -287,7 +289,7 @@ export function RecipeScreen({
    *  cleared, as one write — see StepsMode's onMarkDone. */
   const markDone = (stepId: string) => {
     const next = doneSet.has(stepId) ? done : toggleDone(recipe, done, stepId);
-    const stamped = stampCooked(cooked, done.length, next.length, total);
+    const stamped = stampCooked(cooked, doneCount, countDone(next), total);
     const patch: EntryPatch = { done: next };
     if (stamped !== cooked) patch.cooked = stamped;
     if (timer?.stepId === stepId) patch.timer = null;

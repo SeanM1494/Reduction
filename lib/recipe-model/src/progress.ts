@@ -33,6 +33,35 @@
 
 import type { Recipe } from "./layout";
 
+/**
+ * A section's standing instruction ("Oven 425°F", "Preheat to 350°F") can be
+ * checked off like a step (Sep 25, from the phone). Its entry in `done` is
+ * derived from the section's ROOT step id — which survives reordering and
+ * renaming the section, where an index or a name would not — and it exists
+ * only while the section has a header. It has no inputs and nothing
+ * consumes it, so the closure rules pass it through untouched, and it is
+ * NEVER counted: a preheat nobody ticked must not stop a recipe from
+ * completing (and so from being stamped cooked). Count with `countDone`,
+ * never `done.length`.
+ */
+export const HEADER_DONE_PREFIX = "header:";
+
+export function headerDoneId(section: { root?: unknown; header?: unknown } | null | undefined): string | null {
+  if (!section || typeof section.root !== "string" || !section.root) return null;
+  if (typeof section.header !== "string" || !section.header.trim()) return null;
+  return `${HEADER_DONE_PREFIX}${section.root}`;
+}
+
+export const isHeaderDoneId = (id: string): boolean => id.startsWith(HEADER_DONE_PREFIX);
+
+/** How many of the recipe's ingredients and steps are done — the numerator
+ *  that goes with `countAll`. Header checks are left out (see above). */
+export function countDone(done: Iterable<string>): number {
+  let n = 0;
+  for (const id of done) if (!isHeaderDoneId(id)) n++;
+  return n;
+}
+
 /** Every id a `done` entry could legitimately refer to. Tolerates a
  *  half-formed recipe, since this runs against user-edited JSON. */
 export function idsInRecipe(recipe: unknown): Set<string> {
@@ -48,6 +77,8 @@ export function idsInRecipe(recipe: unknown): Set<string> {
     for (const node of Array.isArray(section.nodes) ? section.nodes : []) {
       if (node && typeof node.id === "string") ids.add(node.id);
     }
+    const header = headerDoneId(section);
+    if (header) ids.add(header);
   }
   return ids;
 }

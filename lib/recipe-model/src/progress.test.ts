@@ -8,7 +8,8 @@
 
 import test from "node:test";
 import assert from "node:assert/strict";
-import { reconcileDone, idsInRecipe } from "./progress";
+import { countDone, headerDoneId, reconcileDone, idsInRecipe } from "./progress";
+import { enforceClosure } from "./sync";
 import type { Recipe } from "./layout";
 
 const recipe = (ingredientIds: string[], stepIds: string[]): Recipe =>
@@ -106,4 +107,46 @@ test("sections missing their arrays contribute no ids and do not throw", () => {
   const got = reconcileDone({ title: "T", servings: 1, sections: [{ name: "S" }] }, ["a"]);
   assert.deepEqual(got.done, []);
   assert.deepEqual(got.dropped, ["a"]);
+});
+
+// ---- the checkable header (Sep 25) ----------------------------------------
+
+const withHeader = (header: string | null) => ({
+  title: "T",
+  servings: 1,
+  sections: [
+    {
+      name: "Bake",
+      header,
+      ingredients: [{ id: "a", qty: 1, unit: null, name: "flour" }],
+      nodes: [{ id: "s1", label: "mix", inputs: ["a"] }],
+      root: "s1",
+    },
+  ],
+});
+
+test("a section's header has a done id derived from its root, only while it has a header", () => {
+  assert.equal(headerDoneId(withHeader("Oven 425°F").sections[0]), "header:s1");
+  assert.equal(headerDoneId(withHeader(null).sections[0]), null);
+  assert.equal(headerDoneId(withHeader("   ").sections[0]), null);
+  assert.ok(idsInRecipe(withHeader("Oven 425°F")).has("header:s1"));
+});
+
+test("a checked header survives the server's reconcile, and goes when the header does", () => {
+  assert.deepEqual(reconcileDone(withHeader("Oven 425°F"), ["a", "header:s1"]).done, ["a", "header:s1"]);
+  const gone = reconcileDone(withHeader(null), ["a", "header:s1"]);
+  assert.deepEqual(gone.done, ["a"]);
+  assert.deepEqual(gone.dropped, ["header:s1"]);
+});
+
+test("a checked header passes the merge's closure repair untouched", () => {
+  const r = withHeader("Oven 425°F") as never;
+  assert.deepEqual(enforceClosure(r, ["header:s1"]), ["header:s1"]);
+  assert.deepEqual(enforceClosure(r, ["header:s1", "s1"]), ["header:s1"], "s1 still needs a");
+});
+
+test("a header is never counted, so an unticked preheat cannot block completion", () => {
+  assert.equal(countDone(["a", "s1"]), 2);
+  assert.equal(countDone(["a", "s1", "header:s1"]), 2);
+  assert.equal(countDone(new Set(["header:s1"])), 0);
 });
