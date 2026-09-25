@@ -396,6 +396,62 @@ create table recipe_photos (
 No foreign key to `recipes`, deliberately — see the schema comment. The
 library DELETE route and account deletion remove photos in code.
 
+### Original wording
+
+Beside the diagram, a recipe's ingredient lines and steps as its source
+worded them — `OriginalRecipe` in `lib/recipe-model/src/original.ts`:
+`{ ingredients, steps, truncated, from }`, each list an array of lines with
+sub-headings marked (`{ text, heading: true }`), never one block of text.
+
+Where it comes from, per extraction path:
+
+| path | wording from | model cost |
+|---|---|---|
+| page with schema.org JSON-LD | `recipeIngredient` / `recipeInstructions` (`fetchSource`), HowToSection names as headings | none |
+| page without structured data | the same model pass, `askOriginal` (`prompt.ts` `ORIGINAL_RULES`) | output tokens ≈ the recipe's length |
+| page only Claude could fetch | same, in `fetchViaClaude` | same |
+| pasted text, photo / PDF | same | same |
+
+The model is told to copy ONLY the recipe's lines, verbatim, and to leave
+the story, tips, FAQs, nutrition and comments behind — the same judgement
+the tree already rests on, made explicit because a verbatim copy is where a
+stray paragraph of a post would actually be shown. `original` is asked for
+LAST in the JSON, so a reply the 8000-token limit stops is cut in the
+wording, not the tree: `closeTruncatedJson` keeps every complete line and
+the list is marked `truncated`. Long recipes are truncated with a note and a
+link to the source, never retried at a higher limit. `sanitizeOriginal`
+gates everything stored (120 ingredient lines, 80 steps, 1,500 characters a
+line, 24,000 in all).
+
+Stored in two tables (schema comment on `extraction_originals`): beside the
+cached tree under its hash, and per recipe under `(owner_key, id)`, copied
+at save from the `sourceKey` the extract response returned. `GET
+/api/library/:id/original` answers `{ original, sourceUrl, source }`; a
+recipe with no copy yet (saved before this existed, or by a client that
+sent no key) is filled once on first open from the cache's wording for its
+URL, else from the page's JSON-LD — no model call — and "none" is
+remembered. Private to the account, never in the recipe JSON, never in
+search. Deleted with its recipe and with the account, in code.
+
+**Production DDL** (hand-run, before deploying the code; both tables are
+decoration, so the code tolerates their absence — extraction, saving and
+the library carry on, and the screen says the wording was not kept):
+
+```sql
+create table extraction_originals (
+  hash       text primary key,
+  original   jsonb not null,
+  created_at timestamptz default now()
+);
+create table recipe_originals (
+  owner_key  text not null,
+  id         text not null,
+  original   jsonb,
+  created_at timestamptz default now(),
+  primary key (owner_key, id)
+);
+```
+
 ### The recipe box
 
 A recipe can be taken out of the recipe box without being deleted:

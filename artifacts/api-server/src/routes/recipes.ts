@@ -23,10 +23,23 @@ import { libraryMatches, mergeResults, proofLine, usageFor, type UsageStats } fr
 import type { Recipe } from "../shared/layout";
 import { userIdOf } from "../middleware/session";
 import { checkAccess, subscriptionRequired } from "../lib/billing/access";
-import { ensureTrialId, refundTrial, spendTrial, storeTrialRecipe } from "../lib/trial";
+import { ensureTrialId, refundTrial, spendTrial, storeTrialRecipe, trialOwnerKey } from "../lib/trial";
 import { urlKeyOf } from "../lib/urlKey";
 import { hostOf, recordExtraction, type ExtractionEvent } from "../lib/extractionLog";
-import { setRecipeTotalMinutes } from "@workspace/recipe-model";
+import {
+  sanitizeOriginal,
+  setRecipeTotalMinutes,
+  type OriginalFrom,
+  type OriginalRecipe,
+} from "@workspace/recipe-model";
+import {
+  dropExtractionOriginals,
+  extractionOriginal,
+  forgetRecipeOriginalsFor,
+  saveExtractionOriginal,
+  storeRecipeOriginal,
+  warnOriginal,
+} from "../lib/original";
 
 export const recipesRouter = Router();
 
@@ -95,8 +108,15 @@ async function cacheSet(key: string, recipe: Recipe): Promise<void> {
  * normalisation off is deleting the second lookup, with nothing to migrate.
  */
 export async function cacheGetUrl(rawUrl: string): Promise<Recipe | null> {
-  const exact = await cacheGet(hash(`url:${rawUrl}`));
-  if (exact) return exact;
+  return (await cacheGetUrlRow(rawUrl))?.recipe ?? null;
+}
+
+/** The same lookup, saying WHICH row answered — its hash is the key the
+ *  original wording is stored under (lib/original.ts). */
+export async function cacheGetUrlRow(rawUrl: string): Promise<{ hash: string; recipe: Recipe } | null> {
+  const exactKey = hash(`url:${rawUrl}`);
+  const exact = await cacheGet(exactKey);
+  if (exact) return { hash: exactKey, recipe: exact };
 
   const alias = urlKeyOf(rawUrl);
   if (!alias) return null;
@@ -113,7 +133,7 @@ export async function cacheGetUrl(rawUrl: string): Promise<Recipe | null> {
     .where(eq(extractionCache.urlKey, alias))
     .orderBy(desc(extractionCache.createdAt))
     .limit(1);
-  return hit ? hit.recipe : null;
+  return hit ? { hash: hit.hash, recipe: hit.recipe } : null;
 }
 
 export async function cacheSetUrl(rawUrl: string, recipe: Recipe): Promise<void> {
@@ -129,12 +149,38 @@ export async function cacheSetUrl(rawUrl: string, recipe: Recipe): Promise<void>
     });
 }
 
-/** Drops whatever is cached for a URL, under either key. */
+/** Drops whatever is cached for a URL, under either key — and the original
+ *  wording stored beside each dropped row. */
 async function cacheDropUrl(rawUrl: string): Promise<void> {
   const db = getDb();
-  await db.delete(extractionCache).where(eq(extractionCache.hash, hash(`url:${rawUrl}`)));
+  const dropped = await db
+    .delete(extractionCache)
+    .where(eq(extractionCache.hash, hash(`url:${rawUrl}`)))
+    .returning({ hash: extractionCache.hash });
   const alias = urlKeyOf(rawUrl);
-  if (alias) await db.delete(extractionCache).where(eq(extractionCache.urlKey, alias));
+  if (alias)
+    dropped.push(
+      ...(await db
+        .delete(extractionCache)
+        .where(eq(extractionCache.urlKey, alias))
+        .returning({ hash: extractionCache.hash }))
+    );
+  await dropExtractionOriginals(dropped.map((d) => d.hash)).catch((e) => warnOriginal("drop", e));
+}
+
+/**
+ * The original wording beside a freshly cached tree, and back out beside a
+ * cache hit. Decoration both ways: a failure is logged and the extraction
+ * goes on (lib/original.ts).
+ */
+async function keepOriginal(key: string, original: OriginalRecipe | null): Promise<void> {
+  await saveExtractionOriginal(key, original).catch((e) => warnOriginal("save", e));
+}
+async function cachedOriginal(key: string, from: OriginalFrom): Promise<OriginalRecipe | null> {
+  return extractionOriginal(key, from).catch((e) => {
+    warnOriginal("read", e);
+    return null;
+  });
 }
 
 /**
@@ -282,7 +328,14 @@ async function requireExtractionAllowance(
 async function sendRecipe(
   req: Request,
   res: Response,
-  body: { recipe: unknown; meta: unknown }
+  body: {
+    recipe: unknown;
+    meta: unknown;
+    /** The recipe as its source worded it, for the preview's "Original
+     *  recipe" screen, and the key a save names to keep it. */
+    original: OriginalRecipe | null;
+    sourceKey: string;
+  }
 ) {
   const trialId = (req as Request & { trialId?: string }).trialId;
   if (!trialId) return res.json(body);
@@ -292,6 +345,12 @@ async function sendRecipe(
         ? ((body.recipe as { servings: number }).servings)
         : null;
     const trialRecipeId = await storeTrialRecipe(trialId, body.recipe, servings);
+    // Parked beside the recipe under the trial's owner_key, which the claim
+    // keeps — the same way the photo follows it into the account.
+    if (body.original)
+      await storeRecipeOriginal(trialOwnerKey(trialId), trialRecipeId, body.original).catch((e) =>
+        warnOriginal("trial", e)
+      );
     return res.json({ ...body, trialRecipeId });
   } catch (e) {
     // The extraction worked; only the parking failed. Send it anyway — the
@@ -363,10 +422,15 @@ recipesRouter.post("/extract", requireExtractionAllowance, async (req: Request, 
       // fallback fires, so a failure on either path is attributable rather
       // than landing in a null bucket.
       mark({ source: "url", host: hostOf(url), via: "self" });
-      const cached = await cacheGetUrl(url);
+      const cached = await cacheGetUrlRow(url);
       if (cached) {
         mark({ cached: true });
-        return sendRecipe(req, res, { recipe: cached, meta: { cached: true, source: "url" } });
+        return sendRecipe(req, res, {
+          recipe: cached.recipe,
+          meta: { cached: true, source: "url" },
+          original: await cachedOriginal(cached.hash, "page"),
+          sourceKey: cached.hash,
+        });
       }
 
       if (overLimit(req.ip ?? "unknown"))
@@ -379,6 +443,7 @@ recipesRouter.post("/extract", requireExtractionAllowance, async (req: Request, 
       let repaired: string[] = [];
       let via: "self" | "claude" = "self";
       let extraction: "jsonld" | "text" | undefined;
+      let original: OriginalRecipe | null = null;
 
       try {
         // Our own fetch is cheaper and gives us JSON-LD when the site has it.
@@ -390,7 +455,11 @@ recipesRouter.post("/extract", requireExtractionAllowance, async (req: Request, 
           instructions: src.instructions,
           text: src.quality === "text" ? src.text : undefined,
           sourceUrl: url,
+          // The card's own lines come with JSON-LD; only a text page needs
+          // the model to copy them out (lib/prompt.ts ORIGINAL_RULES).
+          askOriginal: src.quality === "text",
         });
+        original = src.original ?? sanitizeOriginal(out.original, "page");
         recipe = out.recipe;
         attempts = out.attempts;
         repaired = out.repaired;
@@ -415,13 +484,18 @@ recipesRouter.post("/extract", requireExtractionAllowance, async (req: Request, 
         recipe = out.recipe;
         attempts = out.attempts;
         repaired = out.repaired;
+        original = sanitizeOriginal(out.original, "page");
         via = "claude";
       }
 
       await cacheSetUrl(url, recipe);
+      const sourceKey = hash(`url:${url}`);
+      await keepOriginal(sourceKey, original);
       mark({ cached: false, via, attempts, repaired: repaired.length });
       return sendRecipe(req, res, {
         recipe,
+        original,
+        sourceKey,
         meta: {
           cached: false,
           source: "url",
@@ -454,7 +528,12 @@ recipesRouter.post("/extract", requireExtractionAllowance, async (req: Request, 
       const cached = await cacheGet(key);
       if (cached) {
         mark({ cached: true });
-        return sendRecipe(req, res, { recipe: cached, meta: { cached: true, source: "text" } });
+        return sendRecipe(req, res, {
+          recipe: cached,
+          meta: { cached: true, source: "text" },
+          original: await cachedOriginal(key, "text"),
+          sourceKey: key,
+        });
       }
 
       if (overLimit(req.ip ?? "unknown"))
@@ -462,12 +541,17 @@ recipesRouter.post("/extract", requireExtractionAllowance, async (req: Request, 
           .status(429)
           .json({ error: "Too many extractions this hour. Try again later." });
 
-      const { recipe, attempts, repaired } = await structureRecipe({ text: clipped });
+      const out = await structureRecipe({ text: clipped, askOriginal: true });
+      const { recipe, attempts, repaired } = out;
+      const original = sanitizeOriginal(out.original, "text");
       await cacheSet(key, recipe);
+      await keepOriginal(key, original);
       mark({ cached: false, via: "self", attempts, repaired: repaired.length });
       return sendRecipe(req, res, {
         recipe,
         meta: { cached: false, source: "text", attempts, repaired },
+        original,
+        sourceKey: key,
       });
     }
 
@@ -489,7 +573,12 @@ recipesRouter.post("/extract", requireExtractionAllowance, async (req: Request, 
     const cached = await cacheGet(key);
     if (cached) {
       mark({ cached: true });
-      return sendRecipe(req, res, { recipe: cached, meta: { cached: true, source: "file" } });
+      return sendRecipe(req, res, {
+        recipe: cached,
+        meta: { cached: true, source: "file" },
+        original: await cachedOriginal(key, "photo"),
+        sourceKey: key,
+      });
     }
 
     if (overLimit(req.ip ?? "unknown"))
@@ -497,14 +586,20 @@ recipesRouter.post("/extract", requireExtractionAllowance, async (req: Request, 
         .status(429)
         .json({ error: "Too many extractions this hour. Try again later." });
 
-    const { recipe, attempts, repaired } = await structureRecipe({
+    const out = await structureRecipe({
       file: { data: clean, mediaType },
+      askOriginal: true,
     });
+    const { recipe, attempts, repaired } = out;
+    const original = sanitizeOriginal(out.original, "photo");
     await cacheSet(key, recipe);
+    await keepOriginal(key, original);
     mark({ cached: false, via: "self", attempts, repaired: repaired.length });
     return sendRecipe(req, res, {
       recipe,
       meta: { cached: false, source: "file", attempts, repaired },
+      original,
+      sourceKey: key,
     });
   } catch (e) {
     // The allowance was taken before the work started, so a failure here has
@@ -640,6 +735,7 @@ recipesRouter.post("/reextract", async (req: Request, res: Response) => {
     let recipe: Recipe;
     let attempts = 1;
     let repaired: string[] = [];
+    let original: OriginalRecipe | null = null;
     try {
       const src = await fetchSource(url);
       const out = await structureRecipe({
@@ -649,7 +745,9 @@ recipesRouter.post("/reextract", async (req: Request, res: Response) => {
         instructions: src.instructions,
         text: src.quality === "text" ? src.text : undefined,
         sourceUrl: url,
+        askOriginal: src.quality === "text",
       });
+      original = src.original ?? sanitizeOriginal(out.original, "page");
       recipe = out.recipe;
       attempts = out.attempts;
       repaired = out.repaired;
@@ -663,9 +761,14 @@ recipesRouter.post("/reextract", async (req: Request, res: Response) => {
       recipe = out.recipe;
       attempts = out.attempts;
       repaired = out.repaired;
+      original = sanitizeOriginal(out.original, "page");
     }
 
     await cacheSetUrl(url, recipe);
+    await keepOriginal(hash(`url:${url}`), original);
+    // This account's saved copies of the page forget their old wording; the
+    // next open of each takes the new reading from the cache.
+    await forgetRecipeOriginalsFor(userId, url).catch((e) => warnOriginal("reextract", e));
     mark({ attempts, repaired: repaired.length });
     return res.json({ recipe, meta: { cached: false, source: "url", attempts, repaired } });
   } catch (e) {

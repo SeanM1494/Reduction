@@ -11,6 +11,7 @@ import { SYSTEM_PROMPT, buildUserText, buildRepairText } from "./prompt";
 import { validateRecipe, type Recipe } from "../shared/layout";
 import { sanitizeMealTypes } from "../shared/mealTypes";
 import { setRecipeTotalMinutes } from "@workspace/recipe-model";
+import { closeTruncatedJson, takeOriginal } from "./original";
 
 let _client: Anthropic | null = null;
 function getClient(): Anthropic {
@@ -35,6 +36,10 @@ export interface StructureInput {
   sourceUrl?: string | null;
   /** A photo of a page, or a PDF. Base64, no data: prefix. */
   file?: { data: string; mediaType: string };
+  /** Also copy out the recipe's original wording (prompt.ts ORIGINAL_RULES).
+   *  Only where the model reads the raw source; a JSON-LD page's wording
+   *  comes from the page itself. */
+  askOriginal?: boolean;
 }
 
 function contentFor(input: StructureInput): Anthropic.ContentBlockParam[] {
@@ -86,6 +91,9 @@ export interface StructureResult {
   attempts: number;
   /** Problems the repair pass fixed. Worth logging as an extraction-quality signal. */
   repaired: string[];
+  /** The model's copy of the original wording, unsanitised (the route gates
+   *  it with `sanitizeOriginal`), or null when not asked or not given. */
+  original: unknown | null;
 }
 
 export async function structureRecipe(
@@ -97,6 +105,7 @@ export async function structureRecipe(
 
   let lastErrors: string[] = [];
   let repaired: string[] = [];
+  let original: unknown | null = null;
 
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
     const msg = await getClient().messages.create({
@@ -107,7 +116,10 @@ export async function structureRecipe(
     });
 
     const raw = textFrom(msg);
-    const json = unwrap(raw);
+    // A reply the token limit stopped is closed rather than thrown away:
+    // the wording is asked for last, so the cut lands there (original.ts).
+    const cutOff = msg.stop_reason === "max_tokens";
+    const json = cutOff ? closeTruncatedJson(raw) : unwrap(raw);
 
     let parsed: unknown;
     try {
@@ -122,6 +134,12 @@ export async function structureRecipe(
       continue;
     }
 
+    // The wording comes off before the tree is judged, and the first one
+    // given is kept: a repair pass is told not to repeat it.
+    const given = takeOriginal(parsed, cutOff);
+    if (original === null) original = given;
+    const tree = JSON.stringify(parsed);
+
     const errors = validateRecipe(parsed);
     if (errors.length === 0) {
       const recipe = parsed as Recipe;
@@ -131,7 +149,7 @@ export async function structureRecipe(
       recipe.mealTypes = sanitizeMealTypes(recipe.mealTypes);
       // A stated total time, through its gate: junk is dropped, not stored.
       setRecipeTotalMinutes(recipe, (recipe as { totalMinutes?: unknown }).totalMinutes);
-      return { recipe, attempts: attempt, repaired };
+      return { recipe, attempts: attempt, repaired, original: input.askOriginal ? original : null };
     }
 
     lastErrors = errors;
@@ -139,7 +157,7 @@ export async function structureRecipe(
     repaired = errors;
     messages.push(
       { role: "assistant", content: raw },
-      { role: "user", content: buildRepairText(json, errors) }
+      { role: "user", content: buildRepairText(tree, errors) }
     );
   }
 

@@ -34,7 +34,17 @@ import { userIdOf } from "../middleware/session";
 import { cancelTimer, scheduleTimer } from "../lib/timerDispatch";
 import { checkAccess, subscriptionRequired } from "../lib/billing/access";
 import { recordRecipeUsed } from "../lib/billing/entitlement";
-import { setRecipeTotalMinutes } from "@workspace/recipe-model";
+import { setRecipeTotalMinutes, type OriginalRecipe } from "@workspace/recipe-model";
+import {
+  copyExtractionOriginal,
+  deleteRecipeOriginal,
+  extractionOriginal,
+  recipeOriginal,
+  storeRecipeOriginal,
+  warnOriginal,
+} from "../lib/original";
+import { fetchSource } from "../lib/fetchSource";
+import { cacheGetUrlRow } from "./recipes";
 
 export const libraryRouter = Router();
 
@@ -311,7 +321,7 @@ libraryRouter.get("/removed", async (req: Request, res: Response) => {
 });
 
 libraryRouter.post("/", async (req: Request, res: Response) => {
-  const { id, recipe, done, servings, mode, timer } = req.body ?? {};
+  const { id, recipe, done, servings, mode, timer, sourceKey } = req.body ?? {};
   if (typeof id !== "string" || !id)
     return res.status(400).json({ error: "id must be a non-empty string." });
 
@@ -424,6 +434,15 @@ libraryRouter.post("/", async (req: Request, res: Response) => {
     const imageUrl = (recipe as { image?: unknown }).image;
     if (row?.version === 1 && typeof imageUrl === "string" && imageUrl) {
       void capturePagePhoto(row.ownerKey, row.id, imageUrl);
+    }
+
+    // The original wording of the extraction this recipe came from, copied
+    // under the recipe (lib/original.ts). `sourceKey` is the key the extract
+    // response handed this client. Awaited — it is one small row, and the
+    // "Original recipe" screen may be opened the moment the save lands — but
+    // never allowed to fail the save.
+    if (row && typeof sourceKey === "string" && sourceKey) {
+      await copyExtractionOriginal(sourceKey, row.ownerKey, row.id).catch((e) => warnOriginal("save", e));
     }
 
     return res.status(201).json({ entry: await wireOne(row) });
@@ -603,6 +622,8 @@ libraryRouter.delete("/:id", async (req: Request, res: Response) => {
     } catch (e) {
       console.error("[library:photo] could not delete with the recipe:", (e as Error).message);
     }
+    // And its original wording, for the same reason (no foreign key).
+    await deleteRecipeOriginal(row.ownerKey, row.id).catch((e) => warnOriginal("delete", e));
 
     // A deleted recipe must take its pending buzz with it, or someone gets
     // told to check on a dish whose recipe no longer exists.
@@ -619,6 +640,74 @@ libraryRouter.delete("/:id", async (req: Request, res: Response) => {
     console.error("[library:delete]", e);
     return res.status(500).json({ error: "Could not delete that recipe." });
   }
+});
+
+// -------------------------------------------------- the original wording ---
+
+/** What a structured-data page says, read afresh. A seam so the suite never
+ *  reaches a recipe site. */
+type PageOriginalFetcher = (url: string) => Promise<OriginalRecipe | null>;
+const fetchPageOriginal: PageOriginalFetcher = async (url) => (await fetchSource(url)).original;
+let pageOriginalFetcher: PageOriginalFetcher = fetchPageOriginal;
+export function setPageOriginalFetcherForTests(f: PageOriginalFetcher | null): void {
+  pageOriginalFetcher = f ?? fetchPageOriginal;
+}
+
+/**
+ * GET /api/library/:id/original — the recipe as its source worded it:
+ * `{ original, sourceUrl, source }`, `original` null when there is none.
+ * Private, because the recipe is.
+ *
+ * The saved copy answers when there is one (null included: "looked, none").
+ * A recipe saved before this existed, or from a client that sent no
+ * `sourceKey`, is filled in ONCE on its first open: from the extraction
+ * cache's wording for its URL, else by reading the page again for its
+ * JSON-LD — never with a model call. A page that could not be reached is
+ * not remembered as having none, so it is tried again next time.
+ */
+libraryRouter.get("/:id/original", async (req: Request, res: Response) => {
+  let row;
+  try {
+    row = await ownRow(req, String(req.params.id));
+  } catch (e) {
+    console.error("[library:original]", (e as Error).message);
+    return res.status(500).json({ error: "Could not load that recipe." });
+  }
+  if (!row) return res.status(404).json({ error: "No such recipe." });
+
+  const recipe = row.recipe as { sourceUrl?: unknown; source?: unknown };
+  const sourceUrl = typeof recipe.sourceUrl === "string" && recipe.sourceUrl ? recipe.sourceUrl : null;
+  const source = typeof recipe.source === "string" && recipe.source ? recipe.source : null;
+  const reply = (original: OriginalRecipe | null) => res.json({ original, sourceUrl, source });
+
+  try {
+    const stored = await recipeOriginal(row.ownerKey, row.id);
+    if (stored !== undefined) return reply(stored);
+  } catch (e) {
+    // The table is missing (hand-run DDL not yet run): no wording, not an
+    // error — the recipe itself is fine.
+    warnOriginal("get", e);
+    return reply(null);
+  }
+
+  let original: OriginalRecipe | null = null;
+  if (sourceUrl) {
+    try {
+      const hit = await cacheGetUrlRow(sourceUrl);
+      if (hit) original = await extractionOriginal(hit.hash, "page");
+    } catch (e) {
+      warnOriginal("get:cache", e);
+    }
+    if (!original) {
+      try {
+        original = await pageOriginalFetcher(sourceUrl);
+      } catch {
+        return reply(null); // unreachable now; asked again on the next open
+      }
+    }
+  }
+  await storeRecipeOriginal(row.ownerKey, row.id, original).catch((e) => warnOriginal("get:store", e));
+  return reply(original);
 });
 
 // ------------------------------------------------------------- the photo ---

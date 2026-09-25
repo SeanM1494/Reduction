@@ -13,7 +13,8 @@
     "./amounts": "./src/amounts.ts",
     "./mealTypes": "./src/mealTypes.ts",
     "./progress": "./src/progress.ts",
-    "./collapse": "./src/collapse.ts"
+    "./collapse": "./src/collapse.ts",
+    "./original": "./src/original.ts"
   },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json"

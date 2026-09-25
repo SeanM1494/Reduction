@@ -29,6 +29,8 @@ export interface Required {
 export const REQUIRED_SCHEMA: readonly Required[] = [
   { table: "recipe_photos", readme: 'README "Recipe photos"' },
   { table: "recipes", column: "removed_at", readme: 'README "The recipe box"' },
+  { table: "extraction_originals", readme: 'README "Original wording"' },
+  { table: "recipe_originals", readme: 'README "Original wording"' },
 ];
 
 export interface SchemaReport {

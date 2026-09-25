@@ -28,7 +28,7 @@
 import { Router, type Request, type Response } from "express";
 import { eq, sql } from "drizzle-orm";
 import { getDb } from "../db";
-import { accessEvents, recipePhotos, recipes, trials, users } from "@workspace/db";
+import { accessEvents, recipeOriginals, recipePhotos, recipes, trials, users } from "@workspace/db";
 import { userIdOf } from "../middleware/session";
 import { clearSessionCookie } from "./auth";
 import { cancelSubscriptionsFor } from "../lib/billing/cancel";
@@ -58,6 +58,18 @@ accountRouter.delete("/", async (req: Request, res: Response) => {
         sql`delete from ${recipePhotos} p using ${recipes} r
              where p.owner_key = r.owner_key and p.id = r.id and r.user_id = ${userId}`
       );
+      // The original wording the same way — but in a savepoint, because it
+      // is hand-run DDL and a database without the table must still be able
+      // to delete an account (Apple 5.1.1(v)); a failed statement would
+      // otherwise abort the whole transaction.
+      await tx
+        .transaction(async (sp) => {
+          await sp.execute(
+            sql`delete from ${recipeOriginals} o using ${recipes} r
+                 where o.owner_key = r.owner_key and o.id = r.id and r.user_id = ${userId}`
+          );
+        })
+        .catch((e) => console.warn(`[account:delete] ${userId}: original wording not deleted:`, (e as Error).message));
       await tx.delete(recipes).where(eq(recipes.userId, userId));
       await tx.delete(accessEvents).where(eq(accessEvents.userId, userId));
       await tx.update(trials).set({ claimedByUserId: null }).where(eq(trials.claimedByUserId, userId));

@@ -67,3 +67,52 @@ test("total time: a page without structured data leaves it to the model, which r
   assert.equal(src.totalMinutes, null, "not parsed here: on a text page the model reads the stated total");
   assert.match(src.text, /Total time: 45 minutes/, "and the text it reads still carries it");
 });
+
+// ----------------------------------------------------- original wording ---
+
+test("original wording: a JSON-LD page gives the card's own lines, and nothing of the post around it", () => {
+  const html = `<!doctype html><html><head>
+<script type="application/ld+json">${JSON.stringify({
+    "@type": "Recipe",
+    name: "Lemon Loaf",
+    recipeIngredient: ["1 1/2 cups flour", "1&nbsp;cup sugar", "2 lemons, zested"],
+    recipeInstructions: [
+      {
+        "@type": "HowToSection",
+        name: "Make the loaf",
+        itemListElement: [
+          { "@type": "HowToStep", text: "Heat the oven to 350°F." },
+          { "@type": "HowToStep", text: "Whisk the <b>flour</b> and sugar." },
+        ],
+      },
+      { "@type": "HowToSection", name: "Glaze", itemListElement: [{ "@type": "HowToStep", text: "Stir lemon juice into sugar." }] },
+    ],
+  })}</script></head><body><main>
+<p>My grandmother made this loaf every summer at the lake, and I still remember the smell of lemons drifting across the porch while we waited.</p>
+<p>Jump to recipe. Pin it for later! 147 comments.</p></main></body></html>`;
+  const src = sourceFromHtml(html, new URL(page));
+  assert.equal(src.quality, "jsonld");
+  assert.deepEqual(src.original, {
+    ingredients: [{ text: "1 1/2 cups flour" }, { text: "1 cup sugar" }, { text: "2 lemons, zested" }],
+    steps: [
+      { text: "Make the loaf", heading: true },
+      { text: "Heat the oven to 350°F." },
+      { text: "Whisk the flour and sugar." },
+      { text: "Glaze", heading: true },
+      { text: "Stir lemon juice into sugar." },
+    ],
+    truncated: false,
+    from: "page",
+  });
+  const everything = JSON.stringify(src.original);
+  assert.ok(!/grandmother|porch|Pin it|comments/.test(everything), "the story and the page furniture never reach it");
+  // The model's input is unchanged: sections flattened, as before.
+  assert.deepEqual(src.instructions, ["Heat the oven to 350°F.", "Whisk the <b>flour</b> and sugar.", "Stir lemon juice into sugar."]);
+});
+
+test("original wording: a page without structured data has none here — the model copies it out", () => {
+  const html = `<html><body><main>${"Mix the flour and water, then knead for ten minutes until smooth. ".repeat(6)}</main></body></html>`;
+  const src = sourceFromHtml(html, new URL(page));
+  assert.equal(src.quality, "text");
+  assert.equal(src.original, null);
+});

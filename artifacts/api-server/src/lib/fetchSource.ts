@@ -7,7 +7,7 @@
  */
 
 import * as cheerio from "cheerio";
-import { parseIsoDuration } from "@workspace/recipe-model";
+import { parseIsoDuration, sanitizeOriginal, type OriginalRecipe } from "@workspace/recipe-model";
 
 const UA =
   "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 " +
@@ -36,6 +36,11 @@ export interface FetchedSource {
    *  (recipe-model totalTime.ts says why). Always null on a text page:
    *  there, a stated total is the model's to read. */
   totalMinutes: number | null;
+  /** The recipe card's own lines, in its own words (recipe-model
+   *  original.ts), from `recipeIngredient` / `recipeInstructions` — never
+   *  the post around the card. Null on a text page: there the model copies
+   *  them out of the page while it builds the tree. */
+  original: OriginalRecipe | null;
 }
 
 /**
@@ -122,6 +127,37 @@ function flattenInstructions(v: unknown): string[] {
     const o = node as Record<string, unknown>;
     // HowToSection nests its own steps.
     if (o.itemListElement) {
+      walk(o.itemListElement);
+      return;
+    }
+    const s = textOf(o);
+    if (s) out.push(s);
+  };
+  walk(v);
+  return out;
+}
+
+/**
+ * `recipeInstructions` as lines for the original-wording screen: like
+ * flattenInstructions, except a HowToSection's name is kept as a heading
+ * ("For the frosting") instead of being dropped, since that is how the
+ * card reads.
+ */
+function instructionLines(v: unknown): Array<string | { heading: string }> {
+  const out: Array<string | { heading: string }> = [];
+  const walk = (node: unknown): void => {
+    if (!node) return;
+    if (Array.isArray(node)) {
+      node.forEach(walk);
+      return;
+    }
+    if (typeof node === "string") {
+      if (node.trim()) out.push(node.trim());
+      return;
+    }
+    const o = node as Record<string, unknown>;
+    if (o.itemListElement) {
+      if (typeof o.name === "string" && o.name.trim()) out.push({ heading: o.name.trim() });
       walk(o.itemListElement);
       return;
     }
@@ -241,6 +277,10 @@ export function sourceFromHtml(html: string, url: URL): FetchedSource {
         // og:image is the fallback: many pages that skip `image` set it.
         image: imageUrlOf(node.image, url) ?? imageUrlOf($('meta[property="og:image"]').attr("content"), url),
         totalMinutes: parseIsoDuration(node.totalTime),
+        original: sanitizeOriginal(
+          { ingredients, steps: instructionLines(node.recipeInstructions) },
+          "page"
+        ),
       };
     }
   }
@@ -262,5 +302,6 @@ export function sourceFromHtml(html: string, url: URL): FetchedSource {
     // A text-quality page can still have a picture worth keeping.
     image: imageUrlOf($('meta[property="og:image"]').attr("content"), url),
     totalMinutes: null,
+    original: null,
   };
 }

@@ -76,6 +76,34 @@ AMOUNTS
 
 Work only from the source given. Do not add ingredients or steps that are not there.`;
 
+/**
+ * The original wording, asked for ONLY where the model reads the raw source
+ * — page text, a paste, a photo, a page it fetched itself. A structured-data
+ * page gives us the recipe card's own lines (fetchSource), so there the
+ * model is not asked, and those tokens are not spent.
+ *
+ * LAST in the object, on purpose: if a long recipe runs into the token
+ * limit, the cut lands in the wording and the tree before it survives
+ * (lib/original.ts, closeTruncatedJson). The screen then says the wording
+ * was cut and links to the source.
+ *
+ * "Only the recipe" is the same judgement the tree already depends on —
+ * the page text is raw and full of story, comments and navigation — made
+ * explicit here because a verbatim copy is where a stray paragraph of the
+ * post would actually be SHOWN.
+ */
+export const ORIGINAL_RULES = `ALSO RETURN THE ORIGINAL WORDING
+
+Add one more key to the object, LAST, after "sections":
+
+"original": { "ingredients": [ ... ], "steps": [ ... ] }
+
+- Copy the recipe's own ingredient lines and method steps exactly as the source words them: the same words, amounts and order. Do not shorten, reword, merge, split, correct or convert them.
+- One array element per ingredient line, and one per step as the source separates them.
+- A sub-heading inside the recipe ("For the frosting", "Make the dough") is an object { "heading": "For the frosting" } at its place in the list.
+- ONLY the recipe itself. Leave out everything around it: the story or introduction, tips and notes sections, FAQs, substitution lists, nutrition, equipment lists, reader comments, ads, navigation, and anything the page says about itself or its author.
+- Never invent a line. A list the source does not have is [].`;
+
 const CRUST_EXAMPLE = `{
   "name": "Graham cracker crust",
   "header": "Oven 325°F",
@@ -101,6 +129,8 @@ export function buildUserText(opts: {
   instructions?: string[];
   text?: string;
   sourceUrl?: string | null;
+  /** Ask for the original wording (see ORIGINAL_RULES). */
+  askOriginal?: boolean;
 }): string {
   const parts: string[] = [];
 
@@ -125,6 +155,8 @@ export function buildUserText(opts: {
       `PAGE TEXT — raw, and it contains navigation, comments, and other noise. Extract only the recipe.\n\n${opts.text}`
     );
 
+  if (opts.askOriginal) parts.push(ORIGINAL_RULES);
+
   parts.push("Return the JSON object now.");
   return parts.join("\n\n");
 }
@@ -138,5 +170,5 @@ Here is what you returned:
 
 ${previous}
 
-Fix only what the errors call out and return the corrected JSON object. No prose, no fences.`;
+Fix only what the errors call out and return the corrected JSON object. No prose, no fences. Leave out "original" if you gave one — it has been kept.`;
 }

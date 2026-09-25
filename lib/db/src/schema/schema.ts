@@ -197,6 +197,49 @@ export const recipePhotos = pgTable(
   (table) => [primaryKey({ columns: [table.ownerKey, table.id] })]
 );
 
+/**
+ * A recipe's ORIGINAL WORDING — the ingredient lines and method steps as the
+ * source wrote them (`OriginalRecipe`, lib/recipe-model/src/original.ts),
+ * shown beside the diagram on its own screen.
+ *
+ * Two tables, the same split as the tree itself:
+ *
+ *   extraction_originals — keyed by the extraction cache's hash, written
+ *   with the cached tree, so a cache hit still has its wording. Its own
+ *   table rather than a column on extraction_cache: Drizzle's select()
+ *   names every column, so a column the production database lacked would
+ *   fail every cache lookup and with it every extraction. A missing table
+ *   fails only the wording, which is decoration (CLAUDE.md, "A picture may
+ *   never take down the library" — the same rule).
+ *
+ *   recipe_originals — the account's own copy, keyed like recipe_photos by
+ *   the recipe's (owner_key, id), copied at save from the extraction the
+ *   client names (`sourceKey`). A null `original` is a remembered "there is
+ *   none" (a page with no structured data, read before this existed), so
+ *   the screen does not re-fetch the page on every open.
+ *
+ * Neither is ever shown to anyone but the account that saved the recipe,
+ * and neither is in the recipe JSON (the library list returns every
+ * entry's JSON on each load). NO FOREIGN KEY to recipes, for the reason in
+ * recipe_photos' comment; the places that delete recipes delete these too.
+ */
+export const extractionOriginals = pgTable("extraction_originals", {
+  hash: text("hash").primaryKey(),
+  original: jsonb("original").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
+});
+
+export const recipeOriginals = pgTable(
+  "recipe_originals",
+  {
+    ownerKey: text("owner_key").notNull(),
+    id: text("id").notNull(),
+    original: jsonb("original"),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
+  },
+  (table) => [primaryKey({ columns: [table.ownerKey, table.id] })]
+);
+
 export const extractionCache = pgTable(
   "extraction_cache",
   {
