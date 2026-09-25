@@ -29,6 +29,7 @@ import React, { createContext, useCallback, useContext, useEffect, useMemo, useR
 import { AppState, type AppStateStatus } from 'react-native';
 import type { Recipe } from '@/shared/layout';
 import type { OrderPreference } from '@/shared/sequence';
+import type { OriginalRecipe } from '@/shared/original';
 import {
   createEntry as apiCreateEntry,
   deleteEntry as apiDeleteEntry,
@@ -75,7 +76,9 @@ interface LibraryState {
   error: string | null;
   refresh: () => Promise<void>;
   getEntry: (id: string) => Entry | undefined;
-  saveRecipe: (recipe: Recipe) => Promise<Entry>;
+  /** `sourceKey` (from the extract response) keeps the recipe's original
+   *  wording with it, server-side. */
+  saveRecipe: (recipe: Recipe, sourceKey?: string) => Promise<Entry>;
   update: (id: string, patch: EntryPatch) => void;
   /** The photo's meta, as the server reported it after an upload, a
    *  removal or a from-source fetch. Local only: the photo is server-owned
@@ -95,8 +98,18 @@ interface LibraryState {
   /** Entries with a write waiting for the network (the offline window).
    *  Their screens show the optimistic state and say it is waiting. */
   queued: string[];
-  draft: { recipe: Recipe; sourceUrl?: string | null } | null;
-  setDraft: (draft: { recipe: Recipe; sourceUrl?: string | null } | null) => void;
+  draft: Draft | null;
+  setDraft: (draft: Draft | null) => void;
+}
+
+/** A just-extracted recipe, not yet saved. `original` and `sourceKey` come
+ *  from the extract response: the first is shown by the preview's
+ *  "Original recipe" screen, the second is handed to the save. */
+export interface Draft {
+  recipe: Recipe;
+  sourceUrl?: string | null;
+  original?: OriginalRecipe | null;
+  sourceKey?: string;
 }
 
 const LibraryContext = createContext<LibraryState | null>(null);
@@ -134,7 +147,7 @@ export function LibraryProvider({ children }: { children: React.ReactNode }) {
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<LibraryNotice | null>(null);
   const [queued, setQueued] = useState<string[]>([]);
-  const [draft, setDraft] = useState<{ recipe: Recipe; sourceUrl?: string | null } | null>(null);
+  const [draft, setDraft] = useState<Draft | null>(null);
 
   const replaceEntry = useCallback((next: Entry) => {
     setEntries((prev) => prev.map((e) => (e.id === next.id ? keepRecipeIdentity(e, next) : e)));
@@ -233,10 +246,10 @@ export function LibraryProvider({ children }: { children: React.ReactNode }) {
   const getEntry = useCallback((id: string) => entries.find((e) => e.id === id), [entries]);
 
   const saveRecipe = useCallback(
-    async (recipe: Recipe): Promise<Entry> => {
+    async (recipe: Recipe, sourceKey?: string): Promise<Entry> => {
       // Awaited rather than queued: the draft screen navigates to the saved
       // id, which has to exist first.
-      const { entry } = await apiCreateEntry({ id: newEntryId(), recipe, mode: 'diagram' });
+      const { entry } = await apiCreateEntry({ id: newEntryId(), recipe, mode: 'diagram', sourceKey });
       engine.hydrate([entry]);
       setEntries((prev) => [entry, ...prev.filter((e) => e.id !== entry.id)]);
       return entry;

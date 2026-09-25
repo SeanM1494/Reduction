@@ -114,7 +114,7 @@ export default function RecipeDetailScreen() {
     if (!draft || saving) return;
     setSaving(true);
     try {
-      const saved = await saveRecipe(draft.recipe);
+      const saved = await saveRecipe(draft.recipe, draft.sourceKey);
       // The SAVE is what spends the free allowance (the server counts
       // a created row, not an extraction), so the entitlement the
       // Find tab and Settings read has to be re-read here. Without
@@ -168,6 +168,9 @@ export default function RecipeDetailScreen() {
           isDraft
           saving={saving}
           onSave={saveDraft}
+          // Only when the extraction brought wording: a preview has nothing
+          // to fetch it from later.
+          onOpenOriginal={draft.original ? () => router.push('/original/draft') : undefined}
         />
         <Window
           open={leaveOpen}
@@ -245,6 +248,7 @@ export default function RecipeDetailScreen() {
       <RecipeScreen
         initialView={initialView}
         recipe={entry.recipe}
+        onOpenOriginal={() => router.push(`/original/${entry.id}`)}
         editRequest={editRequest}
         photoEntry={entry}
         done={entry.done}
@@ -328,6 +332,7 @@ export default function RecipeDetailScreen() {
         </Text>
         <View style={styles.menu} accessibilityRole="menu">
           <MenuItem label="Edit recipe" onPress={() => menuThen(() => setEditRequest((n) => n + 1))} colors={colors} testID="menu-edit" />
+          <MenuItem label="Original recipe" onPress={() => menuThen(() => router.push(`/original/${entry.id}`))} colors={colors} testID="menu-original" />
           <MenuItem label="Meal types" onPress={() => menuThen(() => setMealSheetOpen(true))} colors={colors} testID="menu-meal-types" />
           <MenuItem label="Photo" onPress={() => menuThen(() => setPhotoSheetOpen(true))} colors={colors} testID="menu-photo" />
           <MenuItem label="Delete recipe" danger onPress={() => menuThen(() => setConfirmDelete(true))} colors={colors} testID="menu-delete" />

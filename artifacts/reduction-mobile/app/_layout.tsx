@@ -72,6 +72,7 @@ function RootLayoutNav() {
       <Stack.Screen name="recipe/[id]" options={{ title: '' }} />
       <Stack.Screen name="removed" options={{ title: 'Removed recipes' }} />
       <Stack.Screen name="demo" options={{ title: '' }} />
+      <Stack.Screen name="original/[id]" options={{ title: 'Original recipe' }} />
     </Stack>
   );
 }

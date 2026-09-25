@@ -154,6 +154,9 @@ interface RecipeScreenProps {
   offlineQueued?: boolean;
   isDraft?: boolean;
   onSave?: () => void;
+  /** Opens the recipe as its source worded it (app/original/[id].tsx);
+   *  absent, there is no row for it. */
+  onOpenOriginal?: () => void;
   saving?: boolean;
   /** Rendered under the mode tabs in both views — the demo's coach line
    *  and tips live here, so the teaching layer wraps this screen without
@@ -209,6 +212,7 @@ export function RecipeScreen({
   offlineQueued,
   isDraft,
   onSave,
+  onOpenOriginal,
   saving,
   above,
   overviewFooter,
@@ -514,6 +518,26 @@ export function RecipeScreen({
                 : 'Amber means you can do it now. Tap any step further right to jump ahead — everything it depends on gets marked done with it.'}
             </Text>
           )}
+          {/* The source's own wording, one tap from the diagram that is our
+              reading of it. Below the diagram, not above: an SE has no room
+              above it left to spend (CLAUDE.md, the recipe screen headroom). */}
+          {onOpenOriginal && !editing ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Original recipe, as the source wrote it"
+              onPress={onOpenOriginal}
+              style={({ pressed }) => [styles.originalRow, pressed && styles.originalRowPressed]}
+              testID="recipe-original"
+            >
+              <View style={{ flex: 1 }}>
+                <Text style={styles.originalTitle}>Original recipe</Text>
+                <Text style={styles.originalSub} numberOfLines={1}>
+                  The ingredients and steps as {recipe.sourceUrl ? recipe.source || 'the page' : 'the source'} wrote them
+                </Text>
+              </View>
+              <Text style={styles.originalChevron}>›</Text>
+            </Pressable>
+          ) : null}
           {/* A 44px row rather than an inline link: the web's 12px anchor is
               a mouse target, and this one is tapped. */}
           {recipe.sourceUrl ? (
@@ -706,6 +730,22 @@ function makeStyles(colors: Colors) {
     tagMore: { fontFamily: fonts.mono, fontSize: 11, color: colors.mutedForeground },
     hint: { fontSize: 12, lineHeight: 17, color: colors.mutedForeground, marginTop: 12, marginBottom: 14 },
     source: { minHeight: 44, justifyContent: 'center', marginBottom: 8 },
+    originalRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      minHeight: 56,
+      marginTop: 12,
+      paddingVertical: 10,
+      paddingHorizontal: 16,
+      borderRadius: colors.radiusCard,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.card,
+    },
+    originalRowPressed: { borderColor: colors.borderStrong, backgroundColor: colors.muted },
+    originalTitle: { fontFamily: fonts.heading, fontSize: 15, color: colors.foreground },
+    originalSub: { fontSize: 13, color: colors.mutedForeground, marginTop: 2 },
+    originalChevron: { fontSize: 22, color: colors.mutedForeground, marginLeft: 8 },
     sourceText: { fontSize: 12, color: colors.faint },
     sourceLink: { color: colors.mutedForeground, textDecorationLine: 'underline' },
     draftBanner: {

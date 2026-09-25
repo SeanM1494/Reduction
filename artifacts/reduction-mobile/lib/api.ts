@@ -15,6 +15,7 @@
 
 import type { Recipe } from '@/shared/layout';
 import type { OrderPreference } from '@/shared/sequence';
+import type { OriginalRecipe } from '@/shared/original';
 
 let authToken: string | null = null;
 
@@ -279,6 +280,12 @@ export interface ExtractMeta {
 export interface ExtractResult {
   recipe: Recipe;
   meta?: ExtractMeta;
+  /** The recipe as its source worded it (recipe-model original.ts), for the
+   *  preview's "Original recipe" screen; null when none was kept. */
+  original?: OriginalRecipe | null;
+  /** Names this extraction's wording to the save, which copies it under the
+   *  recipe (`createEntry`'s `sourceKey`). */
+  sourceKey?: string;
 }
 
 const extractPost = (body: unknown): Promise<ExtractResult> =>
@@ -387,8 +394,23 @@ export const createEntry = (entry: {
   servings?: number | null;
   mode?: 'diagram' | 'steps';
   timer?: StepTimer | null;
+  /** From the extract response: keeps the original wording with the recipe. */
+  sourceKey?: string;
 }): Promise<{ entry: Entry }> =>
   request('/api/library', { method: 'POST', body: JSON.stringify(entry) });
+
+export interface OriginalResponse {
+  original: OriginalRecipe | null;
+  sourceUrl: string | null;
+  /** The site's name, for "From …". */
+  source: string | null;
+}
+
+/** A saved recipe's original wording. Private, like the recipe; filled in
+ *  once server-side for a recipe saved before wording was kept. The server
+ *  may read the recipe's page to do that, so this waits like a photo. */
+export const loadOriginal = (id: string): Promise<OriginalResponse> =>
+  request(`/api/library/${encodeURIComponent(id)}/original`, {}, PHOTO_TIMEOUT_MS);
 
 export const patchEntry = (
   id: string,

@@ -17,7 +17,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@/lib/auth-context';
 import { useLibrary } from '@/lib/library-context';
-import { extractFromUrl, extractFromText, extractFromFile, ApiError } from '@/lib/api';
+import { extractFromUrl, extractFromText, extractFromFile, ApiError, type ExtractResult } from '@/lib/api';
 import { PhotoPicker } from '@/components/PhotoPicker';
 import { ExtractionProgress } from '@/components/ExtractionProgress';
 import { SearchBar } from '@/components/SearchBar';
@@ -59,13 +59,13 @@ export default function FindScreen() {
 
   /** One extraction path for all three sources: the result becomes the
    *  draft, the allowance is re-read, and the draft screen opens. */
-  const run = async (kind: 'text' | 'photo', go: () => Promise<{ recipe: Recipe }>, sourceUrl: string | null) => {
+  const run = async (kind: 'text' | 'photo', go: () => Promise<ExtractResult>, sourceUrl: string | null) => {
     if (busy) return;
     setBusy(kind);
     setError(null);
     try {
       const result = await go();
-      setDraft({ recipe: result.recipe, sourceUrl });
+      setDraft({ recipe: result.recipe, sourceUrl, original: result.original, sourceKey: result.sourceKey });
       setInput('');
       setPhoto(null);
       await refresh();
@@ -102,7 +102,7 @@ export default function FindScreen() {
     setBusy('search');
     try {
       const result = await extractFromUrl(url);
-      setDraft({ recipe: result.recipe, sourceUrl: url });
+      setDraft({ recipe: result.recipe, sourceUrl: url, original: result.original, sourceKey: result.sourceKey });
       await refresh();
       router.push('/recipe/draft');
     } catch (e) {
