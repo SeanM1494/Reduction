@@ -46,3 +46,13 @@ export function advance(i: number): { next: number; done: boolean } {
   const next = Math.min(i + 1, LAST_STAGE);
   return { next, done: next === LAST_STAGE };
 }
+
+/**
+ * A wait that has outlasted every stage says so. The stages are sized for
+ * the usual 10–30 seconds; a page only Anthropic can fetch, or a long
+ * recipe, can take minutes, and "Down to the essence" held for a minute and
+ * a half reads as a hang. Mobile only: the web sets no ceiling on the
+ * request, so it has no long wait to explain (Sep 25).
+ */
+export const SLOW_AFTER_MS = 45_000;
+export const SLOW_MESSAGE = 'Still working — taking longer than usual';

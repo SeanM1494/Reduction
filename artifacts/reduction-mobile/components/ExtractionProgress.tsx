@@ -28,7 +28,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { AccessibilityInfo, ActivityIndicator, Platform, StyleSheet, Text, View } from 'react-native';
-import { advance, STAGE_MS, STAGES } from '@/lib/extractionStage';
+import { advance, SLOW_AFTER_MS, SLOW_MESSAGE, STAGE_MS, STAGES } from '@/lib/extractionStage';
 import { useColors, type Colors } from '@/hooks/useColors';
 
 /**
@@ -57,7 +57,16 @@ export function useReductionStage(active: boolean): string | null {
     return () => clearInterval(id);
   }, [active]);
 
-  return active ? STAGES[i] : null;
+  // Past SLOW_AFTER_MS the line stops pretending to be a stage.
+  const [slow, setSlow] = useState(false);
+  useEffect(() => {
+    setSlow(false);
+    if (!active) return;
+    const id = setTimeout(() => setSlow(true), SLOW_AFTER_MS);
+    return () => clearTimeout(id);
+  }, [active]);
+  if (!active) return null;
+  return slow ? SLOW_MESSAGE : STAGES[i];
 }
 
 export function ExtractionProgress({ active, testID = 'extraction-progress' }: { active: boolean; testID?: string }) {

@@ -68,7 +68,7 @@ export const REQUEST_TIMEOUT_MS = 15_000;
  * connection reaches, per route, or it is a second failure mode rather than
  * a safety net.
  */
-export const EXTRACTION_TIMEOUT_MS = 120_000;
+export const EXTRACTION_TIMEOUT_MS = 180_000;
 
 /** A web search is one upstream call plus its cache write: slower than a
  *  library read, far quicker than an extraction. */
@@ -93,6 +93,9 @@ export class RequestCancelled extends Error {
     this.name = 'RequestCancelled';
   }
 }
+
+/** Our own timer gave up on the request (see `request`). */
+export const isTimedOut = (e: unknown): boolean => (e as { timedOut?: unknown })?.timedOut === true;
 
 export const isCancelled = (e: unknown): e is RequestCancelled =>
   (e as { cancelled?: unknown })?.cancelled === true;
@@ -140,7 +143,7 @@ async function request(path: string, init?: RequestInit, timeoutMs: number = REQ
     // No status on purpose: the sync engine keys "offline" on its absence.
     // An aborted write may still have reached the server; the retry then
     // 409s against its own commit and merges, which is the safe outcome.
-    if (timedOut || (e as Error)?.name === 'AbortError') throw new Error('The request timed out.');
+    if (timedOut || (e as Error)?.name === 'AbortError') throw Object.assign(new Error('The request timed out.'), { timedOut: true });
     throw e;
   } finally {
     clearTimeout(timer);
@@ -288,8 +291,21 @@ export interface ExtractResult {
   sourceKey?: string;
 }
 
+/**
+ * An extraction the phone stopped waiting for is usually one the server
+ * went on to finish — and a finished extraction is cached — so the message
+ * says to try again rather than that something broke (Sep 25: 120s became
+ * 180s after extractions started passing it).
+ */
 const extractPost = (body: unknown): Promise<ExtractResult> =>
-  request('/api/recipes/extract', { method: 'POST', body: JSON.stringify(body) }, EXTRACTION_TIMEOUT_MS);
+  request('/api/recipes/extract', { method: 'POST', body: JSON.stringify(body) }, EXTRACTION_TIMEOUT_MS).catch((e) => {
+    if (isTimedOut(e))
+      throw Object.assign(
+        new Error('This one is taking too long. Try it again in a minute — if it finished in the meantime, it opens straight away.'),
+        { timedOut: true }
+      );
+    throw e;
+  });
 
 export const extractFromUrl = (url: string) => extractPost({ url });
 export const extractFromText = (text: string) => extractPost({ text });

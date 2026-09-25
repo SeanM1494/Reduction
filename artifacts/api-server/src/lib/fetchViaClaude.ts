@@ -17,6 +17,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { ORIGINAL_RULES, SYSTEM_PROMPT, buildRepairText } from "./prompt";
 import { closeTruncatedJson, takeOriginal } from "./original";
+import { addUsage, effortFields, emptyUsage, resolveCall, type CallUsage, type ModelCallOptions } from "./extractionConfig";
 import { validateRecipe, type Recipe } from "../shared/layout";
 import { sanitizeMealTypes } from "../shared/mealTypes";
 import { setRecipeTotalMinutes } from "@workspace/recipe-model";
@@ -31,7 +32,6 @@ function getClient(): Anthropic {
 
 const MODEL = "claude-sonnet-5";
 const BETA = "web-fetch-2025-09-10";
-const MAX_TOKENS = 8000;
 const MAX_ATTEMPTS = 2;
 
 function textFrom(msg: any): string {
@@ -70,9 +70,12 @@ const FRIENDLY: Record<string, string> = {
 };
 
 export async function structureRecipeFromUrl(
-  url: string
-): Promise<{ recipe: Recipe; attempts: number; repaired: string[]; original: unknown | null }> {
+  url: string,
+  opts: ModelCallOptions = {}
+): Promise<{ recipe: Recipe; attempts: number; repaired: string[]; original: unknown | null; usage: CallUsage }> {
   const client = getClient();
+  const call = resolveCall(opts);
+  const usage = emptyUsage();
 
   const messages: any[] = [
     {
@@ -96,9 +99,10 @@ export async function structureRecipeFromUrl(
     const msg = await client.messages.create(
       {
         model: MODEL,
-        max_tokens: MAX_TOKENS,
+        max_tokens: call.maxTokens,
         system: SYSTEM_PROMPT,
         messages,
+        ...effortFields(call.effort),
         tools: [
           {
             type: "web_fetch_20250910",
@@ -112,6 +116,7 @@ export async function structureRecipeFromUrl(
       { headers: { "anthropic-beta": BETA } }
     );
 
+    addUsage(usage, msg);
     const fetchFail = fetchError(msg);
     if (fetchFail)
       throw new Error(
@@ -151,7 +156,7 @@ export async function structureRecipeFromUrl(
       } catch {
         /* leave source unset */
       }
-      return { recipe, attempts: attempt, repaired, original };
+      return { recipe, attempts: attempt, repaired, original, usage };
     }
 
     lastErrors = errors;
@@ -163,7 +168,9 @@ export async function structureRecipeFromUrl(
     );
   }
 
-  throw new Error(
+  const err = new Error(
     `Could not build a diagram from that page. ${lastErrors[0] ?? ""}`
-  );
+  ) as Error & { usage?: CallUsage };
+  err.usage = usage;
+  throw err;
 }

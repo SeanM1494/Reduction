@@ -12,6 +12,7 @@ import { validateRecipe, type Recipe } from "../shared/layout";
 import { sanitizeMealTypes } from "../shared/mealTypes";
 import { setRecipeTotalMinutes } from "@workspace/recipe-model";
 import { closeTruncatedJson, takeOriginal } from "./original";
+import { addUsage, effortFields, emptyUsage, resolveCall, type CallUsage, type ModelCallOptions } from "./extractionConfig";
 
 let _client: Anthropic | null = null;
 function getClient(): Anthropic {
@@ -24,7 +25,6 @@ function getClient(): Anthropic {
 /** Exported so the admin preflight can test the exact model extraction uses,
  *  rather than a model that happens to work while this one is retired. */
 export const MODEL = "claude-sonnet-5";
-const MAX_TOKENS = 8000;
 const MAX_ATTEMPTS = 2;
 
 export interface StructureInput {
@@ -94,11 +94,16 @@ export interface StructureResult {
   /** The model's copy of the original wording, unsanitised (the route gates
    *  it with `sanitizeOriginal`), or null when not asked or not given. */
   original: unknown | null;
+  /** Tokens and stop reasons across every attempt (extractionConfig.ts). */
+  usage: CallUsage;
 }
 
 export async function structureRecipe(
-  input: StructureInput
+  input: StructureInput,
+  opts: ModelCallOptions = {}
 ): Promise<StructureResult> {
+  const call = resolveCall(opts);
+  const usage = emptyUsage();
   const messages: Anthropic.MessageParam[] = [
     { role: "user", content: contentFor(input) },
   ];
@@ -110,10 +115,12 @@ export async function structureRecipe(
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
     const msg = await getClient().messages.create({
       model: MODEL,
-      max_tokens: MAX_TOKENS,
+      max_tokens: call.maxTokens,
       system: SYSTEM_PROMPT,
       messages,
-    });
+      ...effortFields(call.effort),
+    } as Anthropic.MessageCreateParamsNonStreaming);
+    addUsage(usage, msg);
 
     const raw = textFrom(msg);
     // A reply the token limit stopped is closed rather than thrown away:
@@ -149,7 +156,7 @@ export async function structureRecipe(
       recipe.mealTypes = sanitizeMealTypes(recipe.mealTypes);
       // A stated total time, through its gate: junk is dropped, not stored.
       setRecipeTotalMinutes(recipe, (recipe as { totalMinutes?: unknown }).totalMinutes);
-      return { recipe, attempts: attempt, repaired, original: input.askOriginal ? original : null };
+      return { recipe, attempts: attempt, repaired, original: input.askOriginal ? original : null, usage };
     }
 
     lastErrors = errors;
@@ -163,7 +170,8 @@ export async function structureRecipe(
 
   const err = new Error(
     `Could not build a valid diagram from that source. ${lastErrors[0] ?? ""}`
-  ) as Error & { details?: string[] };
+  ) as Error & { details?: string[]; usage?: CallUsage };
   err.details = lastErrors;
+  err.usage = usage;
   throw err;
 }

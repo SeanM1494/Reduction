@@ -12,6 +12,8 @@ import { appleBillingRouter } from "./billingApple";
 import { adminRouter } from "./admin";
 import { accountRouter } from "./account";
 
+import { EXTRACTION_MAX_TOKENS, extractionEffort } from "../lib/extractionConfig";
+
 const router: IRouter = Router();
 
 router.use(healthRouter);
@@ -20,8 +22,15 @@ router.use(healthRouter);
 // `schema` names any hand-run DDL this build needs and the database lacks
 // (lib/schemaCheck.ts). `ok` stays about the process, so a platform health
 // probe is never failed by a missing column it can do nothing about.
+// `extraction` is what the model is being asked to do, so a before/after
+// comparison can confirm which side a deployment is on (extractionConfig.ts).
 router.get("/health", async (_req, res) =>
-  res.json({ ok: true, commit: BUILD_COMMIT, schema: await schemaForHealth() })
+  res.json({
+    ok: true,
+    commit: BUILD_COMMIT,
+    schema: await schemaForHealth(),
+    extraction: { effort: extractionEffort() ?? "default", maxTokens: EXTRACTION_MAX_TOKENS },
+  })
 );
 
 router.use("/auth", authRouter);

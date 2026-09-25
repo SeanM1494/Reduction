@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { advance, LAST_STAGE, STAGE_MS, STAGES, stageAfter } from "./extractionStage";
+import { advance, LAST_STAGE, SLOW_AFTER_MS, SLOW_MESSAGE, STAGE_MS, STAGES, stageAfter } from "./extractionStage";
 
 // The literals are the web's (artifacts/reduction/src/components/
 // ExtractionProgress.tsx). Pasted rather than imported: that file imports
@@ -48,4 +48,10 @@ test("advance reaches the last stage in four steps and says when the clock can s
   assert.deepEqual(seen, [1, 2, 3, 4]);
   // Already at the end: stays there, still done.
   assert.deepEqual(advance(LAST_STAGE), { next: LAST_STAGE, done: true });
+});
+
+test("a long wait says so, well after the last stage and well before the timeout", () => {
+  assert.ok(SLOW_AFTER_MS > STAGE_MS * STAGES.length * 2, "not while the stages are still walking");
+  assert.ok(SLOW_AFTER_MS < 180_000 / 2, "early enough to matter before the phone gives up");
+  assert.ok(SLOW_MESSAGE.length <= 42, "one line on an SE, ellipsis included");
 });

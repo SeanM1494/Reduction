@@ -396,6 +396,48 @@ create table recipe_photos (
 No foreign key to `recipes`, deliberately — see the schema comment. The
 library DELETE route and account deletion remove photos in code.
 
+### Extraction speed
+
+Extraction is one Sonnet 5 call (two when the tree fails validation), and
+the phone waits **180 seconds** for it (`EXTRACTION_TIMEOUT_MS`), saying
+"Still working — taking longer than usual" after 45. Two server settings,
+in `lib/extractionConfig.ts`, reported by `/api/health` as `extraction`:
+
+- **Output cap: 16,000 tokens**, always. The model reasons before it
+  answers and that reasoning counts against the cap; at 8,000 a long recipe
+  could be cut off inside the tree and cost a second full attempt.
+- **Effort: the `EXTRACTION_EFFORT` secret** (`low`, `medium`, `high`;
+  unset = the model's default, which reasons the most). It changes what the
+  diagram can say, so it stays unset until a before/after comparison on the
+  recipes most likely to break says otherwise — then it is one secret and a
+  republish, with no commit, in either direction.
+
+Where the time goes, from the production log (read-only):
+
+```sql
+-- by path: via = claude is the page Anthropic had to fetch; attempts = 2 is a retry
+select via, attempts, ok, count(*) n,
+       round(avg(ms)/1000.0, 1) avg_s,
+       round((percentile_cont(0.9) within group (order by ms))::numeric/1000, 1) p90_s,
+       round(max(ms)/1000.0, 1) max_s
+  from extraction_events
+ where not cached and at > now() - interval '14 days'
+ group by 1,2,3 order by 1,2,3;
+
+-- the slowest recent links (the log keeps only the host; the URL comes from
+-- the cache row written at the same moment, so a failed one shows no URL)
+select e.at, round(e.ms/1000.0,1) secs, e.via, e.attempts, e.ok, e.host,
+       c.recipe->>'sourceUrl' as url
+  from extraction_events e
+  left join lateral (
+    select recipe from extraction_cache c
+     where c.recipe->>'sourceUrl' ilike '%' || e.host || '%'
+       and c.created_at between e.at - interval '5 minutes' and e.at + interval '1 minute'
+     order by abs(extract(epoch from c.created_at - e.at)) limit 1) c on true
+ where not e.cached and e.source = 'url' and e.at > now() - interval '14 days'
+ order by e.ms desc nulls last limit 15;
+```
+
 ### Original wording
 
 Beside the diagram, a recipe's ingredient lines and steps as its source
