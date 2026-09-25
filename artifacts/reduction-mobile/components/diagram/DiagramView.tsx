@@ -911,11 +911,12 @@ export function SectionDiagram({ section, done, onToggle, scale = 1, edit = null
           {placed ? (
             <>
               <Animated.ScrollView
+                showsVerticalScrollIndicator={false}
+                showsHorizontalScrollIndicator={false}
                 ref={scrollRef}
                 horizontal
                 bounces={false}
                 scrollEnabled={!dragging}
-                showsHorizontalScrollIndicator
                 onScroll={Animated.event(
                   [{ nativeEvent: { contentOffset: { x: scrollX } } }],
                   { useNativeDriver: true, listener: onScroll }

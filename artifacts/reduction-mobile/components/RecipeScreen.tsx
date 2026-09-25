@@ -375,6 +375,8 @@ export function RecipeScreen({
 
       {view === 'overview' ? (
         <ScrollView
+          showsVerticalScrollIndicator={false}
+          showsHorizontalScrollIndicator={false}
           ref={overviewRef}
           contentContainerStyle={styles.scrollContent}
           scrollEnabled={!dragging}

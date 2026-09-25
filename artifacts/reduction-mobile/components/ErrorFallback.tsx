@@ -132,12 +132,15 @@ export function ErrorFallback({ error, resetError }: ErrorFallbackProps) {
               </View>
 
               <ScrollView
+
+                showsVerticalScrollIndicator={false}
+
+                showsHorizontalScrollIndicator={false}
                 style={styles.modalScrollView}
                 contentContainerStyle={[
                   styles.modalScrollContent,
                   { paddingBottom: insets.bottom + 16 },
                 ]}
-                showsVerticalScrollIndicator
               >
                 <View
                   style={[

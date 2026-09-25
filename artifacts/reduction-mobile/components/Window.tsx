@@ -93,7 +93,7 @@ export function Window({ open, onClose, instant = false, maxWidth = 440, padding
           accessibilityViewIsModal
           testID={testID}
         >
-          <ScrollView bounces={false} keyboardShouldPersistTaps="handled" contentContainerStyle={{ padding }}>
+          <ScrollView showsVerticalScrollIndicator={false} showsHorizontalScrollIndicator={false} bounces={false} keyboardShouldPersistTaps="handled" contentContainerStyle={{ padding }}>
             {open ? children : last.current}
           </ScrollView>
         </Animated.View>

@@ -99,6 +99,8 @@ export default function RemovedRecipesScreen() {
         </View>
       ) : (
         <FlatList
+          showsVerticalScrollIndicator={false}
+          showsHorizontalScrollIndicator={false}
           data={list ?? []}
           keyExtractor={(e) => e.id}
           contentContainerStyle={[styles.list, { paddingBottom: insets.bottom + 24 }]}

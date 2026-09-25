@@ -107,7 +107,7 @@ export default function SettingsScreen() {
         : '—';
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={[styles.content, { paddingBottom: 84 + insets.bottom + 24 }]}>
+    <ScrollView showsVerticalScrollIndicator={false} showsHorizontalScrollIndicator={false} style={styles.container} contentContainerStyle={[styles.content, { paddingBottom: 84 + insets.bottom + 24 }]}>
       <View style={styles.section}>
         <Text style={styles.label}>Account</Text>
         <Text style={styles.value}>{user?.name || user?.email || 'Signed in'}</Text>

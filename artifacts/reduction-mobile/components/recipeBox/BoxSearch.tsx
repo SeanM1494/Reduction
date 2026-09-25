@@ -70,6 +70,8 @@ export function BoxResults({
   if (!hits.length) return <BoxNoMatches query={query} onSearchWeb={onSearchWeb} />;
   return (
     <FlatList
+      showsVerticalScrollIndicator={false}
+      showsHorizontalScrollIndicator={false}
       data={hits}
       keyExtractor={(h) => h.entry.id}
       keyboardShouldPersistTaps="handled"

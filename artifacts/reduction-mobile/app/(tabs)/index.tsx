@@ -127,6 +127,8 @@ export default function FindScreen() {
 
   return (
     <ScrollView
+      showsVerticalScrollIndicator={false}
+      showsHorizontalScrollIndicator={false}
       style={styles.container}
       // The tab bar is absolutely positioned (see (tabs)/_layout.tsx), so
       // the content pads itself past it — without this the photo section's

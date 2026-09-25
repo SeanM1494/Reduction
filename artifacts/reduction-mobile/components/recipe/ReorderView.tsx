@@ -308,6 +308,8 @@ export function ReorderView({ recipe, order, done, onSetOrder, onClose }: Props)
 
   return (
     <ScrollView
+      showsVerticalScrollIndicator={false}
+      showsHorizontalScrollIndicator={false}
       ref={scrollRef}
       onScroll={onScroll}
       scrollEventThrottle={16}

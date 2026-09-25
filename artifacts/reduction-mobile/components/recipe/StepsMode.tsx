@@ -206,7 +206,7 @@ export function StepsMode({ recipe, done, order, timer, scale, onToggle, onSetTi
   }
 
   return (
-    <ScrollView contentContainerStyle={styles.wrap} testID="recipe-cook">
+    <ScrollView showsVerticalScrollIndicator={false} showsHorizontalScrollIndicator={false} contentContainerStyle={styles.wrap} testID="recipe-cook">
       {canReorder && onSetOrder ? (
         <View style={styles.reorderRow}>
           <SheetButton label="Reorder" onPress={() => setReordering(true)} testID="cook-reorder" />

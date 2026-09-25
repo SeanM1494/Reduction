@@ -102,7 +102,7 @@ export function Sheet({ open, title, onClose, closeLabel = 'Done', avoidKeyboard
             <Text style={styles.title}>{shown.title}</Text>
             <SheetButton label={closeLabel} onPress={onClose} />
           </View>
-          <ScrollView bounces={false} keyboardShouldPersistTaps="handled">
+          <ScrollView showsVerticalScrollIndicator={false} showsHorizontalScrollIndicator={false} bounces={false} keyboardShouldPersistTaps="handled">
             {shown.children}
           </ScrollView>
         </Animated.View>

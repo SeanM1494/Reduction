@@ -128,6 +128,8 @@ export default function LibraryScreen() {
   if (entries.length === 0) {
     return (
       <ScrollView
+        showsVerticalScrollIndicator={false}
+        showsHorizontalScrollIndicator={false}
         style={styles.container}
         contentContainerStyle={[styles.content, { paddingBottom: tabBarHeight + 24 }]}
         refreshControl={<RefreshControl refreshing={loading} onRefresh={refresh} tintColor={colors.foreground} />}
@@ -233,8 +235,9 @@ export default function LibraryScreen() {
       {searching ? null : (
       <View style={styles.stripRow}>
       <ScrollView
-        horizontal
+        showsVerticalScrollIndicator={false}
         showsHorizontalScrollIndicator={false}
+        horizontal
         style={styles.chipRow}
         contentContainerStyle={styles.chipRowContent}
         testID="library-tabs"
@@ -258,6 +261,8 @@ export default function LibraryScreen() {
       </View>
       )}
       <FlatList
+        showsVerticalScrollIndicator={false}
+        showsHorizontalScrollIndicator={false}
         contentContainerStyle={[styles.content, { paddingBottom: tabBarHeight + 24 }]}
         data={grid}
         keyExtractor={(e, i) => e?.id ?? `hole-${i}`}
