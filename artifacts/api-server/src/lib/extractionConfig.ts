@@ -13,12 +13,14 @@
  *   non-streaming request can carry. It is ON.
  *
  *   EFFORT. `output_config.effort` sets how much of that reasoning happens;
- *   unset, the model's default applies (the most). "low" is expected to be
- *   the larger time saving, and it is the lever that can change what the
- *   diagram says — so it is OFF until a before/after comparison on the
- *   recipes most likely to break says it holds (scripts/eval-extraction.ts,
- *   README "Extraction speed"). The switch is the EXTRACTION_EFFORT secret,
- *   not a code change, so turning it on or back off never needs a commit.
+ *   without it the model's default applies (the most). "low" is expected
+ *   to be the larger time saving, and it is the lever that can change what
+ *   the diagram says. It is ON — "low" — by decision (Sep 25): measured on
+ *   real extractions after it went live rather than held back for a
+ *   comparison nobody could run yet (src/eval/evalExtraction.ts still runs
+ *   the four configs side by side). The EXTRACTION_EFFORT secret is the
+ *   switch, so going back never needs a commit: "default" restores the
+ *   model's own, "medium"/"high" pick a level.
  *
  * Read per call rather than at import, so a test (or the comparison
  * script) can pass its own values and nothing caches a stale one.
@@ -30,12 +32,16 @@ const EFFORTS: readonly ExtractionEffort[] = ["low", "medium", "high"];
 
 export const EXTRACTION_MAX_TOKENS = 16_000;
 
-/** EXTRACTION_EFFORT as a level, or null for "the model's default". Anything
- *  unrecognised is the default, never an error: a typo in a secret must not
- *  take extraction down. */
+/** What runs when EXTRACTION_EFFORT is unset. */
+export const DEFAULT_EFFORT: ExtractionEffort = "low";
+
+/** EXTRACTION_EFFORT as a level, or null for "the model's default"
+ *  ("default"). Unset — or anything unrecognised, since a typo in a secret
+ *  must not take extraction down — is DEFAULT_EFFORT. */
 export function extractionEffort(env: NodeJS.ProcessEnv = process.env): ExtractionEffort | null {
   const raw = env.EXTRACTION_EFFORT?.trim().toLowerCase();
-  return EFFORTS.includes(raw as ExtractionEffort) ? (raw as ExtractionEffort) : null;
+  if (raw === "default") return null;
+  return EFFORTS.includes(raw as ExtractionEffort) ? (raw as ExtractionEffort) : DEFAULT_EFFORT;
 }
 
 /** The request fields for a level. SDK 0.65 predates `output_config` in its
@@ -49,12 +55,14 @@ export function effortFields(effort: ExtractionEffort | null): Record<string, un
  * SOURCE STEP NUMBERS (recipe-model stepSource.ts): the model tags each
  * diagram step with the number of the recipe's own step it came from, and
  * Step-by-Step orders and captions cards by it. A wrong tag reorders cards
- * away from the recipe, so this too is a secret — EXTRACTION_STEP_SOURCES
- * — and stays off until the same comparison has checked the tags on messy
- * recipes. Off, the prompt is exactly what it was.
+ * away from the recipe. ON by decision (Sep 25), to be checked on real
+ * extractions (the comparison's config S prints every tag against the
+ * sentence it names). EXTRACTION_STEP_SOURCES=off is the switch back: the
+ * prompt is then exactly what it was and any tag is stripped. Recipes
+ * extracted while it was off simply have no tags and keep the old order.
  */
 export function stepSourcesEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
-  return /^(1|on|true|yes)$/i.test(env.EXTRACTION_STEP_SOURCES?.trim() ?? "");
+  return !/^(0|off|false|no)$/i.test(env.EXTRACTION_STEP_SOURCES?.trim() ?? "");
 }
 
 /** Options every extraction call takes: the comparison script sets them

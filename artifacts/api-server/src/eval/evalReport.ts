@@ -10,10 +10,10 @@
  *
  *   A  "before"   8,000-token cap, the model's default effort, no tags —
  *                 production until 9924009
- *   B  "cap"      16,000-token cap, otherwise A — what production runs now
- *   C  "cap+low"  B with effort "low" — the EXTRACTION_EFFORT candidate
- *   S  "tags"     B with source step numbers — the EXTRACTION_STEP_SOURCES
- *                 candidate, checked for CORRECTNESS, not just presence
+ *   B  "cap"      16,000-token cap, otherwise A — the cap alone
+ *   C  "cap+low"  B with effort "low" — the effort change alone
+ *   S  "now"      C with source step numbers — production since Sep 25,
+ *                 tags checked for CORRECTNESS, not just presence
  *
  * A → B answers "does the cap alone stop second attempts"; B → C "does low
  * effort buy time without costing the diagram"; S "does each tag point at
@@ -37,7 +37,7 @@ export const CONFIGS: Record<string, EvalConfig> = {
   A: { key: "A", label: "before (8k cap, default effort)", effort: null, maxTokens: 8000, stepSources: false },
   B: { key: "B", label: "cap (16k, default effort)", effort: null, maxTokens: 16000, stepSources: false },
   C: { key: "C", label: "cap + low effort", effort: "low", maxTokens: 16000, stepSources: false },
-  S: { key: "S", label: "cap + source step tags", effort: null, maxTokens: 16000, stepSources: true },
+  S: { key: "S", label: "production now (cap + low + tags)", effort: "low", maxTokens: 16000, stepSources: true },
 };
 
 export interface EvalResult {

@@ -406,19 +406,18 @@ in `lib/extractionConfig.ts`, reported by `/api/health` as `extraction`:
 - **Output cap: 16,000 tokens**, always. The model reasons before it
   answers and that reasoning counts against the cap; at 8,000 a long recipe
   could be cut off inside the tree and cost a second full attempt.
-- **Source step numbers: the `EXTRACTION_STEP_SOURCES` secret** (`on`;
-  unset = off, and the prompt is exactly what it was). The model tags each
-  diagram step with the number of the recipe's own step it came from;
+- **Source step numbers: ON** (Sep 25; `EXTRACTION_STEP_SOURCES=off` turns
+  them off, and the prompt is then exactly what it was). The model tags
+  each diagram step with the number of the recipe's own step it came from;
   Step-by-Step then follows the recipe's order and shows its sentence
   (CLAUDE.md, "Cooking order is not section order"). A wrong tag makes the
-  order worse than none, so it stays off until the same comparison has
-  checked the tags on messy recipes. Recipes extracted while it is off have
-  no tags and keep the old order for good (a re-read brings tags).
-- **Effort: the `EXTRACTION_EFFORT` secret** (`low`, `medium`, `high`;
-  unset = the model's default, which reasons the most). It changes what the
-  diagram can say, so it stays unset until a before/after comparison on the
-  recipes most likely to break says otherwise — then it is one secret and a
-  republish, with no commit, in either direction.
+  order worse than none, so the comparison below prints every tag against
+  the sentence it names. Recipes extracted before have no tags and keep
+  the old order (a re-read brings tags).
+- **Effort: `low`** (Sep 25). It changes what the diagram can say, so it
+  is measured on real extractions now that it is live. The
+  `EXTRACTION_EFFORT` secret overrides it with no commit: `default` for the
+  model's own (the most reasoning), or `medium` / `high`.
 
 Where the time goes, from the production log (read-only):
 
@@ -449,8 +448,8 @@ select e.at, round(e.ms/1000.0,1) secs, e.via, e.attempts, e.ok, e.host,
 **The comparison that decides the two secrets** is
 `artifacts/api-server/src/eval/evalExtraction.ts`. It runs every case in a
 cases file through production's own extraction code under four configs —
-**A** the old 8,000 cap, **B** the 16,000 cap (production now), **C** B at
-low effort, **S** B with source step tags — and writes a report: time,
+**A** the old 8,000 cap, **B** the 16,000 cap alone, **C** B at low
+effort, **S** C with source step tags (production now) — and writes a report: time,
 model calls per run (a retry or a fallback shows as more than one), cap
 hits and cost per config; every case side by side; and every tag checked
 against the sentence it names (out of range, no words in common, or

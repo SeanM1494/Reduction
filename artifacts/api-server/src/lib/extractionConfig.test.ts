@@ -8,7 +8,7 @@
 import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { createServer, type Server } from "node:http";
-import { EXTRACTION_MAX_TOKENS, effortFields, extractionEffort } from "./extractionConfig";
+import { EXTRACTION_MAX_TOKENS, effortFields, extractionEffort, stepSourcesEnabled } from "./extractionConfig";
 
 const TREE = {
   title: "Toast",
@@ -74,12 +74,15 @@ after(() => {
   }
 });
 
-test("EXTRACTION_EFFORT: a level, or the model's default for anything else", () => {
-  assert.equal(extractionEffort({}), null);
+test("EXTRACTION_EFFORT: low unless it names another level or the model's default", () => {
+  assert.equal(extractionEffort({}), "low", "on by default (Sep 25)");
   assert.equal(extractionEffort({ EXTRACTION_EFFORT: "low" }), "low");
   assert.equal(extractionEffort({ EXTRACTION_EFFORT: " Medium " }), "medium");
-  assert.equal(extractionEffort({ EXTRACTION_EFFORT: "lowest" }), null, "a typo is the default, never an error");
-  assert.equal(extractionEffort({ EXTRACTION_EFFORT: "default" }), null);
+  assert.equal(extractionEffort({ EXTRACTION_EFFORT: "lowest" }), "low", "a typo is the default, never an error");
+  assert.equal(extractionEffort({ EXTRACTION_EFFORT: "default" }), null, "the way back to the model's own");
+  assert.equal(stepSourcesEnabled({}), true, "on by default (Sep 25)");
+  assert.equal(stepSourcesEnabled({ EXTRACTION_STEP_SOURCES: "off" }), false);
+  assert.equal(stepSourcesEnabled({ EXTRACTION_STEP_SOURCES: "on" }), true);
   assert.deepEqual(effortFields(null), {});
   assert.deepEqual(effortFields("low"), { output_config: { effort: "low" } });
 });
@@ -90,9 +93,14 @@ test("on the wire: 16,000 tokens always; effort only when configured", async () 
 
   delete process.env.EXTRACTION_EFFORT;
   bodies.length = 0;
+  await structureRecipe({ text: "Toast the bread. ".repeat(5) });
+  assert.deepEqual(bodies[0].output_config, { effort: "low" }, "unset is low (Sep 25)");
+
+  process.env.EXTRACTION_EFFORT = "default";
+  bodies.length = 0;
   const plain = await structureRecipe({ text: "Toast the bread. ".repeat(5) });
   assert.equal(bodies[0].max_tokens, EXTRACTION_MAX_TOKENS);
-  assert.equal("output_config" in bodies[0], false, "unset means the model's default, not a guess");
+  assert.equal("output_config" in bodies[0], false, "\"default\" sends nothing: the model's own");
   assert.equal(plain.recipe.title, "Toast");
   assert.deepEqual(plain.usage, { inputTokens: 100, outputTokens: 40, stopReasons: ["end_turn"] });
 
@@ -112,13 +120,13 @@ test("source step numbers: off asks nothing and keeps nothing; on asks and keeps
   const { structureRecipe } = await import("./structureRecipe");
   const userText = (b: any) => b.messages[0].content.map((c: any) => c.text ?? "").join("\n");
 
-  delete process.env.EXTRACTION_STEP_SOURCES;
+  process.env.EXTRACTION_STEP_SOURCES = "off";
   bodies.length = 0;
   const off = await structureRecipe({ text: "Toast the bread. ".repeat(5) });
   assert.equal(userText(bodies[0]).includes("NUMBER EACH STEP'S SOURCE"), false, "off: the prompt is what it was");
   assert.equal("src" in off.recipe.sections[0].nodes[0], false, "off: a tag the model sent anyway is dropped");
 
-  process.env.EXTRACTION_STEP_SOURCES = "on";
+  delete process.env.EXTRACTION_STEP_SOURCES; // unset is on
   bodies.length = 0;
   const on = await structureRecipe({ text: "Toast the bread. ".repeat(5) });
   assert.equal(userText(bodies[0]).includes("NUMBER EACH STEP'S SOURCE"), true);

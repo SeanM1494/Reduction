@@ -105,8 +105,8 @@ Add one more key to the object, LAST, after "sections":
 - Never invent a line. A list the source does not have is [].`;
 
 /**
- * Source step numbers (recipe-model stepSource.ts), asked for only when
- * EXTRACTION_STEP_SOURCES is on. Step-by-Step orders its cards by them and
+ * Source step numbers (recipe-model stepSource.ts), asked for unless
+ * EXTRACTION_STEP_SOURCES is off. Step-by-Step orders its cards by them and
  * shows the recipe's own sentence for each, so the numbering rule has to be
  * the one the stored wording uses: the INSTRUCTIONS list's own numbers when
  * one is given, otherwise the model's own "original" steps, counted without

@@ -2,8 +2,9 @@
  * src/eval/evalExtraction.ts — the extraction comparison. Runs each case
  * through the SAME code production uses (lib/readRecipe.ts for links,
  * structureRecipe for pastes and photos) under each config in
- * evalReport.ts, and writes a report a person reads before either secret
- * is switched on.
+ * evalReport.ts, and writes a report a person reads: whether the cap, low
+ * effort and source tags (all live since Sep 25) hold on the recipes most
+ * likely to break, and which one to switch back if one does not.
  *
  *   node --import tsx artifacts/api-server/src/eval/evalExtraction.ts \
  *     artifacts/api-server/src/eval/cases.txt --yes

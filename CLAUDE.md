@@ -1228,9 +1228,10 @@ tags. Three rules keep it safe: **no tags, no change** (every recipe saved
 before this keeps `sectionSequence` exactly — `cardSequence` is identical
 for it, pinned by test); **a Reorder preference keeps the walk it was made
 against** (the Reorder view arranges parts whole, and says so when the
-cards differ); and **a wrong tag is worse than none**, so the model is
-asked for tags only when the `EXTRACTION_STEP_SOURCES` secret is on, which
-waits on a check of real, messy recipes. The same numbers caption each
+cards differ); and **a wrong tag is worse than none**, so every tag can be
+checked against the sentence it names (`src/eval`, config S), and
+`EXTRACTION_STEP_SOURCES=off` strips them all without a commit. Tags went
+on by decision on Sep 25, to be judged on real extractions. The same numbers caption each
 Step-by-Step card with the source's own sentence (`originalStepTexts`),
 which is why a structured-data page's INSTRUCTIONS are numbered from
 exactly the lines stored as its original wording (`fetchSource`).

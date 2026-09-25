@@ -17,11 +17,11 @@
  *   - Step-by-Step shows the source's sentence for it under the terse label.
  *
  * A WRONG TAG IS WORSE THAN NONE: it reorders cards away from the recipe
- * and captions a step with somebody else's sentence. So the model is asked
- * for tags only when the EXTRACTION_STEP_SOURCES secret is on, which waits
- * on a check of real, messy recipes (README "Extraction speed"), and a
- * recipe without tags — every recipe saved before this — keeps exactly the
- * order it had. Nothing is backfilled; a re-read brings them.
+ * and captions a step with somebody else's sentence. The comparison
+ * (api-server src/eval) prints every tag against the sentence it names,
+ * EXTRACTION_STEP_SOURCES=off stops asking for them, and a recipe without
+ * tags — every recipe saved before Sep 25 — keeps exactly the order it
+ * had. Nothing is backfilled; a re-read brings them.
  *
  * Deliberately NOT a field on the Step type in layout.ts, the same way
  * totalTime.ts keeps `totalMinutes` off Recipe: it rides the recipe JSON
