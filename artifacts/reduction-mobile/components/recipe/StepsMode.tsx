@@ -104,9 +104,33 @@ interface Props {
    *  stick — and for the draft, which has no row yet. */
   canReorder?: boolean;
   onSetOrder?: (next: OrderPreference | null) => void;
+  /** The recipe's ⋮ › Reorder steps asked for the cooking-order view. It
+   *  used to be a button above the card; it moved to the menu (Sep 25) so
+   *  the page holds only what tonight's cooking needs. A flag the parent
+   *  clears through `onReorderOpened`, not a counter: this component
+   *  remounts every time the diagram is shown, and a counter would reopen
+   *  the view on every return. */
+  openReorder?: boolean;
+  onReorderOpened?: () => void;
+  /** Above the card: the recipe's picture and Clear progress. */
+  header?: React.ReactNode;
 }
 
-export function StepsMode({ recipe, done, order, timer, scale, onToggle, onSetTimer, onMarkDone, canReorder = false, onSetOrder }: Props) {
+export function StepsMode({
+  recipe,
+  done,
+  order,
+  timer,
+  scale,
+  onToggle,
+  onSetTimer,
+  onMarkDone,
+  canReorder = false,
+  onSetOrder,
+  openReorder = false,
+  onReorderOpened,
+  header = null,
+}: Props) {
   const colors = useColors();
   const styles = makeStyles(colors);
   const { cards, totalActions } = useMemo(() => buildCards(recipe, order), [recipe, order]);
@@ -122,6 +146,12 @@ export function StepsMode({ recipe, done, order, timer, scale, onToggle, onSetTi
   // The full-page cooking-order list. State here rather than in RecipeScreen
   // so the demo (which never sets canReorder) cannot reach it at all.
   const [reordering, setReordering] = useState(false);
+  useEffect(() => {
+    if (!openReorder) return;
+    if (canReorder) setReordering(true);
+    onReorderOpened?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [openReorder]);
   const goTo = useCallback((i: number) => setCardIndex(Math.max(0, Math.min(cards.length, i))), [cards.length]);
   const card: StepCard | null = cardIndex < cards.length ? cards[cardIndex] : null;
 
@@ -207,11 +237,7 @@ export function StepsMode({ recipe, done, order, timer, scale, onToggle, onSetTi
 
   return (
     <ScrollView showsVerticalScrollIndicator={false} showsHorizontalScrollIndicator={false} contentContainerStyle={styles.wrap} testID="recipe-cook">
-      {canReorder && onSetOrder ? (
-        <View style={styles.reorderRow}>
-          <SheetButton label="Reorder" onPress={() => setReordering(true)} testID="cook-reorder" />
-        </View>
-      ) : null}
+      {header}
       {returnIndex != null && cardIndex !== returnIndex ? (
         <Pressable accessibilityRole="button" onPress={backToTimer} style={styles.returnBtn} testID="cook-return">
           <Text style={styles.returnText}>← Back to timer</Text>
@@ -305,7 +331,6 @@ export function StepsMode({ recipe, done, order, timer, scale, onToggle, onSetTi
 function makeStyles(colors: Colors) {
   return StyleSheet.create({
     wrap: { paddingHorizontal: 20, paddingBottom: 100, gap: 12 },
-    reorderRow: { flexDirection: 'row' },
     empty: { padding: 20 },
     emptyText: { fontSize: 14, color: colors.mutedForeground },
     returnBtn: {

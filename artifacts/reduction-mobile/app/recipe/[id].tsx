@@ -24,7 +24,7 @@ import { Stack, router, useLocalSearchParams, useNavigation } from 'expo-router'
 import { usePreventRemove } from 'expo-router/react-navigation';
 import { Feather } from '@expo/vector-icons';
 import { useLibrary, type EntryPatch } from '@/lib/library-context';
-import { RecipeScreen } from '@/components/RecipeScreen';
+import { RecipeScreen, type RecipeRequest } from '@/components/RecipeScreen';
 import { MealTypeSheet } from '@/components/recipe/MealTypeSheet';
 import { Window } from '@/components/Window';
 import { useAuth } from '@/lib/auth-context';
@@ -60,7 +60,9 @@ export default function RecipeDetailScreen() {
   const [photoSheetOpen, setPhotoSheetOpen] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   // "Edit recipe" in the menu opens edit mode in RecipeScreen, which owns it.
-  const [editRequest, setEditRequest] = useState(0);
+  // ⋮ requests for the recipe screen (RecipeScreen's `request`).
+  const [request, setRequest] = useState<RecipeRequest | null>(null);
+  const askScreen = (kind: RecipeRequest['kind']) => setRequest((r) => ({ kind, n: (r?.n ?? 0) + 1 }));
   // What a menu item opens once the menu has finished closing.
   const afterMenu = useRef<(() => void) | null>(null);
   const menuThen = (next: () => void) => {
@@ -249,7 +251,7 @@ export default function RecipeDetailScreen() {
         initialView={initialView}
         recipe={entry.recipe}
         onOpenOriginal={() => router.push(`/original/${entry.id}`)}
-        editRequest={editRequest}
+        request={request}
         photoEntry={entry}
         done={entry.done}
         servings={entry.servings}
@@ -259,7 +261,6 @@ export default function RecipeDetailScreen() {
         mode={entry.mode}
         order={entry.order ?? null}
         onUpdate={write}
-        onEditMealTypes={() => setMealSheetOpen(true)}
         notice={syncError ?? entryNotice}
         onDismissNotice={() => {
           setSyncError(null);
@@ -331,10 +332,17 @@ export default function RecipeDetailScreen() {
           {recipeTitle}
         </Text>
         <View style={styles.menu} accessibilityRole="menu">
-          <MenuItem label="Edit recipe" onPress={() => menuThen(() => setEditRequest((n) => n + 1))} colors={colors} testID="menu-edit" />
-          <MenuItem label="Original recipe" onPress={() => menuThen(() => router.push(`/original/${entry.id}`))} colors={colors} testID="menu-original" />
+          <MenuItem label="Edit recipe" onPress={() => menuThen(() => askScreen('edit'))} colors={colors} testID="menu-edit" />
+          <MenuItem label="Reorder steps" onPress={() => menuThen(() => askScreen('reorder'))} colors={colors} testID="menu-reorder" />
+          <MenuItem label="Servings" onPress={() => menuThen(() => askScreen('servings'))} colors={colors} testID="menu-servings" />
+          {/* A rating is an opinion about a dish, so it is offered once the
+              recipe has been cooked — before that it would be about a page. */}
+          {entry.cooked?.length ? (
+            <MenuItem label="Rating" onPress={() => menuThen(() => askScreen('rating'))} colors={colors} testID="menu-rating" />
+          ) : null}
           <MenuItem label="Meal types" onPress={() => menuThen(() => setMealSheetOpen(true))} colors={colors} testID="menu-meal-types" />
           <MenuItem label="Photo" onPress={() => menuThen(() => setPhotoSheetOpen(true))} colors={colors} testID="menu-photo" />
+          <MenuItem label="Original recipe" onPress={() => menuThen(() => router.push(`/original/${entry.id}`))} colors={colors} testID="menu-original" />
           <MenuItem label="Delete recipe" danger onPress={() => menuThen(() => setConfirmDelete(true))} colors={colors} testID="menu-delete" />
         </View>
         <Pressable

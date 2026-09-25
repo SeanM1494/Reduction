@@ -1452,6 +1452,13 @@ height: it sits beside the servings stepper, sized from the screen
 height the servings block already had, so the SE's first table stays at
 y=308 (measured with and without a photo); 128pt on a 390pt phone, which
 moves its diagram down 58pt, spent where there is room.
+**Sep 25: the rating, the meal-type badge and the servings stepper left the
+page for the ⋮ menu** (Servings and Rating open sheets; Reorder steps moved
+there from above the card), and both views now open with ONE row: the
+photo and Clear progress, plus a "Cooking for 6 · the recipe makes 4" line
+only while servings are scaled, because every amount on the page depends
+on it. That returned 65pt on an SE: the first table is at **y=243**
+(measured), where the budget above now stands.
 
 **The servings stepper writes `entry.servings` ONLY**, and lives above the
 first section rather than in the badge row — it is the control that changes

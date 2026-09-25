@@ -116,7 +116,6 @@ export function DemoScreen({ onSignIn }: { onSignIn?: () => void }) {
           </View>
         }
         overviewFooter={<CoachLegend />}
-        showServings={false}
       />
     </SafeAreaView>
   );

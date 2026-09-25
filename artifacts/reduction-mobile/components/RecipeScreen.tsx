@@ -37,14 +37,13 @@ import { RatingControl } from '@/components/recipe/RatingControl';
 import { asksForRating } from '@/lib/recipeBox';
 import { StepsMode } from '@/components/recipe/StepsMode';
 import { EditSheet, type EditTarget } from '@/components/edit/EditSheet';
-import { SheetButton } from '@/components/Sheet';
+import { Sheet, SheetButton, SheetNote } from '@/components/Sheet';
 import { Window } from '@/components/Window';
 import { useToast } from '@/components/Toast';
 import { validateRecipe, type Recipe } from '@/shared/layout';
 import { applyEdit, type EditOp } from '@/shared/edits';
 import { countDone, reconcileDone } from '@/shared/progress';
 import type { OrderPreference } from '@/shared/sequence';
-import { MEAL_TYPE_LABELS, sanitizeMealTypes } from '@/shared/mealTypes';
 import { countAll } from '@/shared/amounts';
 import { useColors, type Colors } from '@/hooks/useColors';
 import { fonts } from '@/constants/colors';
@@ -119,6 +118,9 @@ export function stampCooked(cooked: number[], prevDone: number, nextDone: number
 
 // ------------------------------------------------------------------ props --
 
+/** What the recipe route's ⋮ menu can ask this screen for. */
+export type RecipeRequest = { kind: 'edit' | 'reorder' | 'servings' | 'rating'; n: number };
+
 interface RecipeScreenProps {
   recipe: Recipe;
   done: string[];
@@ -135,16 +137,14 @@ interface RecipeScreenProps {
    *  useLibrary().update takes, so app/recipe/[id].tsx passes it straight
    *  through and the draft screen can keep what it wants locally. */
   onUpdate: (patch: EntryPatch) => void;
-  /** Opens the meal-type sheet, which the route owns because the header's
-   *  overflow menu reaches it too. */
-  onEditMealTypes?: () => void;
   /** False turns off every write that is about the recipe rather than about
    *  tonight — rating and tagging — which is the draft's case. */
   canEdit?: boolean;
-  /** Bumped by the route's ⋮ "Edit recipe": opens edit mode on the Diagram.
-   *  Edit lives in the menu (Sep 25); the row it used to sit in holds
-   *  Clear progress. */
-  editRequest?: number;
+  /** Something the route's ⋮ menu asked for, with a counter so asking twice
+   *  is two requests. Everything that is not tonight's cooking lives in that
+   *  menu (Sep 25): editing, the card order, servings and the rating. The
+   *  page itself keeps only the picture and Clear progress. */
+  request?: RecipeRequest | null;
   /** A write the server refused, shown until dismissed (see the web's
    *  "Writes are confirmed, not assumed"). */
   notice?: string | null;
@@ -164,10 +164,8 @@ interface RecipeScreenProps {
   above?: React.ReactNode;
   /** Replaces the Overview hint below the diagram (the demo's legend). */
   overviewFooter?: React.ReactNode;
-  /** The demo hides the stepper: it is about tonight, and nobody is cooking
-   *  the demo — and the small phone needs the 80px above the diagram. */
-  showServings?: boolean;
-  /** The saved entry, for its photo beside the servings (a draft has none). */
+  /** The saved entry, for its photo at the top of both views (a draft has
+   *  none). */
   photoEntry?: Pick<Entry, 'id' | 'photo' | 'recipe'> | null;
   /** Which view is up, for the route: the diagram scrolls sideways, and a
    *  swipe on it at its left edge must not be iOS's swipe-back. */
@@ -204,9 +202,8 @@ export function RecipeScreen({
   mode,
   order = null,
   onUpdate: onUpdateProp,
-  onEditMealTypes,
   canEdit = true,
-  editRequest = 0,
+  request = null,
   notice,
   onDismissNotice,
   offlineQueued,
@@ -216,7 +213,6 @@ export function RecipeScreen({
   saving,
   above,
   overviewFooter,
-  showServings = true,
   photoEntry = null,
   onViewChange,
   initialView,
@@ -263,12 +259,26 @@ export function RecipeScreen({
   const [sheetFor, setSheetFor] = useState<EditTarget | null>(null);
   const [undoStack, setUndoStack] = useState<Array<{ recipe: Recipe; done: string[] }>>([]);
   const [editError, setEditError] = useState<string | null>(null);
+  // The ⋮ menu's requests. Keyed on the counter, so the same request made
+  // twice acts twice, and a re-render with the old one acts never.
+  const [servingsOpen, setServingsOpen] = useState(false);
+  const [ratingOpen, setRatingOpen] = useState(false);
+  const [openReorder, setOpenReorder] = useState(false);
   useEffect(() => {
-    if (!editRequest || !canEdit) return;
-    setView('overview');
-    setEditing(true);
+    if (!request?.n || !canEdit) return;
+    if (request.kind === 'edit') {
+      setView('overview');
+      setEditing(true);
+    } else if (request.kind === 'reorder') {
+      pickView('cook');
+      setOpenReorder(true);
+    } else if (request.kind === 'servings') {
+      setServingsOpen(true);
+    } else if (request.kind === 'rating') {
+      setRatingOpen(true);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [editRequest]);
+  }, [request?.n]);
 
   // Clear progress asks first: it wipes every check on the recipe, and the
   // button sits where a thumb reaches for other things.
@@ -317,7 +327,29 @@ export function RecipeScreen({
     if (asksForRating(cooked, stamped)) onCooked?.();
   };
   const doneSet = useMemo(() => new Set(done), [done]);
-  const types = sanitizeMealTypes(recipe.mealTypes);
+  // Scaled servings are the one thing moved to the menu that changes what
+  // is on screen — every amount — so when they are not the recipe's own,
+  // the page says so, and the line opens the stepper.
+  const scaledNote =
+    servings && recipe.servings && servings !== recipe.servings
+      ? `Cooking for ${servings} · the recipe makes ${recipe.servings}`
+      : null;
+  /** The top of both views: the recipe's picture and Clear progress, and
+   *  nothing else (Sep 25). Saved recipes only — the demo has its own
+   *  Reset, and a preview has neither a picture nor progress. */
+  const sessionRow = canEdit ? (
+    <View style={styles.sessionRow} testID="recipe-session">
+      {photoEntry ? <RecipePhotoThumb entry={photoEntry} /> : null}
+      <View style={styles.sessionMain}>
+        <SheetButton label="Clear progress" onPress={() => setConfirmClear(true)} disabled={done.length === 0 && !timer} testID="recipe-clear" />
+        {scaledNote ? (
+          <Pressable accessibilityRole="button" onPress={() => setServingsOpen(true)} style={styles.scaledNote} testID="recipe-scaled">
+            <Text style={styles.scaledNoteText}>{scaledNote}</Text>
+          </Pressable>
+        ) : null}
+      </View>
+    </View>
+  ) : null;
 
   /**
    * Applies one edit, immediately. No Save button: the change is the save.
@@ -440,27 +472,7 @@ export function RecipeScreen({
           }}
           testID="recipe-overview"
         >
-          {/* Tag and rating share a row: both are standing facts about the
-              recipe rather than about this cooking session. The rating only
-              appears once the recipe has actually been cooked — before that
-              it would collect an opinion about a web page. */}
-          {canEdit && !editing ? (
-            <View style={styles.factsRow}>
-              {cooked.length > 0 ? <RatingControl rating={rating} onChange={(r) => (onRate ? onRate(r) : onUpdate({ rating: r }))} /> : null}
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel="Edit meal types"
-                onPress={onEditMealTypes}
-                style={({ pressed }) => [styles.tagBadge, pressed && styles.tagBadgePressed]}
-                testID="recipe-tag"
-              >
-                <Text style={styles.tagText}>{types.length ? MEAL_TYPE_LABELS[types[0]].toUpperCase() : 'TAG MEAL TYPE'}</Text>
-                {types.length > 1 ? <Text style={styles.tagMore}>+{types.length - 1}</Text> : null}
-              </Pressable>
-              <View style={styles.factsSpacer} />
-              <SheetButton label="Clear progress" onPress={() => setConfirmClear(true)} disabled={done.length === 0 && !timer} testID="recipe-clear" />
-            </View>
-          ) : null}
+          {!editing ? sessionRow : null}
           {/* The mode has to announce itself. Someone who wanders into edit
               mode and taps around must not be left wondering why nothing
               checks off — so the bar is persistent, not a toast. The
@@ -483,15 +495,6 @@ export function RecipeScreen({
               <Text style={styles.noticeText}>{editError}</Text>
               <SheetButton label="Dismiss" onPress={() => setEditError(null)} />
             </View>
-          ) : null}
-          {showServings ? (
-            <ServingsRow
-              base={recipe.servings}
-              entryServings={servings}
-              yieldText={recipe.yieldText}
-              onChange={(next) => onUpdate({ servings: next })}
-              aside={photoEntry ? <RecipePhotoThumb entry={photoEntry} /> : null}
-            />
           ) : null}
           <DiagramView
             recipe={recipe}
@@ -566,10 +569,35 @@ export function RecipeScreen({
           onMarkDone={markDone}
           canReorder={canEdit && !isDraft}
           onSetOrder={(next) => onUpdate({ order: next })}
+          openReorder={openReorder}
+          onReorderOpened={() => setOpenReorder(false)}
+          header={sessionRow}
         />
       )}
 
       {editing ? <EditSheet recipe={recipe} target={sheetFor} onApply={applyOp} onClose={() => setSheetFor(null)} /> : null}
+
+      {/* ⋮ › Servings: tonight's quantity, which scales every amount.
+          `entry.servings` only — never the recipe's own number (CLAUDE.md). */}
+      <Sheet open={servingsOpen} title="Servings" onClose={() => setServingsOpen(false)}>
+        <ServingsRow
+          base={recipe.servings}
+          entryServings={servings}
+          yieldText={recipe.yieldText}
+          onChange={(next) => onUpdate({ servings: next })}
+        />
+        {typeof recipe.servings !== 'number' || recipe.servings <= 0 ? (
+          <SheetNote>This recipe does not say how many it serves, so it cannot be scaled.</SheetNote>
+        ) : null}
+      </Sheet>
+
+      {/* ⋮ › Rating: offered once the recipe has been cooked (before that
+          it would be an opinion about a web page). */}
+      <Sheet open={ratingOpen} title="Rating" onClose={() => setRatingOpen(false)}>
+        <View style={styles.ratingSheet}>
+          <RatingControl rating={rating} onChange={(r) => (onRate ? onRate(r) : onUpdate({ rating: r }))} />
+        </View>
+      </Sheet>
 
       {/* A window, like the delete confirmation: it asks something. */}
       <Window open={confirmClear} onClose={() => setConfirmClear(false)} maxWidth={400} testID="clear-window">
@@ -694,8 +722,11 @@ function makeStyles(colors: Colors) {
     },
     queuedText: { fontSize: 13.5, lineHeight: 19, color: colors.mutedForeground },
     scrollContent: { paddingHorizontal: 20, paddingBottom: 100 },
-    factsRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 8, marginBottom: 10 },
-    factsSpacer: { flex: 1 },
+    sessionRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 12 },
+    sessionMain: { flex: 1, alignItems: 'flex-end', gap: 6 },
+    scaledNote: { minHeight: 44, justifyContent: 'center' },
+    scaledNoteText: { fontSize: 13, color: colors.coolInk, textAlign: 'right', textDecorationLine: 'underline' },
+    ratingSheet: { alignItems: 'flex-start', paddingVertical: 4 },
     // .rd-editbar: cool tint, cool line, persistent.
     editBar: {
       flexDirection: 'row',
@@ -714,20 +745,6 @@ function makeStyles(colors: Colors) {
     editText: { flex: 1, minWidth: 200, fontSize: 13.5, lineHeight: 19, color: colors.coolInk },
     editStrong: { fontWeight: '700' },
     editActions: { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
-    tagBadge: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 6,
-      minHeight: 44,
-      paddingHorizontal: 14,
-      borderRadius: 99,
-      backgroundColor: colors.warmBg,
-      borderWidth: 1,
-      borderColor: colors.dangerLine,
-    },
-    tagBadgePressed: { opacity: 0.8 },
-    tagText: { fontFamily: fonts.mono, fontSize: 11, letterSpacing: 0.55, color: colors.warmInk },
-    tagMore: { fontFamily: fonts.mono, fontSize: 11, color: colors.mutedForeground },
     hint: { fontSize: 12, lineHeight: 17, color: colors.mutedForeground, marginTop: 12, marginBottom: 14 },
     source: { minHeight: 44, justifyContent: 'center', marginBottom: 8 },
     originalRow: {
