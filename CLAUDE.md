@@ -805,14 +805,16 @@ accommodate afterwards.
   meta; that disables pinch zoom for people who need it.
 - Legibility at arm's length across a counter, and reach for one thumb, beat
   desktop density every time they conflict.
-- **The recipe screen turns iOS's swipe-back off while the diagram is up.**
-  The diagram scrolls sideways, and at its leftmost position a rightward
-  swipe on it is, to iOS, the interactive pop gesture — the screen went
-  back to the library under a finger that was reading a table (Sep 21, a
-  real device). `app/recipe/[id].tsx` sets `gestureEnabled: !overview` from
-  `RecipeScreen`'s `onViewChange`; Step-by-Step has nothing horizontal and
-  keeps the gesture, and the header's back button always works. Chromium
-  cannot exercise this; it is the phone's to confirm.
+- **The recipe screen has no swipe-back, in either view.** The diagram
+  scrolls sideways, and at its leftmost position a rightward swipe on it
+  is, to iOS, the interactive pop gesture — the screen went back to the
+  library under a finger that was reading a table (Sep 21, a real device).
+  Step-by-Step kept the gesture at first, on the reasoning that nothing in
+  it scrolls sideways; a thumb brushing the edge while cooking popped it
+  just the same (Sep 25). `app/recipe/[id].tsx` sets `gestureEnabled:
+  false` on both the saved and the draft screen; the header's back button
+  is the way out. Chromium cannot exercise this; it is the phone's to
+  confirm.
 - **There are TWO tab layouts and Chromium can only ever reach one of
   them.** `app/(tabs)/_layout.tsx` returns `NativeTabLayout` when
   `isLiquidGlassAvailable()` — iOS 26 on a real iPhone — and

@@ -66,12 +66,14 @@ export default function RecipeDetailScreen() {
   };
   const [deleting, setDeleting] = useState(false);
   const [syncError, setSyncError] = useState<string | null>(null);
-  // The diagram scrolls sideways. At its leftmost position a swipe to the
-  // right on it is, to iOS, the interactive pop gesture — and the screen
-  // went back to the library under a finger that was reading a table. So
-  // the swipe-back is off while the Diagram is up and on again in Step-by-Step,
-  // which has nothing horizontal. The header's back button always works.
-  const [overview, setOverview] = useState(initialView !== 'cook');
+  // NO SWIPE-BACK ON THIS SCREEN, in either view. The diagram scrolls
+  // sideways, and at its leftmost position a swipe to the right on it is,
+  // to iOS, the interactive pop gesture: the screen went back to the library
+  // under a finger that was reading a table (Sep 21). It was left on for
+  // Step-by-Step, which has nothing horizontal — and a thumb brushing the
+  // edge while cooking popped that screen too (Sep 25, a real phone). A
+  // recipe is where the hands are busy; the header's back button is the way
+  // out.
 
   const isDraft = id === 'draft';
   const entry = isDraft ? null : getEntry(id);
@@ -98,9 +100,8 @@ export default function RecipeDetailScreen() {
     }
     return (
       <>
-        <Stack.Screen options={{ title: recipeTitle, gestureEnabled: !overview }} />
+        <Stack.Screen options={{ title: recipeTitle, gestureEnabled: false }} />
         <RecipeScreen
-          onViewChange={(v) => setOverview(v === 'overview')}
           recipe={draft.recipe}
           done={[]}
           servings={draftServings}
@@ -152,7 +153,7 @@ export default function RecipeDetailScreen() {
       <Stack.Screen
         options={{
           title: recipeTitle,
-          gestureEnabled: !overview,
+          gestureEnabled: false,
           headerRight: () => (
             <Pressable
               accessibilityRole="button"
@@ -168,7 +169,6 @@ export default function RecipeDetailScreen() {
         }}
       />
       <RecipeScreen
-        onViewChange={(v) => setOverview(v === 'overview')}
         initialView={initialView}
         recipe={entry.recipe}
         photoEntry={entry}
