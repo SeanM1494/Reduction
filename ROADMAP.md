@@ -1823,6 +1823,23 @@ and the text change carries the whole signal.
 
 ## Still open from earlier work
 
+- **The original-wording screen is phone-only — a known gap, not urgent
+  (Sep 25).** The recipe as its source worded it (README "Original
+  wording") ships on mobile only: `app/original/[id].tsx`, reached from
+  the ⋮ menu and a row under the diagram. The web has no screen for it,
+  by decision. What that leaves behind today: the web's saves send no
+  `sourceKey`, so a recipe PASTED or PHOTOGRAPHED on the web never gets
+  its wording kept; a recipe saved from a LINK on the web is still filled
+  in on its first open on the phone (from the cache's wording, or the
+  page's JSON-LD), so nothing is lost there. Building it later is a
+  client-only job — the server route, storage and gate already exist:
+  pass `sourceKey` from the extract response into the save, and render
+  `GET /api/library/:id/original` (plus the preview's `original`) with
+  the same attribution-first layout and the truncation note. The
+  truncation cutoffs (80 steps, 120 ingredient lines, 24,000 characters,
+  `ORIGINAL_LIMITS` in recipe-model `original.ts`) are SETTLED as they
+  are: no recipe anyone expects to extract comes near them, and they
+  exist for the rare runaway case, not to be tuned.
 - **A component that joins at the last step gets no finish strip — decision
   needed (Sep 21).** Reported from a real extraction (a copycat lemon loaf
   with a Lemon Glaze section): the main table stayed wide while the last
