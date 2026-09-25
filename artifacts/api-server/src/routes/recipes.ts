@@ -15,9 +15,8 @@ import crypto from "node:crypto";
 import { desc, eq, inArray, or } from "drizzle-orm";
 import { getDb } from "../db";
 import { extractionCache } from "@workspace/db";
-import { fetchSource } from "../lib/fetchSource";
+import { readRecipeAtUrl } from "../lib/readRecipe";
 import { structureRecipe } from "../lib/structureRecipe";
-import { structureRecipeFromUrl } from "../lib/fetchViaClaude";
 import { searchRecipes, type SearchResult } from "../lib/searchRecipes";
 import { libraryMatches, mergeResults, proofLine, usageFor, type UsageStats } from "../lib/searchLibrary";
 import type { Recipe } from "../shared/layout";
@@ -28,7 +27,6 @@ import { urlKeyOf } from "../lib/urlKey";
 import { hostOf, recordExtraction, type ExtractionEvent } from "../lib/extractionLog";
 import {
   sanitizeOriginal,
-  setRecipeTotalMinutes,
   type OriginalFrom,
   type OriginalRecipe,
 } from "@workspace/recipe-model";
@@ -438,55 +436,12 @@ recipesRouter.post("/extract", requireExtractionAllowance, async (req: Request, 
           .status(429)
           .json({ error: "Too many extractions this hour. Try again later." });
 
-      let recipe;
-      let attempts = 1;
-      let repaired: string[] = [];
-      let via: "self" | "claude" = "self";
-      let extraction: "jsonld" | "text" | undefined;
-      let original: OriginalRecipe | null = null;
-
-      try {
-        // Our own fetch is cheaper and gives us JSON-LD when the site has it.
-        const src = await fetchSource(url);
-        const out = await structureRecipe({
-          title: src.title,
-          yieldText: src.yieldText,
-          ingredients: src.ingredients,
-          instructions: src.instructions,
-          text: src.quality === "text" ? src.text : undefined,
-          sourceUrl: url,
-          // The card's own lines come with JSON-LD; only a text page needs
-          // the model to copy them out (lib/prompt.ts ORIGINAL_RULES).
-          askOriginal: src.quality === "text",
-        });
-        original = src.original ?? sanitizeOriginal(out.original, "page");
-        recipe = out.recipe;
-        attempts = out.attempts;
-        repaired = out.repaired;
-        recipe.source = src.siteName;
-        recipe.image = src.image;
-        // On a structured-data page the model was shown only the ingredients
-        // and steps — never the page — so any total it returned is a guess
-        // from step times. There, the page's own totalTime is the only
-        // source, and its absence clears the model's number. On a text page
-        // the model read the page itself, and its (gated) value stands.
-        if (src.quality === "jsonld") setRecipeTotalMinutes(recipe, src.totalMinutes);
-        extraction = src.quality;
-      } catch (selfErr) {
-        // Blocked, JS-rendered, or unreadable. Let Claude fetch it instead —
-        // the request comes from Anthropic's infrastructure, not this Repl.
-        // Marked here rather than only on success, so a failure on the
-        // expensive path still shows up as one — otherwise the fraction this
-        // table exists to measure would count only the calls that worked.
-        mark({ via: "claude" });
-        console.warn("[extract] self-fetch failed, using web_fetch:", (selfErr as Error).message);
-        const out = await structureRecipeFromUrl(url);
-        recipe = out.recipe;
-        attempts = out.attempts;
-        repaired = out.repaired;
-        original = sanitizeOriginal(out.original, "page");
-        via = "claude";
-      }
+      // Our fetch, then Anthropic's; `via` is marked as the expensive path
+      // STARTS, so a failure on it still shows up as one — otherwise the
+      // fraction the log exists to measure would count only the calls that
+      // worked (lib/readRecipe.ts).
+      const read = await readRecipeAtUrl(url, { onFallback: () => mark({ via: "claude" }) });
+      const { recipe, attempts, repaired, via, extraction, original } = read;
 
       await cacheSetUrl(url, recipe);
       const sourceKey = hash(`url:${url}`);
@@ -732,37 +687,9 @@ recipesRouter.post("/reextract", async (req: Request, res: Response) => {
     // wrong — the cheaper mistake of the two.
     await cacheDropUrl(url);
 
-    let recipe: Recipe;
-    let attempts = 1;
-    let repaired: string[] = [];
-    let original: OriginalRecipe | null = null;
-    try {
-      const src = await fetchSource(url);
-      const out = await structureRecipe({
-        title: src.title,
-        yieldText: src.yieldText,
-        ingredients: src.ingredients,
-        instructions: src.instructions,
-        text: src.quality === "text" ? src.text : undefined,
-        sourceUrl: url,
-        askOriginal: src.quality === "text",
-      });
-      original = src.original ?? sanitizeOriginal(out.original, "page");
-      recipe = out.recipe;
-      attempts = out.attempts;
-      repaired = out.repaired;
-      recipe.source = src.siteName;
-      recipe.image = src.image;
-      // Same rule as the first extraction: see there.
-      if (src.quality === "jsonld") setRecipeTotalMinutes(recipe, src.totalMinutes);
-    } catch {
-      mark({ via: "claude" });
-      const out = await structureRecipeFromUrl(url);
-      recipe = out.recipe;
-      attempts = out.attempts;
-      repaired = out.repaired;
-      original = sanitizeOriginal(out.original, "page");
-    }
+    const { recipe, attempts, repaired, original } = await readRecipeAtUrl(url, {
+      onFallback: () => mark({ via: "claude" }),
+    });
 
     await cacheSetUrl(url, recipe);
     await keepOriginal(hash(`url:${url}`), original);

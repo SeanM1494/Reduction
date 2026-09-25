@@ -157,6 +157,9 @@ interface RecipeScreenProps {
   /** Opens the recipe as its source worded it (app/original/[id].tsx);
    *  absent, there is no row for it. */
   onOpenOriginal?: () => void;
+  /** The source's step sentences, for Step-by-Step's "From the recipe"
+   *  line (StepsMode's `sourceSteps`). */
+  sourceSteps?: string[] | null;
   saving?: boolean;
   /** Rendered under the mode tabs in both views — the demo's coach line
    *  and tips live here, so the teaching layer wraps this screen without
@@ -210,6 +213,7 @@ export function RecipeScreen({
   isDraft,
   onSave,
   onOpenOriginal,
+  sourceSteps = null,
   saving,
   above,
   overviewFooter,
@@ -572,6 +576,7 @@ export function RecipeScreen({
           openReorder={openReorder}
           onReorderOpened={() => setOpenReorder(false)}
           header={sessionRow}
+          sourceSteps={sourceSteps}
         />
       )}
 

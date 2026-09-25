@@ -34,7 +34,7 @@ import { isValidOrder } from "./library";
 import { sanitizeMealTypes } from "../shared/mealTypes";
 import { reconcileDone } from "../shared/progress";
 import { readTrialId, trialOwnerKey } from "../lib/trial";
-import { setRecipeTotalMinutes } from "@workspace/recipe-model";
+import { sanitizeStepSources, setRecipeTotalMinutes } from "@workspace/recipe-model";
 
 export const trialRouter = Router();
 
@@ -72,6 +72,7 @@ trialRouter.patch("/recipe", async (req: Request, res: Response) => {
     );
     // A stated total time, through its gate — a client cannot store junk.
     setRecipeTotalMinutes(recipe, (recipe as { totalMinutes?: unknown }).totalMinutes);
+    sanitizeStepSources(recipe); // source step numbers, through their gate (stepSource.ts)
   }
   if (done !== undefined && !Array.isArray(done))
     return res.status(400).json({ error: "done must be an array of ids." });

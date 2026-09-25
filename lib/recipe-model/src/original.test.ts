@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { ORIGINAL_LIMITS, originalStepNumbers, sanitizeOriginal } from "./original";
+import { ORIGINAL_LIMITS, originalStepNumbers, originalStepTexts, sanitizeOriginal } from "./original";
 
 test("keeps each line as its own element, in order, with headings marked", () => {
   const o = sanitizeOriginal(
@@ -77,4 +77,15 @@ test("steps are numbered across headings, headings unnumbered", () => {
     originalStepNumbers([{ text: "a" }, { text: "H", heading: true }, { text: "b" }, { text: "c" }]),
     [1, null, 2, 3]
   );
+});
+
+test("step texts count steps only, so src n is entry n-1", () => {
+  const o = sanitizeOriginal(
+    { ingredients: ["1 egg"], steps: [{ heading: "Filling" }, "Sauté.", "Scramble.", { heading: "Assembly" }, "Fill."] },
+    "page"
+  );
+  assert.deepEqual(originalStepTexts(o), ["Sauté.", "Scramble.", "Fill."]);
+  assert.deepEqual(originalStepTexts(null), []);
+  // And the numbers the wording screen shows are the same ones.
+  assert.deepEqual(originalStepNumbers(o!.steps).filter((n) => n !== null), [1, 2, 3]);
 });

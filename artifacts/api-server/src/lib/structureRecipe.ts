@@ -10,7 +10,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { SYSTEM_PROMPT, buildUserText, buildRepairText } from "./prompt";
 import { validateRecipe, type Recipe } from "../shared/layout";
 import { sanitizeMealTypes } from "../shared/mealTypes";
-import { setRecipeTotalMinutes } from "@workspace/recipe-model";
+import { sanitizeStepSources, setRecipeTotalMinutes, stripStepSources } from "@workspace/recipe-model";
 import { closeTruncatedJson, takeOriginal } from "./original";
 import { addUsage, effortFields, emptyUsage, resolveCall, type CallUsage, type ModelCallOptions } from "./extractionConfig";
 
@@ -42,7 +42,7 @@ export interface StructureInput {
   askOriginal?: boolean;
 }
 
-function contentFor(input: StructureInput): Anthropic.ContentBlockParam[] {
+function contentFor(input: StructureInput, askStepSources: boolean): Anthropic.ContentBlockParam[] {
   const blocks: Anthropic.ContentBlockParam[] = [];
 
   if (input.file) {
@@ -64,7 +64,7 @@ function contentFor(input: StructureInput): Anthropic.ContentBlockParam[] {
     }
   }
 
-  blocks.push({ type: "text", text: buildUserText(input) });
+  blocks.push({ type: "text", text: buildUserText({ ...input, askStepSources }) });
   return blocks;
 }
 
@@ -105,7 +105,7 @@ export async function structureRecipe(
   const call = resolveCall(opts);
   const usage = emptyUsage();
   const messages: Anthropic.MessageParam[] = [
-    { role: "user", content: contentFor(input) },
+    { role: "user", content: contentFor(input, call.stepSources) },
   ];
 
   let lastErrors: string[] = [];
@@ -156,6 +156,9 @@ export async function structureRecipe(
       recipe.mealTypes = sanitizeMealTypes(recipe.mealTypes);
       // A stated total time, through its gate: junk is dropped, not stored.
       setRecipeTotalMinutes(recipe, (recipe as { totalMinutes?: unknown }).totalMinutes);
+      // Source step numbers through their gate — or gone, when switched off.
+      if (call.stepSources) sanitizeStepSources(recipe);
+      else stripStepSources(recipe);
       return { recipe, attempts: attempt, repaired, original: input.askOriginal ? original : null, usage };
     }
 

@@ -12,7 +12,7 @@ import { appleBillingRouter } from "./billingApple";
 import { adminRouter } from "./admin";
 import { accountRouter } from "./account";
 
-import { EXTRACTION_MAX_TOKENS, extractionEffort } from "../lib/extractionConfig";
+import { EXTRACTION_MAX_TOKENS, extractionEffort, stepSourcesEnabled } from "../lib/extractionConfig";
 
 const router: IRouter = Router();
 
@@ -29,7 +29,7 @@ router.get("/health", async (_req, res) =>
     ok: true,
     commit: BUILD_COMMIT,
     schema: await schemaForHealth(),
-    extraction: { effort: extractionEffort() ?? "default", maxTokens: EXTRACTION_MAX_TOKENS },
+    extraction: { effort: extractionEffort() ?? "default", maxTokens: EXTRACTION_MAX_TOKENS, stepSources: stepSourcesEnabled() },
   })
 );
 

@@ -7,7 +7,7 @@
  */
 
 import * as cheerio from "cheerio";
-import { parseIsoDuration, sanitizeOriginal, type OriginalRecipe } from "@workspace/recipe-model";
+import { cleanOriginalText, parseIsoDuration, sanitizeOriginal, type OriginalRecipe } from "@workspace/recipe-model";
 
 const UA =
   "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 " +
@@ -110,38 +110,10 @@ function textOf(v: unknown): string {
   return "";
 }
 
-function flattenInstructions(v: unknown): string[] {
-  if (!v) return [];
-  const out: string[] = [];
-  const walk = (node: unknown): void => {
-    if (!node) return;
-    if (Array.isArray(node)) {
-      node.forEach(walk);
-      return;
-    }
-    if (typeof node === "string") {
-      const s = node.trim();
-      if (s) out.push(s);
-      return;
-    }
-    const o = node as Record<string, unknown>;
-    // HowToSection nests its own steps.
-    if (o.itemListElement) {
-      walk(o.itemListElement);
-      return;
-    }
-    const s = textOf(o);
-    if (s) out.push(s);
-  };
-  walk(v);
-  return out;
-}
-
 /**
- * `recipeInstructions` as lines for the original-wording screen: like
- * flattenInstructions, except a HowToSection's name is kept as a heading
- * ("For the frosting") instead of being dropped, since that is how the
- * card reads.
+ * `recipeInstructions` as lines, a HowToSection's name kept as a heading
+ * ("For the frosting") since that is how the card reads. The model is shown
+ * the steps (numbered, headings aside); the wording screen shows all of it.
  */
 function instructionLines(v: unknown): Array<string | { heading: string }> {
   const out: Array<string | { heading: string }> = [];
@@ -262,7 +234,14 @@ export function sourceFromHtml(html: string, url: URL): FetchedSource {
     )
       .map(textOf)
       .filter(Boolean);
-    const instructions = flattenInstructions(node.recipeInstructions);
+    // ONE list serves both the model and the wording screen: the steps are
+    // numbered for the model from exactly the lines stored as the original
+    // wording (headings aside), so a step's source number points at the
+    // sentence it came from (recipe-model stepSource.ts).
+    const lines = instructionLines(node.recipeInstructions)
+      .map((l) => (typeof l === "string" ? cleanOriginalText(l) : { heading: cleanOriginalText(l.heading) }))
+      .filter((l) => (typeof l === "string" ? l : l.heading));
+    const instructions = lines.filter((l): l is string => typeof l === "string");
 
     if (ingredients.length && instructions.length) {
       return {
@@ -278,7 +257,7 @@ export function sourceFromHtml(html: string, url: URL): FetchedSource {
         image: imageUrlOf(node.image, url) ?? imageUrlOf($('meta[property="og:image"]').attr("content"), url),
         totalMinutes: parseIsoDuration(node.totalTime),
         original: sanitizeOriginal(
-          { ingredients, steps: instructionLines(node.recipeInstructions) },
+          { ingredients, steps: lines },
           "page"
         ),
       };

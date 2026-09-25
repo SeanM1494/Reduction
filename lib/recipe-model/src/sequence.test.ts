@@ -21,6 +21,8 @@ import {
   freeSectionIndices,
   pruneOrderPreference,
   sectionOrder,
+  sectionSequence,
+  sourceSequence,
   stepSequence,
   type OrderPreference,
 } from "./sequence";
@@ -548,4 +550,185 @@ test("the invariant survives random preferences over random trees", () => {
     assert.equal(new Set(seq).size, seq.length);
     assert.equal(seq.length, sections.reduce((n, s) => n + s.nodes.length, 0));
   }
+});
+
+// ------------------------------------------------------------ source order --
+
+/**
+ * The invariant at step level, which is what source order has to keep: a
+ * step never after one that consumes it, and a component ingredient's
+ * whole section done before the step that uses it — while the consuming
+ * section's OTHER steps may run first, which is the point.
+ */
+function stepViolations(recipe: Recipe, seq: Array<{ sectionIndex: number; stepId: string }>): string[] {
+  const at = new Map(seq.map((s, i) => [`${s.sectionIndex}:${s.stepId}`, i]));
+  const bad: string[] = [];
+  const names = new Map(recipe.sections.map((s, i) => [s.name.trim().toLowerCase(), i]));
+  recipe.sections.forEach((s, si) => {
+    const ids = new Set(s.nodes.map((n) => n.id));
+    for (const n of s.nodes) {
+      const me = at.get(`${si}:${n.id}`);
+      if (me == null) continue;
+      for (const inp of n.inputs) {
+        if (ids.has(inp)) {
+          if ((at.get(`${si}:${inp}`) ?? -1) > me) bad.push(`${inp} after its consumer ${n.id}`);
+          continue;
+        }
+        const ing = s.ingredients.find((x) => x.id === inp);
+        const sj = ing ? names.get(ing.name.trim().toLowerCase()) : undefined;
+        if (sj == null || sj === si) continue;
+        for (const m of recipe.sections[sj].nodes) {
+          if ((at.get(`${sj}:${m.id}`) ?? -1) > me) bad.push(`${recipe.sections[sj].name}/${m.id} after ${n.id}, which uses it`);
+        }
+      }
+    }
+  });
+  return bad;
+}
+
+/** The hot pockets from the Sep 25 report: an egg wash made as its own
+ *  section, and a filling whose steps the section walk emitted by column. */
+const HOT_POCKETS = (): Recipe => ({
+  title: "Breakfast Hot Pockets",
+  servings: 6,
+  sections: [
+    {
+      name: "Egg wash",
+      header: null,
+      ingredients: [{ id: "w_egg", qty: 1, unit: null, name: "egg" }],
+      nodes: [{ id: "w1", label: "beat", inputs: ["w_egg"], src: 6 } as never],
+      root: "w1",
+    },
+    {
+      name: "Hot pockets",
+      header: "Oven 400°F",
+      ingredients: [
+        { id: "h_butter", qty: 2, unit: "tbsp", name: "butter" },
+        { id: "h_sausage", qty: 4, unit: null, name: "sausage links" },
+        { id: "h_pepper", qty: 1, unit: null, name: "red pepper" },
+        { id: "h_eggs", qty: 6, unit: null, name: "eggs" },
+        { id: "h_cheese", qty: 1, unit: "cup", name: "cheddar" },
+        { id: "h_pastry", qty: 1, unit: null, name: "puff pastry sheet" },
+        { id: "h_wash", qty: 1, unit: null, name: "Egg wash" },
+      ],
+      nodes: [
+        { id: "h1", label: "sauté sausage and vegetables", inputs: ["h_butter", "h_sausage", "h_pepper"], src: 2 },
+        { id: "h2", label: "scramble eggs with cheese", inputs: ["h1", "h_eggs", "h_cheese"], src: 3 },
+        { id: "h3", label: "cut into 6 rectangles", inputs: ["h_pastry"], src: 4 },
+        { id: "h4", label: "fill and fold", inputs: ["h3", "h2"], src: 5 },
+        { id: "h5", label: "brush", inputs: ["h4", "h_wash"], src: 6 },
+        { id: "h6", label: "bake 400°F 20 min", inputs: ["h5"], src: 7 },
+      ] as never,
+      root: "h6",
+    },
+  ],
+});
+
+const labels = (r: Recipe, seq: Array<{ sectionIndex: number; stepId: string }>) =>
+  seq.map((s) => r.sections[s.sectionIndex].nodes.find((n) => n.id === s.stepId)!.label);
+
+test("source order: the hot pockets cook in the recipe's order, egg wash beaten just before brushing", () => {
+  const r = HOT_POCKETS();
+  assert.deepEqual(validateRecipe(r), []);
+  const seq = cardSequence(r);
+  assert.deepEqual(labels(r, seq), [
+    "sauté sausage and vegetables",
+    "scramble eggs with cheese",
+    "cut into 6 rectangles",
+    "fill and fold",
+    "beat",
+    "brush",
+    "bake 400°F 20 min",
+  ]);
+  assert.deepEqual(stepViolations(r, seq), []);
+  // What the reported screenshots showed: the section walk, egg wash first.
+  assert.equal(labels(r, sectionSequence(r))[0], "beat");
+});
+
+test("source order: a recipe without tags keeps exactly the order it had", () => {
+  const r = HOT_POCKETS();
+  for (const s of r.sections) for (const n of s.nodes) delete (n as { src?: unknown }).src;
+  assert.equal(sourceSequence(r), null);
+  assert.deepEqual(cardSequence(r), sectionSequence(r));
+  // And for every older fixture in this file.
+  for (const old of [one(GUAC()), SPLIT_COOKIE()]) assert.deepEqual(cardSequence(old), sectionSequence(old));
+});
+
+test("source order: a Reorder preference keeps the walk it was made against", () => {
+  const r = HOT_POCKETS();
+  const prefer: OrderPreference = { branches: { h4: ["h2", "h3"] } };
+  assert.deepEqual(cardSequence(r, prefer), sectionSequence(r, prefer));
+  assert.deepEqual(cardSequence(r, {}), sourceSequence(r), "an empty preference is no preference");
+});
+
+test("source order: an untagged step goes just before the tagged step it feeds", () => {
+  const r = HOT_POCKETS();
+  // A step added in the editor between cutting and filling, with no tag.
+  const hp = r.sections[1];
+  hp.nodes.splice(3, 0, { id: "h3b", label: "chill 10 min", inputs: ["h3"] });
+  hp.nodes.find((n) => n.id === "h4")!.inputs = ["h3b", "h2"];
+  assert.deepEqual(validateRecipe(r), []);
+  const order = labels(r, cardSequence(r));
+  assert.deepEqual(order.slice(0, 5), ["sauté sausage and vegetables", "scramble eggs with cheese", "cut into 6 rectangles", "chill 10 min", "fill and fold"]);
+});
+
+test("source order: tags that contradict the tree cannot break the invariant", () => {
+  const r = HOT_POCKETS();
+  // The worst a bad tag can do: claim the last step came first.
+  (r.sections[1].nodes.find((n) => n.id === "h6") as { src?: number }).src = 1;
+  (r.sections[0].nodes[0] as { src?: number }).src = 9;
+  const seq = cardSequence(r);
+  assert.equal(seq.length, 7);
+  assert.deepEqual(stepViolations(r, seq), []);
+  assert.equal(labels(r, seq).at(-1), "bake 400°F 20 min", "it still bakes last: nothing depends on the tag alone");
+});
+
+test("source order: random trees and random (even adversarial) tags keep the invariant", () => {
+  let seed = 20260925;
+  const rnd = () => (seed = (seed * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff;
+  let checked = 0;
+  for (let iter = 0; iter < 8000; iter++) {
+    const nSections = 1 + Math.floor(rnd() * 3);
+    const sections: Section[] = [];
+    for (let si = 0; si < nSections; si++) {
+      const ingredients: Section["ingredients"] = [];
+      const nodes: Section["nodes"] = [];
+      const pool: string[] = [];
+      let ing = 0;
+      const newIng = (name?: string) => {
+        const id = `x${si}_i${ing++}`;
+        ingredients.push({ id, qty: 1, unit: null, name: name ?? `ing ${id}` });
+        pool.push(id);
+        return id;
+      };
+      for (let i = 0; i < 2 + Math.floor(rnd() * 3); i++) newIng();
+      // Some sections use an earlier section's output.
+      for (let pj = 0; pj < si; pj++) if (rnd() < 0.5) newIng(`Part ${pj}`);
+      const nSteps = 1 + Math.floor(rnd() * 6);
+      for (let s = 0; s < nSteps; s++) {
+        const inputs: string[] = [];
+        const want = 1 + Math.floor(rnd() * 3);
+        for (let k = 0; k < want; k++) {
+          if (pool.length === 0 || (rnd() < 0.35 && s < nSteps - 1)) inputs.push(newIng());
+          else inputs.push(pool.splice(Math.floor(rnd() * pool.length), 1)[0]);
+        }
+        const node: Section["nodes"][number] & { src?: number } = { id: `x${si}_s${s}`, label: `step ${si}.${s}`, inputs };
+        if (rnd() < 0.8) node.src = 1 + Math.floor(rnd() * 12);
+        nodes.push(node);
+        pool.push(node.id);
+      }
+      const last = nodes[nodes.length - 1];
+      for (const leftover of pool) if (leftover !== last.id) last.inputs.push(leftover);
+      sections.push({ name: `Part ${si}`, ingredients, nodes, root: last.id });
+    }
+    const recipe: Recipe = { title: "t", servings: 1, sections };
+    if (validateRecipe(recipe).length) continue;
+    checked++;
+    const seq = cardSequence(recipe);
+    const total = sections.reduce((n, s) => n + s.nodes.length, 0);
+    assert.equal(seq.length, total, "every step exactly once");
+    assert.equal(new Set(seq.map((s) => `${s.sectionIndex}:${s.stepId}`)).size, total);
+    assert.deepEqual(stepViolations(recipe, seq), [], JSON.stringify(recipe));
+  }
+  assert.ok(checked > 300, `expected a decent sample, got ${checked}`);
 });

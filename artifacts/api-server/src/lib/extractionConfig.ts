@@ -45,18 +45,37 @@ export function effortFields(effort: ExtractionEffort | null): Record<string, un
   return effort ? { output_config: { effort } } : {};
 }
 
+/**
+ * SOURCE STEP NUMBERS (recipe-model stepSource.ts): the model tags each
+ * diagram step with the number of the recipe's own step it came from, and
+ * Step-by-Step orders and captions cards by it. A wrong tag reorders cards
+ * away from the recipe, so this too is a secret — EXTRACTION_STEP_SOURCES
+ * — and stays off until the same comparison has checked the tags on messy
+ * recipes. Off, the prompt is exactly what it was.
+ */
+export function stepSourcesEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
+  return /^(1|on|true|yes)$/i.test(env.EXTRACTION_STEP_SOURCES?.trim() ?? "");
+}
+
 /** Options every extraction call takes: the comparison script sets them
  *  explicitly, the routes leave them to the configuration above. */
 export interface ModelCallOptions {
   /** undefined = configured; null = the model's default. */
   effort?: ExtractionEffort | null;
   maxTokens?: number;
+  /** undefined = configured. */
+  stepSources?: boolean;
 }
 
-export function resolveCall(opts: ModelCallOptions = {}): { effort: ExtractionEffort | null; maxTokens: number } {
+export function resolveCall(opts: ModelCallOptions = {}): {
+  effort: ExtractionEffort | null;
+  maxTokens: number;
+  stepSources: boolean;
+} {
   return {
     effort: opts.effort === undefined ? extractionEffort() : opts.effort,
     maxTokens: opts.maxTokens ?? EXTRACTION_MAX_TOKENS,
+    stepSources: opts.stepSources ?? stepSourcesEnabled(),
   };
 }
 

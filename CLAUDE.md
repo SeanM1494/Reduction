@@ -1214,6 +1214,27 @@ with no components comes out untouched, and a cycle (which a bad parse can
 produce) falls back to the original order rather than hanging or dropping a
 section.
 
+**When the recipe's steps carry source numbers, cards follow the RECIPE'S
+order, not the tree's** (Sep 25). The section walk above emits a component
+section whole before its consumer and each section column by column, which
+is dependency-safe and still wrong in a kitchen: the hot pockets beat their
+egg wash first and cut the pastry before the eggs were scrambled. Each
+step's `src` (recipe-model `stepSource.ts`) is the number of the source's
+own step it came from, and `sourceSequence` walks ALL steps of ALL
+sections topologically, taking the ready step with the smallest `src` —
+so parts interleave as the recipe does, and the invariant holds by
+construction, fuzzed over 8,000 trees with random and deliberately wrong
+tags. Three rules keep it safe: **no tags, no change** (every recipe saved
+before this keeps `sectionSequence` exactly — `cardSequence` is identical
+for it, pinned by test); **a Reorder preference keeps the walk it was made
+against** (the Reorder view arranges parts whole, and says so when the
+cards differ); and **a wrong tag is worse than none**, so the model is
+asked for tags only when the `EXTRACTION_STEP_SOURCES` secret is on, which
+waits on a check of real, messy recipes. The same numbers caption each
+Step-by-Step card with the source's own sentence (`originalStepTexts`),
+which is why a structured-data page's INSTRUCTIONS are numbered from
+exactly the lines stored as its original wording (`fetchSource`).
+
 **Any edit that changes a name can break that link, and nothing else in the
 codebase can see it.** `validateRecipe` runs per section, so when the link
 goes both sections stay valid, the diagram stays correct, and the only symptom

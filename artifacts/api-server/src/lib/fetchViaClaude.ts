@@ -15,12 +15,12 @@
  */
 
 import Anthropic from "@anthropic-ai/sdk";
-import { ORIGINAL_RULES, SYSTEM_PROMPT, buildRepairText } from "./prompt";
+import { ORIGINAL_RULES, STEP_SOURCE_RULES, SYSTEM_PROMPT, buildRepairText } from "./prompt";
 import { closeTruncatedJson, takeOriginal } from "./original";
 import { addUsage, effortFields, emptyUsage, resolveCall, type CallUsage, type ModelCallOptions } from "./extractionConfig";
 import { validateRecipe, type Recipe } from "../shared/layout";
 import { sanitizeMealTypes } from "../shared/mealTypes";
-import { setRecipeTotalMinutes } from "@workspace/recipe-model";
+import { sanitizeStepSources, setRecipeTotalMinutes, stripStepSources } from "@workspace/recipe-model";
 
 let _client: Anthropic | null = null;
 function getClient(): Anthropic {
@@ -87,7 +87,8 @@ export async function structureRecipeFromUrl(
         `Return the JSON object and nothing else.\n\n` +
         // The model read the page itself, so it is the only one that can
         // copy the recipe's own wording out of it (prompt.ts).
-        ORIGINAL_RULES,
+        ORIGINAL_RULES +
+        (call.stepSources ? `\n\n${STEP_SOURCE_RULES}` : ""),
     },
   ];
 
@@ -150,6 +151,8 @@ export async function structureRecipeFromUrl(
       recipe.mealTypes = sanitizeMealTypes(recipe.mealTypes);
       // A stated total time, through its gate: junk is dropped, not stored.
       setRecipeTotalMinutes(recipe, (recipe as { totalMinutes?: unknown }).totalMinutes);
+      if (call.stepSources) sanitizeStepSources(recipe);
+      else stripStepSources(recipe);
       recipe.sourceUrl = url;
       try {
         recipe.source = new URL(url).hostname.replace(/^www\./, "");

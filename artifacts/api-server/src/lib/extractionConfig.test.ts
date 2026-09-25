@@ -17,7 +17,9 @@ const TREE = {
     {
       name: "Toast",
       ingredients: [{ id: "a", qty: 1, unit: null, name: "bread" }],
-      nodes: [{ id: "n1", label: "toast", inputs: ["a"] }],
+      // The model's reply carries a tag whether or not it was asked for
+      // one — which is what "off" must survive.
+      nodes: [{ id: "n1", label: "toast", inputs: ["a"], src: 1 }],
       root: "n1",
     },
   ],
@@ -25,7 +27,12 @@ const TREE = {
 
 let server: Server;
 const bodies: any[] = [];
-const saved = { key: process.env.ANTHROPIC_API_KEY, base: process.env.ANTHROPIC_BASE_URL, effort: process.env.EXTRACTION_EFFORT };
+const saved = {
+  key: process.env.ANTHROPIC_API_KEY,
+  base: process.env.ANTHROPIC_BASE_URL,
+  effort: process.env.EXTRACTION_EFFORT,
+  sources: process.env.EXTRACTION_STEP_SOURCES,
+};
 
 before(async () => {
   server = createServer((req, res) => {
@@ -56,7 +63,12 @@ before(async () => {
 
 after(() => {
   server.close();
-  for (const [k, v] of [["ANTHROPIC_API_KEY", saved.key], ["ANTHROPIC_BASE_URL", saved.base], ["EXTRACTION_EFFORT", saved.effort]] as const) {
+  for (const [k, v] of [
+    ["ANTHROPIC_API_KEY", saved.key],
+    ["ANTHROPIC_BASE_URL", saved.base],
+    ["EXTRACTION_EFFORT", saved.effort],
+    ["EXTRACTION_STEP_SOURCES", saved.sources],
+  ] as const) {
     if (v === undefined) delete process.env[k];
     else process.env[k] = v;
   }
@@ -94,4 +106,22 @@ test("on the wire: 16,000 tokens always; effort only when configured", async () 
   await structureRecipe({ text: "Toast the bread. ".repeat(5) }, { effort: null, maxTokens: 8000 });
   assert.equal("output_config" in bodies[0], false);
   assert.equal(bodies[0].max_tokens, 8000);
+});
+
+test("source step numbers: off asks nothing and keeps nothing; on asks and keeps", async () => {
+  const { structureRecipe } = await import("./structureRecipe");
+  const userText = (b: any) => b.messages[0].content.map((c: any) => c.text ?? "").join("\n");
+
+  delete process.env.EXTRACTION_STEP_SOURCES;
+  bodies.length = 0;
+  const off = await structureRecipe({ text: "Toast the bread. ".repeat(5) });
+  assert.equal(userText(bodies[0]).includes("NUMBER EACH STEP'S SOURCE"), false, "off: the prompt is what it was");
+  assert.equal("src" in off.recipe.sections[0].nodes[0], false, "off: a tag the model sent anyway is dropped");
+
+  process.env.EXTRACTION_STEP_SOURCES = "on";
+  bodies.length = 0;
+  const on = await structureRecipe({ text: "Toast the bread. ".repeat(5) });
+  assert.equal(userText(bodies[0]).includes("NUMBER EACH STEP'S SOURCE"), true);
+  assert.equal((on.recipe.sections[0].nodes[0] as { src?: number }).src, 1);
+  delete process.env.EXTRACTION_STEP_SOURCES;
 });

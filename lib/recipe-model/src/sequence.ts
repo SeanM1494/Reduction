@@ -30,6 +30,7 @@
  */
 
 import { computeLayout, type Recipe, type Section } from "./layout";
+import { hasStepSources, stepSource } from "./stepSource";
 
 /**
  * The steps of one section, in the order they should be done.
@@ -243,6 +244,25 @@ export interface SequencedStep {
  * preference naming a step or section that no longer exists is inert.
  */
 export function cardSequence(recipe: Recipe, prefer?: OrderPreference): SequencedStep[] {
+  // The recipe's own order, when its steps carry source numbers and nobody
+  // has arranged the cards by hand — see sourceSequence. A stored
+  // preference is someone's deliberate choice and keeps the walk it was
+  // made against (below), so a Reorder never changes meaning under them.
+  const hasPreference = !!(prefer?.sections?.length || (prefer?.branches && Object.keys(prefer.branches).length));
+  if (!hasPreference) {
+    const bySource = sourceSequence(recipe);
+    if (bySource) return bySource;
+  }
+  return sectionSequence(recipe, prefer);
+}
+
+/**
+ * The walk every recipe had before source numbers: sections whole, in
+ * dependency order (with a preference as tie-break), each section's steps
+ * column by column. Still the order for every recipe without tags and every
+ * entry with a Reorder preference.
+ */
+export function sectionSequence(recipe: Recipe, prefer?: OrderPreference): SequencedStep[] {
   const out: SequencedStep[] = [];
   for (const si of sectionOrder(recipe, prefer)) {
     const section = prefer?.branches
@@ -251,6 +271,115 @@ export function cardSequence(recipe: Recipe, prefer?: OrderPreference): Sequence
     for (const stepId of stepSequence(section)) {
       out.push({ sectionIndex: si, stepId });
     }
+  }
+  return out;
+}
+
+// ------------------------------------------------------------ source order --
+
+/**
+ * Every step, in the order the RECIPE gives them, wherever the tree allows —
+ * or null when the recipe has no source numbers (stepSource.ts), which is
+ * the caller's cue to use `sectionSequence` exactly as before.
+ *
+ * One topological walk over ALL steps of ALL sections, so sections
+ * interleave the way the recipe does (sauté the filling, scramble the eggs,
+ * cut the pastry, fill, THEN beat the egg wash and brush it on) instead of
+ * a component section running whole before its consumer. The edges are
+ * the same two kinds `sectionSequence` honours — a step's step-inputs, and
+ * a component ingredient's whole section (through its root, which every
+ * other step of that section feeds) — so the invariant holds by
+ * construction: a step never follows a step that consumes its output.
+ *
+ * Among the steps whose inputs are all done, the one with the smallest
+ * priority goes next: its own `src`; for a step without one (added in the
+ * editor, or a tag the gate dropped), the `src` of the nearest tagged step
+ * it feeds — "just before what needs it" — or failing that the largest
+ * `src` it depends on, "right after what it needs"; ties fall back to
+ * `sectionSequence`'s position, which is also what orders several steps
+ * drawn from one source sentence. A cycle (a bad parse) returns null
+ * rather than dropping or repeating a step.
+ */
+export function sourceSequence(recipe: Recipe): SequencedStep[] | null {
+  if (!hasStepSources(recipe)) return null;
+
+  const key = (si: number, id: string) => `${si}\u0000${id}`;
+  const fallback = sectionSequence(recipe);
+  const position = new Map(fallback.map((s, i) => [key(s.sectionIndex, s.stepId), i]));
+
+  // Which section each component ingredient is the output of — the one
+  // matching rule, via componentLinks' own name map.
+  const byName = sectionsByName(recipe);
+  const steps: Array<{ k: string; sectionIndex: number; stepId: string; src: number | null; deps: string[] }> = [];
+  const consumers = new Map<string, string[]>();
+  recipe.sections.forEach((section, si) => {
+    const stepIds = new Set((section.nodes ?? []).map((n) => n.id));
+    const ingredientSection = new Map<string, number>();
+    for (const ing of section.ingredients ?? []) {
+      const from = byName.get(norm(ing.name));
+      if (from != null && from !== si) ingredientSection.set(ing.id, from);
+    }
+    for (const node of section.nodes ?? []) {
+      const deps: string[] = [];
+      for (const input of node.inputs ?? []) {
+        if (stepIds.has(input)) deps.push(key(si, input));
+        else if (ingredientSection.has(input)) {
+          const sj = ingredientSection.get(input)!;
+          const root = recipe.sections[sj]?.root;
+          if (root) deps.push(key(sj, root));
+        }
+      }
+      const k = key(si, node.id);
+      steps.push({ k, sectionIndex: si, stepId: node.id, src: stepSource(node), deps });
+      for (const d of deps) consumers.set(d, [...(consumers.get(d) ?? []), k]);
+    }
+  });
+  const byKey = new Map(steps.map((s) => [s.k, s]));
+  // Only steps the section walk would emit (a section that cannot lay out
+  // contributes none there, and must contribute none here either).
+  const live = steps.filter((s) => position.has(s.k));
+  if (live.length !== fallback.length) return null;
+
+  // Priorities, untagged steps borrowing from what they feed, then from
+  // what feeds them.
+  const upward = (k: string, seen = new Set<string>()): number | null => {
+    if (seen.has(k)) return null;
+    seen.add(k);
+    let best: number | null = null;
+    for (const c of consumers.get(k) ?? []) {
+      const cs = byKey.get(c);
+      const v = cs?.src ?? upward(c, seen);
+      if (v !== null && (best === null || v < best)) best = v;
+    }
+    return best;
+  };
+  const downward = (k: string): number | null => {
+    let best: number | null = null;
+    for (const d of byKey.get(k)?.deps ?? []) {
+      const v = byKey.get(d)?.src ?? null;
+      if (v !== null && (best === null || v > best)) best = v;
+    }
+    return best;
+  };
+  const priority = new Map<string, number>();
+  for (const s of live) priority.set(s.k, s.src ?? upward(s.k) ?? downward(s.k) ?? Infinity);
+
+  const done = new Set<string>();
+  const out: SequencedStep[] = [];
+  while (out.length < live.length) {
+    let best: (typeof live)[number] | null = null;
+    for (const s of live) {
+      if (done.has(s.k)) continue;
+      if (!s.deps.every((d) => done.has(d) || !position.has(d))) continue;
+      if (
+        !best ||
+        priority.get(s.k)! < priority.get(best.k)! ||
+        (priority.get(s.k) === priority.get(best.k) && position.get(s.k)! < position.get(best.k)!)
+      ) best = s;
+    }
+    if (!best) return null; // a cycle: the section walk's own fallback applies
+    done.add(best.k);
+    out.push({ sectionIndex: best.sectionIndex, stepId: best.stepId });
   }
   return out;
 }

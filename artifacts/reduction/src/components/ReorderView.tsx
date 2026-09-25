@@ -35,6 +35,7 @@
 
 import { useMemo } from "react";
 import type { Recipe } from "../shared/layout";
+import { hasStepSources } from "../shared/stepSource";
 import type { Entry } from "../lib/storage";
 import {
   applyBranchPreference,
@@ -209,6 +210,15 @@ export default function ReorderView({ recipe, entry, done, onUpdate, onClose }: 
             work the recipe leaves interchangeable can move — everything else
             is fixed by what depends on what.
           </p>
+          {/* Tagged recipes cook in the recipe's own order, parts
+              interleaved (sequence.ts sourceSequence); this view arranges
+              parts whole, so it says so rather than quietly differing. */}
+          {!entry.order && hasStepSources(recipe) ? (
+            <p className="rd-ro-hint">
+              Your cards follow the recipe&rsquo;s own order. Moving anything
+              here switches them to the order you set.
+            </p>
+          ) : null}
           {entry.order ? (
             <button className="rd-btn rd-ro-reset" onClick={() => commit(null)}>
               Reset to the recipe&rsquo;s own order

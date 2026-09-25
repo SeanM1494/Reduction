@@ -54,7 +54,11 @@ export const ORIGINAL_LIMITS = {
   total: 24_000,
 } as const;
 
-const clean = (s: string): string =>
+/** One line of source text as the wording screen shows it: tags out,
+ *  common entities decoded, whitespace collapsed. Exported so the server
+ *  numbers the model's INSTRUCTIONS from exactly these lines — a step's
+ *  source number and the sentence shown for it must count the same list. */
+export const cleanOriginalText = (s: string): string =>
   s
     .replace(/<[^>]*>/g, " ") // a stray tag in JSON-LD text
     .replace(/&nbsp;/gi, " ")
@@ -68,17 +72,17 @@ const clean = (s: string): string =>
 
 function lineOf(v: unknown): OriginalLine | null {
   if (typeof v === "string") {
-    const text = clean(v);
+    const text = cleanOriginalText(v);
     return text ? { text } : null;
   }
   if (v && typeof v === "object") {
     const o = v as { heading?: unknown; text?: unknown };
     if (typeof o.heading === "string") {
-      const text = clean(o.heading);
+      const text = cleanOriginalText(o.heading);
       return text ? { text, heading: true } : null;
     }
     if (typeof o.text === "string") {
-      const text = clean(o.text);
+      const text = cleanOriginalText(o.text);
       if (!text) return null;
       return (o as { heading?: unknown }).heading === true ? { text, heading: true } : { text };
     }
@@ -140,4 +144,14 @@ export function sanitizeOriginal(v: unknown, from: OriginalFrom): OriginalRecipe
 export function originalStepNumbers(steps: OriginalLine[]): Array<number | null> {
   let n = 0;
   return steps.map((l) => (l.heading ? null : ++n));
+}
+
+/**
+ * The source's method steps as text, headings left out, so that entry
+ * `n - 1` is the sentence a diagram step tagged `src: n` came from
+ * (stepSource.ts) — the one numbering both sides count by. Null in, empty
+ * out.
+ */
+export function originalStepTexts(original: OriginalRecipe | null | undefined): string[] {
+  return (original?.steps ?? []).filter((l) => !l.heading).map((l) => l.text);
 }

@@ -406,6 +406,14 @@ in `lib/extractionConfig.ts`, reported by `/api/health` as `extraction`:
 - **Output cap: 16,000 tokens**, always. The model reasons before it
   answers and that reasoning counts against the cap; at 8,000 a long recipe
   could be cut off inside the tree and cost a second full attempt.
+- **Source step numbers: the `EXTRACTION_STEP_SOURCES` secret** (`on`;
+  unset = off, and the prompt is exactly what it was). The model tags each
+  diagram step with the number of the recipe's own step it came from;
+  Step-by-Step then follows the recipe's order and shows its sentence
+  (CLAUDE.md, "Cooking order is not section order"). A wrong tag makes the
+  order worse than none, so it stays off until the same comparison has
+  checked the tags on messy recipes. Recipes extracted while it is off have
+  no tags and keep the old order for good (a re-read brings tags).
 - **Effort: the `EXTRACTION_EFFORT` secret** (`low`, `medium`, `high`;
   unset = the model's default, which reasons the most). It changes what the
   diagram can say, so it stays unset until a before/after comparison on the

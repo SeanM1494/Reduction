@@ -106,8 +106,9 @@ test("original wording: a JSON-LD page gives the card's own lines, and nothing o
   });
   const everything = JSON.stringify(src.original);
   assert.ok(!/grandmother|porch|Pin it|comments/.test(everything), "the story and the page furniture never reach it");
-  // The model's input is unchanged: sections flattened, as before.
-  assert.deepEqual(src.instructions, ["Heat the oven to 350°F.", "Whisk the <b>flour</b> and sugar.", "Stir lemon juice into sugar."]);
+  // The model sees the same steps, cleaned and numbered from the same
+  // list, so source step 2 IS the second non-heading line above.
+  assert.deepEqual(src.instructions, ["Heat the oven to 350°F.", "Whisk the flour and sugar.", "Stir lemon juice into sugar."]);
 });
 
 test("original wording: a page without structured data has none here — the model copies it out", () => {

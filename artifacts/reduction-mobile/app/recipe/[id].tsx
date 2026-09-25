@@ -34,7 +34,9 @@ import { PhotoSheet } from '@/components/recipe/PhotoSheet';
 import { FinishPrompt, type FinishStage } from '@/components/recipeBox/FinishPrompt';
 import { useToast } from '@/components/Toast';
 import { asksToRemove, bookById, bookOf, keptToast, removedToast } from '@/lib/recipeBox';
-import type { Entry } from '@/lib/api';
+import { loadOriginal, type Entry } from '@/lib/api';
+import { originalStepTexts } from '@/shared/original';
+import { hasStepSources } from '@/shared/stepSource';
 
 export default function RecipeDetailScreen() {
   // `view` is the Recipe Box preview's choice of tab for this visit.
@@ -82,6 +84,25 @@ export default function RecipeDetailScreen() {
 
   const isDraft = id === 'draft';
   const entry = isDraft ? null : getEntry(id);
+
+  // The recipe's own step sentences, for Step-by-Step (StepsMode's
+  // `sourceSteps`). Asked for only when the recipe's steps carry source
+  // numbers — every recipe saved before them has nothing to caption — and
+  // kept with the id it was fetched FOR, so a reply for another recipe is
+  // never shown on this one.
+  const [sourceFor, setSourceFor] = useState<{ id: string; steps: string[] } | null>(null);
+  const tagged = !isDraft && !!entry && hasStepSources(entry.recipe);
+  useEffect(() => {
+    if (!tagged || !id || sourceFor?.id === id) return;
+    let live = true;
+    loadOriginal(id)
+      .then((r) => live && setSourceFor({ id, steps: originalStepTexts(r.original) }))
+      .catch(() => {});
+    return () => {
+      live = false;
+    };
+  }, [tagged, id, sourceFor?.id]);
+  const savedSourceSteps = sourceFor?.id === id ? sourceFor.steps : null;
 
   // LEAVING A PREVIEW ASKS (Sep 25). The draft lives in memory only, so
   // back from it used to throw the recipe away without a word. Saving turns
@@ -173,6 +194,7 @@ export default function RecipeDetailScreen() {
           // Only when the extraction brought wording: a preview has nothing
           // to fetch it from later.
           onOpenOriginal={draft.original ? () => router.push('/original/draft') : undefined}
+          sourceSteps={originalStepTexts(draft.original)}
         />
         <Window
           open={leaveOpen}
@@ -251,6 +273,7 @@ export default function RecipeDetailScreen() {
         initialView={initialView}
         recipe={entry.recipe}
         onOpenOriginal={() => router.push(`/original/${entry.id}`)}
+        sourceSteps={savedSourceSteps}
         request={request}
         photoEntry={entry}
         done={entry.done}

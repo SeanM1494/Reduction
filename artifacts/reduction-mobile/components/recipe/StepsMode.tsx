@@ -33,6 +33,8 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import type { Ingredient, Recipe, Step } from '@/shared/layout';
 import { cardSequence, type OrderPreference } from '@/shared/sequence';
+import { headerDoneId } from '@/shared/progress';
+import { stepSource } from '@/shared/stepSource';
 import { formatAmount, formatMinutes, stepMinutes } from '@/shared/amounts';
 import { SheetButton } from '@/components/Sheet';
 import { ReorderView } from '@/components/recipe/ReorderView';
@@ -50,6 +52,15 @@ interface StepCard {
   fromLabels: string[];
   actionNumber: number;
 }
+
+/** A section header as an instruction: the prompt writes the preheat as
+ *  "Oven 400°F", which labels a diagram well and reads oddly as the thing
+ *  to do first. Anything else stands as the recipe gave it. */
+export const headerInstruction = (header: string): string => {
+  const t = header.trim();
+  const oven = /^oven\s+(.+)$/i.exec(t);
+  return oven ? `Preheat the oven to ${oven[1]}` : t;
+};
 
 function fmtRemaining(ms: number): string {
   const total = Math.max(0, Math.round(ms / 1000));
@@ -114,6 +125,14 @@ interface Props {
   onReorderOpened?: () => void;
   /** Above the card: the recipe's picture and Clear progress. */
   header?: React.ReactNode;
+  /**
+   * The source's method steps as text (`originalStepTexts`), so a card whose
+   * step carries a source number (`src`, stepSource.ts) can show the
+   * recipe's own sentence under the terse label: the diagram says "beat
+   * egg", the recipe said which bowl and until when. Absent — an older
+   * recipe, the demo — nothing is shown, not a guess.
+   */
+  sourceSteps?: string[] | null;
 }
 
 export function StepsMode({
@@ -130,6 +149,7 @@ export function StepsMode({
   openReorder = false,
   onReorderOpened,
   header = null,
+  sourceSteps = null,
 }: Props) {
   const colors = useColors();
   const styles = makeStyles(colors);
@@ -154,6 +174,39 @@ export function StepsMode({
   }, [openReorder]);
   const goTo = useCallback((i: number) => setCardIndex(Math.max(0, Math.min(cards.length, i))), [cards.length]);
   const card: StepCard | null = cardIndex < cards.length ? cards[cardIndex] : null;
+
+  // ---- before you start ------------------------------------------------------
+  // A section's standing instruction ("Oven 400°F" — the prompt puts the
+  // preheat there, never in a step) comes as its own card in front of that
+  // section's first step, until it is ticked: here, or on the diagram's
+  // header row, which is the same done id. Shown IN FRONT OF the step card
+  // rather than inserted into `cards`, so the timer, the "while that's
+  // going" suggestion and every index into the sequence stay about steps.
+  // `passed` lets the card be passed where the tick cannot be written (a
+  // preview, which keeps no progress) — and is the only local memory of it.
+  const firstOfSection = useMemo(() => {
+    const m = new Map<number, number>();
+    cards.forEach((c, i) => {
+      if (!m.has(c.sectionIndex)) m.set(c.sectionIndex, i);
+    });
+    return m;
+  }, [cards]);
+  const [passed, setPassed] = useState<Set<string>>(() => new Set());
+  const headerCard = (() => {
+    if (!card || firstOfSection.get(card.sectionIndex) !== cardIndex) return null;
+    const section = recipe.sections[card.sectionIndex];
+    const id = headerDoneId(section);
+    if (!id || done.has(id) || passed.has(id)) return null;
+    return { id, text: headerInstruction(String(section.header)), first: cardIndex === 0 };
+  })();
+  const passHeader = (id: string) => {
+    setPassed((prev) => new Set(prev).add(id));
+    onToggle(id);
+  };
+
+  // ---- the recipe's own words ------------------------------------------------
+  const src = card ? stepSource(card.step) : null;
+  const sourceLine = src && sourceSteps ? sourceSteps[src - 1] ?? null : null;
 
   // ---- timer ---------------------------------------------------------------
   const [, setTick] = useState(0);
@@ -251,6 +304,17 @@ export function StepsMode({
             <SheetButton label="← Back" onPress={() => goTo(cardIndex - 1)} />
           </View>
         </View>
+      ) : headerCard ? (
+        <View style={styles.card} key={`header-${headerCard.id}`} testID="cook-header">
+          <Text style={styles.eyebrow}>{headerCard.first ? 'Before you start' : `${card.sectionName} · Before you start`}</Text>
+          <Text style={styles.label}>{headerCard.text}</Text>
+          <View style={styles.nav}>
+            {cardIndex > 0 ? <SheetButton label="← Back" onPress={() => goTo(cardIndex - 1)} /> : null}
+            <Pressable accessibilityRole="button" onPress={() => passHeader(headerCard.id)} style={styles.primary} testID="cook-header-done">
+              <Text style={styles.primaryText}>Done →</Text>
+            </Pressable>
+          </View>
+        </View>
       ) : (
         <View style={styles.card} key={card.key}>
           <Text style={styles.eyebrow}>
@@ -293,6 +357,14 @@ export function StepsMode({
           ) : (
             <Text style={styles.label}>{card.step.label}</Text>
           )}
+          {sourceLine ? (
+            <View style={styles.sourceBox} testID="cook-source">
+              <Text style={styles.sourceLabel}>From the recipe</Text>
+              <Text style={styles.sourceText} selectable>
+                {sourceLine}
+              </Text>
+            </View>
+          ) : null}
           {card.step.tempF ? <Text style={styles.temp}>{card.step.tempF}°F</Text> : null}
 
           {stepMinutes(card.step.minutes) != null ? (
@@ -356,6 +428,21 @@ function makeStyles(colors: Colors) {
     },
     eyebrow: { fontSize: 12.5, fontWeight: '600', color: colors.mutedForeground, marginBottom: 10 },
     builds: { fontSize: 12.5, color: colors.faint, marginBottom: 16 },
+    // The recipe's own sentence: body size, readable across a counter, set
+    // off from the instruction above it so the two never read as one.
+    sourceBox: {
+      marginTop: 4,
+      marginBottom: 12,
+      paddingVertical: 10,
+      paddingHorizontal: 12,
+      borderLeftWidth: 3,
+      borderLeftColor: colors.border,
+      backgroundColor: colors.muted,
+      borderRadius: 8,
+      gap: 4,
+    },
+    sourceLabel: { fontFamily: fonts.mono, fontSize: 11, letterSpacing: 0.44, color: colors.faint, textTransform: 'uppercase' },
+    sourceText: { fontSize: 17, lineHeight: 25, color: colors.foreground },
     lead: { fontSize: 15, fontWeight: '600', color: colors.foreground, marginBottom: 10 },
     prepList: { gap: 8, marginBottom: 16 },
     prepRow: {

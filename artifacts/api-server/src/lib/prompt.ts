@@ -104,6 +104,26 @@ Add one more key to the object, LAST, after "sections":
 - ONLY the recipe itself. Leave out everything around it: the story or introduction, tips and notes sections, FAQs, substitution lists, nutrition, equipment lists, reader comments, ads, navigation, and anything the page says about itself or its author.
 - Never invent a line. A list the source does not have is [].`;
 
+/**
+ * Source step numbers (recipe-model stepSource.ts), asked for only when
+ * EXTRACTION_STEP_SOURCES is on. Step-by-Step orders its cards by them and
+ * shows the recipe's own sentence for each, so the numbering rule has to be
+ * the one the stored wording uses: the INSTRUCTIONS list's own numbers when
+ * one is given, otherwise the model's own "original" steps, counted without
+ * headings (`originalStepNumbers`). A step the source implies but never
+ * states — melting butter the ingredient list calls "melted" — is null,
+ * and sequence.ts places it just before whatever it feeds.
+ */
+export const STEP_SOURCE_RULES = `ALSO NUMBER EACH STEP'S SOURCE
+
+Give every node one more field, "src": the number of the recipe's own method step that the node was made from.
+
+- When a numbered INSTRUCTIONS list is given above, use its numbers exactly.
+- Otherwise number the recipe's method steps yourself — 1, 2, 3, in the order the source gives them, counting steps only and never sub-headings. This is exactly the numbering of the "steps" list in your "original" object, so the two must agree.
+- One source step that you split into several nodes: every one of those nodes gets that step's number.
+- One node that combines two source steps: the earlier step's number.
+- A node the source never states as an instruction (for example "melt", implied by "butter, melted" in the ingredient list): null.`;
+
 const CRUST_EXAMPLE = `{
   "name": "Graham cracker crust",
   "header": "Oven 325°F",
@@ -131,6 +151,8 @@ export function buildUserText(opts: {
   sourceUrl?: string | null;
   /** Ask for the original wording (see ORIGINAL_RULES). */
   askOriginal?: boolean;
+  /** Ask for source step numbers (see STEP_SOURCE_RULES). */
+  askStepSources?: boolean;
 }): string {
   const parts: string[] = [];
 
@@ -156,6 +178,7 @@ export function buildUserText(opts: {
     );
 
   if (opts.askOriginal) parts.push(ORIGINAL_RULES);
+  if (opts.askStepSources) parts.push(STEP_SOURCE_RULES);
 
   parts.push("Return the JSON object now.");
   return parts.join("\n\n");

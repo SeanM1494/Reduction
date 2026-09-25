@@ -43,6 +43,7 @@ import {
   type OrderPreference,
 } from '@/shared/sequence';
 import { SheetButton } from '@/components/Sheet';
+import { hasStepSources } from '@/shared/stepSource';
 import { useColors, type Colors } from '@/hooks/useColors';
 import { fonts } from '@/constants/colors';
 
@@ -328,6 +329,15 @@ export function ReorderView({ recipe, order, done, onSetOrder, onClose }: Props)
             Press and hold a row with a grip, then drop it on another. Only work the recipe leaves interchangeable can
             move — everything else is fixed by what depends on what.
           </Text>
+          {/* A recipe with source step numbers cooks in the recipe's own
+              order, parts interleaved (sequence.ts sourceSequence); this
+              view arranges parts whole, so saying so beats a list that
+              quietly differs from the cards. */}
+          {!order && hasStepSources(recipe) ? (
+            <Text style={styles.hint} testID="reorder-source-note">
+              Your cards follow the recipe's own order. Moving anything here switches them to the order you set.
+            </Text>
+          ) : null}
           {order ? (
             <View style={styles.resetRow}>
               <SheetButton label="Reset to the recipe's own order" onPress={() => commit(null)} testID="reorder-reset" />
