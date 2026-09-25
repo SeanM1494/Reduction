@@ -64,7 +64,13 @@ console.log(`  server       ${domain}`);
 console.log(`  reaches      builds of version ${app.version} (runtimeVersion follows the app version)`);
 console.log(`  message      ${message}`);
 
+// Newer eas-cli asks which EAS environment's hosted variables to load, and
+// the answer for a channel is the environment of the same name — so it is
+// passed rather than asked. (The server address never comes from there: it
+// is set explicitly above, from the build profile.)
+const EAS_ENVIRONMENTS = ["development", "preview", "production"];
 const command = ["-y", "eas-cli@latest", "update", "--channel", channel, "--platform", "ios", "--message", message];
+if (EAS_ENVIRONMENTS.includes(channel)) command.push("--environment", channel);
 if (dryRun) {
   console.log(`  would run    EXPO_PUBLIC_DOMAIN=${domain} npx ${command.join(" ")}`);
   process.exit(0);
