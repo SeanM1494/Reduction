@@ -102,7 +102,7 @@ test("on the wire: 16,000 tokens always; effort only when configured", async () 
   assert.equal(bodies[0].max_tokens, EXTRACTION_MAX_TOKENS);
   assert.equal("output_config" in bodies[0], false, "\"default\" sends nothing: the model's own");
   assert.equal(plain.recipe.title, "Toast");
-  assert.deepEqual(plain.usage, { inputTokens: 100, outputTokens: 40, stopReasons: ["end_turn"] });
+  assert.deepEqual(plain.usage, { inputTokens: 100, outputTokens: 40, stopReasons: ["end_turn"], failures: [] });
 
   process.env.EXTRACTION_EFFORT = "low";
   bodies.length = 0;

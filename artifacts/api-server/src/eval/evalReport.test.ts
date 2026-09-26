@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { checkTags, costUsd, outline, summarize, words, type EvalResult } from "./evalReport";
+import { checkTags, costUsd, outline, ruleOf, summarize, tallyRules, words, type EvalResult } from "./evalReport";
 import type { Recipe } from "../shared/layout";
 
 const ORIGINAL = {
@@ -94,6 +94,7 @@ test("summary counts retries, cap hits and runs past the phone's old limit", () 
     calls,
     attempts: calls,
     stopReasons: stops,
+    failures: [],
     inputTokens: 1000,
     outputTokens: 1000,
     recipe: null,
@@ -109,4 +110,43 @@ test("summary counts retries, cap hits and runs past the phone's old limit", () 
 
 test("outline shows tags so a reader can check them by eye", () => {
   assert.match(outline(tree([2, 3, 4])), /scramble \(src 3\) ← \[sauté\], eggs/);
+});
+
+test("turned-down answers are tallied by rule, without the particulars", () => {
+  assert.equal(ruleOf('section "Dough": step "dough_6" is missing a label.'), 'step "…" is missing a label.');
+  assert.equal(ruleOf('section 2: "final_rice" has no qty and no text fallback. One is required.'), '"…" has no qty and no text fallback. One is required.');
+  assert.equal(ruleOf("Response was not valid JSON: Unexpected end of JSON input"), "Response was not valid JSON.");
+  assert.equal(ruleOf('section "A": "x" has unit "pinch". Use one of cup, tbsp, or null.'), '"…" has unit "…". Use one of the allowed units.');
+
+  const r = (caseId: string, failures: string[][]): EvalResult => ({
+    caseId,
+    kind: "text",
+    config: "S",
+    ok: true,
+    ms: 1,
+    path: "paste",
+    calls: failures.length + 1,
+    attempts: failures.length + 1,
+    stopReasons: [],
+    failures,
+    inputTokens: 0,
+    outputTokens: 0,
+    recipe: null,
+    original: null,
+  });
+  const rules = tallyRules([
+    // One answer breaking a rule on two steps counts ONCE for that answer.
+    r("a", [['section "X": step "s1" is missing a label.', 'section "X": step "s2" is missing a label.']]),
+    r("b", [['section "Y": step "q" is missing a label.', 'section "Y": "egg" qty must be a number, not a string.']]),
+    r("c", []),
+  ]);
+  assert.deepEqual(
+    rules.map((x) => [x.rule, x.answers, x.cases]),
+    [
+      ['step "…" is missing a label.', 2, ["a", "b"]],
+      ['"…" qty must be a number, not a string.', 1, ["b"]],
+    ]
+  );
+  const [s] = summarize([r("a", [["x"]]), r("b", [["y"], ["z"]])]);
+  assert.equal(s.turnedDown, 3);
 });

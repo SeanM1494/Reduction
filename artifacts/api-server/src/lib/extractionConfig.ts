@@ -52,6 +52,31 @@ export function effortFields(effort: ExtractionEffort | null): Record<string, un
 }
 
 /**
+ * THE FALLBACK'S EFFORT (Sep 26). When our own fetch is refused, Anthropic's
+ * web fetch reads the page and the same call builds the tree — the one path
+ * where the model has to USE A TOOL before it can answer, and lower effort
+ * means fewer, more consolidated tool calls. On the comparison both
+ * allrecipes.com links came back in ~10s as empty trees at "low", where the
+ * model's default got one of them. EXTRACTION_FALLBACK_EFFORT sets that
+ * path alone, so pages we read ourselves keep "low":
+ *
+ *   unset       follow EXTRACTION_EFFORT (the fallback is not special)
+ *   "default"   the model's own
+ *   low/medium/high
+ *
+ * `undefined` from this function means "follow"; null means "the model's
+ * default". A typo is "follow", never an error.
+ */
+export const DEFAULT_FALLBACK_EFFORT: ExtractionEffort | null | undefined = undefined;
+
+export function extractionFallbackEffort(env: NodeJS.ProcessEnv = process.env): ExtractionEffort | null | undefined {
+  const raw = env.EXTRACTION_FALLBACK_EFFORT?.trim().toLowerCase();
+  if (raw === "default") return null;
+  if (EFFORTS.includes(raw as ExtractionEffort)) return raw as ExtractionEffort;
+  return DEFAULT_FALLBACK_EFFORT;
+}
+
+/**
  * SOURCE STEP NUMBERS (recipe-model stepSource.ts): the model tags each
  * diagram step with the number of the recipe's own step it came from, and
  * Step-by-Step orders and captions cards by it. A wrong tag reorders cards
@@ -73,6 +98,16 @@ export interface ModelCallOptions {
   maxTokens?: number;
   /** undefined = configured. */
   stepSources?: boolean;
+  /** The Anthropic-fetch fallback's effort: undefined = configured
+   *  (EXTRACTION_FALLBACK_EFFORT, else `effort`); null = the model's default. */
+  fallbackEffort?: ExtractionEffort | null;
+}
+
+/** The options the fallback call runs with: `effort` replaced by the
+ *  fallback's own when one is set, explicitly or by the secret. */
+export function fallbackCall(opts: ModelCallOptions = {}): ModelCallOptions {
+  const own = opts.fallbackEffort !== undefined ? opts.fallbackEffort : extractionFallbackEffort();
+  return own === undefined ? opts : { ...opts, effort: own };
 }
 
 export function resolveCall(opts: ModelCallOptions = {}): {
@@ -93,9 +128,24 @@ export interface CallUsage {
   outputTokens: number;
   /** One per attempt, in order: "end_turn", "max_tokens", … */
   stopReasons: string[];
+  /** Why each answer that did NOT become the tree was turned down, in
+   *  order: the validator's errors, "Response was not valid JSON…", or a
+   *  cut-off. The comparison tallies these by rule — the count alone (the
+   *  log's `repaired`) cannot say which rule costs the second call. */
+  failures: string[][];
 }
 
-export const emptyUsage = (): CallUsage => ({ inputTokens: 0, outputTokens: 0, stopReasons: [] });
+export const emptyUsage = (): CallUsage => ({ inputTokens: 0, outputTokens: 0, stopReasons: [], failures: [] });
+
+/** One usage into another: the URL path adds its first path's calls to the
+ *  fallback's. */
+export function mergeUsage(into: CallUsage, from?: CallUsage): void {
+  if (!from) return;
+  into.inputTokens += from.inputTokens;
+  into.outputTokens += from.outputTokens;
+  into.stopReasons.push(...from.stopReasons);
+  into.failures.push(...(from.failures ?? []));
+}
 
 export function addUsage(u: CallUsage, msg: { usage?: { input_tokens?: number; output_tokens?: number } | null; stop_reason?: string | null }): void {
   u.inputTokens += msg.usage?.input_tokens ?? 0;

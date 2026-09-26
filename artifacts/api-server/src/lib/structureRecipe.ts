@@ -133,6 +133,7 @@ export async function structureRecipe(
       parsed = JSON.parse(json);
     } catch (e) {
       lastErrors = [`Response was not valid JSON: ${(e as Error).message}`];
+      usage.failures.push(cutOff ? ["Cut off by the output limit.", ...lastErrors] : lastErrors);
       if (attempt === MAX_ATTEMPTS) break;
       messages.push(
         { role: "assistant", content: raw },
@@ -163,6 +164,7 @@ export async function structureRecipe(
     }
 
     lastErrors = errors;
+    usage.failures.push(cutOff ? ["Cut off by the output limit.", ...errors] : errors);
     if (attempt === MAX_ATTEMPTS) break;
     repaired = errors;
     messages.push(

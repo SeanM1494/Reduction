@@ -9,7 +9,7 @@
  *   node --import tsx artifacts/api-server/src/eval/evalExtraction.ts \
  *     artifacts/api-server/src/eval/cases.txt --yes
  *
- * Options: --configs A,B,C,S (default all four) · --concurrency 2 · --out eval-out
+ * Options: --configs A,B,C,S,F (default all five) · --concurrency 2 · --out eval-out
  *
  * Run it in the Replit workspace: it needs ANTHROPIC_API_KEY and the open
  * internet, which this repo's agent container has neither of. IT SPENDS
@@ -30,7 +30,7 @@ import { sanitizeOriginal } from "@workspace/recipe-model";
 import { readRecipeAtUrl } from "../lib/readRecipe";
 import { structureRecipe } from "../lib/structureRecipe";
 import type { CallUsage } from "../lib/extractionConfig";
-import { CONFIGS, renderMarkdown, summarize, type EvalConfig, type EvalResult } from "./evalReport";
+import { CONFIGS, renderMarkdown, ruleOf, summarize, type EvalConfig, type EvalResult } from "./evalReport";
 
 const MAX_TEXT = 30_000; // routes/recipes.ts MAX_TEXT: a paste is clipped there, so here too
 const MEDIA: Record<string, string> = { ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png", ".webp": "image/webp", ".pdf": "application/pdf" };
@@ -73,7 +73,14 @@ function loadCases(file: string): Case[] {
 }
 
 async function runOne(c: Case, cfg: EvalConfig): Promise<EvalResult> {
-  const opts = { effort: cfg.effort, maxTokens: cfg.maxTokens, stepSources: cfg.stepSources };
+  const opts = {
+    effort: cfg.effort,
+    maxTokens: cfg.maxTokens,
+    stepSources: cfg.stepSources,
+    // Explicit either way, so a secret set in the shell cannot change what a
+    // config measures.
+    fallbackEffort: cfg.fallbackEffort === undefined ? cfg.effort : cfg.fallbackEffort,
+  };
   const started = Date.now();
   const base = { caseId: c.id, kind: c.kind, config: cfg.key };
   try {
@@ -87,6 +94,7 @@ async function runOne(c: Case, cfg: EvalConfig): Promise<EvalResult> {
         calls: r.usage.stopReasons.length,
         attempts: r.attempts,
         stopReasons: r.usage.stopReasons,
+        failures: r.usage.failures,
         inputTokens: r.usage.inputTokens,
         outputTokens: r.usage.outputTokens,
         recipe: r.recipe,
@@ -109,6 +117,7 @@ async function runOne(c: Case, cfg: EvalConfig): Promise<EvalResult> {
       calls: r.usage.stopReasons.length,
       attempts: r.attempts,
       stopReasons: r.usage.stopReasons,
+      failures: r.usage.failures,
       inputTokens: r.usage.inputTokens,
       outputTokens: r.usage.outputTokens,
       recipe: r.recipe,
@@ -125,6 +134,7 @@ async function runOne(c: Case, cfg: EvalConfig): Promise<EvalResult> {
       calls: usage?.stopReasons.length ?? 0,
       attempts: null,
       stopReasons: usage?.stopReasons ?? [],
+      failures: usage?.failures ?? [],
       inputTokens: usage?.inputTokens ?? 0,
       outputTokens: usage?.outputTokens ?? 0,
       recipe: null,
@@ -136,7 +146,7 @@ async function runOne(c: Case, cfg: EvalConfig): Promise<EvalResult> {
 async function main() {
   const args = parseArgs(process.argv.slice(2));
   if (!args.casesFile) {
-    console.error("usage: evalExtraction.ts <cases file> [--configs A,B,C,S] [--concurrency 2] [--out eval-out] --yes");
+    console.error("usage: evalExtraction.ts <cases file> [--configs A,B,C,S,F] [--concurrency 2] [--out eval-out] --yes");
     process.exit(2);
   }
   const configs = args.configs.map((k) => CONFIGS[k]).filter(Boolean);
@@ -167,7 +177,8 @@ async function main() {
         const r = await runOne(c, cfg);
         results.push(r);
         console.log(
-          `${cfg.key} ${c.id}: ${r.ok ? "ok" : "FAILED"} ${(r.ms / 1000).toFixed(1)}s ${r.path} calls=${r.calls} [${r.stopReasons.join(",")}]${r.ok ? "" : ` — ${r.error}`}`
+          `${cfg.key} ${c.id}: ${r.ok ? "ok" : "FAILED"} ${(r.ms / 1000).toFixed(1)}s ${r.path} calls=${r.calls} [${r.stopReasons.join(",")}]${r.ok ? "" : ` — ${r.error}`}` +
+            (r.failures.length ? `\n    turned down: ${r.failures.map((a) => a.map(ruleOf).join("; ")).join(" ⟶ ")}` : "")
         );
       }
     }

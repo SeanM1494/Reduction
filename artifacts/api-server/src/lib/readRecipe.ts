@@ -19,8 +19,8 @@ import { sanitizeOriginal, setRecipeTotalMinutes, type OriginalRecipe } from "@w
 import type { Recipe } from "../shared/layout";
 import { fetchSource } from "./fetchSource";
 import { structureRecipe } from "./structureRecipe";
-import { structureRecipeFromUrl } from "./fetchViaClaude";
-import { emptyUsage, type CallUsage, type ModelCallOptions } from "./extractionConfig";
+import { isUnreadable, structureRecipeFromUrl } from "./fetchViaClaude";
+import { emptyUsage, fallbackCall, mergeUsage, type CallUsage, type ModelCallOptions } from "./extractionConfig";
 
 export interface ReadRecipe {
   recipe: Recipe;
@@ -47,12 +47,7 @@ export async function readRecipeAtUrl(
   } = {}
 ): Promise<ReadRecipe> {
   const usage = emptyUsage();
-  const add = (u?: CallUsage) => {
-    if (!u) return;
-    usage.inputTokens += u.inputTokens;
-    usage.outputTokens += u.outputTokens;
-    usage.stopReasons.push(...u.stopReasons);
-  };
+  const add = (u?: CallUsage) => mergeUsage(usage, u);
 
   let reason: "fetch" | "model" = "fetch";
   try {
@@ -101,7 +96,9 @@ export async function readRecipeAtUrl(
     opts.onFallback?.(reason, message);
     console.warn(`[extract] ${reason === "fetch" ? "self-fetch" : "extraction from our fetch"} failed, using web_fetch:`, message);
     try {
-      const out = await structureRecipeFromUrl(url, opts);
+      // The fallback may think harder than the first path
+      // (EXTRACTION_FALLBACK_EFFORT, extractionConfig.ts).
+      const out = await structureRecipeFromUrl(url, fallbackCall(opts));
       add(out.usage);
       return {
         recipe: out.recipe,
@@ -114,8 +111,14 @@ export async function readRecipeAtUrl(
       };
     } catch (claudeErr) {
       add((claudeErr as { usage?: CallUsage }).usage);
-      (claudeErr as { usage?: CallUsage }).usage = usage;
-      throw claudeErr;
+      // Anthropic's fetch came away with no recipe. When ours was refused
+      // too, its error already says the site blocked us (BLOCKED_MESSAGE).
+      // When OUR fetch read the page and only the tree failed, that failure
+      // is the truer account of what went wrong, so it is the one reported.
+      let out = claudeErr as Error & { usage?: CallUsage };
+      if (isUnreadable(claudeErr) && reason === "model") out = selfErr as Error & { usage?: CallUsage };
+      out.usage = usage;
+      throw out;
     }
   }
 }

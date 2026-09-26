@@ -418,6 +418,22 @@ in `lib/extractionConfig.ts`, reported by `/api/health` as `extraction`:
   is measured on real extractions now that it is live. The
   `EXTRACTION_EFFORT` secret overrides it with no commit: `default` for the
   model's own (the most reasoning), or `medium` / `high`.
+- **The fallback's effort** (Sep 26): when a site refuses our own fetch,
+  Anthropic's web fetch reads the page and the same call builds the tree.
+  `EXTRACTION_FALLBACK_EFFORT` sets that path alone (unset: it follows
+  `EXTRACTION_EFFORT`; `default` for the model's own). A fallback reply
+  with no recipe in it — a block page, "I was unable to access…" — ends the
+  reading at once with "This site blocked us from reading the recipe. Try
+  pasting the recipe text instead." rather than spending a repair call, and
+  a fetch Anthropic's side PAUSES is resumed with the page it already had
+  (before Sep 26 the page was dropped and the model asked to fix its JSON).
+
+Measured Sep 26 on 19 real cases, the old settings against today's (same
+recipes, `evalExtraction.ts`, configs A and S): 12 → 17 extracted, average
+97s → 32s, slowest 329s → 76s, 6 → 0 over two minutes, 7 → 0 cut off by the
+cap, $2.91 → $1.32. Retries did NOT drop (11 → 10 runs with a second call):
+the cut-offs were gone, and what remained was every one a first tree that
+broke a validation rule — which the report now tallies by rule.
 
 Where the time goes, from the production log (read-only):
 

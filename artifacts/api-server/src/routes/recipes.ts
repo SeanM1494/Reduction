@@ -565,7 +565,7 @@ recipesRouter.post("/extract", requireExtractionAllowance, async (req: Request, 
 
     const err = e as Error & { details?: string[] };
     const isUserFacing =
-      /URL|host|page|refused|too large|too short|recipe from that page|valid diagram/i.test(
+      /URL|host|page|refused|blocked|too large|too short|recipe from that page|valid diagram/i.test(
         err.message
       );
     if (!isUserFacing) console.error("[recipes/extract]", err);
@@ -701,7 +701,7 @@ recipesRouter.post("/reextract", async (req: Request, res: Response) => {
   } catch (e) {
     const err = e as Error & { details?: string[] };
     const isUserFacing =
-      /URL|host|page|refused|too large|too short|recipe from that page|valid diagram/i.test(
+      /URL|host|page|refused|blocked|too large|too short|recipe from that page|valid diagram/i.test(
         err.message
       );
     if (!isUserFacing) console.error("[recipes/reextract]", err);

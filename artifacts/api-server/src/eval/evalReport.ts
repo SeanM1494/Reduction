@@ -14,12 +14,18 @@
  *   C  "cap+low"  B with effort "low" — the effort change alone
  *   S  "now"      C with source step numbers — production since Sep 25,
  *                 tags checked for CORRECTNESS, not just presence
+ *   F  "fallback" S, but the Anthropic-fetch fallback at the model's
+ *                 default effort (EXTRACTION_FALLBACK_EFFORT=default) — the
+ *                 candidate fix for sites that refuse our own fetch
  *
  * A → B answers "does the cap alone stop second attempts"; B → C "does low
  * effort buy time without costing the diagram"; S "does each tag point at
- * the sentence its step came from". The retry rate is reported beside the
+ * the sentence its step came from"; S → F "does the fallback need the
+ * reasoning low effort took away". The retry rate is reported beside the
  * time for every config, because a second model call is both a slow
- * extraction and a failed first attempt.
+ * extraction and a failed first attempt — and since Sep 26 every answer
+ * that was turned down is kept with its reasons and tallied by RULE, so a
+ * second call is a named cause and not only a count.
  */
 
 import type { Recipe } from "../shared/layout";
@@ -31,6 +37,9 @@ export interface EvalConfig {
   effort: "low" | "medium" | "high" | null;
   maxTokens: number;
   stepSources: boolean;
+  /** The fallback's effort; absent = the same as `effort` (production's
+   *  default, where the fallback follows EXTRACTION_EFFORT). */
+  fallbackEffort?: "low" | "medium" | "high" | null;
 }
 
 export const CONFIGS: Record<string, EvalConfig> = {
@@ -38,6 +47,7 @@ export const CONFIGS: Record<string, EvalConfig> = {
   B: { key: "B", label: "cap (16k, default effort)", effort: null, maxTokens: 16000, stepSources: false },
   C: { key: "C", label: "cap + low effort", effort: "low", maxTokens: 16000, stepSources: false },
   S: { key: "S", label: "production now (cap + low + tags)", effort: "low", maxTokens: 16000, stepSources: true },
+  F: { key: "F", label: "S + fallback at default effort", effort: "low", maxTokens: 16000, stepSources: true, fallbackEffort: null },
 };
 
 export interface EvalResult {
@@ -54,6 +64,8 @@ export interface EvalResult {
   /** Tries on the path that produced the tree (the log's `attempts`). */
   attempts: number | null;
   stopReasons: string[];
+  /** Every answer turned down on the way, with the reasons (CallUsage.failures). */
+  failures: string[][];
   inputTokens: number;
   outputTokens: number;
   recipe: Recipe | null;
@@ -158,6 +170,50 @@ export function checkTags(recipe: Recipe, original: OriginalRecipe | null): TagC
   };
 }
 
+// --------------------------------------------------------------- rules --
+
+/**
+ * A validator message without the particulars, so the same broken rule on
+ * two recipes counts once per answer under one name:
+ *   section "Dough": step "dough_6" is missing a label.  →  step "…" is missing a label.
+ */
+export function ruleOf(error: string): string {
+  return error
+    .replace(/^section (?:"[^"]*"|\d+): /, "")
+    .replace(/Response was not valid JSON: .*/, "Response was not valid JSON.")
+    .replace(/No recipe in the reply: .*/, "No recipe in the reply (page unreadable).")
+    .replace(/Use one of .*/, "Use one of the allowed units.")
+    .replace(/"[^"]*"/g, '"…"')
+    .trim();
+}
+
+export interface RuleCount {
+  rule: string;
+  /** Answers that broke it (an answer breaking it twice counts once). */
+  answers: number;
+  cases: string[];
+  example: string;
+}
+
+/** Every turned-down answer's rules, most common first. */
+export function tallyRules(results: EvalResult[]): RuleCount[] {
+  const by = new Map<string, RuleCount>();
+  for (const r of results)
+    for (const answer of r.failures ?? []) {
+      const seen = new Set<string>();
+      for (const e of answer) {
+        const rule = ruleOf(e);
+        if (seen.has(rule)) continue;
+        seen.add(rule);
+        const row = by.get(rule) ?? { rule, answers: 0, cases: [], example: e };
+        row.answers++;
+        if (!row.cases.includes(r.caseId)) row.cases.push(r.caseId);
+        by.set(rule, row);
+      }
+    }
+  return [...by.values()].sort((a, b) => b.answers - a.answers || a.rule.localeCompare(b.rule));
+}
+
 // ------------------------------------------------------------- summary --
 
 export interface ConfigSummary {
@@ -171,6 +227,8 @@ export interface ConfigSummary {
   multiCall: number;
   /** Runs where some call hit the output cap. */
   hitCap: number;
+  /** Answers turned down (validation, bad JSON, no recipe) across all runs. */
+  turnedDown: number;
   costUsd: number;
 }
 
@@ -186,6 +244,7 @@ export function summarize(results: EvalResult[]): ConfigSummary[] {
     over120: rs.filter((r) => r.ms > 120_000).length,
     multiCall: rs.filter((r) => r.calls > 1).length,
     hitCap: rs.filter((r) => r.stopReasons.includes("max_tokens")).length,
+    turnedDown: rs.reduce((n, r) => n + (r.failures?.length ?? 0), 0),
     costUsd: Math.round(rs.reduce((n, r) => n + costUsd(r.inputTokens, r.outputTokens), 0) * 100) / 100,
   }));
 }
@@ -220,12 +279,12 @@ const counts = (r: Recipe | null) =>
 export function renderMarkdown(results: EvalResult[], configs: EvalConfig[], startedAt: Date): string {
   const out: string[] = [];
   out.push(`# Extraction comparison — ${startedAt.toISOString().slice(0, 16).replace("T", " ")} UTC`, "");
-  out.push("| config | runs | ok | avg s | max s | >120s | >1 model call | hit cap | cost |");
-  out.push("|---|---|---|---|---|---|---|---|---|");
+  out.push("| config | runs | ok | avg s | max s | >120s | >1 model call | hit cap | answers turned down | cost |");
+  out.push("|---|---|---|---|---|---|---|---|---|---|");
   for (const s of summarize(results)) {
     const c = configs.find((x) => x.key === s.config);
     out.push(
-      `| ${s.config} ${c?.label ?? ""} | ${s.runs} | ${s.ok} | ${s.avgS} | ${s.maxS} | ${s.over120} | ${s.multiCall} | ${s.hitCap} | $${s.costUsd.toFixed(2)} |`
+      `| ${s.config} ${c?.label ?? ""} | ${s.runs} | ${s.ok} | ${s.avgS} | ${s.maxS} | ${s.over120} | ${s.multiCall} | ${s.hitCap} | ${s.turnedDown} | $${s.costUsd.toFixed(2)} |`
     );
   }
   out.push("");
@@ -244,6 +303,31 @@ export function renderMarkdown(results: EvalResult[], configs: EvalConfig[], sta
     });
     out.push(`| ${id} | ${cells.join(" | ")} |`);
   }
+  out.push("");
+
+  // Why second calls happened: every turned-down answer, by rule, per config.
+  out.push("## Why answers were turned down", "");
+  for (const c of configs) {
+    const rules = tallyRules(results.filter((r) => r.config === c.key));
+    const answers = results.filter((r) => r.config === c.key).reduce((n, r) => n + (r.failures?.length ?? 0), 0);
+    out.push(`### ${c.key} — ${answers} answer${answers === 1 ? "" : "s"} turned down`, "");
+    if (!rules.length) {
+      out.push("None.", "");
+      continue;
+    }
+    out.push("| rule | answers | cases | example |", "|---|---|---|---|");
+    for (const r of rules)
+      out.push(`| ${r.rule.replace(/\|/g, "/")} | ${r.answers} | ${r.cases.join(", ")} | ${r.example.replace(/\|/g, "/").slice(0, 120)} |`);
+    out.push("");
+  }
+  out.push("### Run by run", "", "| case | config | calls | stop reasons | turned down because |", "|---|---|---|---|---|");
+  for (const r of results.filter((x) => x.calls > 1 || (x.failures?.length ?? 0) > 0))
+    out.push(
+      `| ${r.caseId} | ${r.config} | ${r.calls} | ${r.stopReasons.join(", ")} | ${(r.failures ?? [])
+        .map((a) => a.map(ruleOf).join("; "))
+        .join(" ⟶ ")
+        .replace(/\|/g, "/")} |`
+    );
   out.push("");
 
   // Source step tags: every row, suspects first.

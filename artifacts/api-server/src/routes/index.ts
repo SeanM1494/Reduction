@@ -12,7 +12,7 @@ import { appleBillingRouter } from "./billingApple";
 import { adminRouter } from "./admin";
 import { accountRouter } from "./account";
 
-import { EXTRACTION_MAX_TOKENS, extractionEffort, stepSourcesEnabled } from "../lib/extractionConfig";
+import { EXTRACTION_MAX_TOKENS, extractionEffort, extractionFallbackEffort, stepSourcesEnabled } from "../lib/extractionConfig";
 
 const router: IRouter = Router();
 
@@ -29,7 +29,13 @@ router.get("/health", async (_req, res) =>
     ok: true,
     commit: BUILD_COMMIT,
     schema: await schemaForHealth(),
-    extraction: { effort: extractionEffort() ?? "default", maxTokens: EXTRACTION_MAX_TOKENS, stepSources: stepSourcesEnabled() },
+    extraction: {
+      effort: extractionEffort() ?? "default",
+      // "same" = the fallback follows `effort` (EXTRACTION_FALLBACK_EFFORT unset).
+      fallbackEffort: ((f) => (f === undefined ? "same" : f ?? "default"))(extractionFallbackEffort()),
+      maxTokens: EXTRACTION_MAX_TOKENS,
+      stepSources: stepSourcesEnabled(),
+    },
   })
 );
 
