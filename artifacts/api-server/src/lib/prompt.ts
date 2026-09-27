@@ -72,7 +72,7 @@ AMOUNTS
 - Ranges: "qty" is the low end, "qtyMax" the high end.
 - Non-numeric amounts ("to taste", "1 can"): qty null, and put the source's words in "text".
 - Prep descriptors that are not steps go in "note": "softened", "room temperature", "finely chopped". Keep the name clean.
-- Do not invent amounts. If the source omits one, use qty null and text null.
+- Every ingredient has a number in "qty" or words in "text" — never both null. When the source gives no amount at all ("salt and pepper", "oil for the pan"), qty is null and "text" is "to taste" for salt, pepper and other seasonings, and "as needed" for anything else. Never invent a number.
 
 Work only from the source given. Do not add ingredients or steps that are not there.`;
 

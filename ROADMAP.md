@@ -1823,6 +1823,29 @@ and the text change carries the whole signal.
 
 ## Still open from earlier work
 
+- **allrecipes.com cannot be read by the server, by either fetch (Sep
+  27).** Our fetch gets 402; Anthropic's web fetch is refused for the
+  domain ("permission denied for this domain"), measured on seven links,
+  at both effort levels. Nothing on our side of the call changes that, and
+  the site is saying no, so there is no workaround to build in the server.
+  Today the person is told "This site blocked us from reading the recipe.
+  Try pasting the recipe text instead." in about four seconds. The real
+  option is a product decision: let the PHONE hand us the page it is
+  already showing (a Share-sheet extension, or an in-app browser whose
+  page text is sent for extraction), which is how recipe apps generally
+  read sites that refuse servers. That is a native feature (a share
+  extension means a build and an `expo.version` bump) and a privacy-policy
+  sentence; undecided.
+- **An ingredient with no amount: "to taste" / "as needed", or blank?
+  (Sep 27).** The validator has always required qty or text on every
+  ingredient, while the prompt said "no amount → qty null, text null", so
+  most extractions paid a second model call to be told to fill `text` in.
+  The prompt now asks for "to taste" (seasonings) or "as needed"
+  (anything else) up front — no visible change from what the repair pass
+  already produced, one call fewer. The other honest answer is to let the
+  amount be BLANK when the source gives none: loosen `validateRecipe`'s
+  rule and show nothing in the amount column. That changes what a card
+  shows and what the editor accepts, so it is a decision, not a fix.
 - **How much of a long source step a card shows — a default, not a
   settled decision (Sep 27).** Each Step-by-Step card now shows only its
   own share of a source step (recipe-model `sourceText.ts`). When that

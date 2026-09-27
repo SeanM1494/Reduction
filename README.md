@@ -435,6 +435,21 @@ cap, $2.91 → $1.32. Retries did NOT drop (11 → 10 runs with a second call):
 the cut-offs were gone, and what remained was every one a first tree that
 broke a validation rule — which the report now tallies by rule.
 
+Measured Sep 27 (24 cases, configs S and F — the fallback at the model's
+default effort): **F did not help and is not on.** All seven allrecipes.com
+links failed in 2–7 seconds under both, because Anthropic's fetch is
+refused for that domain outright ("permission denied for this domain"), so
+no amount of reasoning reaches the page; each now ends in one call with the
+blocked message. On the pages the fallback CAN read, F averaged 47.5s
+against 25.4s, ran three past two minutes (the turkey took 305s and hit the
+cap), and cost 39% more. `EXTRACTION_FALLBACK_EFFORT` stays unset (the
+fallback follows `EXTRACTION_EFFORT`). The tally named the retries: 7 of
+the 8 non-allrecipes second calls were one rule, "has no qty and no text
+fallback" — the prompt said "if the source omits an amount, qty null and
+text null", which the validator has always refused. The prompt now says
+what the validator wants ("to taste" for seasonings, "as needed"
+otherwise, never an invented number); re-measure with `--configs S`.
+
 Where the time goes, from the production log (read-only):
 
 ```sql
