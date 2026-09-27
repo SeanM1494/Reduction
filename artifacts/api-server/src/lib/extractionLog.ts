@@ -33,7 +33,8 @@ import { getDb } from "../db";
 import { extractionEvents } from "@workspace/db";
 
 export interface ExtractionEvent {
-  source: "url" | "text" | "file" | "reextract";
+  /** "page": a page the phone's in-app browser already had (Sep 28). */
+  source: "url" | "text" | "file" | "reextract" | "page";
   cached: boolean;
   via?: "self" | "claude" | null;
   attempts?: number | null;

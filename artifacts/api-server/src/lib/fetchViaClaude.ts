@@ -78,8 +78,12 @@ export const BLOCKED_MESSAGE =
 export class UnreadablePageError extends Error {
   unreadable = true as const;
   usage?: CallUsage;
+  /** "site_blocked" when the answer is BLOCKED_MESSAGE: the phone keys its
+   *  "Open in browser" offer on this, never on the words. */
+  code?: string;
   constructor(message: string) {
     super(message);
+    if (message === BLOCKED_MESSAGE) this.code = "site_blocked";
   }
 }
 

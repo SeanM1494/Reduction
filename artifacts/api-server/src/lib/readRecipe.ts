@@ -17,7 +17,7 @@
 
 import { sanitizeOriginal, setRecipeTotalMinutes, type OriginalRecipe } from "@workspace/recipe-model";
 import type { Recipe } from "../shared/layout";
-import { fetchSource } from "./fetchSource";
+import { fetchSource, type FetchedSource } from "./fetchSource";
 import { structureRecipe } from "./structureRecipe";
 import { isUnreadable, structureRecipeFromUrl } from "./fetchViaClaude";
 import { emptyUsage, fallbackCall, mergeUsage, type CallUsage, type ModelCallOptions } from "./extractionConfig";
@@ -38,6 +38,52 @@ export interface ReadRecipe {
   usage: CallUsage;
 }
 
+/**
+ * A page's recipe, from a page already in hand: our own fetch's, or (Sep
+ * 28) the page the phone's in-app browser is showing, which reaches sites
+ * that refuse every server (routes/recipes.ts, `page`). Structured data
+ * when the page has it — the fast, single-call path that keeps the card's
+ * own wording — and the page's text when it does not. No fallback to
+ * Anthropic's fetch here: whoever holds the page has already fetched it.
+ */
+export async function recipeFromSource(
+  src: FetchedSource,
+  url: string,
+  opts: ModelCallOptions = {}
+): Promise<Omit<ReadRecipe, "via" | "fallback">> {
+  const out = await structureRecipe(
+    {
+      title: src.title,
+      yieldText: src.yieldText,
+      ingredients: src.ingredients,
+      instructions: src.instructions,
+      text: src.quality === "text" ? src.text : undefined,
+      sourceUrl: url,
+      // The card's own lines come with JSON-LD; only a text page needs
+      // the model to copy them out (lib/prompt.ts ORIGINAL_RULES).
+      askOriginal: src.quality === "text",
+    },
+    opts
+  );
+  const recipe = out.recipe;
+  recipe.source = src.siteName ?? undefined;
+  recipe.image = src.image;
+  // On a structured-data page the model was shown only the ingredients
+  // and steps — never the page — so any total it returned is a guess
+  // from step times. There, the page's own totalTime is the only source,
+  // and its absence clears the model's number. On a text page the model
+  // read the page itself, and its (gated) value stands.
+  if (src.quality === "jsonld") setRecipeTotalMinutes(recipe, src.totalMinutes);
+  return {
+    recipe,
+    attempts: out.attempts,
+    repaired: out.repaired,
+    original: src.original ?? sanitizeOriginal(out.original, "page"),
+    extraction: src.quality,
+    usage: out.usage,
+  };
+}
+
 export async function readRecipeAtUrl(
   url: string,
   opts: ModelCallOptions & {
@@ -54,39 +100,9 @@ export async function readRecipeAtUrl(
     // Our own fetch is cheaper and gives us JSON-LD when the site has it.
     const src = await fetchSource(url);
     reason = "model";
-    const out = await structureRecipe(
-      {
-        title: src.title,
-        yieldText: src.yieldText,
-        ingredients: src.ingredients,
-        instructions: src.instructions,
-        text: src.quality === "text" ? src.text : undefined,
-        sourceUrl: url,
-        // The card's own lines come with JSON-LD; only a text page needs
-        // the model to copy them out (lib/prompt.ts ORIGINAL_RULES).
-        askOriginal: src.quality === "text",
-      },
-      opts
-    );
+    const out = await recipeFromSource(src, url, opts);
     add(out.usage);
-    const recipe = out.recipe;
-    recipe.source = src.siteName ?? undefined;
-    recipe.image = src.image;
-    // On a structured-data page the model was shown only the ingredients
-    // and steps — never the page — so any total it returned is a guess
-    // from step times. There, the page's own totalTime is the only source,
-    // and its absence clears the model's number. On a text page the model
-    // read the page itself, and its (gated) value stands.
-    if (src.quality === "jsonld") setRecipeTotalMinutes(recipe, src.totalMinutes);
-    return {
-      recipe,
-      attempts: out.attempts,
-      repaired: out.repaired,
-      original: src.original ?? sanitizeOriginal(out.original, "page"),
-      via: "self",
-      extraction: src.quality,
-      usage,
-    };
+    return { ...out, via: "self", usage };
   } catch (selfErr) {
     // Blocked, JS-rendered, unreadable — or read, and the model's tree
     // would not validate. Let Claude fetch it instead: the request comes

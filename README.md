@@ -45,7 +45,9 @@ artifacts/reduction/src/
 
 ## How extraction works
 
-`POST /api/recipes/extract` takes `{ url }`, `{ text }`, or `{ file: { data, mediaType } }` and returns `{ recipe, meta }`.
+`POST /api/recipes/extract` takes `{ url }`, `{ text }`, `{ file: { data, mediaType } }` or `{ page: { url, html } }` and returns `{ recipe, meta }`.
+
+`page` (Sep 28) is a page the phone's in-app browser already has — how a site that refuses every server is read at all: allrecipes.com answers our fetch with a 402 and refuses Anthropic's outright. The HTML goes through the same parse as our own fetch (`sourceFromHtml`, then `recipeFromSource` in `lib/readRecipe.ts`: structured data when present, one call, the card's own wording), with no fallback fetch. **It is cached by what the page SAYS (`pageKey`), never by the URL it claims, and the cached copy carries no `sourceUrl`** — the sender chose the HTML, so a page read behind someone's login, or claimed to be from a URL it is not, must never answer another person's paste of that URL or reach search, which offers cached rows by `sourceUrl`. A content key only matches someone who already has the identical recipe in hand; `routes/page.db.test.ts` pins all of it. A URL extraction that ends in "This site blocked us…" carries `code: "site_blocked"`, which is what the phone keys its "Open in browser" offer on.
 
 1. For a URL, fetch the page and look for `schema.org/Recipe` JSON-LD. Most modern food sites have it, which skips the messy parsing. Older sites fall back to stripped body text.
 2. Send that to Claude with the rules in `lib/prompt.ts`.

@@ -15,7 +15,8 @@ import crypto from "node:crypto";
 import { desc, eq, inArray, or } from "drizzle-orm";
 import { getDb } from "../db";
 import { extractionCache } from "@workspace/db";
-import { readRecipeAtUrl } from "../lib/readRecipe";
+import { readRecipeAtUrl, recipeFromSource } from "../lib/readRecipe";
+import { sourceFromHtml, type FetchedSource } from "../lib/fetchSource";
 import { structureRecipe } from "../lib/structureRecipe";
 import { searchRecipes, type SearchResult } from "../lib/searchRecipes";
 import { libraryMatches, mergeResults, proofLine, usageFor, type UsageStats } from "../lib/searchLibrary";
@@ -179,6 +180,39 @@ async function cachedOriginal(key: string, from: OriginalFrom): Promise<Original
     warnOriginal("read", e);
     return null;
   });
+}
+
+/** Past this a page is not a recipe page, or the phone did not strip it
+ *  (the in-app browser sends the DOM without scripts, styles and images). */
+const MAX_PAGE_CHARS = 3_000_000;
+const PAGE_TOO_LARGE = "That page is too large.";
+
+/** `page` as sent — `{ url, html }` with an http(s) URL — or why not. */
+function readPageBody(page: unknown): { url: URL; html: string } | string {
+  const p = page as { url?: unknown; html?: unknown } | null;
+  if (!p || typeof p !== "object" || typeof p.url !== "string" || typeof p.html !== "string")
+    return "page needs a url and the page's html.";
+  let url: URL;
+  try {
+    url = new URL(p.url);
+  } catch {
+    return "page.url is not a URL.";
+  }
+  if (url.protocol !== "https:" && url.protocol !== "http:") return "page.url must be a web page.";
+  if (p.html.length > MAX_PAGE_CHARS) return PAGE_TOO_LARGE;
+  return { url, html: p.html };
+}
+
+/** A page's cache key: what the page SAYS, never where it claimed to be
+ *  from. Structured data is stable across loads, so the same recipe card
+ *  keys the same for everyone who opens it; a text-only page mostly will
+ *  not (ads, dates), which only costs a miss. */
+export function pageKey(src: FetchedSource): string {
+  const said =
+    src.quality === "jsonld"
+      ? { t: src.title, y: src.yieldText, i: src.ingredients, s: src.instructions }
+      : { t: src.title, x: src.text };
+  return hash(`page:${JSON.stringify(said)}`);
 }
 
 /**
@@ -401,12 +435,62 @@ function extractionRecorder(req: Request, res: Response) {
 
 recipesRouter.post("/extract", requireExtractionAllowance, async (req: Request, res: Response) => {
   const mark = extractionRecorder(req, res);
-  const { url, text, file } = req.body ?? {};
+  const { url, text, file, page } = req.body ?? {};
 
-  if (!url && !text && !file)
-    return res.status(400).json({ error: "Send a url, pasted text, or a file." });
+  if (!url && !text && !file && !page)
+    return res.status(400).json({ error: "Send a url, pasted text, a file, or a page." });
 
   try {
+    // ---- A page the phone already has ---------------------------------
+    // The in-app browser's rendered page (Sep 28): how a site that refuses
+    // every server — allrecipes.com refuses our fetch AND Anthropic's — is
+    // read at all. The person loaded it themselves; we only read what they
+    // hand over. Two rules, both about the fact that the SENDER chose what
+    // is in `html`:
+    //  - It is cached by CONTENT, never by URL, and the cached copy carries
+    //    no sourceUrl. A page read behind someone's login, or simply claimed
+    //    to be from a URL it is not, must never answer someone else's paste
+    //    of that URL or surface in search, which offers cached rows by their
+    //    sourceUrl (lib/searchLibrary.ts). A content key only ever matches a
+    //    sender who already has the identical recipe in hand.
+    //  - No fallback fetch: whoever holds the page has already fetched it.
+    if (page !== undefined) {
+      const given = readPageBody(page);
+      if (typeof given === "string") return res.status(given === PAGE_TOO_LARGE ? 413 : 400).json({ error: given });
+      const pageUrl = given.url.href;
+      mark({ source: "page", host: hostOf(pageUrl), via: "self" });
+
+      const src = sourceFromHtml(given.html, given.url);
+      const key = pageKey(src);
+      const cached = await cacheGet(key);
+      if (cached) {
+        mark({ cached: true });
+        return sendRecipe(req, res, {
+          recipe: { ...cached, sourceUrl: pageUrl, source: src.siteName ?? cached.source },
+          meta: { cached: true, source: "page" },
+          original: await cachedOriginal(key, "page"),
+          sourceKey: key,
+        });
+      }
+
+      if (overLimit(req.ip ?? "unknown"))
+        return res
+          .status(429)
+          .json({ error: "Too many extractions this hour. Try again later." });
+
+      const out = await recipeFromSource(src, pageUrl);
+      const { sourceUrl: _omit, ...shareable } = out.recipe;
+      await cacheSet(key, shareable as Recipe);
+      await keepOriginal(key, out.original);
+      mark({ cached: false, via: "self", attempts: out.attempts, repaired: out.repaired.length });
+      return sendRecipe(req, res, {
+        recipe: out.recipe,
+        original: out.original,
+        sourceKey: key,
+        meta: { cached: false, source: "page", extraction: out.extraction, attempts: out.attempts, repaired: out.repaired },
+      });
+    }
+
     // ---- URL ----------------------------------------------------------
     if (url) {
       if (typeof url !== "string")
@@ -572,6 +656,8 @@ recipesRouter.post("/extract", requireExtractionAllowance, async (req: Request, 
     return res.status(isUserFacing ? 422 : 500).json({
       error: isUserFacing ? err.message : "Something went wrong reading that recipe.",
       details: err.details,
+      // "site_blocked": the phone offers its in-app browser (fetchViaClaude.ts).
+      code: isUserFacing ? (err as { code?: string }).code : undefined,
     });
   }
 });
@@ -708,6 +794,7 @@ recipesRouter.post("/reextract", async (req: Request, res: Response) => {
     return res.status(isUserFacing ? 422 : 500).json({
       error: isUserFacing ? err.message : "Could not read that page again.",
       details: err.details,
+      code: isUserFacing ? (err as { code?: string }).code : undefined,
     });
   }
 });
