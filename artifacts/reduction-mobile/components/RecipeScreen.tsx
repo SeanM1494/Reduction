@@ -338,6 +338,29 @@ export function RecipeScreen({
     servings && recipe.servings && servings !== recipe.servings
       ? `Cooking for ${servings} · the recipe makes ${recipe.servings}`
       : null;
+  // The source's own wording, one tap from either view: below the diagram
+  // (an SE has no room above it left to spend — CLAUDE.md, the recipe
+  // screen headroom), and below the card in Step-by-Step, where the card
+  // shows only its own share of a source step.
+  const originalRow =
+    onOpenOriginal && !editing ? (
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="Original recipe, as the source wrote it"
+        onPress={onOpenOriginal}
+        style={({ pressed }) => [styles.originalRow, pressed && styles.originalRowPressed]}
+        testID="recipe-original"
+      >
+        <View style={{ flex: 1 }}>
+          <Text style={styles.originalTitle}>Original recipe</Text>
+          <Text style={styles.originalSub} numberOfLines={1}>
+            The ingredients and steps as {recipe.sourceUrl ? recipe.source || 'the page' : 'the source'} wrote them
+          </Text>
+        </View>
+        <Text style={styles.originalChevron}>›</Text>
+      </Pressable>
+    ) : null;
+
   /** The top of both views: the recipe's picture and Clear progress, and
    *  nothing else (Sep 25). Saved recipes only — the demo has its own
    *  Reset, and a preview has neither a picture nor progress. */
@@ -528,23 +551,7 @@ export function RecipeScreen({
           {/* The source's own wording, one tap from the diagram that is our
               reading of it. Below the diagram, not above: an SE has no room
               above it left to spend (CLAUDE.md, the recipe screen headroom). */}
-          {onOpenOriginal && !editing ? (
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Original recipe, as the source wrote it"
-              onPress={onOpenOriginal}
-              style={({ pressed }) => [styles.originalRow, pressed && styles.originalRowPressed]}
-              testID="recipe-original"
-            >
-              <View style={{ flex: 1 }}>
-                <Text style={styles.originalTitle}>Original recipe</Text>
-                <Text style={styles.originalSub} numberOfLines={1}>
-                  The ingredients and steps as {recipe.sourceUrl ? recipe.source || 'the page' : 'the source'} wrote them
-                </Text>
-              </View>
-              <Text style={styles.originalChevron}>›</Text>
-            </Pressable>
-          ) : null}
+          {originalRow}
           {/* A 44px row rather than an inline link: the web's 12px anchor is
               a mouse target, and this one is tapped. */}
           {recipe.sourceUrl ? (
@@ -577,6 +584,7 @@ export function RecipeScreen({
           onReorderOpened={() => setOpenReorder(false)}
           header={sessionRow}
           sourceSteps={sourceSteps}
+          footer={originalRow}
         />
       )}
 

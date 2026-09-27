@@ -69,6 +69,7 @@ import type { Recipe, Section, Cell } from "@/shared/layout";
 import { deriveDiagramState } from "@/shared/collapse";
 import { computeLayout } from "@/shared/layout";
 import { formatAmount } from "@/shared/amounts";
+import { AmountText } from "@/components/AmountText";
 import { headerDoneId } from "@/shared/progress";
 import { noTargetsReason, validMoveTargets } from "@/shared/edits";
 import { edgeDir, rectAt, stepAt, toContent, type WindowRect } from "./dragMath";
@@ -225,9 +226,11 @@ function cellContent(
   if (c.kind === "ingredient" && c.ingredient) {
     return (
       <View style={[styles.ingBody, { width: w }]}>
-        <Text style={[styles.amount, { color: st.isDone ? colors.coolInk : colors.mutedForeground }]}>
-          {formatAmount(c.ingredient, scale)}
-        </Text>
+        <AmountText
+          text={formatAmount(c.ingredient, scale)}
+          fontSize={AMOUNT_SIZE}
+          style={[styles.amount, { color: st.isDone ? colors.coolInk : colors.mutedForeground }]}
+        />
         <Text style={[styles.name, { color: st.isDone ? colors.coolInk : colors.text }, struck]}>
           {c.ingredient.name}
         </Text>
@@ -1119,6 +1122,8 @@ export function DiagramView({ recipe, done, onToggle, scale, edit = null }: Diag
   );
 }
 
+const AMOUNT_SIZE = 13;
+
 const styles = StyleSheet.create({
   frameShadow: {
     shadowColor: "#3a2418",
@@ -1144,7 +1149,7 @@ const styles = StyleSheet.create({
   tuckedText: { flex: 1, fontSize: 14, fontWeight: "600" },
   tuckedMore: { fontFamily: "SpaceMono_400Regular", fontSize: 10.5, letterSpacing: 0.5 },
   ingBody: { gap: 3 },
-  amount: { fontFamily: "SpaceMono_400Regular", fontSize: 13, letterSpacing: -0.13 },
+  amount: { fontFamily: "SpaceMono_400Regular", fontSize: AMOUNT_SIZE, letterSpacing: -0.13 },
   name: { fontSize: 14, lineHeight: 17.5 },
   note: { fontSize: 12.5, lineHeight: 15, fontStyle: "italic" },
   opLabel: { fontSize: 14, lineHeight: 18, textAlign: "center" },

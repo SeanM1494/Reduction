@@ -17,6 +17,7 @@ import React, { useLayoutEffect, useRef, useState } from "react";
 import type { Section } from "../shared/layout";
 import { deriveDiagramState } from "../shared/collapse";
 import { formatAmount, formatMinutes } from "../shared/amounts";
+import { Amount } from "./Amount";
 
 /**
  * Columns shade deeper to the right, so stage depth reads before interaction.
@@ -454,7 +455,7 @@ export default function Diagram({
                             {c.kind === "ingredient" ? (
                               <span className="rd-ing-body">
                                 <span className="rd-amount">
-                                  {formatAmount(c.ingredient!, scale)}
+                                  <Amount text={formatAmount(c.ingredient!, scale)} />
                                 </span>
                                 <span className="rd-name">
                                   {c.ingredient!.name}

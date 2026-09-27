@@ -23,6 +23,7 @@ import { type Ingredient, type Recipe, type Step } from "../shared/layout";
 import { cardSequence } from "../shared/sequence";
 import ReorderView from "./ReorderView";
 import { formatAmount, formatMinutes, stepMinutes } from "../shared/amounts";
+import { Amount } from "./Amount";
 import type { Entry, StepTimer } from "../lib/storage";
 
 interface StepCard {
@@ -343,7 +344,7 @@ export default function StepsMode({ recipe, entry, done, scale, onToggle, onUpda
                       onClick={() => onToggle(ing.id)}
                     >
                       <span className="rd-steps-check" aria-hidden="true" />
-                      <span className="rd-amount">{formatAmount(ing, scale)}</span>
+                      <span className="rd-amount"><Amount text={formatAmount(ing, scale)} /></span>
                       <span className="rd-name">
                         {ing.name}
                         {ing.note ? <em className="rd-note">, {ing.note}</em> : null}

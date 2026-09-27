@@ -1823,6 +1823,28 @@ and the text change carries the whole signal.
 
 ## Still open from earlier work
 
+- **How much of a long source step a card shows — a default, not a
+  settled decision (Sep 27).** Each Step-by-Step card now shows only its
+  own share of a source step (recipe-model `sourceText.ts`). When that
+  share is long — a single step carrying a page of advice, like a pizza
+  dough's knead step with its poke test and windowpane test — the card
+  shows whole sentences up to about 200 characters and a "Show the rest
+  of this step" button (`clampSourceText`), and the Original recipe row
+  under the card has everything. The 200 and the fold itself were chosen
+  to fix the wall of text, not decided: the alternatives are no fold (the
+  advice is the recipe's own words), a tighter fold, or asking the
+  extractor to mark which sentences are advice. Worth deciding on a real
+  phone after some cooking.
+- **The web's Step-by-Step still invents "In a bowl" (Sep 27).** The
+  phone's lead-in now comes from the vessel the step's own source text
+  names, and is plain "Add:" when there is none. The web shows no source
+  text (the original-wording gap below), so its lead-in keeps the old
+  rule — "In a bowl, add:" whenever the label says "mix", "Add:"
+  otherwise — which is the inconsistency reported on the phone. It
+  closes with the gap below: pass the wording to the web's StepsMode
+  and call `sourceTextsByStep` the way the phone does. The landing
+  demo's guacamole reads "In a bowl, add:" today, so that copy changes
+  with it.
 - **The original-wording screen is phone-only — a known gap, not urgent
   (Sep 25).** The recipe as its source worded it (README "Original
   wording") ships on mobile only: `app/original/[id].tsx`, reached from

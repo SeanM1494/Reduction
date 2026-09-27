@@ -604,6 +604,11 @@ input, select, textarea { font-size: 16px; }
   font-size: 13px; color: color-mix(in srgb, var(--muted) 26%, var(--ink) 74%);
   letter-spacing: -.01em;
 }
+/* A vulgar fraction is one character cell, so the digits inside "¼" are
+   ~40% of the "2" beside it — at 13px, a 5px numeral. 1.5em brings them to
+   about 60% of a whole number's; line-height 0 keeps the line box, so a row
+   with a fraction is exactly as tall as one without (components/Amount.tsx). */
+.rd-frac { font-size: 1.5em; line-height: 0; }
 .rd-name { font-size: 14px; line-height: 1.25; }
 .rd-note { color: var(--faint); font-style: italic; font-size: 12.5px; }
 .rd-op-label {

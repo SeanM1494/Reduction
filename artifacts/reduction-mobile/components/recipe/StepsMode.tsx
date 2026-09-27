@@ -11,9 +11,11 @@
  * kitchen, and it shipped once on the web.
  *
  * Every step is one card: its raw ingredients live on the same card as the
- * action, as checkable rows, framed as a short instruction — "In a bowl,
- * add: … Then mix these together." — rather than a bare label with a
+ * action, as checkable rows, framed as a short instruction — "In a large
+ * bowl, add: … Then mix these together." — rather than a bare label with a
  * separate prep card. Steps with nothing to add show their label directly.
+ * The vessel in that lead-in is the one the recipe's own words name for
+ * THIS step (shared/sourceText.ts), and without them it is plain "Add:".
  *
  * Timers persist via an absolute `endsAt` on the entry, never a running
  * countdown: the interval here only forces a re-render each second, and
@@ -34,9 +36,10 @@ import * as Haptics from 'expo-haptics';
 import type { Ingredient, Recipe, Step } from '@/shared/layout';
 import { cardSequence, type OrderPreference } from '@/shared/sequence';
 import { headerDoneId } from '@/shared/progress';
-import { stepSource } from '@/shared/stepSource';
+import { clampSourceText, sourceTextsByStep, type StepSourceText } from '@/shared/sourceText';
 import { formatAmount, formatMinutes, stepMinutes } from '@/shared/amounts';
 import { SheetButton } from '@/components/Sheet';
+import { AmountText } from '@/components/AmountText';
 import { ReorderView } from '@/components/recipe/ReorderView';
 import { useColors, type Colors } from '@/hooks/useColors';
 import { cardShadow, fonts } from '@/constants/colors';
@@ -70,8 +73,12 @@ function fmtRemaining(ms: number): string {
 }
 
 // A short lead-in + closing pair so the card reads like an instruction
-// rather than a bare verb. Only steps with ingredients use this.
-const leadFor = (label: string): string => (/\bmix\b/i.test(label) ? 'In a bowl, add' : 'Add');
+// rather than a bare verb. Only steps with ingredients use this. The
+// lead-in's vessel comes from the step's own share of the recipe's words;
+// it used to be "In a bowl" whenever the LABEL said "mix", so one recipe's
+// marinade read "In a bowl, add:" and its sear just "Add:" (Sep 26, a real
+// phone). No words, no vessel — never an invented bowl.
+const leadFor = (source: StepSourceText | null): string => (source?.leadIn ? `${source.leadIn}, add` : 'Add');
 const closingFor = (label: string): string => {
   const trimmed = label.trim();
   return /^mix$/i.test(trimmed) ? 'mix these together' : trimmed;
@@ -133,6 +140,10 @@ interface Props {
    * recipe, the demo — nothing is shown, not a guess.
    */
   sourceSteps?: string[] | null;
+  /** Below the card: the recipe screen's "Original recipe" row, so the
+   *  source's whole wording is one tap from cooking as well as from the
+   *  diagram. */
+  footer?: React.ReactNode;
 }
 
 export function StepsMode({
@@ -150,6 +161,7 @@ export function StepsMode({
   onReorderOpened,
   header = null,
   sourceSteps = null,
+  footer = null,
 }: Props) {
   const colors = useColors();
   const styles = makeStyles(colors);
@@ -205,8 +217,19 @@ export function StepsMode({
   };
 
   // ---- the recipe's own words ------------------------------------------------
-  const src = card ? stepSource(card.step) : null;
-  const sourceLine = src && sourceSteps ? sourceSteps[src - 1] ?? null : null;
+  // Each card's share of its source step, divided in cooking order: three
+  // steps drawn from one paragraph get a third each, not the paragraph three
+  // times (shared/sourceText.ts). A long share shows its first sentences and
+  // keeps the rest a tap away, per card — `expandedFor` names the card it
+  // was opened on, so the next card starts folded.
+  const sourceTexts = useMemo(
+    () => sourceTextsByStep(recipe, sourceSteps, cards.map((c) => c.stepId)),
+    [recipe, sourceSteps, cards]
+  );
+  const sourceText = card ? sourceTexts.get(card.stepId) ?? null : null;
+  const clamped = sourceText ? clampSourceText(sourceText.text) : null;
+  const [expandedFor, setExpandedFor] = useState<string | null>(null);
+  const showAllSource = !!card && expandedFor === card.stepId;
 
   // ---- timer ---------------------------------------------------------------
   const [, setTick] = useState(0);
@@ -324,7 +347,7 @@ export function StepsMode({
 
           {card.ingredients.length ? (
             <>
-              <Text style={styles.lead}>{leadFor(card.step.label)}:</Text>
+              <Text style={styles.lead} testID="cook-lead">{leadFor(sourceText)}:</Text>
               <View style={styles.prepList}>
                 {card.ingredients.map((ing) => {
                   const isDone = done.has(ing.id);
@@ -343,7 +366,7 @@ export function StepsMode({
                       <View style={[styles.check, isDone && styles.checkDone]}>
                         {isDone ? <Text style={styles.checkMark}>✓</Text> : null}
                       </View>
-                      {amount ? <Text style={styles.amount}>{amount}</Text> : null}
+                      {amount ? <AmountText text={amount} fontSize={AMOUNT_SIZE} style={styles.amount} /> : null}
                       <Text style={[styles.name, isDone && styles.nameDone]}>
                         {ing.name}
                         {ing.note ? <Text style={styles.note}>, {ing.note}</Text> : null}
@@ -357,12 +380,24 @@ export function StepsMode({
           ) : (
             <Text style={styles.label}>{card.step.label}</Text>
           )}
-          {sourceLine ? (
+          {sourceText && clamped ? (
             <View style={styles.sourceBox} testID="cook-source">
               <Text style={styles.sourceLabel}>From the recipe</Text>
-              <Text style={styles.sourceText} selectable>
-                {sourceLine}
+              <Text style={styles.sourceText} selectable testID="cook-source-text">
+                {showAllSource || !clamped.rest ? sourceText.text : `${clamped.head} …`}
               </Text>
+              {clamped.rest ? (
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityState={{ expanded: showAllSource }}
+                  onPress={() => setExpandedFor(showAllSource ? null : card.stepId)}
+                  hitSlop={{ top: 8, bottom: 8 }}
+                  style={styles.sourceMore}
+                  testID="cook-source-more"
+                >
+                  <Text style={styles.sourceMoreText}>{showAllSource ? 'Show less' : 'Show the rest of this step'}</Text>
+                </Pressable>
+              ) : null}
             </View>
           ) : null}
           {card.step.tempF ? <Text style={styles.temp}>{card.step.tempF}°F</Text> : null}
@@ -396,9 +431,12 @@ export function StepsMode({
           </View>
         </View>
       )}
+      {footer}
     </ScrollView>
   );
 }
+
+const AMOUNT_SIZE = 13;
 
 function makeStyles(colors: Colors) {
   return StyleSheet.create({
@@ -443,6 +481,8 @@ function makeStyles(colors: Colors) {
     },
     sourceLabel: { fontFamily: fonts.mono, fontSize: 11, letterSpacing: 0.44, color: colors.faint, textTransform: 'uppercase' },
     sourceText: { fontSize: 17, lineHeight: 25, color: colors.foreground },
+    sourceMore: { alignSelf: 'flex-start', minHeight: 44, justifyContent: 'center' },
+    sourceMoreText: { fontSize: 15, fontWeight: '600', color: colors.warmInk },
     lead: { fontSize: 15, fontWeight: '600', color: colors.foreground, marginBottom: 10 },
     prepList: { gap: 8, marginBottom: 16 },
     prepRow: {
@@ -470,7 +510,7 @@ function makeStyles(colors: Colors) {
     },
     checkDone: { backgroundColor: colors.coolLine, borderColor: colors.coolLine },
     checkMark: { color: '#fff', fontSize: 11, lineHeight: 13, fontFamily: fonts.headingBold },
-    amount: { fontFamily: fonts.mono, fontSize: 13, color: colors.mutedForeground },
+    amount: { fontFamily: fonts.mono, fontSize: AMOUNT_SIZE, color: colors.mutedForeground },
     name: { flex: 1, fontSize: 15, color: colors.foreground },
     nameDone: { color: colors.coolInk },
     note: { fontStyle: 'italic', color: colors.mutedForeground },
