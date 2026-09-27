@@ -158,3 +158,58 @@ test("a long run is cut after whole sentences, the rest kept for a tap", () => {
   assert.equal(`${head} ${rest}`, knead);
   assert.deepEqual(clampSourceText("Short. Two sentences."), { head: "Short. Two sentences.", rest: null });
 });
+
+// Verbatim from the saved recipe on a real phone (Strawberry Rhubarb Bars,
+// Sep 27): one source step, two sections, three cards that each showed all
+// of it.
+const BARS_REAL =
+  "Make the crust and crumble: In a food processor, pulse the flour, granulated sugar, brown sugar, baking powder, and salt to combine. " +
+  "Add the butter, cream cheese, and almond extract and pulse until coarse crumbs form, about 10 pulses. " +
+  "Remove one-third of the mixture (about 1 2/3 cups) and set aside in a medium bowl for the topping. " +
+  "Add the milk to the food processor and pulse until the remaining mixture clumps when squeezed, about 5 pulses. " +
+  "It should still be crumbly, not doughy.";
+
+test("the real Strawberry Rhubarb Bars paragraph: three cards, three shares, the right vessel on each", () => {
+  const r = {
+    title: "Strawberry Rhubarb Bars",
+    servings: 16,
+    sections: [
+      {
+        name: "Crumb base",
+        ingredients: [
+          { id: "f", qty: 2.5, unit: "cup", name: "all-purpose flour" },
+          { id: "g", qty: 0.5, unit: "cup", name: "granulated sugar" },
+          { id: "b", qty: 0.5, unit: "cup", name: "light brown sugar" },
+          { id: "bp", qty: 1, unit: "tsp", name: "baking powder" },
+          { id: "s", qty: 0.5, unit: "tsp", name: "kosher salt" },
+          { id: "bu", qty: 18, unit: "tbsp", name: "cold salted butter" },
+          { id: "cc", qty: 3, unit: "oz", name: "cold cream cheese" },
+          { id: "al", qty: 0.5, unit: "tsp", name: "almond extract" },
+        ],
+        nodes: [
+          { id: "d", label: "pulse dry ingredients", inputs: ["f", "g", "b", "bp", "s"], src: 2 },
+          { id: "c", label: "pulse to coarse crumbs", inputs: ["d", "bu", "cc", "al"], src: 2 },
+        ],
+        root: "c",
+      },
+      {
+        name: "Crust",
+        ingredients: [
+          { id: "cb", qty: 1, unit: null, name: "crumb base" },
+          { id: "m", qty: 3, unit: "tbsp", name: "milk" },
+        ],
+        nodes: [{ id: "k", label: "pulse until clumping", inputs: ["cb", "m"], src: 2 }],
+        root: "k",
+      },
+    ],
+  } as unknown as Recipe;
+  const t = sourceTextsByStep(r, ["Preheat the oven.", BARS_REAL], ["d", "c", "k"]);
+  assert.equal(t.get("d")!.text, "Make the crust and crumble: In a food processor, pulse the flour, granulated sugar, brown sugar, baking powder, and salt to combine.");
+  assert.match(t.get("c")!.text, /^Add the butter, cream cheese, and almond extract .*for the topping\.$/);
+  assert.match(t.get("k")!.text, /^Add the milk to the food processor .* not doughy\.$/);
+  assert.equal([...t.values()].map((x) => x.text).join(" "), BARS_REAL);
+  assert.equal(t.get("d")!.leadIn, "In a food processor");
+  assert.equal(t.get("c")!.leadIn, null, "the medium bowl is where the TOPPING waits, not where the butter goes");
+  assert.equal(t.get("k")!.leadIn, "In the food processor");
+  assert.equal(leadInFrom("Bring to a boil in a large pot."), "In a large pot", "'to a boil' is not a vessel");
+});

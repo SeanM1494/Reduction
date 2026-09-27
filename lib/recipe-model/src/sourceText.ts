@@ -29,7 +29,8 @@
  * (`shared`), rather than showing a guess as if it were exact.
  *
  * The same run is where a card's lead-in comes from (`leadIn`): "In a large
- * bowl" is the vessel the recipe names for THIS step, found in its own run.
+ * bowl" is the vessel the recipe names for THIS step, found in the sentence
+ * of its own run where its ingredients go in.
  * It used to be keyed on the word "mix" in the label, which is why a tikka
  * masala's marinade read "In a bowl, add:" and its sear, in the same recipe,
  * just "Add:" with the pan it happens in trapped in the paragraph below.
@@ -128,8 +129,13 @@ const VESSELS =
   "sheet pan|baking sheet|baking dish|baking pan|casserole dish|casserole|loaf pan|cake pan|pie dish|pie plate|springform pan|" +
   "skillet|wok|pot|pan|dish|tray|jar|slow cooker|instant pot|pressure cooker|ramekin|tin";
 
+// Up to four describing words between the article and the vessel ("a
+// heavy based oven proof skillet"), none of them a preposition or an
+// article — or "to a boil in a pot" would read as a vessel called "a boil
+// in a pot".
+const FILLER = String.raw`(?:(?!(?:in|into|to|on|onto|a|an|the|of|over|with|and|or|until|for|at)\b)[\w-]+\s+)`;
 const VESSEL_RE = new RegExp(
-  String.raw`\b(?:in|into)\s+(?:(?:a|an|the|your|one|another|same)\s+)?(?:[\w-]+\s+){0,4}?(?:${VESSELS})\b` +
+  String.raw`\b(?:in|into|to)\s+(?:(?:a|an|the|your|one|another|same)\s+)?${FILLER}{0,4}?(?:${VESSELS})\b` +
     String.raw`(?:\s+of\s+(?:a|an|the|your)\s+(?:[\w-]+\s+){0,3}?(?:food processor|stand mixer|mixer|blender))?` +
     String.raw`(?:\s+(?:fitted with (?:the|a)\s+(?:[\w-]+\s+){0,2}?(?:blade|attachment|hook)))?` +
     String.raw`(?:\s+(?:over|on)\s+(?:low|medium|high|medium-high|medium-low|moderate|medium high|medium low)\s+heat)?`,
@@ -146,9 +152,27 @@ export function leadInFrom(text: string | null | undefined): string | null {
   if (!text) return null;
   const m = VESSEL_RE.exec(text);
   if (!m) return null;
-  const phrase = m[0].replace(/^into\b/i, "in").replace(/\s+/g, " ").trim();
+  const phrase = m[0].replace(/^(?:into|to)\b/i, "in").replace(/\s+/g, " ").trim();
   return phrase.charAt(0).toUpperCase() + phrase.slice(1);
 }
+
+/**
+ * A card's lead-in: the vessel named in the sentence where THIS step's
+ * ingredients go in — the first sentence of its run that names one of
+ * them, or the run's first sentence when none does. Not the first vessel
+ * anywhere in the run: "Add the butter, cream cheese and almond extract
+ * and pulse… Remove one-third of the mixture and set aside in a medium
+ * bowl" is a food processor step, and the medium bowl is where the
+ * topping waits (Strawberry Rhubarb Bars, Sep 27, a real phone).
+ */
+function leadInForRun(run: string, ingredientWords: Set<string>): string | null {
+  const sentences = sentencesOf(run);
+  const adding = sentences.find((s) => [...contentWords(s)].some((w) => ingredientWords.has(w))) ?? sentences[0];
+  return leadInFrom(adding);
+}
+
+const ingredientWordsOf = (step: Step, names: Map<string, string>): Set<string> =>
+  new Set((step.inputs ?? []).flatMap((id) => [...contentWords(names.get(id) ?? "")]));
 
 // ------------------------------------------------------------- split --
 
@@ -247,7 +271,7 @@ export function sourceTextsByStep(
     const text = sourceSteps[src - 1];
     if (!text) continue;
     if (group.length === 1) {
-      out.set(group[0].id, { text, leadIn: leadInFrom(text), shared: false });
+      out.set(group[0].id, { text, leadIn: leadInForRun(text, ingredientWordsOf(group[0], names)), shared: false });
       continue;
     }
 
@@ -266,7 +290,7 @@ export function sourceTextsByStep(
       group.forEach((step, j) => {
         const run = pieces.slice(start, ends[j]).join(" ");
         start = ends[j];
-        out.set(step.id, { text: run, leadIn: leadInFrom(run), shared: false });
+        out.set(step.id, { text: run, leadIn: leadInForRun(run, ingredientWordsOf(step, names)), shared: false });
       });
       continue;
     }
@@ -282,7 +306,11 @@ export function sourceTextsByStep(
     });
     group.forEach((step, j) => {
       const run = pieces[chosen[j]];
-      out.set(step.id, { text: run, leadIn: leadInFrom(run), shared: chosen.filter((c) => c === chosen[j]).length > 1 });
+      out.set(step.id, {
+        text: run,
+        leadIn: leadInForRun(run, ingredientWordsOf(step, names)),
+        shared: chosen.filter((c) => c === chosen[j]).length > 1,
+      });
     });
   }
   return out;

@@ -289,8 +289,8 @@ page when it was read from a public-looking URL, and that its counts are
 per account and per page however the URL was spelled, and the
 fourteenth guards that a recipe's original wording is its account's alone,
 filled once and never re-fetched on every open, and gone with the recipe
-and the account. **The full suite — 589 tests at the time of
-writing — has been run against a real Postgres and passes 589/0.** The
+and the account. **The full suite — 590 tests at the time of
+writing — has been run against a real Postgres and passes 590/0.** The
 ones that are not api-server or model tests include the mobile library's
 filter and sort (`artifacts/reduction-mobile/lib/libraryView.test.ts`), the
 recipe box's books and page arithmetic (`recipeBox.test.ts`), the
@@ -1246,7 +1246,10 @@ before "and" + a cooking verb), one run per step in cooking order, scored by
 the words each step's label and ingredients share with each piece; the runs
 together are the paragraph verbatim, and a piece that matches nothing stays
 with the step before it. The card's lead-in vessel ("In a large bowl, add:")
-comes from the same run and is plain "Add:" when the run names none — it
+comes from the sentence of that run where the step's ingredients go in —
+never merely the first vessel in the run, which put a food processor step
+"In a medium bowl" where the topping was set aside — and is plain "Add:"
+when that sentence names none — it
 used to be keyed on "mix" in the label, which is how one recipe's marinade
 got a bowl and its sear, in a pan, got nothing. If you touch either, run
 `src/scripts/sourceCards.ts` (read-only) against real saved recipes: it
