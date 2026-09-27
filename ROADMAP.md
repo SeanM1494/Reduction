@@ -1835,7 +1835,21 @@ and the text change carries the whole signal.
   page text is sent for extraction), which is how recipe apps generally
   read sites that refuse servers. That is a native feature (a share
   extension means a build and an `expo.version` bump) and a privacy-policy
-  sentence; undecided.
+  sentence. **Decided and under way (Sep 28): an in-app browser**, the
+  same mechanism Paprika documents for allrecipes.com (its bookmarklet:
+  the person opens the page in a real browser and extracts from there).
+  Phase 1, done: the server reads `{ page: { url, html } }`, cached by
+  content and never by URL (README "How extraction works"), and a blocked
+  URL carries `code: "site_blocked"`; the binary gains
+  `react-native-webview` at `expo.version` 1.1.0. Phase 2: the browser
+  screen and the rescue path — "Open in browser" beside "paste the text
+  instead" — and the go/no-go on a phone: allrecipes.com loads in it and
+  Extract returns the recipe with its wording. The rescue browser keeps
+  nothing between visits; the privacy-policy sentence ships with the
+  client that sends pages. Phase 3: the Find tab's Browse entry (address
+  bar, back/forward, recent sites on the phone only, "no recipe on this
+  page" before an extraction is spent), remembering site data between
+  visits, over the air on the 1.1.0 binary.
 - **An ingredient with no amount: "to taste" / "as needed", or blank?
   (Sep 27).** The validator has always required qty or text on every
   ingredient, while the prompt said "no amount → qty null, text null", so
