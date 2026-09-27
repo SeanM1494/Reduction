@@ -19,6 +19,28 @@ const VULGAR: Array<[number, number, string]> = [
   [7, 8, "\u215E"],
 ];
 
+/**
+ * An amount cut into runs, the fraction glyphs marked, so a renderer can
+ * draw them larger. A vulgar fraction packs numerator, slash and
+ * denominator into ONE character cell, so in the amounts' font (Space Mono,
+ * whose ¼ is exactly as tall as its 1) the digits inside it come out at
+ * roughly 40% of the whole number beside them: "2¼" read as a 2 and a
+ * smudge (Sep 26, a real phone). The glyph set is exactly what formatQty
+ * writes, plus the other common ones a recipe's own text may carry.
+ */
+const FRACTION_GLYPHS = new Set([...VULGAR.map(([, , g]) => g), "\u2155", "\u2156", "\u2157", "\u2158", "\u2159", "\u215A", "\u2150", "\u2151", "\u2152"]);
+
+export function fractionRuns(text: string): { text: string; fraction: boolean }[] {
+  const runs: { text: string; fraction: boolean }[] = [];
+  for (const ch of text) {
+    const fraction = FRACTION_GLYPHS.has(ch);
+    const last = runs[runs.length - 1];
+    if (last && last.fraction === fraction) last.text += ch;
+    else runs.push({ text: ch, fraction });
+  }
+  return runs;
+}
+
 /** 0.125 -> "⅛", 2.5 -> "2½", 1.37 -> "1.37" */
 export function formatQty(q: number): string {
   if (Math.abs(q - Math.round(q)) < 0.001) return String(Math.round(q));

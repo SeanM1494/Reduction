@@ -14,6 +14,8 @@ import {
   editableAmount,
   formatAmount,
   formatMinutes,
+  formatQty,
+  fractionRuns,
   snapQty,
   stepMinutes,
 } from "./amounts";
@@ -512,4 +514,22 @@ test("editableAmount is exact, unscaled, and round-trips through parseAmount", (
   assert.equal(editableAmount(ing(null, "cup")), "");
   assert.equal(editableAmount({ ...ing(null, "cup"), text: "to taste" }), "to taste");
   assert.equal(editableAmount(ing(2, "cup", 3)), "2–3");
+});
+
+test("fractionRuns: the fraction glyphs are marked, everything else passes through in order", () => {
+  assert.deepEqual(fractionRuns("2¼ cup"), [
+    { text: "2", fraction: false },
+    { text: "¼", fraction: true },
+    { text: " cup", fraction: false },
+  ]);
+  assert.deepEqual(fractionRuns("⅓"), [{ text: "⅓", fraction: true }]);
+  assert.deepEqual(fractionRuns("1.37 g"), [{ text: "1.37 g", fraction: false }]);
+  assert.deepEqual(fractionRuns(""), []);
+  // Every glyph formatQty can write is one the renderers will enlarge.
+  for (let n = 1; n < 8; n++) {
+    const out = formatQty(n / 8);
+    if (/\d/.test(out)) continue;
+    assert.equal(fractionRuns(out)[0].fraction, true, out);
+  }
+  for (const q of [1 / 3, 2 / 3, 0.25, 0.5, 0.75]) assert.equal(fractionRuns(formatQty(q))[0].fraction, true);
 });
