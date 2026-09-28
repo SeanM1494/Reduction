@@ -98,3 +98,122 @@ export function hostLabel(url: string): string {
   const m = /^https?:\/\/([^/?#]+)/i.exec(url);
   return m ? m[1].replace(/^www\./i, '') : '';
 }
+
+// ---------------------------------------------------------------------------
+// "Is there a recipe on this page?" — asked before anything is spent.
+// ---------------------------------------------------------------------------
+
+const DETECT_TYPE = 'reduction-page-detect';
+
+/**
+ * The body of `function (doc)`: collects the few things that say "recipe"
+ * and returns them for `looksLikeRecipe` to judge — collecting in the page
+ * and judging here keeps the judgement pure and under test. Cheap: a few
+ * selectors, the first 400 list items' first 60 characters.
+ */
+export const DETECT_BODY = `
+  var ld = [];
+  var scripts = doc.querySelectorAll('script[type="application/ld+json"]');
+  for (var i = 0; i < scripts.length && i < 20; i++) ld.push(String(scripts[i].textContent || '').slice(0, 200000));
+  var microdata = !!doc.querySelector('[itemtype*="schema.org/Recipe"]');
+  var plugin = !!doc.querySelector('.wprm-recipe-container,.wprm-recipe,.tasty-recipes,.mv-create-card,.easyrecipe,.zlrecipe-container,.recipe-card-details,[class*="recipe-card"]');
+  var headings = [];
+  var hs = doc.querySelectorAll('h1,h2,h3,h4,h5,h6');
+  for (var j = 0; j < hs.length && j < 200; j++) headings.push(String(hs[j].textContent || '').trim().slice(0, 60));
+  var items = [];
+  var lis = doc.querySelectorAll('li');
+  for (var k = 0; k < lis.length && k < 400; k++) items.push(String(lis[k].textContent || '').trim().slice(0, 60));
+  return { ld: ld, microdata: microdata, plugin: plugin, headings: headings, items: items };
+`;
+
+export interface PageSignals {
+  ld: string[];
+  microdata: boolean;
+  plugin: boolean;
+  headings: string[];
+  items: string[];
+}
+
+/** Does this JSON-LD text declare a Recipe anywhere — top level, in an
+ *  array, in an @graph, or as one of several @types? */
+export function ldHasRecipe(text: string): boolean {
+  let data: unknown;
+  try {
+    data = JSON.parse(text);
+  } catch {
+    // Some pages publish JSON-LD that is not quite JSON; the declaration
+    // itself is still plain to see.
+    return /"@type"\s*:\s*(\[[^\]]*)?"(?:schema:|https?:\/\/schema\.org\/)?Recipe"/.test(text);
+  }
+  const seen = new Set<unknown>();
+  const walk = (v: unknown, depth: number): boolean => {
+    if (!v || typeof v !== 'object' || depth > 6 || seen.has(v)) return false;
+    seen.add(v);
+    if (Array.isArray(v)) return v.some((x) => walk(x, depth + 1));
+    const o = v as Record<string, unknown>;
+    const t = o['@type'];
+    const isRecipe = (x: unknown) => typeof x === 'string' && /(^|[/:])Recipe$/.test(x);
+    if (isRecipe(t) || (Array.isArray(t) && t.some(isRecipe))) return true;
+    return walk(o['@graph'], depth + 1) || Object.values(o).some((x) => typeof x === 'object' && walk(x, depth + 1));
+  };
+  return walk(data, 0);
+}
+
+/** An ingredient line: it starts with an amount. */
+const AMOUNT_START = /^(?:\d+(?:[.,/]\d+)?|\d*\s*[½⅓⅔¼¾⅕⅖⅗⅘⅙⅚⅛⅜⅝⅞])\s*(?:-|–|to)?\s*\S/;
+
+/**
+ * The verdict. Any ONE strong signal is enough — the structured data a
+ * recipe card publishes, the same thing as microdata, or the container of a
+ * recipe-card plugin (WP Recipe Maker, Tasty, Create…) — and failing those,
+ * an "Ingredients" heading with at least three list items that start with
+ * an amount. Deliberately generous: a wrong "no" costs a person a tap on
+ * "Try anyway", a wrong "yes" costs one extraction the server's own
+ * no-recipe check then refuses.
+ */
+export function looksLikeRecipe(s: PageSignals): boolean {
+  if (s.microdata || s.plugin) return true;
+  if (s.ld.some(ldHasRecipe)) return true;
+  const heading = s.headings.some((h) => /^ingredients\b/i.test(h.replace(/^[^a-z]+/i, '')));
+  if (!heading) return false;
+  return s.items.filter((t) => AMOUNT_START.test(t)).length >= 3;
+}
+
+/** What the native browser injects to ask: collect, then post the signals
+ *  back tagged with `nonce`. */
+export function detectScript(nonce: string): string {
+  return `(function () {
+  var post = function (m) { window.ReactNativeWebView.postMessage(JSON.stringify(m)); };
+  try {
+    var got = (function (doc) { ${DETECT_BODY} })(document);
+    post({ type: ${JSON.stringify(DETECT_TYPE)}, nonce: ${JSON.stringify(nonce)}, signals: got });
+  } catch (e) {
+    post({ type: ${JSON.stringify(DETECT_TYPE)}, nonce: ${JSON.stringify(nonce)}, error: String(e && e.message || e) });
+  }
+})();
+true;`;
+}
+
+/**
+ * The browser's answer to THIS question: true or false, or null when the
+ * page could not be asked (a script error) — which the caller treats as
+ * "unknown" and does not stop anyone over. Anything else is not ours: undefined.
+ */
+export function readDetectMessage(data: string, nonce: string): boolean | null | undefined {
+  let m: { type?: unknown; nonce?: unknown; signals?: unknown };
+  try {
+    m = JSON.parse(data);
+  } catch {
+    return undefined;
+  }
+  if (!m || m.type !== DETECT_TYPE || m.nonce !== nonce) return undefined;
+  const sig = m.signals as Partial<PageSignals> | undefined;
+  if (!sig || typeof sig !== 'object') return null;
+  return looksLikeRecipe({
+    ld: Array.isArray(sig.ld) ? sig.ld.filter((x): x is string => typeof x === 'string') : [],
+    microdata: sig.microdata === true,
+    plugin: sig.plugin === true,
+    headings: Array.isArray(sig.headings) ? sig.headings.filter((x): x is string => typeof x === 'string') : [],
+    items: Array.isArray(sig.items) ? sig.items.filter((x): x is string => typeof x === 'string') : [],
+  });
+}

@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { SEARCH_ENGINE, addressFor, pageIdentity, searchUrl, searchWordsOf } from './browseAddress';
+import { SEARCH_ENGINE, STARTER_SITES, addressFor, pageIdentity, searchUrl, searchWordsOf } from './browseAddress';
 
 test('a web address loads; a bare domain gains https://', () => {
   assert.equal(addressFor('https://www.allrecipes.com/recipe/1/'), 'https://www.allrecipes.com/recipe/1/');
@@ -32,4 +32,9 @@ test('one page however its address was spelled', () => {
   assert.notEqual(pageIdentity('https://example.com/pie-2'), pageIdentity('https://example.com/pie'));
   assert.equal(pageIdentity(null), null);
   assert.equal(pageIdentity('not a url'), null);
+});
+
+test('the starter sites are https pages the address bar would load as they are', () => {
+  assert.equal(STARTER_SITES.length, 6);
+  for (const s of STARTER_SITES) assert.equal(addressFor(s.url), s.url, s.name);
 });

@@ -87,7 +87,7 @@ export default function FindScreen() {
         <AddNewPane blocked={blocked} onOpenBrowse={openBrowse} bottomInset={bottomInset} />
       </View>
       <View style={shown('browse')}>
-        <BrowsePane request={browseRequest} bottomInset={bottomInset} />
+        <BrowsePane request={browseRequest} blocked={blocked} bottomInset={bottomInset} />
       </View>
     </View>
   );

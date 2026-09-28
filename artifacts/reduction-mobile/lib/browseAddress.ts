@@ -70,3 +70,19 @@ export function pageIdentity(url: string | null | undefined): string | null {
     return null;
   }
 }
+
+/**
+ * What Browse offers before anyone types: a fixed row of well-known recipe
+ * sites. Fixed on purpose — a list of the person's own recent sites would
+ * be browsing history kept on the phone, which the private browser does not
+ * keep (and the privacy policy would have to say so). Home pages, so each
+ * opens on the site's own search.
+ */
+export const STARTER_SITES: ReadonlyArray<{ name: string; url: string }> = [
+  { name: 'Allrecipes', url: 'https://www.allrecipes.com/' },
+  { name: 'Serious Eats', url: 'https://www.seriouseats.com/' },
+  { name: 'BBC Good Food', url: 'https://www.bbcgoodfood.com/' },
+  { name: 'Budget Bytes', url: 'https://www.budgetbytes.com/' },
+  { name: 'Simply Recipes', url: 'https://www.simplyrecipes.com/' },
+  { name: 'King Arthur Baking', url: 'https://www.kingarthurbaking.com/recipes' },
+];
