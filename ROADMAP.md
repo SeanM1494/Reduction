@@ -1841,8 +1841,11 @@ and the text change carries the whole signal.
   Phase 1, done: the server reads `{ page: { url, html } }`, cached by
   content and never by URL (README "How extraction works"), and a blocked
   URL carries `code: "site_blocked"`; the binary gains
-  `react-native-webview` at `expo.version` 1.1.0. Phase 2 (BUILT Sep 28, awaiting the
-  phone): `app/browser.tsx` and the rescue path — "Open in browser" beside "paste the text
+  `react-native-webview` at `expo.version` 1.1.0. Phase 2 (BUILT and PASSED on a real
+  iPhone, Sep 28: allrecipes.com loads in the in-app browser with its
+  default user agent — no Safari disguise needed — and Extract returns
+  the recipe with its own wording; shipped to the 1.1.0 TestFlight build
+  over the air, server published at 76f4f48): `app/browser.tsx` and the rescue path — "Open in browser" beside "paste the text
   instead" — and the go/no-go on a phone: allrecipes.com loads in it and
   Extract returns the recipe with its wording. The rescue browser keeps
   nothing between visits; the privacy-policy sentence ships with the
