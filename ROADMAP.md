@@ -2329,6 +2329,13 @@ bookmarklet (Paprika's way), a separate decision.
   `PAYWALL_ENFORCED` unset and no `enforce_override` rows, the gate computes
   its decision, logs it, and allows the request.
 
+  **Fair-use clause added; no cap exists (Sep 28).** The Terms now say a
+  subscription is unlimited for normal personal use and reserve the right to
+  limit, slow or suspend automated, excessive or abusive use, unreasonable
+  load, or a sign-in shared between many people. Nothing in code counts or
+  limits anything. If a cap is added later, update the paywall and Settings
+  wording in the same commit.
+
   **What "one recipe" means, precisely**, because each of these was a decision
   rather than a detail:
 
