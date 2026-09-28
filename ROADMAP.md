@@ -908,6 +908,8 @@ DECIDED (Sep 23, after the step-1 push):
   its book to its spread with no slide and no turn, and outlines the page
   in the book's colour for ~1.8s. Nothing found → "Search the web for it"
   → the Find tab with the query filled in and the web search run once.
+  (Since Sep 28: "Look for it elsewhere" → Find › My Recipes with the
+  query — suggestions from the cache, then a web search in Browse.)
   Measured cost: the field row is 52px, which the book pays only where the
   stage was already short — as the app, no phone shrinks (iPhone 13 366px,
   SE 296px); in Safari-sized profiles the iPhone 13 book goes 366 → 343
@@ -1821,6 +1823,90 @@ and the text change carries the whole signal.
 
 ---
 
+## Find: three tabs, and the in-app browser as one of them (Sep 28)
+
+**Built on the phone, Sep 28 — over the air on 1.1.0, plus one server
+route.** Find is three folder tabs: **My Recipes / Add New / Browse**. The
+scope was the owner's (Sep 28), replacing Phase 3 as first proposed.
+
+- **The tabs.** The Recipe Box book tab's shape, the app's control type,
+  44pt tall; on an iPhone SE the three are 277pt of the 288pt its gutters
+  leave (measured). Find has no navigator header any more and pays the top
+  inset itself, the same on both tab layouts. **Opens on Add New** when the
+  app starts; coming back to Find keeps the tab and each pane's state for
+  the session (all three stay mounted); nothing is remembered once the app
+  closes. Hand-offs win: the Recipe Box's miss opens My Recipes with the
+  query, a blocked link and "Browse tab" open Browse on the page.
+- **My Recipes** is the Recipe Box's own search (`searchBox` and its result
+  row, shared, so the two cannot drift); a tap opens the recipe where the
+  box opens a book. The box keeps its own field — two ways into one search,
+  deliberately. With no match, **at most two suggestions from the shared
+  cache** under "Not in your library. Suggestions from recipes other
+  people have saved." — `POST /api/recipes/suggestions`, the cached half of
+  search alone: URL extractions only, public-looking addresses only, never
+  a paste, photo or browser-read page, usage line only above its floors, a
+  page already in the box left out. Signed in only, **not walled** (it
+  costs nothing), its own throttle. Opening one is an ordinary link
+  extraction — a cache hit — and is walled where it always was: a walled
+  account sees the wall and sends nothing.
+- **"Search the web" (the model-powered search) is retired from the
+  phone's interface.** Browse's address bar searches instead, which costs
+  us nothing. `POST /api/recipes/search`, the client's `searchRecipes` and
+  `components/SearchBar.tsx` stay; the website still uses the route. **After
+  this, the usage line ("Saved by N people…") appears on the phone ONLY on
+  My Recipes' suggestions.** (The website's search still shows it.)
+- **Add New** is the old Find screen moved: one extraction path, the
+  progress line, the 180s wait, the photo errors, the wall in place of the
+  controls. New: **Title and From (optional)** under a pasted recipe and
+  under a picked photo (not a link), applied on the phone to whatever the
+  extraction returns — so a typed title wins on a cache hit too — and never
+  sent; and the "Some websites don't work with link extraction…" line, a
+  44pt target to Browse that carries a pasted link.
+- **Browse.** Address bar (web address or search words; the engine is one
+  constant, `SEARCH_ENGINE` in `lib/browseAddress.ts`, **DuckDuckGo** by
+  decision — Google is a one-line change, plus privacy.html, which names
+  it), reload, a way back to the start screen, back/forward, Open in
+  Safari, Extract. Before typing: a line on how it works and **a fixed row
+  of six recipe sites — no recent-sites list** (it would be history kept on
+  the phone and a policy line; not asked for). **Private, nothing kept once
+  the app closes**, as decided for Phase 2; the policy's site-data sentence
+  unchanged. **"No recipe found on this page"** before anything is spent
+  (`looksLikeRecipe`: recipe JSON-LD anywhere, microdata, a recipe-card
+  plugin's container, or an Ingredients heading with three amount-first
+  items), with **"Try anyway"** under it. **The wall comes first** for
+  Extract and Try anyway — the same `allowed && enforced` from the same
+  `entitlementFor` the server's `checkAccess` decides with; the 402 stays
+  the backstop. An app without the webview module says Browse needs the
+  latest version rather than crashing (`loadPageView.ts`).
+- **Titles.** One rule (recipe-model `title.ts`): trimmed, whitespace runs
+  collapsed, never empty, **100 characters at most** (From: 80). Rename in
+  the ⋮ menu after Edit recipe; the preview's title in its "not saved"
+  banner (a blank one asks before Save); the editor's Title field. A rename
+  is the editor's own op through the sync engine, so it queues offline, and
+  touches only the account's row — never the cache or search (verified by
+  reading the paths: a save only reads the cache). **The 100-character cap
+  is the phone's, not the server's**: `validateRecipe` still accepts any
+  non-empty title, so the website can save longer. **Not in the Recipe Box
+  preview sheet**, by decision: a glance-and-go screen, and two ways in are
+  enough.
+
+**Only a real iPhone can check:** WKWebView itself — the recipe check on
+real sites, back/forward and the edge swipe, Open in Safari, the address
+bar's keyboard; memory with a page kept alive in a background tab; the iOS
+26 native tab layout (no header — the tabs pay the inset themselves); the
+tabs under a thumb. Chromium's preview can only frame pages from its own
+origin, so Browse was driven there against local recipe and no-recipe
+pages; DuckDuckGo loads in the frame only as far as the address.
+
+**The website has none of this (web parity, logged):** no Find tabs (its
+header search is unchanged: the library, then the web, with the usage
+line), no Title/From on a paste or photo, no Rename in a menu (its
+editor's recipe fields do rename, without the 100-character cap), no
+preview-title row, no suggestions route caller. **A Browse tab cannot
+exist on the website**: recipe sites refuse to be framed, and a framed
+page from another origin cannot be read — the web's answer would be a
+bookmarklet (Paprika's way), a separate decision.
+
 ## Still open from earlier work
 
 - **allrecipes.com cannot be read by the server, by either fetch (Sep
@@ -1849,10 +1935,9 @@ and the text change carries the whole signal.
   instead" — and the go/no-go on a phone: allrecipes.com loads in it and
   Extract returns the recipe with its wording. The rescue browser keeps
   nothing between visits; the privacy-policy sentence ships with the
-  client that sends pages. Phase 3: the Find tab's Browse entry (address
-  bar, back/forward, recent sites on the phone only, "no recipe on this
-  page" before an extraction is spent), remembering site data between
-  visits, over the air on the 1.1.0 binary.
+  client that sends pages. **Phase 3 — BUILT Sep 28, over the air on
+  the 1.1.0 binary, awaiting the phone** (commits 79de4af, 1cfa2f5,
+  7e58794, 8b30b4f, 7c55bec; the section below has what was decided).
 - **An ingredient with no amount: "to taste" / "as needed", or blank?
   (Sep 27).** The validator has always required qty or text on every
   ingredient, while the prompt said "no amount → qty null, text null", so

@@ -953,6 +953,14 @@ accommodate afterwards.
   Info.plist field): the runtime version follows it, and without the bump a
   bundle written for new native code is offered to binaries that lack it.
   A pure JS change needs neither a build nor a bump.
+- **Nothing imports `react-native-webview` except
+  `components/browser/PageView.tsx`, and nothing imports that file except
+  `components/browser/loadPageView.ts`.** The package throws at IMPORT on
+  a binary without its native half (`TurboModuleRegistry.getEnforcing`),
+  so one static import anywhere under the Find tab would crash the tab on
+  such an app; the loader checks for the module first and Browse says the
+  app needs updating. The same pattern applies to any native module added
+  after a binary has shipped.
 - The landing page section below is part of this rule, not a separate concern.
 
 ### Verify on a real phone viewport, and on production
