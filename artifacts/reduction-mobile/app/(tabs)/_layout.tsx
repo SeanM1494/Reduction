@@ -75,6 +75,9 @@ function ClassicTabLayout() {
         name="index"
         options={{
           title: 'Find',
+          // Find draws its own top: folder tabs, and a heading in each pane
+          // (app/(tabs)/index.tsx) — the same on both tab layouts.
+          headerShown: false,
           tabBarIcon: ({ color }) =>
             isIOS ? (
               <SymbolView name="magnifyingglass" tintColor={color} size={24} />

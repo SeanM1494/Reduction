@@ -22,9 +22,12 @@ interface Props {
   onPhoto: (photo: PreparedPhoto | null) => void;
   onExtract: () => void;
   busy: boolean;
+  /** Shown under a picked photo, above its extract button: the optional
+   *  Title and From (components/find/NameFields.tsx). */
+  fields?: React.ReactNode;
 }
 
-export function PhotoPicker({ photo, onPhoto, onExtract, busy }: Props) {
+export function PhotoPicker({ photo, onPhoto, onExtract, busy, fields }: Props) {
   const colors = useColors();
   const styles = makeStyles(colors);
   const [picking, setPicking] = useState<PhotoSource | null>(null);
@@ -75,6 +78,8 @@ export function PhotoPicker({ photo, onPhoto, onExtract, busy }: Props) {
           {problem.remedy === 'library' ? <SheetButton label="Choose a photo" onPress={() => choose('library')} /> : null}
         </View>
       ) : null}
+
+      {photo && fields ? fields : null}
 
       {photo ? (
         <Pressable
