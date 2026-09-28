@@ -73,6 +73,8 @@ AMOUNTS
 - Non-numeric amounts ("to taste", "1 can"): qty null, and put the source's words in "text".
 - Prep descriptors that are not steps go in "note": "softened", "room temperature", "finely chopped". Keep the name clean.
 - Every ingredient has a number in "qty" or words in "text" — never both null. When the source gives no amount at all ("salt and pepper", "oil for the pan"), qty is null and "text" is "to taste" for salt, pepper and other seasonings, and "as needed" for anything else. Never invent a number.
+- A measure with no number is one of it: "a pinch of salt" is qty 1, unit "pinch". A measure that is not a unit ("a splash of milk", "a handful of basil", "a drizzle of oil") is qty null with the source's words in "text": "a splash".
+- Words that say HOW MUCH go in "text", never in "note": "to taste", "as needed", "for serving", "for dusting", "enough to thin". "note" is only for how the ingredient is prepared.
 
 Work only from the source given. Do not add ingredients or steps that are not there.`;
 

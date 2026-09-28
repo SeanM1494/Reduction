@@ -1,0 +1,9 @@
+# The recipes whose first answer was turned down for an ingredient with no
+# number and no words (Sep 28 comparison): "pinch of salt", a pinch of chili
+# flakes and of sugar, cream "as needed". A cheap check after any change to
+# the AMOUNTS rules in lib/prompt.ts (3 extractions, well under a dollar):
+#   node --import tsx artifacts/api-server/src/eval/evalExtraction.ts \
+#     artifacts/api-server/src/eval/cases-amounts.txt --configs S --yes
+text:fixtures/blog-paste.txt
+https://coleycooks.com/authentic-italian-sunday-gravy/
+https://www.daringgourmet.com/killer-peanut-butter-cake/
