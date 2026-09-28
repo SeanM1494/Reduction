@@ -308,6 +308,10 @@ const extractPost = (body: unknown): Promise<ExtractResult> =>
   });
 
 export const extractFromUrl = (url: string) => extractPost({ url });
+/** The page the in-app browser is showing (lib/pageCapture.ts): how a site
+ *  that refuses every server is read. Cached by content on the server,
+ *  never by `url` (README "How extraction works"). */
+export const extractFromPage = (url: string, html: string) => extractPost({ page: { url, html } });
 export const extractFromText = (text: string) => extractPost({ text });
 export const extractFromFile = (data: string, mediaType: string) =>
   extractPost({ file: { data, mediaType } });

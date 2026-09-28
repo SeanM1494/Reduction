@@ -47,6 +47,10 @@ export default function FindScreen() {
   const [photo, setPhoto] = useState<PreparedPhoto | null>(null);
   const [busy, setBusy] = useState<'text' | 'photo' | 'search' | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // A link that ended in "This site blocked us" (code site_blocked): the
+  // server cannot read it, but the phone can — offered beside the paste
+  // suggestion, the in-app browser (app/browser.tsx) opens it.
+  const [blockedUrl, setBlockedUrl] = useState<string | null>(null);
 
   // The same predicate as the web's isWalled: the wall bites only when the
   // allowance is exhausted AND enforcement is on. `allowed` alone is the
@@ -63,6 +67,7 @@ export default function FindScreen() {
     if (busy) return;
     setBusy(kind);
     setError(null);
+    setBlockedUrl(null);
     try {
       const result = await go();
       setDraft({ recipe: result.recipe, sourceUrl, original: result.original, sourceKey: result.sourceKey });
@@ -86,6 +91,7 @@ export default function FindScreen() {
         setError('Could not read a recipe from that photo. Try a sharper, straight-on shot of the whole page, with the ingredients and steps both in frame.');
       } else {
         setError(err.message || 'Could not extract that recipe.');
+        if (err.code === 'site_blocked' && sourceUrl) setBlockedUrl(sourceUrl);
       }
     } finally {
       setBusy(null);
@@ -169,6 +175,18 @@ export default function FindScreen() {
               {error}
             </Text>
           ) : null}
+          {error && blockedUrl ? (
+            <Pressable
+              style={({ pressed }) => [styles.rescue, pressed && { opacity: 0.85 }]}
+              onPress={() => router.push({ pathname: '/browser', params: { url: blockedUrl } })}
+              accessibilityRole="button"
+              accessibilityHint="Opens the page inside the app, where you can extract it"
+              testID="find-open-browser"
+            >
+              <Text style={styles.rescueText}>Open in browser</Text>
+              <Text style={styles.rescueSub}>Load the page here, then extract it</Text>
+            </Pressable>
+          ) : null}
 
           <Pressable
             style={[styles.button, (!input.trim() || !!busy) && styles.buttonDisabled]}
@@ -228,6 +246,22 @@ function makeStyles(colors: Colors) {
       justifyContent: 'center',
     },
     buttonDisabled: { opacity: 0.5 },
+    // The rescue: a second action, so outlined rather than ink, but a full
+    // 48px target — it is the way forward for this link.
+    rescue: {
+      minHeight: 48,
+      paddingVertical: 10,
+      paddingHorizontal: 14,
+      borderRadius: colors.radiusButton,
+      borderWidth: 1,
+      borderColor: colors.borderStrong,
+      backgroundColor: colors.card,
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 2,
+    },
+    rescueText: { fontFamily: fonts.headingMedium, fontSize: 16, color: colors.foreground },
+    rescueSub: { fontSize: 13, color: colors.mutedForeground },
     buttonText: { color: colors.primaryForeground, fontFamily: fonts.headingMedium, fontSize: 16 },
     // .rd-alert: the danger tokens, not the scaffold's solid red block.
     error: {

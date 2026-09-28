@@ -303,8 +303,8 @@ filled once and never re-fetched on every open, and gone with the recipe
 and the account. The fifteenth guards that a page the phone
 hands over is cached by what it SAYS and never by the URL it claims, so a
 page read behind someone's login can never answer another person's paste
-of that URL or reach search. **The full suite — 594 tests at the time of
-writing — has been run against a real Postgres and passes 594/0.** The
+of that URL or reach search. **The full suite — 599 tests at the time of
+writing — has been run against a real Postgres and passes 599/0.** The
 ones that are not api-server or model tests include the mobile library's
 filter and sort (`artifacts/reduction-mobile/lib/libraryView.test.ts`), the
 recipe box's books and page arithmetic (`recipeBox.test.ts`), the
