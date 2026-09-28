@@ -337,6 +337,13 @@ export interface SearchResult {
 export const searchRecipes = (query: string, signal?: AbortSignal): Promise<{ results: SearchResult[] }> =>
   request('/api/recipes/search', { method: 'POST', body: JSON.stringify({ query }), signal }, SEARCH_TIMEOUT_MS);
 
+/** Pages other people have read, for a query that matched nothing in the
+ *  person's own box (My Recipes): at most two, cache only — no model call,
+ *  no web search (api-server lib/searchLibrary.ts `suggestionsFor`). A server
+ *  without the route answers 404, which the caller treats as none. */
+export const suggestRecipes = (query: string, signal?: AbortSignal): Promise<{ results: SearchResult[] }> =>
+  request('/api/recipes/suggestions', { method: 'POST', body: JSON.stringify({ query }), signal });
+
 // ------------------------------------------------------------ library -----
 
 /** Absolute end time (epoch ms), never a countdown. */

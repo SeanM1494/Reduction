@@ -6,8 +6,9 @@
  * Local only: `searchBox` (lib/recipeBox.ts, tested) — the Find tab's own
  * library filter over title, source and ingredient names, plus the book's
  * name — so "what can I make with parmesan" is a keystroke, not a request.
- * Removed recipes never match. Nothing found hands the query to the Find
- * tab's WEB search, prefilled and run.
+ * Removed recipes never match. Nothing found hands the query to Find's My
+ * Recipes tab, which offers pages other people have read and a web search
+ * in Browse.
  */
 
 import React from 'react';
@@ -21,11 +22,20 @@ import { useColors, type Colors } from '@/hooks/useColors';
 import { fonts } from '@/constants/colors';
 import type { Entry } from '@/lib/api';
 
-export function BoxSearchField({ value, onChange }: { value: string; onChange: (q: string) => void }) {
+export function BoxSearchField({
+  value,
+  onChange,
+  inset = true,
+}: {
+  value: string;
+  onChange: (q: string) => void;
+  /** The box's own 16pt side margin; off where the parent pads already. */
+  inset?: boolean;
+}) {
   const colors = useColors();
   const styles = makeStyles(colors);
   return (
-    <View style={styles.field}>
+    <View style={[styles.field, !inset && styles.fieldFlush]}>
       <Feather name="search" size={17} color={colors.mutedForeground} style={styles.fieldIcon} />
       <TextInput
         style={styles.input}
@@ -88,7 +98,8 @@ export function BoxResults({
   );
 }
 
-/** Nothing in the box matched: say so, and offer the web. The grid's
+/** Nothing in the box matched: say so, and offer to look further — Find's
+ *  My Recipes, with the query, where suggestions and Browse are. The grid's
  *  search ends here too. */
 export function BoxNoMatches({ query, onSearchWeb }: { query: string; onSearchWeb: (q: string) => void }) {
   const colors = useColors();
@@ -102,7 +113,7 @@ export function BoxNoMatches({ query, onSearchWeb }: { query: string; onSearchWe
         style={({ pressed }) => [styles.webBtn, pressed && styles.webBtnPressed]}
         testID="box-search-web"
       >
-        <Text style={styles.webBtnText}>Search the web for it</Text>
+        <Text style={styles.webBtnText}>Look for it elsewhere</Text>
       </Pressable>
     </View>
   );
@@ -110,8 +121,18 @@ export function BoxNoMatches({ query, onSearchWeb }: { query: string; onSearchWe
 
 /** One result. A list recycles its rows, so nothing about the recipe is
  *  remembered here — the photo hook keys on (id, version) itself
- *  (CLAUDE.md, "A LIST RECYCLES ITS CELLS"). */
-function ResultRow({ hit, onPick }: { hit: BoxHit<Entry>; onPick: (hit: BoxHit<Entry>) => void }) {
+ *  (CLAUDE.md, "A LIST RECYCLES ITS CELLS"). Find's My Recipes tab shows
+ *  the same row, so the two searches cannot drift; only what a tap does
+ *  differs (here, open the book to the page; there, open the recipe). */
+export function ResultRow({
+  hit,
+  onPick,
+  hint = 'Opens its book to this page',
+}: {
+  hit: BoxHit<Entry>;
+  onPick: (hit: BoxHit<Entry>) => void;
+  hint?: string;
+}) {
   const colors = useColors();
   const styles = makeStyles(colors);
   const { entry, book } = hit;
@@ -123,7 +144,7 @@ function ResultRow({ hit, onPick }: { hit: BoxHit<Entry>; onPick: (hit: BoxHit<E
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={pageA11yLabel(entry.recipe.title, book.name, entry.recipe, entry.rating)}
-      accessibilityHint="Opens its book to this page"
+      accessibilityHint={hint}
       onPress={() => onPick(hit)}
       style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
       testID={`box-result-${entry.id}`}
@@ -168,6 +189,7 @@ function makeStyles(colors: Colors) {
       borderColor: colors.border,
       backgroundColor: colors.card,
     },
+    fieldFlush: { marginHorizontal: 0, marginTop: 0 },
     fieldIcon: { marginLeft: 12 },
     // 16px or iOS zooms the page toward the field (CLAUDE.md).
     input: { flex: 1, minHeight: 44, fontSize: 16, color: colors.foreground, paddingHorizontal: 10, paddingVertical: 8 },

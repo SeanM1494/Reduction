@@ -77,7 +77,8 @@ interface Props {
   onOpenSort: () => void;
   onOpenRecipe: (entry: Entry) => void;
   onAddRecipe: () => void;
-  /** Nothing in the box matched: hand the query to Find's web search. */
+  /** Nothing in the box matched: hand the query to Find's My Recipes, which
+   *  offers what other people have read and a web search in Browse. */
   onSearchWeb: (query: string) => void;
   bottomInset: number;
 }

@@ -81,7 +81,7 @@ export default function FindScreen() {
     <View style={[styles.screen, { backgroundColor: colors.background, paddingTop: insets.top }]}>
       <FolderTabs tab={tab} onChange={choose} />
       <View style={shown('mine')}>
-        <MyRecipesPane prefill={minePrefill} bottomInset={bottomInset} />
+        <MyRecipesPane prefill={minePrefill} blocked={blocked} onOpenBrowse={openBrowse} bottomInset={bottomInset} />
       </View>
       <View style={shown('add')}>
         <AddNewPane blocked={blocked} onOpenBrowse={openBrowse} bottomInset={bottomInset} />
