@@ -188,6 +188,13 @@ signs in from the Replit shell, where eas-cli's default (it opens a
 browser, since eas-cli 24) is no use. Give that exact command whenever a
 login is needed; never bare `eas login` or `--sso`.
 
+**Every set of shell instructions for the owner is COMPLETE**: it starts
+from a fresh Replit shell with `cd ~/workspace` (and every further `cd`
+spelled out), one command per block in the order to run them, with what
+each should print. Never a fragment that assumes the folder or the
+session of an earlier message — a build run from the repo root once
+offered to create a new, empty EAS project.
+
 Until both hold, the way to open the app is with **Expo Go signed out**
 (Profile → Sign out, then scan the QR again): a signed-out Expo Go does not
 ask for a signature. Replit's QR flow signs the phone in, which is how a
