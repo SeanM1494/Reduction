@@ -599,7 +599,8 @@ and point it at the deployment through `EXPO_PUBLIC_DOMAIN`; a dev build
 takes that from whichever dev server it connects to.
 
 From `artifacts/reduction-mobile`, once (each needs the Apple Developer
-Program membership and `eas login`):
+Program membership and `npx eas-cli login --no-browser` — the default
+opens a browser, which the Replit shell cannot use):
 
 1. `pnpm exec eas device:create` — registers the phone's UDID with Apple
    for internal distribution. It prints a link; open it ON THE PHONE in

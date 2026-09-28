@@ -183,6 +183,10 @@ it wrote at the top level of `state.json` (where `eas login` never writes)
 and refreshes only that; any other session is left alone, and
 `npx eas-cli logout` hands the file back. When a build says "not
 authorized", run `npx eas-cli whoami` first: it must say `seans-apps`.
+**Signing in is `npx eas-cli login --no-browser`, always** — the owner
+signs in from the Replit shell, where eas-cli's default (it opens a
+browser, since eas-cli 24) is no use. Give that exact command whenever a
+login is needed; never bare `eas login` or `--sso`.
 
 Until both hold, the way to open the app is with **Expo Go signed out**
 (Profile → Sign out, then scan the QR again): a signed-out Expo Go does not
