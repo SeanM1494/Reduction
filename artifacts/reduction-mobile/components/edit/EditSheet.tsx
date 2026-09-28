@@ -27,6 +27,7 @@ import React, { useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { UNITS, validateRecipe, type Recipe, type Unit } from '@/shared/layout';
 import { editableAmount } from '@/shared/amounts';
+import { TITLE_MAX, cleanTitle, titleProblem } from '@/shared/title';
 import {
   applyEdit,
   consumerOf,
@@ -140,6 +141,7 @@ function Input({
   placeholder,
   keyboard = 'default',
   autoFocus,
+  maxLength,
   testID,
 }: {
   value: string;
@@ -148,6 +150,7 @@ function Input({
   placeholder?: string;
   keyboard?: 'default' | 'decimal-pad' | 'url';
   autoFocus?: boolean;
+  maxLength?: number;
   testID?: string;
 }) {
   const colors = useColors();
@@ -166,6 +169,7 @@ function Input({
       autoCapitalize="none"
       autoCorrect={false}
       autoFocus={autoFocus}
+      maxLength={maxLength}
       testID={testID}
     />
   );
@@ -549,7 +553,20 @@ function RecipeForm({ recipe, onApply, onClose }: { recipe: Recipe; onApply: (op
   return (
     <>
       <Field label="Title" messages={at('title')}>
-        <Input value={title} onChange={setTitle} onCommit={() => commit('title', { title: title.trim() })} testID="recipe-title" />
+        <Input
+          value={title}
+          onChange={setTitle}
+          // The one title rule (recipe-model title.ts), as Rename applies it:
+          // an empty title is refused in the field's own slot, a real one is
+          // saved tidied.
+          onCommit={() => {
+            const problem = titleProblem(title);
+            if (problem) return setProblems({ title: [problem] });
+            commit('title', { title: cleanTitle(title) });
+          }}
+          maxLength={TITLE_MAX}
+          testID="recipe-title"
+        />
       </Field>
       <Field label="Serves" hint="what the recipe makes" messages={at('servings')}>
         <Input value={servings} onChange={setServings} onCommit={() => commit('servings', { servings: parseTiming(servings) })} placeholder="—" keyboard="decimal-pad" testID="recipe-serves" />

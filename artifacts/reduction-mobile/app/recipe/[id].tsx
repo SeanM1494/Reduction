@@ -37,6 +37,9 @@ import { asksToRemove, bookById, bookOf, keptToast, removedToast } from '@/lib/r
 import { loadOriginal, type Entry } from '@/lib/api';
 import { originalStepTexts } from '@/shared/original';
 import { hasStepSources } from '@/shared/stepSource';
+import { applyEdit } from '@/shared/edits';
+import { TitleWindow } from '@/components/TitleWindow';
+import { titleProblem } from '@/shared/title';
 
 export default function RecipeDetailScreen() {
   // `view` is the Recipe Box preview's choice of tab for this visit.
@@ -61,6 +64,8 @@ export default function RecipeDetailScreen() {
   const [mealSheetOpen, setMealSheetOpen] = useState(false);
   const [photoSheetOpen, setPhotoSheetOpen] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  // Rename (saved, from ⋮) and the preview's title: one window, one rule.
+  const [titleOpen, setTitleOpen] = useState(false);
   // "Edit recipe" in the menu opens edit mode in RecipeScreen, which owns it.
   // ⋮ requests for the recipe screen (RecipeScreen's `request`).
   const [request, setRequest] = useState<RecipeRequest | null>(null);
@@ -191,10 +196,22 @@ export default function RecipeDetailScreen() {
           isDraft
           saving={saving}
           onSave={saveDraft}
+          onEditTitle={() => setTitleOpen(true)}
           // Only when the extraction brought wording: a preview has nothing
           // to fetch it from later.
           onOpenOriginal={draft.original ? () => router.push('/original/draft') : undefined}
           sourceSteps={originalStepTexts(draft.original)}
+        />
+        {/* The preview's title lives in the draft, in memory, and is what
+            Save sends: a title typed on Add New or here is never replaced by
+            the extraction's (the cache is written before the reply, and a
+            save only reads it). */}
+        <TitleWindow
+          open={titleOpen}
+          title={draft.recipe.title ?? ''}
+          heading={titleProblemFree(draft.recipe.title) ? 'Rename recipe' : 'Name this recipe'}
+          onSave={(title) => setDraft({ ...draft, recipe: { ...draft.recipe, title } })}
+          onClose={() => setTitleOpen(false)}
         />
         <Window
           open={leaveOpen}
@@ -356,6 +373,7 @@ export default function RecipeDetailScreen() {
         </Text>
         <View style={styles.menu} accessibilityRole="menu">
           <MenuItem label="Edit recipe" onPress={() => menuThen(() => askScreen('edit'))} colors={colors} testID="menu-edit" />
+          <MenuItem label="Rename" onPress={() => menuThen(() => setTitleOpen(true))} colors={colors} testID="menu-rename" />
           <MenuItem label="Reorder steps" onPress={() => menuThen(() => askScreen('reorder'))} colors={colors} testID="menu-reorder" />
           <MenuItem label="Servings" onPress={() => menuThen(() => askScreen('servings'))} colors={colors} testID="menu-servings" />
           {/* A rating is an opinion about a dish, so it is offered once the
@@ -377,6 +395,17 @@ export default function RecipeDetailScreen() {
           <Text style={styles.menuCloseText}>Close</Text>
         </Pressable>
       </Window>
+
+      {/* A recipe edit like any other — the same op the editor's Title field
+          applies — written through the sync engine, so a rename made with
+          no connection waits in the queue and is sent when it returns. It
+          touches only this account's row. */}
+      <TitleWindow
+        open={titleOpen}
+        title={entry.recipe.title ?? ''}
+        onSave={(title) => write({ recipe: applyEdit(entry.recipe, { type: 'setRecipeFields', fields: { title } }) })}
+        onClose={() => setTitleOpen(false)}
+      />
 
       <PhotoSheet open={photoSheetOpen} entry={entry} onClose={() => setPhotoSheetOpen(false)} />
 
@@ -429,6 +458,8 @@ export default function RecipeDetailScreen() {
     </>
   );
 }
+
+const titleProblemFree = (title: string | undefined): boolean => titleProblem(title) === null;
 
 function MenuItem({ label, onPress, danger, colors, testID }: { label: string; onPress: () => void; danger?: boolean; colors: Colors; testID?: string }) {
   const styles = makeStyles(colors);

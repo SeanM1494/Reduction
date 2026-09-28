@@ -14,7 +14,7 @@
  */
 
 import React, { useEffect, useRef, useState } from 'react';
-import { Modal, Pressable, ScrollView, StyleSheet, View, useWindowDimensions } from 'react-native';
+import { KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, View, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { Easing, runOnJS, useAnimatedStyle, useReducedMotion, useSharedValue, withTiming } from 'react-native-reanimated';
 import { useColors, type Colors } from '@/hooks/useColors';
@@ -31,6 +31,9 @@ interface Props {
   /** Padding inside the card; the preview's photo wants less. */
   padding?: number;
   testID?: string;
+  /** A window with a text field rises clear of the keyboard, as a Sheet
+   *  with `avoidKeyboard` does — centred over it, the field is under it. */
+  avoidKeyboard?: boolean;
   /** After it has finished closing and its Modal is gone. Open the NEXT
    *  dialog from here, never in the same breath as closing this one: iOS
    *  can refuse to present a Modal while another is still dismissing, or
@@ -39,7 +42,7 @@ interface Props {
   children: React.ReactNode;
 }
 
-export function Window({ open, onClose, instant = false, maxWidth = 440, padding = 18, testID, onClosed, children }: Props) {
+export function Window({ open, onClose, instant = false, maxWidth = 440, padding = 18, testID, onClosed, avoidKeyboard, children }: Props) {
   const colors = useColors();
   const styles = makeStyles(colors);
   const insets = useSafeAreaInsets();
@@ -87,7 +90,12 @@ export function Window({ open, onClose, instant = false, maxWidth = 440, padding
       <Animated.View style={[StyleSheet.absoluteFill, styles.scrim, scrimStyle]}>
         <Pressable style={StyleSheet.absoluteFill} onPress={onClose} accessibilityLabel="Close" testID={testID ? `${testID}-scrim` : undefined} />
       </Animated.View>
-      <View pointerEvents="box-none" style={[styles.center, { paddingTop: insets.top + 16, paddingBottom: insets.bottom + 16 }]}>
+      <KeyboardAvoidingView
+        pointerEvents="box-none"
+        style={[styles.center, { paddingTop: insets.top + 16, paddingBottom: insets.bottom + 16 }]}
+        behavior={avoidKeyboard && Platform.OS === 'ios' ? 'padding' : undefined}
+        enabled={!!avoidKeyboard}
+      >
         <Animated.View
           style={[styles.card, { width: Math.min(width - 32, maxWidth), maxHeight: height - insets.top - insets.bottom - 32 }, cardStyle]}
           accessibilityViewIsModal
@@ -97,7 +105,7 @@ export function Window({ open, onClose, instant = false, maxWidth = 440, padding
             {open ? children : last.current}
           </ScrollView>
         </Animated.View>
-      </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }

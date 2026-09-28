@@ -16,7 +16,8 @@
     "./collapse": "./src/collapse.ts",
     "./original": "./src/original.ts",
     "./stepSource": "./src/stepSource.ts",
-    "./sourceText": "./src/sourceText.ts"
+    "./sourceText": "./src/sourceText.ts",
+    "./title": "./src/title.ts"
   },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json"

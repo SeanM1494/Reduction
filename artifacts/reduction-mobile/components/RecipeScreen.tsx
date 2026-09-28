@@ -45,6 +45,8 @@ import { applyEdit, type EditOp } from '@/shared/edits';
 import { countDone, reconcileDone } from '@/shared/progress';
 import type { OrderPreference } from '@/shared/sequence';
 import { countAll } from '@/shared/amounts';
+import { titleProblem } from '@/shared/title';
+import { Feather } from '@expo/vector-icons';
 import { useColors, type Colors } from '@/hooks/useColors';
 import { fonts } from '@/constants/colors';
 import type { Entry, StepTimer } from '@/lib/api';
@@ -154,6 +156,9 @@ interface RecipeScreenProps {
   offlineQueued?: boolean;
   isDraft?: boolean;
   onSave?: () => void;
+  /** A preview's title is the person's to change before it is saved: the
+   *  banner shows it with a Rename, and a blank one opens it from Save. */
+  onEditTitle?: () => void;
   /** Opens the recipe as its source worded it (app/original/[id].tsx);
    *  absent, there is no row for it. */
   onOpenOriginal?: () => void;
@@ -212,6 +217,7 @@ export function RecipeScreen({
   offlineQueued,
   isDraft,
   onSave,
+  onEditTitle,
   onOpenOriginal,
   sourceSteps = null,
   saving,
@@ -226,6 +232,7 @@ export function RecipeScreen({
   const colors = useColors();
   const styles = makeStyles(colors);
   const toast = useToast();
+  const untitled = !!isDraft && titleProblem(recipe.title) !== null;
   // A preview keeps nothing: checking a step, a timer or a card order on it
   // would be progress with nowhere to go. Those taps used to be swallowed
   // silently, which read as broken; now they say why (Sep 25). Servings
@@ -444,6 +451,21 @@ export function RecipeScreen({
               <Text style={styles.draftBannerStrong}>Preview — not saved.</Text> Save it to keep it and to check off steps.
               Leaving this screen or closing the app discards it.
             </Text>
+            {onEditTitle ? (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={untitled ? 'Give this recipe a title' : `Title: ${recipe.title}. Rename`}
+                onPress={onEditTitle}
+                style={({ pressed }) => [styles.draftTitleRow, pressed && styles.draftTitleRowPressed]}
+                testID="draft-title"
+              >
+                <Text style={[styles.draftTitle, untitled && styles.draftTitleBlank]} numberOfLines={2}>
+                  {untitled ? 'No title yet — tap to add one' : recipe.title}
+                </Text>
+                <Feather name="edit-2" size={16} color={colors.warmInk} />
+                <Text style={styles.draftTitleAction}>{untitled ? 'Add' : 'Rename'}</Text>
+              </Pressable>
+            ) : null}
           </View>
         ) : null}
         <View style={styles.progressRow} accessibilityLabel={`${doneCount} of ${total} done`}>
@@ -643,7 +665,15 @@ export function RecipeScreen({
 
       {isDraft ? (
         <View style={styles.saveBar}>
-          <Pressable style={styles.saveButton} onPress={onSave} disabled={saving} accessibilityRole="button">
+          <Pressable
+            style={styles.saveButton}
+            // A blank title is asked for, not refused: Save opens the
+            // title window, and saving is one more tap from there.
+            onPress={untitled && onEditTitle ? onEditTitle : onSave}
+            disabled={saving}
+            accessibilityRole="button"
+            testID="draft-save"
+          >
             <Text style={styles.saveButtonText}>{saving ? 'Saving…' : 'Save to Library'}</Text>
           </Pressable>
         </View>
@@ -788,6 +818,24 @@ function makeStyles(colors: Colors) {
     },
     draftBannerText: { fontSize: 14, lineHeight: 20, color: colors.warmInk },
     draftBannerStrong: { fontFamily: fonts.heading },
+    // The preview's title, and the way to change it: a full-width 44pt row
+    // at the foot of the banner, so it reads as part of "not saved yet".
+    draftTitleRow: {
+      marginTop: 8,
+      minHeight: 44,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+      paddingHorizontal: 10,
+      borderRadius: 9,
+      borderWidth: 1,
+      borderColor: colors.warmLine,
+      backgroundColor: colors.card,
+    },
+    draftTitleRowPressed: { backgroundColor: colors.muted },
+    draftTitle: { flex: 1, fontFamily: fonts.heading, fontSize: 15, lineHeight: 19, color: colors.foreground, paddingVertical: 6 },
+    draftTitleBlank: { color: colors.warmInk },
+    draftTitleAction: { fontSize: 14, fontWeight: '600', color: colors.warmInk },
     saveBar: {
       position: 'absolute',
       bottom: 0,
