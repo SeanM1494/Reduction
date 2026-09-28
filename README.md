@@ -341,6 +341,18 @@ be worth not publishing. Below every floor the result says nothing extra.
 The old "Instant" badge is gone; `cached` still travels, and only decides
 whether the clients show the staged "reading the page" wait.
 
+**The phone's My Recipes tab asks for the cached half alone.** `POST
+/api/recipes/suggestions { query }` (`suggestionsFor` in
+`lib/searchLibrary.ts`) is `libraryMatches` at a limit of two
+(`SUGGESTION_LIMIT`) plus the same counts and floors, so nothing can surface
+there that search would not. It runs only when the query matched nothing in
+the person's own box. No model call and no web search, so it is signed-in
+only but NOT walled, and has its own per-account throttle (240 an hour)
+rather than the extraction budget's; opening a suggestion is an ordinary
+link extraction — a cache hit — and is walled where it always was. The
+phone no longer shows `/search` at all (Browse's address bar searches the
+web instead); the route stays, and the website's search still uses it.
+
 **Why this does not slow search down.** The cached half starts before the
 web call and is awaited alongside it; the counts are one read over at most
 five URLs after both land. Measured on 20,000 cached pages and 20,000 saved

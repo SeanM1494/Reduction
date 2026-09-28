@@ -19,7 +19,7 @@ import { readRecipeAtUrl, recipeFromSource } from "../lib/readRecipe";
 import { sourceFromHtml, type FetchedSource } from "../lib/fetchSource";
 import { structureRecipe } from "../lib/structureRecipe";
 import { searchRecipes, type SearchResult } from "../lib/searchRecipes";
-import { libraryMatches, mergeResults, proofLine, usageFor, type UsageStats } from "../lib/searchLibrary";
+import { libraryMatches, mergeResults, proofLine, suggestionsFor, usageFor, type UsageStats } from "../lib/searchLibrary";
 import type { Recipe } from "../shared/layout";
 import { userIdOf } from "../middleware/session";
 import { checkAccess, subscriptionRequired } from "../lib/billing/access";
@@ -796,6 +796,49 @@ recipesRouter.post("/reextract", async (req: Request, res: Response) => {
       details: err.details,
       code: isUserFacing ? (err as { code?: string }).code : undefined,
     });
+  }
+});
+
+// My Recipes' suggestions: a lookup, so its own, looser throttle — sharing
+// the extraction budget would let a few searches in the phone's box spend
+// the hour's extractions. Per instance and fail-open across instances, which
+// is the only way process memory may fail here (CLAUDE.md).
+const suggestRate = new Map<string, number[]>();
+const SUGGEST_LIMIT_PER_HOUR = 240;
+
+/**
+ * POST /api/recipes/suggestions { query } — pages other people have read,
+ * for a query that matched nothing in the person's own box: the cached half
+ * of /search, at most two, with the same usage line (lib/searchLibrary.ts
+ * `suggestionsFor`). Signed in only — nobody outside an account needs it,
+ * and the cache's titles are not a list to hand to anyone who asks.
+ *
+ * NOT WALLED, unlike /search, and for the same reason /search is: the wall
+ * there is a cost decision, and this costs nothing. Opening a suggestion is
+ * an extraction, and that is walled where it always was.
+ */
+recipesRouter.post("/suggestions", async (req: Request, res: Response) => {
+  const userId = userIdOf(req);
+  if (!userId) return res.status(401).json({ error: "Sign in to see suggestions." });
+
+  const now = Date.now();
+  const hits = (suggestRate.get(userId) ?? []).filter((t) => now - t < RATE_WINDOW_MS);
+  hits.push(now);
+  suggestRate.set(userId, hits);
+  if (hits.length > SUGGEST_LIMIT_PER_HOUR) return res.status(429).json({ error: "Too many searches this hour. Try again later." });
+
+  const { query } = req.body ?? {};
+  if (typeof query !== "string") return res.status(400).json({ error: "query must be a string." });
+  const trimmed = query.trim();
+  if (trimmed.length < 3) return res.status(400).json({ error: "Search for at least 3 characters." });
+  if (trimmed.length > 200) return res.status(400).json({ error: "That search is too long." });
+
+  try {
+    return res.json({ results: await suggestionsFor(trimmed) });
+  } catch (e) {
+    // A suggestion is a courtesy: failing, there are none.
+    console.error("[recipes/suggestions]", e);
+    return res.json({ results: [] });
   }
 });
 

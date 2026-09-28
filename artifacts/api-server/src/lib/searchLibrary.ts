@@ -42,6 +42,9 @@ import type { SearchResult } from "./searchRecipes";
 
 export const SEARCH_LIMIT = 5;
 export const LIBRARY_LIMIT = 3;
+/** The phone's My Recipes tab, when nothing in the person's own box
+ *  matches: at most this many pages other people have read. */
+export const SUGGESTION_LIMIT = 2;
 
 /** The floors below which a count is not shown. */
 export const PROOF_FLOOR = { saves: 3, cooks: 5, rated: 5 } as const;
@@ -232,4 +235,24 @@ export function proofLine(s: UsageStats | undefined): string | null {
   if (!parts.length) return null;
   const line = parts.slice(0, 2).join(" · ");
   return line.charAt(0).toUpperCase() + line.slice(1);
+}
+
+/**
+ * The cached half of a search, alone: what My Recipes offers when nothing in
+ * the person's own box matches. The same query as the search's own half
+ * (`libraryMatches` — URL extractions only, public-looking addresses only,
+ * one row per page) and the same counts with the same floors, so nothing can
+ * surface here that search would not surface. No model call and no web
+ * search: two database reads, and nothing it returns cost anyone anything.
+ */
+export async function suggestionsFor(query: string): Promise<Array<SearchResult & { proof: string | null }>> {
+  const found = await libraryMatches(query, SUGGESTION_LIMIT);
+  let usage = new Map<string, UsageStats>();
+  try {
+    usage = await usageFor(found.map((r) => r.url));
+  } catch (e) {
+    // Counts are decoration, here as in search.
+    console.error("[suggestions:usage]", e);
+  }
+  return found.map((r) => ({ ...r, proof: proofLine(usage.get(r.url)) }));
 }

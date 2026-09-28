@@ -269,15 +269,15 @@ them is the whole point:
 
 | result | meaning |
 |---|---|
-| ***n* pass, 142 skipped** | no `DATABASE_URL` at all. Fine on a machine with no Postgres. |
-| ***n*+142 pass, 0 skipped** | a local database with a current schema. This is the real gate — `pnpm run test:db` produces it. |
+| ***n* pass, 144 skipped** | no `DATABASE_URL` at all. Fine on a machine with no Postgres. |
+| ***n*+144 pass, 0 skipped** | a local database with a current schema. This is the real gate — `pnpm run test:db` produces it. |
 | **failures saying "Refusing to run database tests against …"** | `DATABASE_URL` in the shell points somewhere non-local — on Replit, that is production. Working as designed: use `pnpm run test:db`, which ignores the env var entirely. |
 | **failures naming a missing table** | a reachable local database whose schema is behind `lib/db/src/schema/schema.ts`. `test:db` re-pushes on every start, so this means a hand-run database — push it or use the script. |
 
 The total grows as suites are added — pin your expectation to the **skip
 count**, not the pass count (an earlier version of this table hard-coded
 23/39 and went stale within a week, so treat the number above as needing an
-edit whenever a database-backed suite is added). The 142 are fifteen suites:
+edit whenever a database-backed suite is added). The 144 are fifteen suites:
 `claim.db.test.ts` (the anonymous library), `trial.db.test.ts` (the free
 extraction), `cache.db.test.ts` (the URL alias and the cached flag),
 `extractionLog.test.ts` (the cost table), `push.db.test.ts` (timer
@@ -300,14 +300,17 @@ twelfth guards that removed is not deleted — out of the list, restorable,
 its timer stopped, and never a refund of the free recipe, and the
 thirteenth guards that a search only ever surfaces somebody else's cached
 page when it was read from a public-looking URL, and that its counts are
-per account and per page however the URL was spelled, and the
+per account and per page however the URL was spelled — and that My
+Recipes' suggestions, the same cached half alone, stop at two, never
+surface a paste, a photo or a browser-read page, and answer an account the
+wall has stopped, because a lookup costs nothing — and the
 fourteenth guards that a recipe's original wording is its account's alone,
 filled once and never re-fetched on every open, and gone with the recipe
 and the account. The fifteenth guards that a page the phone
 hands over is cached by what it SAYS and never by the URL it claims, so a
 page read behind someone's login can never answer another person's paste
-of that URL or reach search. **The full suite — 599 tests at the time of
-writing — has been run against a real Postgres and passes 599/0.** The
+of that URL or reach search. **The full suite — 605 tests at the time of
+writing — has been run against a real Postgres and passes 605/0.** The
 ones that are not api-server or model tests include the mobile library's
 filter and sort (`artifacts/reduction-mobile/lib/libraryView.test.ts`), the
 recipe box's books and page arithmetic (`recipeBox.test.ts`), the
