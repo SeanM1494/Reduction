@@ -24,7 +24,11 @@
       }
     },
     "android": {
-      "package": "com.recipereduction.mobile"
+      "package": "com.recipereduction.mobile",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/images/adaptive-icon.png",
+        "backgroundColor": "#efe2c8"
+      }
     },
     "web": {
       "favicon": "./assets/images/icon.png"
