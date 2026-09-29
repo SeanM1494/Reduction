@@ -1907,6 +1907,76 @@ exist on the website**: recipe sites refuse to be framed, and a framed
 page from another origin cannot be read — the web's answer would be a
 bookmarklet (Paprika's way), a separate decision.
 
+## Recipe books the person owns (Sep 29)
+
+**Built, Sep 29 — two hand-run tables, a server Publish, and the phone over
+the air on 1.1.0.** The Recipe Box's seven meal-type books became books the
+person owns. The decisions, all confirmed before building:
+
+- **One book per recipe**, as before (page numbers and the flip depend on
+  it). Meal types stay the extraction's guess and a search tag; the Meal
+  types sheet and filter chips are unchanged. Once a recipe has a book,
+  editing its meal types does not move it.
+- **Existing accounts get today's seven, once.** `GET /api/books` inserts
+  the account's row with `ON CONFLICT (user_id) DO NOTHING` — five devices
+  loading at once make one row (tested) — and only the request that
+  inserted it places the existing recipes, removed ones too, by meal type.
+  Same ids, names and colours: nothing looks different until someone
+  customises.
+- **Other is permanent**: renamed and recoloured, never deleted.
+- **Deleting is merging**: a book with recipes asks first where they go
+  (another book, a new book made there and then, or Other), and the book
+  they go into can be renamed in the same step; an empty book goes at
+  once. **No recipe row is rewritten**: the deleted book stays in the list
+  as a tombstone that says where its recipes went, and every reader
+  resolves through it (recipe-model `resolveBookId`) to a live book or
+  Other — so no merge, on any number of devices, can lose a recipe.
+- **Restoring a removed recipe** puts it in its book; if that book was
+  deleted, where its recipes were sent; Other only when the deleted book
+  had no destination (it was empty). Decided Sep 29.
+- **Empty books**: a default hides while empty (as the seven always did); a
+  book the person made stays on its "Room for one more" page.
+- **Names** 1–30 characters, trimmed, unique ignoring case (the title
+  rule's own tidy). **Twelve colours**, each with white tab text at 4.5:1 or
+  better and visible on both page backgrounds (computed in the test); the
+  defaults keep theirs; a new book takes the next unused one.
+- **Reordering** by up/down buttons, no dragging. **Long-press on a book
+  tab: not built**, by agreement (a 22pt tab that is not a control, on a
+  surface that already sorts taps from swipes).
+- **Choosing a book when saving**: every path that saves a recipe ends in
+  the unsaved preview, whose Save bar is `[book ▾] [Save to Library]`,
+  defaulting to where the meal-type guess points (through any merge, else
+  Other). One tap on Save is the common case; the chip opens "Save to…"
+  with "Create a new book". **Moving later**: ⋮ › "Move to another book",
+  a sheet titled "Move to…", the toast "Moved to Soups."
+- **Sync**: a recipe's book is a versioned entry field — last change wins
+  on a 409. The list is one versioned document with its own queue on the
+  same rules (lib/booksQueue.ts). **Delete and merge need a connection**:
+  offline they change nothing and say "Connect to the internet to delete
+  or merge books." (tested). Add, rename, recolour and reorder wait out an
+  offline spell like any edit.
+- **A recipe's book is the account's own**: it never reaches the
+  extraction cache or anything another account can read.
+- **Degrades**: without the tables the phone shows today's seven, Save
+  saves without a book, Manage books says books are not available yet
+  (verified by renaming both tables under a running server).
+
+**The cap of 12 is a guess, measured in Chromium and still the phone's to
+judge.** At 12 books the dot rail is 163pt wide and clears the page buttons
+on every profile (an SE leaves 19pt either side); a swipe goes through all
+twelve and back round to the first; nothing scrolls sideways. How the
+carousel and dots FEEL at 12 — whether finding a book is quick enough, and
+whether 12 dots read as a count — is for the owner's phone; the cap may
+come down (`MAX_BOOKS` in recipe-model books.ts, one line, and the server
+keeps accepting what a merge of two devices produced).
+
+**The website has no books, and that is logged, not fixed.** It never had
+the Recipe Box's books; its library is a grid with meal-type chips, and
+that is unchanged. It ignores the entry's `book`, cannot see or manage
+books, and a recipe it saves has no placement — so the phone shows it where
+its meal type points (through any merge) until it is moved. Nothing on the
+website can clear a book: it never sends the field.
+
 ## Still open from earlier work
 
 - **allrecipes.com cannot be read by the server, by either fetch (Sep

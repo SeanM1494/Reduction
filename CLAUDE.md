@@ -1211,6 +1211,22 @@ const cta = document.querySelector('.rd-landing-cta').getBoundingClientRect();
 // collapsed, this must fit with room to spare on every profile
 ```
 
+## Recipe books: by id, and deleting rewrites nothing
+
+**A recipe names its book by ID** (`recipe_placements`), never by name, so a
+rename orphans nothing. **Deleting or merging a book never touches a
+recipe row**: the book stays in the account's list as a tombstone saying
+where its recipes went, and EVERY reader resolves through
+`resolveBookId` (recipe-model `books.ts`) — to a live book, or Other when
+the chain ends nowhere or loops. That is why no merge of two devices can
+lose a recipe, and it is the one function to call; a screen that looked a
+book up by `entry.book` directly would show a deleted book. Other is always
+live and never deletable, on the phone and in `validateBooks` on the
+server. The list is ONE versioned document (the server never merges; the
+phone's `mergeBooks` does, on a 409), and **delete and merge are never
+queued**: offline they change nothing and say so, where add, rename,
+recolour and reorder wait out the offline window.
+
 ## Cooking order is not section order
 
 **A step never appears in the card sequence after a step that consumes its

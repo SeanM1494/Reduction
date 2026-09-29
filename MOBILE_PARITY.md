@@ -40,6 +40,10 @@ it), the pre-account free trial and `lib/pendingUrl.ts`, the service worker and
 the web-push install instructions. **Not applicable on touch:** hover preview
 of a tap's blast radius, tooltips, keyboard undo, the print stylesheet.
 
+## Phone only, by design
+
+- **Recipe books (Sep 29)**: the website has no books to manage and ignores a recipe's `book`; ROADMAP "Recipe books the person owns".
+
 ## Ported but different
 
 Recorded in ROADMAP and marked veto-able there: delete is confirmed in a sheet;
