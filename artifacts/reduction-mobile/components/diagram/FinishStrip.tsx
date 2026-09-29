@@ -20,6 +20,9 @@ import { formatMinutes } from "@/shared/amounts";
 import { tailStepReady } from "@/shared/collapse";
 import type { Colors } from "@/hooks/useColors";
 import { ReadyMark } from "./DiagramView";
+import { DIM_OPACITY, spotFor, type Spotlight } from "@/lib/spotlight";
+import { SpotRing } from "@/components/demo/SpotRing";
+import { RevealAnchor } from "@/components/demo/reveal";
 
 export type StripDrop = "ok" | "over" | "no" | null;
 
@@ -33,9 +36,11 @@ interface Props {
   /** Handed each row's View so the drag can measure it at pickup. */
   rowRef: (id: string) => (v: View | null) => void;
   editing: boolean;
+  /** The demo guide's ring and dimming (lib/spotlight.ts). */
+  spotlight?: Spotlight | null;
 }
 
-export function FinishStrip({ tail, done, focus, colors, onPress, dropFor, rowRef, editing }: Props) {
+export function FinishStrip({ tail, done, focus, colors, onPress, dropFor, rowRef, editing, spotlight = null }: Props) {
   if (!tail.length) return null;
   return (
     <View style={styles.strip} testID="finish-strip">
@@ -44,6 +49,7 @@ export function FinishStrip({ tail, done, focus, colors, onPress, dropFor, rowRe
         const ready = !isDone && tailStepReady(n, done);
         const drop = dropFor(n.id);
         const mins = formatMinutes(n.minutes);
+        const spot = spotFor(spotlight, n.id);
         const bg = drop === "over" ? colors.coolBg : isDone ? colors.coolBg : ready ? colors.warmBg : colors.card;
         const line = isDone ? colors.coolLine : ready ? colors.warmLine : colors.border;
         const ink = isDone ? colors.coolInk : ready ? colors.warmInk : colors.text;
@@ -60,7 +66,7 @@ export function FinishStrip({ tail, done, focus, colors, onPress, dropFor, rowRe
                       accessibilityRole: "togglebutton" as const,
                       accessibilityLabel: `${i + 1}. ${n.label}${mins ? `, ${mins}` : ""}, ${isDone ? "done" : ready ? "ready" : "not yet"}`,
                       "aria-checked": isDone,
-                      accessibilityHint: isDone ? `Undoes ${n.label}` : ready ? `Marks ${n.label} done` : `Marks ${n.label} done, along with every step before it`,
+                      accessibilityHint: `${isDone ? `Undoes ${n.label}` : ready ? `Marks ${n.label} done` : `Marks ${n.label} done, along with every step before it`}${spot === "target" ? ". Highlighted by the demo." : ""}`,
                     })}
                 style={[
                   styles.row,
@@ -70,6 +76,7 @@ export function FinishStrip({ tail, done, focus, colors, onPress, dropFor, rowRe
                   drop === "over" ? { borderWidth: 3 } : null,
                   drop === "no" ? { opacity: 0.35 } : null,
                   focus && !editing ? { opacity: 1 } : null,
+                  spot === "dim" ? { opacity: DIM_OPACITY } : null,
                 ]}
               >
                 <View style={[styles.num, { borderColor: line }]}>
@@ -87,6 +94,12 @@ export function FinishStrip({ tail, done, focus, colors, onPress, dropFor, rowRe
                 {mins ? <Text style={[styles.time, { color: isDone ? colors.coolInk : colors.mutedForeground }]}>{mins}</Text> : null}
                 {isDone ? <Text style={[styles.mark, { color: colors.coolInk }]}>✓</Text> : null}
                 {ready ? <ReadyMark colors={colors} top={9} right={10} /> : null}
+                {spot === "target" ? (
+                  <>
+                    <SpotRing radius={12} />
+                    <RevealAnchor />
+                  </>
+                ) : null}
               </Pressable>
             </View>
           </View>

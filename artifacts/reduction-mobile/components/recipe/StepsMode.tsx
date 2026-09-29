@@ -45,6 +45,8 @@ import { useColors, type Colors } from '@/hooks/useColors';
 import { cardShadow, fonts } from '@/constants/colors';
 import type { StepTimer } from '@/lib/api';
 import { firstOpenCard, freshCookState } from '@/lib/cookReset';
+import { SpotRing } from '@/components/demo/SpotRing';
+import { makeReveal, RevealAnchor, RevealContext } from '@/components/demo/reveal';
 
 interface StepCard {
   key: string;
@@ -149,6 +151,8 @@ interface Props {
    *  very first card (its "Before you start" card included), scrolled to
    *  the top, with nothing this screen remembered (lib/cookReset.ts). */
   resetSignal?: number;
+  /** The demo guide is pointing at Next step (components/demo/SpotRing). */
+  spotlightNext?: boolean;
 }
 
 export function StepsMode({
@@ -168,6 +172,7 @@ export function StepsMode({
   sourceSteps = null,
   footer = null,
   resetSignal = 0,
+  spotlightNext = false,
 }: Props) {
   const colors = useColors();
   const styles = makeStyles(colors);
@@ -279,6 +284,8 @@ export function StepsMode({
   // "Before you start" card passed without a tick, the way back to a timer,
   // a "Time's up" still showing, an unfolded source text — and the scroll.
   const scrollRef = useRef<ScrollView>(null);
+  const scrollY = useRef(0);
+  const reveal = useMemo(() => makeReveal(scrollRef, scrollY), []);
   const lastReset = useRef(resetSignal);
   useEffect(() => {
     if (resetSignal === lastReset.current) return;
@@ -337,6 +344,10 @@ export function StepsMode({
   return (
     <ScrollView
       ref={scrollRef}
+      onScroll={(e) => {
+        scrollY.current = e.nativeEvent.contentOffset.y;
+      }}
+      scrollEventThrottle={16}
       showsVerticalScrollIndicator={false}
       showsHorizontalScrollIndicator={false}
       contentContainerStyle={styles.wrap}
@@ -454,8 +465,20 @@ export function StepsMode({
 
           <View style={styles.nav}>
             {cardIndex > 0 ? <SheetButton label="← Back" onPress={() => goTo(cardIndex - 1)} /> : null}
-            <Pressable accessibilityRole="button" onPress={() => markDone(card)} style={styles.primary} testID="cook-next">
+            <Pressable
+              accessibilityRole="button"
+              accessibilityHint={spotlightNext ? 'Highlighted by the demo.' : undefined}
+              onPress={() => markDone(card)}
+              style={styles.primary}
+              testID="cook-next"
+            >
               <Text style={styles.primaryText}>Next Step →</Text>
+              {spotlightNext ? (
+                <RevealContext.Provider value={reveal}>
+                  <SpotRing radius={colors.radiusButton} />
+                  <RevealAnchor />
+                </RevealContext.Provider>
+              ) : null}
             </Pressable>
           </View>
         </View>

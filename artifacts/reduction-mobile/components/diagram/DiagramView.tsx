@@ -49,6 +49,8 @@
  */
 
 import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { DIM_OPACITY, spotFor, type Spot, type Spotlight } from '@/lib/spotlight';
+import { RevealAnchor } from '@/components/demo/reveal';
 import {
   AccessibilityInfo,
   Animated,
@@ -198,6 +200,8 @@ interface SectionDiagramProps {
   scale?: number;
   edit?: DiagramEdit | null;
   drag?: SectionDrag | null;
+  /** The demo guide's ring and dimming (lib/spotlight.ts); null elsewhere. */
+  spotlight?: Spotlight | null;
 }
 
 /** The width a cell's content wraps at: its column(s), less the padding
@@ -326,6 +330,8 @@ interface DiagramCellProps {
   /** The scroller's copy of a column-0 cell sits under the sticky overlay's
    *  copy; only one of them may speak. */
   a11yHidden: boolean;
+  /** The demo guide pointing at this cell, or dimming it (lib/spotlight.ts). */
+  spot: Spot;
 }
 
 /**
@@ -355,6 +361,7 @@ const DiagramCell = memo(function DiagramCell({
   drop,
   editing,
   a11yHidden,
+  spot,
 }: DiagramCellProps) {
   const st: CellState = { isDone, ready, ownerDone };
   const tappable = c.kind !== "gap";
@@ -390,6 +397,7 @@ const DiagramCell = memo(function DiagramCell({
       accessible={tappable && !a11yHidden}
       aria-hidden={!tappable || a11yHidden}
       {...a11y}
+      accessibilityHint={spot === "target" ? `${a11y.accessibilityHint ?? ""} Highlighted by the demo.`.trim() : a11y.accessibilityHint}
       style={{
         position: "absolute",
         left: rect!.x,
@@ -401,7 +409,7 @@ const DiagramCell = memo(function DiagramCell({
         justifyContent: "center",
         // .is-drop-over paints the cool hover; .is-lifted / .is-drop-no fade.
         backgroundColor: drop === "over" ? colors.coolBg : background,
-        opacity: drop === "lifted" ? 0.45 : drop === "no" ? 0.35 : 1,
+        opacity: drop === "lifted" ? 0.45 : drop === "no" ? 0.35 : spot === "dim" ? DIM_OPACITY : 1,
         borderColor: colors.border,
         borderRightWidth: StyleSheet.hairlineWidth,
         borderBottomWidth: StyleSheet.hairlineWidth,
@@ -452,6 +460,16 @@ const DiagramCell = memo(function DiagramCell({
       {isDone && c.kind !== "gap" && c.kind !== "collapsed" ? (
         <Text style={[styles.mark, { color: colors.coolInk }]}>✓</Text>
       ) : null}
+      {spot === "target" ? (
+        /* The demo guide's ring: drawn by the cell itself, so it moves with
+           the table and stays in the pinned column. The shared pulse holds
+           still under Reduce Motion, which leaves a static ring. */
+        <>
+          <View pointerEvents="none" style={[StyleSheet.absoluteFill, { borderWidth: 3, borderColor: colors.foreground }]} />
+          <Animated.View pointerEvents="none" style={[styles.halo, { borderColor: colors.foreground, opacity: pulse }]} testID="spot-halo" />
+          <RevealAnchor />
+        </>
+      ) : null}
       {drop === "ok" || drop === "over" ? (
         /* .is-drop-ok: inset 2px cool-line; .is-drop-over: inset 3px cool-ink. */
         <View
@@ -501,7 +519,7 @@ export function ReadyMark({ colors, top = 7, right = 8 }: { colors: Colors; top?
  *  Exported so the demo's legend paints "done" with the same value. */
 export const doneBackground = (colors: Colors): string => mix(colors.coolBg, colors.card, 0.52);
 
-export function SectionDiagram({ section, done, onToggle, scale = 1, edit = null, drag = null }: SectionDiagramProps) {
+export function SectionDiagram({ section, done, onToggle, scale = 1, edit = null, drag = null, spotlight = null }: SectionDiagramProps) {
   const colors = useColors();
   const { height: windowH } = useWindowDimensions();
   // The finish strip, progressive collapse and the handoff are one pure
@@ -863,6 +881,7 @@ export function SectionDiagram({ section, done, onToggle, scale = 1, edit = null
         drop={dropFor(c)}
         editing={!!edit}
         a11yHidden={!!opts.a11yHidden}
+        spot={spotFor(spotlight, c.key)}
       />
     );
   };
@@ -1011,6 +1030,7 @@ export function SectionDiagram({ section, done, onToggle, scale = 1, edit = null
         dropFor={dropForStrip}
         rowRef={stripRowRef}
         editing={!!edit}
+        spotlight={spotlight}
       />
     </View>
   );
@@ -1070,12 +1090,13 @@ interface DiagramViewProps {
   onToggle: (id: string) => void;
   scale?: number;
   edit?: DiagramEdit | null;
+  spotlight?: Spotlight | null;
 }
 
 /** All sections, stacked — the web app renders one table per section. In
  *  edit mode every section shows its title as a 44px button (the web's
  *  .rd-section-head), because a section has no cell of its own to tap. */
-export function DiagramView({ recipe, done, onToggle, scale, edit = null }: DiagramViewProps) {
+export function DiagramView({ recipe, done, onToggle, scale, edit = null, spotlight = null }: DiagramViewProps) {
   const colors = useColors();
   // The section with a live drag is lifted above its siblings so its ghost
   // paints over the next frame rather than under it.
@@ -1115,7 +1136,7 @@ export function DiagramView({ recipe, done, onToggle, scale, edit = null }: Diag
           {s.header ? (
             <SectionHeaderRow section={s} done={done} onToggle={onToggle} editing={!!edit} colors={colors} />
           ) : null}
-          <SectionDiagram section={s} done={done} onToggle={onToggle} scale={scale} edit={edit} drag={dragFor(i)} />
+          <SectionDiagram section={s} done={done} onToggle={onToggle} scale={scale} edit={edit} drag={dragFor(i)} spotlight={spotlight} />
         </View>
       ))}
     </View>

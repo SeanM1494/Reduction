@@ -1,15 +1,10 @@
 /**
- * components/demo/DemoCoach.tsx — the first-run demo's teaching layer, the
- * web's DemoCoach.tsx ported.
- *
- * The demo already shows what the app does. This makes it teach how it
- * works, through interaction alone: no modal, no overlay tour, nothing to
- * dismiss before the diagram is usable. Four parts, all driven by the same
- * `done` set the diagram is driven by:
- *   useCoachStage   one sentence that reacts to where the visitor actually is
- *   useCoachTips    two contextual tips, once each, never two at once
+ * components/demo/DemoCoach.tsx — the demo's autoplay, its legend and its
+ * tag. The teaching itself is the guided demo (lib/demoGuide.ts and
+ * GuideCard.tsx, Sep 29), which replaced the coach line and the two tips
+ * that used to live here: they relied on small text.
  *   CoachLegend     the three cell states, as swatches in the diagram's tokens
- *   useWatchPlayer  the autoplay sequence behind "Watch it"
+ *   useWatchPlayer  the autoplay behind "Watch instead"
  *
  * This layer wraps RecipeScreen — it never reaches into it. No testIDs, no
  * anchoring to a cell, no imports from layout.ts. Everything here is derived
@@ -18,8 +13,8 @@
  * not a fork").
  */
 
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { AccessibilityInfo, Animated, StyleSheet, Text, View } from 'react-native';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { AccessibilityInfo, StyleSheet, Text, View } from 'react-native';
 import type { Section } from '@/shared/layout';
 import { useColors, type Colors } from '@/hooks/useColors';
 import { fonts } from '@/constants/colors';
@@ -42,32 +37,7 @@ const DEMO_NARRATION: Record<string, string> = {
   d5: 'Then a ten-minute rest, while the flavors came together.',
 };
 
-// ---------------------------------------------------------------- graph ----
-
-export interface DemoGraph {
-  opIds: string[];
-  ingredientIds: string[];
-  inputsOf: Map<string, string[]>;
-  /** The first step fed by two or more *steps* — "fold together". Null for
-   *  a recipe that never branches. */
-  joinId: string | null;
-  /** Ops already ready before anyone touches anything, so the amber tip
-   *  never fires for a state the visitor did not cause. */
-  initiallyReadyOps: Set<string>;
-  allIds: string[];
-}
-
-export function buildDemoGraph(section: Section, prechecked: string[]): DemoGraph {
-  const opIds = section.nodes.map((n) => n.id);
-  const ingredientIds = section.ingredients.map((i) => i.id);
-  const isOp = new Set(opIds);
-  const inputsOf = new Map<string, string[]>();
-  for (const n of section.nodes) inputsOf.set(n.id, n.inputs || []);
-  const joinId = section.nodes.find((n) => (n.inputs || []).filter((i) => isOp.has(i)).length >= 2)?.id ?? null;
-  const start = new Set(prechecked);
-  const initiallyReadyOps = new Set(opIds.filter((id) => (inputsOf.get(id) || []).every((i) => start.has(i))));
-  return { opIds, ingredientIds, inputsOf, joinId, initiallyReadyOps, allIds: [...ingredientIds, ...opIds] };
-}
+// ---------------------------------------------------------------- order ----
 
 /** Autoplay order: a post-order walk from the root, so every input is
  *  emitted before the step that consumes it. Anything already checked at
@@ -87,117 +57,6 @@ export function watchOrder(section: Section, prechecked: string[]): string[] {
   return out;
 }
 
-function readyOps(graph: DemoGraph, done: Set<string>): Set<string> {
-  return new Set(graph.opIds.filter((id) => !done.has(id) && (graph.inputsOf.get(id) || []).every((i) => done.has(i))));
-}
-
-// ---------------------------------------------------------------- stage ----
-
-export type CoachStage = 'empty' | 'firstIngredient' | 'stepReady' | 'converging' | 'complete';
-
-const STAGE_TEXT: Record<CoachStage, string> = {
-  empty: 'Guacamole, as a diagram. Tap any ingredient to check it off.',
-  firstIngredient: 'Each box to the right lights up as soon as everything feeding into it is checked.',
-  stepReady: 'That step turned amber because everything it needs is now done.',
-  converging: "Both branches are finished, so folding them together is all that's left.",
-  complete: "That's the whole recipe — no scrolling back up a wall of paragraphs.",
-};
-
-/** Cook mode has no grid, no columns and nothing amber, so the three stages
- *  that describe those get a second phrasing. */
-const STEPS_STAGE_TEXT: Partial<Record<CoachStage, string>> = {
-  empty: 'Guacamole, step by step. Check one off to bring up the next.',
-  firstIngredient: 'A card only comes up once everything it needs is checked off.',
-  stepReady: 'That step unlocked because everything it needs is now done.',
-};
-
-export function useCoachStage(
-  graph: DemoGraph,
-  done: Set<string>,
-  prechecked: string[],
-  view: 'diagram' | 'steps'
-): { stage: CoachStage; text: string } {
-  return useMemo(() => {
-    const stage: CoachStage = (() => {
-      if (graph.allIds.every((id) => done.has(id))) return 'complete';
-      if (graph.joinId) {
-        const feeders = (graph.inputsOf.get(graph.joinId) || []).filter((i) => graph.opIds.includes(i));
-        if (feeders.length >= 2 && feeders.every((f) => done.has(f))) return 'converging';
-      }
-      const ready = readyOps(graph, done);
-      for (const id of ready) if (!graph.initiallyReadyOps.has(id)) return 'stepReady';
-      if (graph.opIds.some((id) => done.has(id))) return 'stepReady';
-      const start = new Set(prechecked);
-      if (graph.ingredientIds.some((id) => done.has(id) && !start.has(id))) return 'firstIngredient';
-      return 'empty';
-    })();
-    const text = (view === 'steps' ? STEPS_STAGE_TEXT[stage] : undefined) ?? STAGE_TEXT[stage];
-    return { stage, text };
-  }, [graph, done, prechecked, view]);
-}
-
-// ----------------------------------------------------------------- tips ----
-
-export type TipId = 'amber' | 'jump';
-
-const TIP_TEXT: Record<TipId, string> = {
-  amber: 'Amber means you can do this now — everything it depends on is already checked.',
-  jump: 'You can skip ahead: tap any step further right and everything it needs gets checked along with it.',
-};
-
-/** Two tips, one at a time, once each, each dismissed by the next
- *  interaction. Driven by watching `done` change, so autoplay, Reset and
- *  ordinary taps all flow through one path. */
-export function useCoachTips(
-  graph: DemoGraph,
-  done: Set<string>,
-  opts: { suspended: boolean }
-): { tip: TipId | null; text: string | null; resetTips: () => void } {
-  const [tip, setTip] = useState<TipId | null>(null);
-  const shown = useRef<Set<TipId>>(new Set());
-  const prevReady = useRef<Set<string> | null>(null);
-  const tipRef = useRef<TipId | null>(null);
-  tipRef.current = tip;
-  const suspended = opts.suspended;
-
-  useEffect(() => {
-    const ready = readyOps(graph, done);
-    if (prevReady.current === null) {
-      prevReady.current = ready;
-      return;
-    }
-    const previous = prevReady.current;
-    prevReady.current = ready;
-    if (suspended) return;
-    // An active tip is dismissed by this change, whatever it was. Read
-    // through a ref so this effect runs only when `done` moves, never when
-    // the tip itself changes (that would dismiss it the instant it appeared).
-    if (tipRef.current !== null) {
-      setTip(null);
-      return;
-    }
-    const newlyReady = [...ready].filter((id) => !previous.has(id) && !graph.initiallyReadyOps.has(id));
-    if (!shown.current.has('amber') && newlyReady.length > 0) {
-      shown.current.add('amber');
-      setTip('amber');
-      return;
-    }
-    const jumpTarget = graph.opIds.some((id) => !done.has(id) && !ready.has(id));
-    if (shown.current.has('amber') && !shown.current.has('jump') && jumpTarget) {
-      shown.current.add('jump');
-      setTip('jump');
-    }
-  }, [done, graph, suspended]);
-
-  const resetTips = useCallback(() => {
-    shown.current = new Set();
-    prevReady.current = null;
-    setTip(null);
-  }, []);
-
-  return { tip, text: tip ? TIP_TEXT[tip] : null, resetTips };
-}
-
 // ---------------------------------------------------------------- watch ----
 
 /** Autoplay for "Watch it". Always replays from the opening position; any
@@ -205,7 +64,9 @@ export function useCoachTips(
 export function useWatchPlayer(
   order: string[],
   prechecked: string[],
-  setDone: (next: string[]) => void
+  setDone: (next: string[]) => void,
+  /** Called when a run plays to its end (not when it is stopped). */
+  onEnd?: () => void
 ): { playing: boolean; line: string | null; play: () => void; stop: () => void } {
   const [playing, setPlaying] = useState(false);
   const [line, setLine] = useState<string | null>(null);
@@ -238,6 +99,7 @@ export function useWatchPlayer(
       // One commit, and no narration: six sentences flashing past in as many
       // frames is worse than none, and there is no motion left to narrate.
       setDone([...prechecked, ...order]);
+      onEnd?.();
       return;
     }
     setPlaying(true);
@@ -257,49 +119,15 @@ export function useWatchPlayer(
       setTimeout(() => {
         setPlaying(false);
         setLine(null);
+        onEnd?.();
       }, at + WATCH_NARRATED_MS)
     );
-  }, [order, prechecked, setDone, stop]);
+  }, [order, prechecked, setDone, stop, onEnd]);
 
   return { playing, line, play, stop };
 }
 
 // --------------------------------------------------------------- pieces ----
-
-/** The coach line: one sentence, faded in on every change. During "Watch
- *  it" the narration stands in for it — one line, never both. */
-export function CoachLine({ text }: { text: string }) {
-  const colors = useColors();
-  const opacity = useRef(new Animated.Value(1)).current;
-  useEffect(() => {
-    opacity.setValue(0);
-    Animated.timing(opacity, { toValue: 1, duration: 450, useNativeDriver: true }).start();
-  }, [text, opacity]);
-  return (
-    <View style={styles.coach} accessibilityLiveRegion="polite">
-      <Animated.Text style={[styles.coachText, { color: colors.foreground, opacity }]} testID="coach-line">
-        {text}
-      </Animated.Text>
-    </View>
-  );
-}
-
-/** A tip, or the empty slot it occupies. The slot is always rendered so a
- *  tip appearing never reflows the diagram below it. */
-export function CoachTip({ text }: { text: string | null }) {
-  const colors = useColors();
-  return (
-    <View style={styles.tipSlot} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
-      {text ? (
-        <View style={[styles.tip, { backgroundColor: colors.warmBg, borderColor: colors.dangerLine, borderLeftColor: colors.warmLine }]}>
-          <Text style={[styles.tipText, { color: colors.warmInk }]} testID="coach-tip">
-            {text}
-          </Text>
-        </View>
-      ) : null}
-    </View>
-  );
-}
 
 /** Says "this is a sample" once. */
 export function DemoTag() {
@@ -353,11 +181,6 @@ function Swatch({
 }
 
 const styles = StyleSheet.create({
-  coach: { minHeight: 20, marginBottom: 8 },
-  coachText: { fontSize: 13.5, lineHeight: 19 },
-  tipSlot: { minHeight: 34, marginBottom: 6 },
-  tip: { borderWidth: 1, borderLeftWidth: 3, borderRadius: 9, paddingVertical: 7, paddingHorizontal: 11 },
-  tipText: { fontSize: 12.5, lineHeight: 18 },
   tag: { borderWidth: 1, borderRadius: 99, paddingVertical: 2, paddingHorizontal: 9 },
   tagText: { fontFamily: fonts.mono, fontSize: 10.5, letterSpacing: 0.95, lineHeight: 15 },
   legend: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 10, marginTop: 12 },

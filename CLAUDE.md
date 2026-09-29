@@ -1690,6 +1690,25 @@ delete, clear progress — so it cannot be reused for the landing demo. Card
 mode there is `StepsMode` driven by a synthetic in-memory entry that never
 reaches `storage.ts`.
 
+**On the phone the renderers take one input from the demo, and it names,
+never measures** (the guided demo, Sep 29). `RecipeScreen`, `DiagramView`,
+`FinishStrip` and `StepsMode` accept a `spotlight` (`lib/spotlight.ts`): a
+set of ids from the recipe's own graph, plus `'mode:steps'` and
+`'cook:next'` for the two controls, and whether to dim the rest. The cell,
+row or button that IS a target draws the ring itself, and a `RevealAnchor`
+inside it asks its own scroller to bring it into view — so the guide
+(`lib/demoGuide.ts`, pure) never knows a position, a testID or a style,
+which is the rule above kept by other means. Nothing but the demo passes a
+spotlight, so nothing else ever dims or scrolls. The steps themselves —
+what each asks, what counts as done, when to nudge, what "Show me" taps —
+are functions of `done` and the mode, tested without a screen; a new step
+is a change there and a test, not state in a component. Two rules in it
+are load-bearing: a step never advances on a tap it faked (Show me's taps
+go through the same judge as a finger), and every do-step, entered from
+ANY state taps can reach, has something to tap (`demoGuide.test.ts`
+explores them) — a step with nothing left to ring is a dead end with only
+Skip.
+
 ## Demo state never persists
 
 Landing page progress lives in component state and dies with the component:

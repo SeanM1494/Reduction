@@ -232,6 +232,8 @@ kept mounted behind it), the spike and the perf strip are removed.
 `components/demo/DemoCoach.tsx` is the web's teaching layer ported — stage
 line, two tips, legend, "Watch it" with narration — wrapping RecipeScreen
 through two slots (`above`, `overviewFooter`) and never reaching into it.
+(Sep 29: the stage line and tips are replaced by the guided demo; see
+"The guided demo: one instruction at a time".)
 (c) DONE (Sep 12) — photo extraction on the Find tab: "Take a photo" and
 "Choose a photo" (expo-image-picker) feed the SAME `{ file: { data,
 mediaType } }` body the web upload sends, so the server needed nothing.
@@ -2167,6 +2169,85 @@ therefore follows the cleared `done` to the first card by itself
 (`artifacts/reduction/src/components/StepsMode.tsx`) is separate code with
 the same in-memory index, so a Clear there leaves the open card where it
 was until the view is left and reopened.
+
+## The guided demo: one instruction at a time (Sep 29)
+
+**Decided and built (phone, over the air).** The demo teaches with a card
+under the recipe that says one thing at a time, rings the thing to tap and
+dims the rest, and moves on when the demo's REAL state changes the way it
+asked. It replaces the coach line and the two small tips, which relied on
+small text nobody read. It does not start by itself: the card first offers
+"Start the demo" and "Watch instead", and until then the recipe is free to
+explore. The same screen serves the signed-out landing, Settings › How it
+works and the empty library's "See how it works". It never saves and
+never calls the server (CLAUDE.md, "Demo state never persists").
+
+**The six steps, current wording** (tweak in `lib/demoGuide.ts`; each is a
+test away from being checked against the word budget):
+
+1. Read — "Read left to right: ingredients feed steps, and steps feed
+   later steps." · Next
+2. Do — "Tap an ingredient to check it off." (lime is ringed)
+3. Do — "Amber means ready: everything it needs is done. Tap an amber
+   step." (halve and scoop)
+4. Do — "Tap the last step. It checks off everything before it." (rest
+   10 min, in the finish strip under the table; the page scrolls to it)
+5. Do — "Checks cleared. Switch to Step-by-Step, then tap Next Step."
+   (the tab is ringed, then Next Step)
+6. Finish — "That's it. Add your own recipe." · Find a recipe (signed in)
+   or Sign in (signed out) · Replay
+
+Nudge for a tap the step did not ask for: "Tap the highlighted one to go
+on." Idle card: "New here? Learn to read a recipe in six short steps."
+
+**Decisions made while building it, and why:**
+
+- **Step 1 was adapted.** The brief's "each column is a step" is not true
+  of this diagram (a step's column is set by what it waits for, and the
+  last two steps leave the table for the finish strip), so it says how to
+  read the arrows instead.
+- **Step 5 clears the checks first, and says so.** Step 4 checks
+  everything, which would leave Step-by-Step nothing to show; clearing
+  silently would look like a bug.
+- **A step makes true what it needs.** Entering a step fixes the state it
+  depends on (an ingredient left, something amber, the last step not done),
+  and a wrong tap that uses that up is kept for a beat, nudged, and then
+  put back where the step began. Explored over every state four taps can
+  reach (`demoGuide.test.ts`).
+- **Back restores the previous step's STARTING snapshot**, not the state
+  it was left in; Back from step 1 leaves the guide.
+- **Show me appears after 6 seconds idle on a do-step and performs the
+  step with the same taps a finger makes**, judged by the same rule, so it
+  cannot advance by a route a person could not take. On step 5 it switches
+  the tab and marks the first card done from outside Step-by-Step, so the
+  card shows as ticked rather than turning; the guide has already moved to
+  "That's it" by then.
+- **Watch instead is the old autoplay** (narration in the card), and ends
+  on "That's it", so watching is a way through the guide. Any tap stops it.
+  Under Reduce Motion it is one commit, as before.
+- **The ring is drawn by the target** (a solid 3pt ring and a halo that
+  breathes, opacity only; static under Reduce Motion), and the target
+  scrolls itself into view. See CLAUDE.md, "The demo teaches through a
+  wrapper" — the renderers take a `spotlight` of ids and nothing else.
+- **The card holds its size**: two lines reserved for the instruction and a
+  line for the nudge whether or not it shows, so nothing moves under a
+  finger. 17pt, Dynamic Type to 1.4x; every button 44pt. 177pt tall with
+  the three buttons; on an SE the diagram keeps 391pt above it.
+- **The old Reset button is gone**: Replay on the last step and Back cover
+  it, and every reachable state is one Back or Replay from the start.
+
+**Phone-only, not provable in Chromium:** VoiceOver reading the card and
+announcing each step (`announceForAccessibility`; RN-web has no
+announcement API), a double-tap completing each do-step, the halo's
+breathing and its stillness under the OS's Reduce Motion (Chromium's
+emulated `prefers-reduced-motion` was checked), Dynamic Type at the largest
+sizes on an SE, and the native tab layout (iOS 26, no header) above it.
+
+**Gap, logged, not fixed: the website's demo** (`artifacts/reduction/src/
+components/DemoCoach.tsx` on the landing page) still teaches with the
+coach line and tips. Porting the guide means the web Diagram, StepsMode and
+finish strip taking the same `spotlight` and scrolling their own targets;
+`lib/demoGuide.ts` is pure and would move to `lib/recipe-model` for both.
 
 ## Still open from earlier work
 

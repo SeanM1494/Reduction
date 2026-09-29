@@ -52,59 +52,14 @@ import { fonts } from '@/constants/colors';
 import type { Entry, StepTimer } from '@/lib/api';
 import type { EntryPatch } from '@/lib/library-context';
 import { clearProgressPatch } from '@/lib/cookReset';
+import { toggleDone } from '@/lib/doneClosure';
+import type { Spotlight } from '@/lib/spotlight';
+import { SpotRing } from '@/components/demo/SpotRing';
+import { makeReveal, RevealContext } from '@/components/demo/reveal';
 
 // ------------------------------------------------------------ done logic ---
-
-/** Every id in the recipe mapped to the ids it directly depends on.
- *  Ingredients are leaves (no inputs). Ids are unique across the whole
- *  recipe — inputs never cross a section boundary (see shared/sequence.ts). */
-function buildInputsOf(recipe: Recipe): Map<string, string[]> {
-  const inputsOf = new Map<string, string[]>();
-  for (const section of recipe.sections ?? []) {
-    for (const ing of section.ingredients ?? []) inputsOf.set(ing.id, []);
-    for (const node of section.nodes ?? []) inputsOf.set(node.id, node.inputs ?? []);
-  }
-  return inputsOf;
-}
-
-function buildDownstreamOf(inputsOf: Map<string, string[]>): Map<string, string[]> {
-  const downstream = new Map<string, string[]>();
-  for (const [id, inputs] of inputsOf) {
-    for (const dep of inputs) {
-      const list = downstream.get(dep) ?? [];
-      list.push(id);
-      downstream.set(dep, list);
-    }
-  }
-  return downstream;
-}
-
-/** Checking a step marks its whole upstream chain done (you cannot have
- *  finished a step without its inputs); unchecking clears everything
- *  downstream of it. Keeps `done` upstream-closed, which is what makes the
- *  cross-device merge in shared/sync.ts provably safe (see its header). */
-function toggleDone(recipe: Recipe, done: string[], id: string): string[] {
-  const inputsOf = buildInputsOf(recipe);
-  const set = new Set(done);
-  if (set.has(id)) {
-    const downstream = buildDownstreamOf(inputsOf);
-    const stack = [id];
-    while (stack.length) {
-      const cur = stack.pop()!;
-      if (!set.delete(cur)) continue;
-      for (const next of downstream.get(cur) ?? []) stack.push(next);
-    }
-  } else {
-    const stack = [id];
-    while (stack.length) {
-      const cur = stack.pop()!;
-      if (set.has(cur)) continue;
-      set.add(cur);
-      for (const next of inputsOf.get(cur) ?? []) stack.push(next);
-    }
-  }
-  return [...set];
-}
+// toggleDone lives in lib/doneClosure.ts (pure), so the demo guide's "Show
+// me" performs a tap by exactly the rule a tap here follows.
 
 /** Six hours: un-checking and re-checking the last step counts one dinner,
  *  not two, and two devices logging the same meal collapse to one (the same
@@ -170,9 +125,9 @@ interface RecipeScreenProps {
    *  line (StepsMode's `sourceSteps`). */
   sourceSteps?: string[] | null;
   saving?: boolean;
-  /** Rendered under the mode tabs in both views — the demo's coach line
-   *  and tips live here, so the teaching layer wraps this screen without
-   *  reaching into it (CLAUDE.md, "The demo teaches through a wrapper"). */
+  /** Rendered under the mode tabs in both views, for a wrapper that needs
+   *  a line there without reaching into this screen (the demo's coach line
+   *  lived here until the guided demo's card replaced it, Sep 29). */
   above?: React.ReactNode;
   /** Replaces the Overview hint below the diagram (the demo's legend). */
   overviewFooter?: React.ReactNode;
@@ -196,6 +151,15 @@ interface RecipeScreenProps {
    *  it (a change to 👎 asks whether to take it out of the box). Without
    *  it the rating is simply written. */
   onRate?: (rating: number | null) => void;
+  /** The demo guide pointing at something (lib/spotlight.ts): cells by id,
+   *  the Step-by-Step tab as 'mode:steps', Next step as 'cook:next'. The
+   *  screen draws the ring; the guide never reaches into it. */
+  spotlight?: Spotlight | null;
+  /** The tab follows `mode` whenever it changes, not only on the first
+   *  render: the demo's guide sets it (Back to a Diagram step, Replay).
+   *  Off for a saved recipe, where another device's mode is not a reason
+   *  to switch tabs under someone. */
+  modeControlled?: boolean;
 }
 
 type ViewMode = 'overview' | 'cook';
@@ -233,6 +197,8 @@ export function RecipeScreen({
   initialView,
   onCooked,
   onRate,
+  spotlight = null,
+  modeControlled = false,
 }: RecipeScreenProps) {
   const colors = useColors();
   const styles = makeStyles(colors);
@@ -258,6 +224,9 @@ export function RecipeScreen({
   useEffect(() => {
     onViewChange?.(view);
   }, [view, onViewChange]);
+  useEffect(() => {
+    if (modeControlled) setView(mode === 'steps' ? 'cook' : 'overview');
+  }, [mode, modeControlled]);
   const pickView = (v: ViewMode) => {
     setView(v);
     if (v === 'cook') stopEditing();
@@ -311,6 +280,8 @@ export function RecipeScreen({
   const pageY = useRef(0);
   const pageContentH = useRef(0);
   const pageViewH = useRef(0);
+  // What the demo guide rings is brought into view (components/demo/reveal).
+  const revealInPage = useMemo(() => makeReveal(overviewRef, pageY), []);
   const scrollPageBy = (dy: number): number => {
     const max = Math.max(0, pageContentH.current - pageViewH.current);
     const next = Math.min(max, Math.max(0, pageY.current + dy));
@@ -491,7 +462,13 @@ export function RecipeScreen({
         </View>
         <View style={styles.modeSwitch}>
           <ModeTab label="Diagram" active={view === 'overview'} onPress={() => pickView('overview')} colors={colors} />
-          <ModeTab label="Step-by-Step" active={view === 'cook'} onPress={() => pickView('cook')} colors={colors} />
+          <ModeTab
+            label="Step-by-Step"
+            active={view === 'cook'}
+            onPress={() => pickView('cook')}
+            colors={colors}
+            spot={!!spotlight?.targets.has('mode:steps')}
+          />
         </View>
       </View>
 
@@ -553,24 +530,27 @@ export function RecipeScreen({
               <SheetButton label="Dismiss" onPress={() => setEditError(null)} />
             </View>
           ) : null}
-          <DiagramView
-            recipe={recipe}
-            done={doneSet}
-            onToggle={toggle}
-            scale={scale}
-            edit={
-              editing
-                ? {
-                    onTapCell: (id) => setSheetFor({ kind: 'node', id }),
-                    onTapSection: (index) => setSheetFor({ kind: 'section', index }),
-                    onMove: (ingredientId, toStepId) => applyOp({ type: 'moveIngredient', ingredientId, toStepId }),
-                    onBlocked: setEditError,
-                    onDragChange: setDragging,
-                    scrollPageBy,
-                  }
-                : null
-            }
-          />
+          <RevealContext.Provider value={spotlight ? revealInPage : null}>
+            <DiagramView
+              recipe={recipe}
+              done={doneSet}
+              onToggle={toggle}
+              scale={scale}
+              spotlight={spotlight}
+              edit={
+                editing
+                  ? {
+                      onTapCell: (id) => setSheetFor({ kind: 'node', id }),
+                      onTapSection: (index) => setSheetFor({ kind: 'section', index }),
+                      onMove: (ingredientId, toStepId) => applyOp({ type: 'moveIngredient', ingredientId, toStepId }),
+                      onBlocked: setEditError,
+                      onDragChange: setDragging,
+                      scrollPageBy,
+                    }
+                  : null
+              }
+            />
+          </RevealContext.Provider>
           {overviewFooter ?? (
             <Text style={styles.hint}>
               {editing
@@ -616,6 +596,7 @@ export function RecipeScreen({
           sourceSteps={sourceSteps}
           footer={originalRow}
           resetSignal={clearCount}
+          spotlightNext={!!spotlight?.targets.has('cook:next')}
         />
       )}
 
@@ -714,11 +695,14 @@ function ModeTab({
   active,
   onPress,
   colors,
+  spot = false,
 }: {
   label: string;
   active: boolean;
   onPress: () => void;
   colors: Colors;
+  /** The demo guide is pointing at this tab. */
+  spot?: boolean;
 }) {
   // The app's language for "one of these" (SheetOption: the Books/Grid
   // choice, the meal types): both segments are filled, bordered controls,
@@ -729,6 +713,7 @@ function ModeTab({
       onPress={onPress}
       accessibilityRole="tab"
       accessibilityState={{ selected: active }}
+      accessibilityHint={spot ? 'Highlighted by the demo.' : undefined}
       testID={`mode-${label === 'Diagram' ? 'diagram' : 'steps'}`}
       style={({ pressed }) => [
         styles2.tab,
@@ -741,6 +726,7 @@ function ModeTab({
       <Text style={{ color: active ? colors.coolInk : colors.foreground, fontFamily: active ? fonts.heading : fonts.headingMedium, fontSize: 15 }}>
         {label}
       </Text>
+      {spot ? <SpotRing radius={12} /> : null}
     </Pressable>
   );
 }
