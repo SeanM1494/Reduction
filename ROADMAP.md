@@ -1977,6 +1977,47 @@ books, and a recipe it saves has no placement — so the phone shows it where
 its meal type points (through any merge) until it is moved. Nothing on the
 website can clear a book: it never sends the field.
 
+## The new icon and splash (Sep 29)
+
+The artwork is final and lives in `brand/` (CLAUDE.md "The brand
+artwork"); `scripts/brand-icons.mjs` makes every size either side ships.
+Replit's agent applied it to the phone first (940a2f9, icon and splash
+correct, the Android foreground uncropped by the safe zone, nothing on the
+website); this finishes it. Decided:
+
+- **The splash is the mark on the ICON's cream, `#efe2c8`, 240pt wide**
+  (was the app's tan `#e8d5b2` at 200). The icon zooms into the splash on
+  launch, so matching the icon's colour makes that one continuous surface;
+  the parchment of the first screen is a shade darker and follows a moment
+  later. 240pt spans about half an SE's width (the drawing is ~70% of its
+  square) and was small at 200 on a 390pt phone. **Dark mode keeps
+  `#131110`**, the app's dark background: the cream bars and the bottle's
+  label sit on the red pot and the orange bottle, never on the background,
+  so they stay visible and no dark variant of the artwork is needed.
+- **`expo.version` stays 1.1.0.** The rule bumps it for native code a
+  bundle might call; an icon and a splash are native but nothing calls
+  them, so a bundle is equally safe on a binary with either icon. 1.1.0 has
+  not reached the App Store, so the new build is another 1.1.0 build (EAS
+  numbers builds remotely).
+- **The Android adaptive foreground is the mark at 636/1024, centred**, so
+  nothing leaves the 66dp safe circle (measured: 311px from centre against
+  a 313px radius), over `#efe2c8`. There is no Android build yet; no
+  monochrome (themed) icon and no notification icon either — both are
+  Android-only, and the notification one wants a white silhouette, which
+  is a new drawing and not a resize.
+- **The sign-in screen's mark is an image of the artwork at the same
+  64pt.** It reads smaller than the old mark, which filled its square; a
+  larger one waits on the item below.
+- **Logged, not fixed: on an iPhone SE the sign-in screen's top is cut
+  off** — its content is centred and taller than the screen, so the mark
+  sits at y=−12 (Chromium, 320×568). It was already so with the old mark,
+  at the same size; the fix is a scroll view on the sign-in screen, which
+  is auth UI and was out of scope.
+
+**Needs the phone:** the icon on the home screen, in Spotlight, in Settings
+and in TestFlight; the splash in light and dark; whether the icon-to-splash
+hand-off reads as one surface.
+
 ## Still open from earlier work
 
 - **allrecipes.com cannot be read by the server, by either fetch (Sep

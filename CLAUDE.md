@@ -1211,6 +1211,24 @@ const cta = document.querySelector('.rd-landing-cta').getBoundingClientRect();
 // collapsed, this must fit with room to spare on every profile
 ```
 
+## The brand artwork: `brand/` is the source, everything else is made
+
+`brand/` holds the four sources (Sep 29): `reduction-icon.svg` (the master,
+full-bleed cream `#efe2c8`, square corners on purpose — iOS applies its own
+mask), `reduction-mark.svg` (the same without the background), and a
+1024px PNG of each. **The PNGs are rendered from the SVGs, never edited by
+hand**, and **the App Store icon (`reduction-icon-1024.png`) must have NO
+alpha channel** — colour type RGB, not RGBA; App Store Connect refuses an
+icon with one, even a fully opaque one. Every icon, splash, favicon and
+in-app mark either side ships is COPIED or RESIZED from those four by
+`scripts/brand-icons.mjs` (premultiplied area-averaging, because the mark's
+transparent pixels are transparent black and a plain resize fringes every
+edge); `--check` says whether any output has drifted. Nothing redraws the
+artwork — the sign-in screen's `BrandLogo` is an image of it, not a port of
+its paths. The icon and splash are in the BINARY: a change to them needs a
+build, and no bundle depends on them, so it does not by itself need an
+`expo.version` bump.
+
 ## Recipe books: by id, and deleting rewrites nothing
 
 **A recipe names its book by ID** (`recipe_placements`), never by name, so a
