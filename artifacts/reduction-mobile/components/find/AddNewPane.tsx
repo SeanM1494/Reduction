@@ -218,13 +218,14 @@ export function AddNewPane({
 
 function makeStyles(colors: Colors) {
   return StyleSheet.create({
-    pane: { flex: 1, backgroundColor: colors.card },
+    // The page itself: white is for what you touch (Sep 29).
+    pane: { flex: 1, backgroundColor: colors.background },
     content: { padding: 16, paddingTop: 18, gap: 12 },
     heading: { fontFamily: fonts.headingBold, fontSize: 22, lineHeight: 27, color: colors.foreground },
-    // The paste box: the page colour inside the card pane, with a strong
-    // edge, so it reads as the thing to tap.
+    // The paste box: a card on the page, with a strong edge, so it reads as
+    // the thing to tap.
     input: {
-      backgroundColor: colors.background,
+      backgroundColor: colors.card,
       borderWidth: 1,
       borderColor: colors.borderStrong,
       borderRadius: colors.radius,
@@ -260,7 +261,7 @@ function makeStyles(colors: Colors) {
       borderRadius: colors.radiusButton,
       borderWidth: 1,
       borderColor: colors.borderStrong,
-      backgroundColor: colors.background,
+      backgroundColor: colors.card,
       alignItems: 'center',
       justifyContent: 'center',
       gap: 2,

@@ -97,7 +97,7 @@ function makeStyles(colors: Colors) {
       paddingVertical: 9,
       fontSize: 16,
       color: colors.foreground,
-      backgroundColor: colors.background,
+      backgroundColor: colors.card,
     },
   });
 }

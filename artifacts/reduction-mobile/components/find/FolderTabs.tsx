@@ -3,9 +3,13 @@
  * folder tabs on the pane they open.
  *
  * The shape is the Recipe Box's book tab (Book.tsx): rounded top corners,
- * joined to what is under it. The chosen tab is the pane's own colour with
- * no line between them, so it reads as the front folder; the others sit a
- * shade back, behind the pane's top edge. Unlike the book tab (22pt, 11pt
+ * joined to what is under it. The pane is the PAGE itself (Sep 29: the
+ * cream pane read as a white slab across the tan app), so the chosen tab is
+ * the page's colour with no line between it and the pane — the front
+ * folder — and the others sit behind it: a shade DARKER than the page in
+ * light (borderStrong, text in full foreground, 8.3:1), the raised card
+ * brown of Settings in dark (card, muted text 5.7:1). Existing tokens only,
+ * picked by the theme's own scheme. Unlike the book tab (22pt, 11pt
  * uppercase — a label on an object) these are controls, so they take the
  * app's control type (15pt heading font, as the Diagram / Step-by-Step
  * switch) and a 44pt height.
@@ -51,7 +55,7 @@ export function FolderTabs({ tab, onChange }: { tab: FindTab; onChange: (t: Find
             testID={`find-tab-${id}`}
           >
             <Text
-              style={[styles.label, { color: active ? colors.foreground : colors.mutedForeground }]}
+              style={[styles.label, { color: active || colors.scheme !== 'dark' ? colors.foreground : colors.mutedForeground }]}
               numberOfLines={1}
               maxFontSizeMultiplier={1.15}
             >
@@ -87,8 +91,11 @@ function makeStyles(colors: Colors) {
     },
     // The front folder: the pane's colour, drawn 1pt over the pane's edge so
     // no line separates them.
-    tabActive: { backgroundColor: colors.card, borderColor: colors.borderStrong, marginBottom: -1, paddingBottom: 1 },
-    tabBack: { backgroundColor: colors.muted, borderColor: colors.border },
+    tabActive: { backgroundColor: colors.background, borderColor: colors.borderStrong, marginBottom: -1, paddingBottom: 1 },
+    tabBack:
+      colors.scheme === 'dark'
+        ? { backgroundColor: colors.card, borderColor: colors.border }
+        : { backgroundColor: colors.borderStrong, borderColor: colors.borderStrong },
     tabPressed: { borderColor: colors.borderStrong },
     label: { fontFamily: fonts.heading, fontSize: 15 },
   });

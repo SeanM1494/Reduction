@@ -364,7 +364,8 @@ function IconButton({
 
 function makeStyles(colors: Colors) {
   return StyleSheet.create({
-    pane: { flex: 1, backgroundColor: colors.card },
+    // The page itself: white is for what you touch (Sep 29).
+    pane: { flex: 1, backgroundColor: colors.background },
     addressRow: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, paddingTop: 10, paddingBottom: 8 },
     // 16px: the input floor (CLAUDE.md).
     // minWidth 0: a long address must shrink the field, not push reload
@@ -376,14 +377,14 @@ function makeStyles(colors: Colors) {
       borderRadius: 10,
       borderWidth: 1,
       borderColor: colors.borderStrong,
-      backgroundColor: colors.background,
+      backgroundColor: colors.card,
       paddingHorizontal: 12,
       fontSize: 16,
       color: colors.foreground,
     },
     progressTrack: { height: 2, backgroundColor: 'transparent' },
     progressFill: { height: 2, backgroundColor: colors.warmInk },
-    page: { flex: 1, backgroundColor: colors.card },
+    page: { flex: 1, backgroundColor: colors.background },
     startPad: { padding: 16, paddingTop: 12, gap: 12 },
     heading: { fontFamily: fonts.headingBold, fontSize: 22, lineHeight: 27, color: colors.foreground },
     body: { fontSize: 14.5, lineHeight: 21, color: colors.mutedForeground },
@@ -398,7 +399,7 @@ function makeStyles(colors: Colors) {
       borderRadius: 12,
       borderWidth: 1,
       borderColor: colors.borderStrong,
-      backgroundColor: colors.background,
+      backgroundColor: colors.card,
     },
     sitePressed: { backgroundColor: colors.muted },
     siteName: { fontFamily: fonts.heading, fontSize: 15, lineHeight: 19, color: colors.foreground },
@@ -409,8 +410,8 @@ function makeStyles(colors: Colors) {
       paddingBottom: 8,
       paddingHorizontal: 12,
       backgroundColor: colors.background,
-      borderTopWidth: 1,
-      borderTopColor: colors.border,
+      borderTopWidth: StyleSheet.hairlineWidth,
+      borderTopColor: colors.borderStrong,
     },
     row: { flexDirection: 'row', alignItems: 'center', gap: 6 },
     icon: { width: 44, height: 44, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },

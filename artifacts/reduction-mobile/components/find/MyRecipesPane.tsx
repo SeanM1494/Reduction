@@ -257,7 +257,8 @@ function Suggestion({ result: r, loading, error, onPick }: { result: SearchResul
 
 function makeStyles(colors: Colors) {
   return StyleSheet.create({
-    pane: { flex: 1, backgroundColor: colors.card },
+    // The page itself: white is for what you touch (Sep 29).
+    pane: { flex: 1, backgroundColor: colors.background },
     content: { padding: 16, paddingTop: 18, gap: 12 },
     heading: { fontFamily: fonts.headingBold, fontSize: 22, lineHeight: 27, color: colors.foreground },
     hint: { fontSize: 14, lineHeight: 20, color: colors.mutedForeground },
@@ -274,7 +275,7 @@ function makeStyles(colors: Colors) {
       borderStyle: 'dashed',
       borderColor: colors.borderStrong,
       borderRadius: 12,
-      backgroundColor: colors.background,
+      backgroundColor: colors.card,
       paddingHorizontal: 12,
       paddingVertical: 10,
       gap: 3,
@@ -295,8 +296,8 @@ function makeStyles(colors: Colors) {
       paddingHorizontal: 12,
       borderRadius: 12,
       borderWidth: 1,
-      borderColor: colors.border,
-      backgroundColor: colors.background,
+      borderColor: colors.borderStrong,
+      backgroundColor: colors.card,
     },
     webRowPressed: { borderColor: colors.borderStrong },
     webRowText: { fontSize: 14.5, color: colors.coolInk, fontFamily: fonts.headingMedium },

@@ -126,7 +126,9 @@ function SourceButton({
 
 function makeStyles(colors: Colors) {
   return StyleSheet.create({
-    wrap: { gap: 10, marginTop: 8, paddingTop: 18, borderTopWidth: 1, borderTopColor: colors.border },
+    // A thin strong line: on the tan page the hairline token is the page's
+    // own brightness and vanishes.
+    wrap: { gap: 10, marginTop: 8, paddingTop: 18, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.borderStrong },
     label: { fontFamily: fonts.heading, fontSize: 16, color: colors.foreground },
     note: { fontSize: 13, lineHeight: 18, color: colors.mutedForeground },
     row: { flexDirection: 'row', gap: 10 },
