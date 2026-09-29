@@ -24,6 +24,8 @@ import {
   identities,
   pushSubscriptions,
   recipePhotos,
+  recipeBooks,
+  recipePlacements,
   recipes,
   sessions,
   subscriptions,
@@ -36,7 +38,7 @@ import { accountRouter } from "./account";
 
 const TABLES = [
   "users", "recipes", "sessions", "identities", "subscriptions", "account_access",
-  "access_events", "trials", "push_subscriptions", "admin_events",
+  "access_events", "trials", "push_subscriptions", "admin_events", "recipe_books", "recipe_placements",
 ];
 
 let server: Server | null = null;
@@ -75,6 +77,9 @@ async function makeAccount(opts: { sub?: { provider: string; status: string; ref
   // A photo on the recipe: no foreign key ties it to the row (see the
   // schema), so the deletion has to remove it in code.
   await db.insert(recipePhotos).values({ ownerKey: `user:${id}`, id: `r-${id}`, bytes: Buffer.from([0xff, 0xd8, 0xff]), mediaType: "image/jpeg", width: 1, height: 1, source: "user" });
+  // Its books and the recipe's place in one: no foreign keys, deleted in code.
+  await db.insert(recipeBooks).values({ userId: id, books: [] as any });
+  await db.insert(recipePlacements).values({ ownerKey: `user:${id}`, id: `r-${id}`, bookId: "dinner" });
   await db.insert(accountAccess).values({ userId: id, recipeAllowance: 1, recipesUsed: 1 } as any);
   await db.insert(accessEvents).values({ userId: id, action: "save", decision: "allow", reason: "within_allowance", enforced: false });
   await db.insert(pushSubscriptions).values({ userId: id, endpoint: `ExponentPushToken[${id}]`, p256dh: "", auth: "" });
@@ -103,6 +108,8 @@ after(async () => {
   const db = getDb();
   for (const id of minted) {
     await db.delete(recipePhotos).where(eq(recipePhotos.ownerKey, `user:${id}`));
+    await db.delete(recipePlacements).where(eq(recipePlacements.ownerKey, `user:${id}`));
+    await db.delete(recipeBooks).where(eq(recipeBooks.userId, id));
     await db.delete(recipes).where(eq(recipes.userId, id));
     await db.delete(accessEvents).where(eq(accessEvents.userId, id));
     await db.delete(users).where(eq(users.id, id));
@@ -129,6 +136,8 @@ async function footprint(id: string) {
     users: await count(db.select().from(users).where(eq(users.id, id))),
     recipes: await count(db.select().from(recipes).where(eq(recipes.userId, id))),
     photos: await count(db.select().from(recipePhotos).where(eq(recipePhotos.ownerKey, `user:${id}`))),
+    books: await count(db.select().from(recipeBooks).where(eq(recipeBooks.userId, id))),
+    placements: await count(db.select().from(recipePlacements).where(eq(recipePlacements.ownerKey, `user:${id}`))),
     sessions: await count(db.select().from(sessions).where(eq(sessions.userId, id))),
     identities: await count(db.select().from(identities).where(eq(identities.userId, id))),
     access: await count(db.select().from(accountAccess).where(eq(accountAccess.userId, id))),
@@ -137,7 +146,7 @@ async function footprint(id: string) {
     subs: await count(db.select().from(subscriptions).where(eq(subscriptions.userId, id))),
   };
 }
-const GONE = { users: 0, recipes: 0, photos: 0, sessions: 0, identities: 0, access: 0, events: 0, push: 0, subs: 0 };
+const GONE = { users: 0, recipes: 0, photos: 0, books: 0, placements: 0, sessions: 0, identities: 0, access: 0, events: 0, push: 0, subs: 0 };
 
 test("account: signed out is 401 and nothing happens", async (t) => {
   if (!(await needsDatabase(t, ...TABLES))) return;

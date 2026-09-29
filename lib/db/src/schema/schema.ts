@@ -240,6 +240,51 @@ export const recipeOriginals = pgTable(
   (table) => [primaryKey({ columns: [table.ownerKey, table.id] })]
 );
 
+/**
+ * The account's recipe books (recipe-model books.ts): ONE row per account,
+ * the whole list as a versioned document. The list is small (at most 12
+ * live books plus the tombstones that say where deleted books' recipes
+ * went), it is edited as a whole, and one version token makes two devices'
+ * edits a 409 and a three-way merge on the phone — the same model the
+ * recipes use. The server never merges.
+ *
+ * Created on first read (routes/books.ts), idempotently: an INSERT … ON
+ * CONFLICT (user_id) DO NOTHING, so two devices loading at once get one
+ * row, and only the request that actually inserted it places the existing
+ * recipes by meal type.
+ *
+ * Its own table rather than a column on users: HAND-RUN DDL, and a column
+ * the database lacks fails every select() of its table (CLAUDE.md). A
+ * missing table fails only the books, which then fall back to today's seven.
+ */
+export const recipeBooks = pgTable("recipe_books", {
+  userId: text("user_id").primaryKey(),
+  books: jsonb("books").notNull(),
+  version: integer("version").notNull().default(1),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),
+});
+
+/**
+ * Which book a recipe is in, BY ID (a rename can orphan nothing). Keyed like
+ * recipe_photos by the recipe's (owner_key, id), and for the same reason
+ * with NO FOREIGN KEY to recipes: the places that delete recipes delete
+ * these too. No row means the recipe's meal type decides (a recipe saved by
+ * the website or an older app). A placement that names a deleted book is
+ * not rewritten: the book's tombstone sends it on (resolveBookId).
+ * Written through the library PATCH, which bumps the recipe's version, so
+ * two devices moving one recipe is an ordinary 409 and last change wins.
+ */
+export const recipePlacements = pgTable(
+  "recipe_placements",
+  {
+    ownerKey: text("owner_key").notNull(),
+    id: text("id").notNull(),
+    bookId: text("book_id").notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),
+  },
+  (table) => [primaryKey({ columns: [table.ownerKey, table.id] })]
+);
+
 export const extractionCache = pgTable(
   "extraction_cache",
   {

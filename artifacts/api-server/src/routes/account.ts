@@ -28,7 +28,7 @@
 import { Router, type Request, type Response } from "express";
 import { eq, sql } from "drizzle-orm";
 import { getDb } from "../db";
-import { accessEvents, recipeOriginals, recipePhotos, recipes, trials, users } from "@workspace/db";
+import { accessEvents, recipeBooks, recipeOriginals, recipePhotos, recipePlacements, recipes, trials, users } from "@workspace/db";
 import { userIdOf } from "../middleware/session";
 import { clearSessionCookie } from "./auth";
 import { cancelSubscriptionsFor } from "../lib/billing/cancel";
@@ -70,6 +70,21 @@ accountRouter.delete("/", async (req: Request, res: Response) => {
           );
         })
         .catch((e) => console.warn(`[account:delete] ${userId}: original wording not deleted:`, (e as Error).message));
+      // The books and every recipe's place in one: hand-run DDL too, so a
+      // savepoint each for the same reason.
+      await tx
+        .transaction(async (sp) => {
+          await sp.execute(
+            sql`delete from ${recipePlacements} p using ${recipes} r
+                 where p.owner_key = r.owner_key and p.id = r.id and r.user_id = ${userId}`
+          );
+        })
+        .catch((e) => console.warn(`[account:delete] ${userId}: book placements not deleted:`, (e as Error).message));
+      await tx
+        .transaction(async (sp) => {
+          await sp.delete(recipeBooks).where(eq(recipeBooks.userId, userId));
+        })
+        .catch((e) => console.warn(`[account:delete] ${userId}: books not deleted:`, (e as Error).message));
       await tx.delete(recipes).where(eq(recipes.userId, userId));
       await tx.delete(accessEvents).where(eq(accessEvents.userId, userId));
       await tx.update(trials).set({ claimedByUserId: null }).where(eq(trials.claimedByUserId, userId));

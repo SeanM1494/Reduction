@@ -370,6 +370,47 @@ CREATE INDEX IF NOT EXISTS recipes_source_url_trgm_idx
   ON recipes USING gin ((recipe->>'sourceUrl') gin_trgm_ops);
 ```
 
+### Recipe books
+
+An account's books are one versioned document in `recipe_books` (one row
+per account: the list, with tombstones for deleted books that say where
+their recipes went), and each recipe's book is a row in
+`recipe_placements`, by book id. The rules — defaults, colours, names,
+resolution, the merge — are recipe-model `books.ts`; storage is
+`artifacts/api-server/src/lib/books.ts`; the routes are `GET /api/books`
+(creates the seven defaults on first read, idempotently, and places the
+account's existing recipes by meal type) and `PUT /api/books { books,
+ifVersion }` (409 with the current list when stale, 422 when invalid). A
+recipe's book rides the library's own save (`book` on `POST
+/api/library`) and versioned `PATCH` (`book`, or `null` to let its meal
+type decide again), and the list carries it as `book` on every entry.
+
+Both tables are hand-run DDL, and both are optional to the app: without
+them the list serves `book: null`, saves and edits go through with the
+book dropped, `/api/books` answers 503 `books_unavailable`, and the phone
+shows today's seven. Verified Sep 29 by renaming both tables under a
+running server. **Production DDL**, before the deploy that uses them:
+
+```sql
+create table if not exists recipe_books (
+  user_id    text primary key,
+  books      jsonb   not null,
+  version    integer not null default 1,
+  updated_at timestamptz default now()
+);
+create table if not exists recipe_placements (
+  owner_key  text not null,
+  id         text not null,
+  book_id    text not null,
+  updated_at timestamptz default now(),
+  primary key (owner_key, id)
+);
+```
+
+No foreign keys, for the reason in the recipe_photos schema comment: the
+library DELETE route and account deletion remove placements and books in
+code (`books.db.test.ts`, `account.db.test.ts`).
+
 ### Recipe photos
 
 A recipe's picture lives in `recipe_photos`, keyed on the recipe's

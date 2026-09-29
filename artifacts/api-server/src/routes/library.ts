@@ -46,6 +46,8 @@ import {
 import { fetchSource } from "../lib/fetchSource";
 import { cacheGetUrlRow } from "./recipes";
 
+import { deletePlacement, isValidBookId, placementKey, placementsFor, setPlacement } from "../lib/books";
+
 export const libraryRouter = Router();
 
 /**
@@ -166,7 +168,7 @@ function scopeOf(req: Request): SQL {
 
 /** The wire shape of one entry. `version` is the concurrency token the
  *  client hands back as `ifVersion`; see shared/sync.ts for the model. */
-function wireEntry(row: typeof recipes.$inferSelect, photo: PhotoMeta | null = null) {
+function wireEntry(row: typeof recipes.$inferSelect, photo: PhotoMeta | null = null, book: string | null = null) {
   return {
     id: row.id,
     recipe: row.recipe,
@@ -185,6 +187,10 @@ function wireEntry(row: typeof recipes.$inferSelect, photo: PhotoMeta | null = n
      *  Removed list (and a write to a removed row) ever carries a non-null
      *  one: the library list excludes removed rows. */
     removedAt: row.removedAt ? new Date(row.removedAt).getTime() : null,
+    /** The book it is in, by id (recipe_placements), or null when it has
+     *  none and its meal type decides. The phone resolves it through the
+     *  account's books (recipe-model resolveBookId); the website ignores it. */
+    book,
     version: row.version ?? 1,
     savedAt: row.createdAt ? new Date(row.createdAt).getTime() : Date.now(),
   };
@@ -209,17 +215,22 @@ async function wireEntries(rows: Array<typeof recipes.$inferSelect>) {
   } catch (e) {
     console.error("[library:photo] meta lookup failed; serving without pictures:", (e as Error).message);
   }
-  return rows.map((r) => wireEntry(r, metas.get(`${r.ownerKey}\u0000${r.id}`) ?? null));
+  // The same rule for books: without recipe_placements every recipe is
+  // served with no placement, and its meal type decides its book.
+  let books = new Map<string, string>();
+  try {
+    books = await placementsFor(rows.map((r) => ({ ownerKey: r.ownerKey, id: r.id })));
+  } catch (e) {
+    console.error("[library:books] placement lookup failed; serving without books:", (e as Error).message);
+  }
+  return rows.map((r) =>
+    wireEntry(r, metas.get(`${r.ownerKey}\u0000${r.id}`) ?? null, books.get(placementKey(r.ownerKey, r.id)) ?? null)
+  );
 }
 
 /** wireEntry for one row, photo included. Same rule as wireEntries. */
 async function wireOne(row: typeof recipes.$inferSelect) {
-  try {
-    return wireEntry(row, await photoMeta(row.ownerKey, row.id));
-  } catch (e) {
-    console.error("[library:photo] meta lookup failed; serving without a picture:", (e as Error).message);
-    return wireEntry(row, null);
-  }
+  return (await wireEntries([row]))[0];
 }
 
 const isValidCooked = (v: unknown): v is number[] =>
@@ -321,9 +332,11 @@ libraryRouter.get("/removed", async (req: Request, res: Response) => {
 });
 
 libraryRouter.post("/", async (req: Request, res: Response) => {
-  const { id, recipe, done, servings, mode, timer, sourceKey } = req.body ?? {};
+  const { id, recipe, done, servings, mode, timer, sourceKey, book } = req.body ?? {};
   if (typeof id !== "string" || !id)
     return res.status(400).json({ error: "id must be a non-empty string." });
+  if (book !== undefined && book !== null && !isValidBookId(book))
+    return res.status(400).json({ error: "book must be a book id or null." });
 
   /**
    * The second gate, and the one that actually spends the allowance.
@@ -446,6 +459,14 @@ libraryRouter.post("/", async (req: Request, res: Response) => {
       await copyExtractionOriginal(sourceKey, row.ownerKey, row.id).catch((e) => warnOriginal("save", e));
     }
 
+    // The book the person chose in the preview. After the row, in its own
+    // savepoint: a database without recipe_placements still saves the
+    // recipe (its meal type decides its book), and a save is never blocked
+    // by a book (lib/books.ts setPlacement).
+    if (row && typeof book === "string") {
+      await db.transaction((tx) => setPlacement(tx, row.ownerKey, row.id, book)).catch(() => false);
+    }
+
     return res.status(201).json({ entry: await wireOne(row) });
   } catch (e) {
     console.error("[library:create]", e);
@@ -455,8 +476,10 @@ libraryRouter.post("/", async (req: Request, res: Response) => {
 
 libraryRouter.patch("/:id", async (req: Request, res: Response) => {
   const id = String(req.params.id);
-  const { recipe, done, servings, mode, timer, cooked, rating, order, removedAt, ifVersion } =
+  const { recipe, done, servings, mode, timer, cooked, rating, order, removedAt, book, ifVersion } =
     req.body ?? {};
+  if (book !== undefined && book !== null && !isValidBookId(book))
+    return res.status(400).json({ error: "book must be a book id or null." });
   if (ifVersion !== undefined && typeof ifVersion !== "number")
     return res.status(400).json({ error: "ifVersion must be a number." });
   if (cooked !== undefined && !isValidCooked(cooked))
@@ -581,6 +604,11 @@ libraryRouter.patch("/:id", async (req: Request, res: Response) => {
         .set(patch)
         .where(and(eq(recipes.id, id), scopeOf(req)))
         .returning();
+      // A move to another book: in the same transaction as the version bump
+      // (so two devices moving it are an ordinary 409, last change wins), in
+      // a savepoint of its own (so a database without the table still takes
+      // the rest of the write).
+      if (updated && book !== undefined) await setPlacement(tx, updated.ownerKey, updated.id, book);
       return updated ? { kind: "ok" as const, row: updated } : { kind: "missing" as const };
     });
 
@@ -626,6 +654,10 @@ libraryRouter.delete("/:id", async (req: Request, res: Response) => {
     }
     // And its original wording, for the same reason (no foreign key).
     await deleteRecipeOriginal(row.ownerKey, row.id).catch((e) => warnOriginal("delete", e));
+    // And its place in a book.
+    await deletePlacement(row.ownerKey, row.id).catch((e) =>
+      console.warn("[library:books] placement not deleted:", (e as Error).message)
+    );
 
     // A deleted recipe must take its pending buzz with it, or someone gets
     // told to check on a dish whose recipe no longer exists.

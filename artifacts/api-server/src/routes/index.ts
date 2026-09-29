@@ -11,6 +11,7 @@ import { billingRouter } from "./billing";
 import { appleBillingRouter } from "./billingApple";
 import { adminRouter } from "./admin";
 import { accountRouter } from "./account";
+import { booksRouter } from "./books";
 
 import { EXTRACTION_MAX_TOKENS, extractionEffort, extractionFallbackEffort, stepSourcesEnabled } from "../lib/extractionConfig";
 
@@ -43,6 +44,7 @@ router.use("/auth", authRouter);
 router.use("/account", accountRouter);
 router.use("/recipes", recipesRouter);
 router.use("/library", libraryRouter);
+router.use("/books", booksRouter);
 router.use("/trial", trialRouter);
 router.use("/push", pushRouter);
 // The dispatch trigger. See lib/timerDispatch.ts: the work is a plain
