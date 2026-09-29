@@ -65,6 +65,7 @@ import {
   type BookId,
 } from '@/lib/recipeBox';
 import { sortLabel, type SortKey } from '@/lib/libraryView';
+import { useBooks } from '@/lib/books-context';
 import { useColors, type Colors } from '@/hooks/useColors';
 import { fonts } from '@/constants/colors';
 import type { Entry } from '@/lib/api';
@@ -87,7 +88,8 @@ export function RecipeBox({ entries, sort, onOpenSort, onOpenRecipe, onAddRecipe
   const colors = useColors();
   const styles = makeStyles(colors);
   const reduceMotion = useReducedMotion();
-  const books = useMemo(() => shelf(entries, sort), [entries, sort]);
+  const { books: allBooks } = useBooks();
+  const books = useMemo(() => shelf(entries, sort, allBooks), [entries, sort, allBooks]);
   const m = books.length;
   const [stage, setStage] = useState<{ w: number; h: number } | null>(null);
   const [at, setAt] = useState(0);
@@ -95,7 +97,7 @@ export function RecipeBox({ entries, sort, onOpenSort, onOpenRecipe, onAddRecipe
   const [query, setQuery] = useState('');
   const [highlight, setHighlight] = useState<{ book: BookId; page: number; token: number } | null>(null);
   const searching = query.trim().length > 0;
-  const hits = useMemo(() => searchBox(entries, query, sort), [entries, query, sort]);
+  const hits = useMemo(() => searchBox(entries, query, sort, allBooks), [entries, query, sort, allBooks]);
 
   const pos = useSharedValue(0);
   const start = useSharedValue(0);

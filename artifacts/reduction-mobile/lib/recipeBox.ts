@@ -5,63 +5,61 @@
  * alias — so the runner tests every rule here, and the components only draw
  * what these functions decide.
  *
- * A book is a DISPLAY GROUPING over the meal types, never a second tagging
- * system: a recipe is in the book of its PRIMARY meal type (the first
- * element of `recipe.mealTypes`), so it is in exactly one book, and the page
- * counts and turns depend on that. Nothing is stored about books.
+ * A recipe is in exactly ONE book — the page counts and turns depend on it
+ * — and since Sep 29 the books are the person's own (recipe-model books.ts):
+ * named, coloured, ordered, and stored. A recipe's placement decides; one
+ * without a placement falls back to its primary meal type's default book.
+ * Meal types stay the extraction's guess and a search tag.
  */
 
 import {
   componentIngredientIds,
   formatMinutes,
-  primaryMealType,
   recipeTotalMinutes,
-  type MealType,
+  DEFAULT_BOOKS,
+  OTHER_BOOK_ID,
+  isDefaultBook,
+  liveBooks,
+  resolveBookId,
+  type BookDef,
   type Recipe,
 } from '@workspace/recipe-model';
 import { arrangeLibrary, inRecipeBox, ratingOf, searchLibrary, type LibraryItem, type SortKey } from './libraryView';
 
-export type BookId = 'breakfast' | 'lunch' | 'dinner' | 'apps' | 'salads' | 'desserts' | 'other';
+/** A book's id: a default's name (`dinner`, `other`…) or a UUID for one the
+ *  person made (recipe-model books.ts). */
+export type BookId = string;
 
 export interface Book {
   id: BookId;
   name: string;
-  /** The cover, tab and accent. Every one carries 11px white tab text at
-   *  4.5:1 or better in both themes (the covers do not follow the theme —
-   *  a book is an object, like its cream pages). The prototype's hues,
-   *  darkened in lightness only where they fell short (ROADMAP). */
+  /** The cover, tab and accent: one of recipe-model's BOOK_COLORS, every one
+   *  carrying 11px white tab text at 4.5:1 or better (the covers do not
+   *  follow the theme — a book is an object, like its cream pages). */
   color: string;
 }
 
-/** The shelf, in order. The carousel loops through the ones with recipes. */
-export const BOOKS: readonly Book[] = [
-  { id: 'breakfast', name: 'Breakfast', color: '#986d29' },
-  { id: 'lunch', name: 'Lunch', color: '#657c51' },
-  { id: 'dinner', name: 'Dinner', color: '#a94f3a' },
-  { id: 'apps', name: 'Apps & Snacks', color: '#477d7b' },
-  { id: 'salads', name: 'Salads', color: '#5a7f43' },
-  { id: 'desserts', name: 'Desserts', color: '#8e4f6f' },
-  { id: 'other', name: 'Other', color: '#6a6575' },
-];
+const asBook = (b: BookDef): Book => ({ id: b.id, name: b.name, color: b.color });
 
-const BOOK_OF_TYPE: Record<MealType, BookId> = {
-  breakfast: 'breakfast',
-  lunch: 'lunch',
-  dinner: 'dinner',
-  snack: 'apps',
-  salad: 'salads',
-  dessert: 'desserts',
-  side: 'other',
-  drink: 'other',
-  baking: 'other',
-};
+/** Today's seven, as a shelf with no account behind it draws them. */
+export const BOOKS: readonly Book[] = DEFAULT_BOOKS.map(asBook);
 
-export const bookById = (id: BookId): Book => BOOKS.find((b) => b.id === id)!;
+/**
+ * The book a recipe is in: its placement (`entry.book`, chosen at save or
+ * by a move), else its primary meal type's default book — then through any
+ * deleted book to where that book's recipes went, and to Other when that
+ * leads nowhere (recipe-model resolveBookId). `books` is the account's list;
+ * without one, today's seven.
+ */
+export function bookOf(entry: LibraryItem & { book?: string | null }, books: readonly BookDef[] = DEFAULT_BOOKS): BookId {
+  return resolveBookId(books, entry.book ?? null, entry.recipe.mealTypes);
+}
 
-/** The book a recipe lives in: its primary meal type's, or Other. */
-export function bookOf(entry: LibraryItem): BookId {
-  const t = primaryMealType(entry.recipe.mealTypes);
-  return t ? BOOK_OF_TYPE[t] : 'other';
+/** A live book by id; Other for anything else (a deleted book resolves
+ *  before it gets here, so that is only ever a stale id). */
+export function bookById(id: BookId, books: readonly BookDef[] = DEFAULT_BOOKS): Book {
+  const live = liveBooks(books);
+  return asBook(live.find((b) => b.id === id) ?? live.find((b) => b.id === OTHER_BOOK_ID) ?? DEFAULT_BOOKS[DEFAULT_BOOKS.length - 1]);
 }
 
 /**
@@ -70,20 +68,38 @@ export function bookOf(entry: LibraryItem): BookId {
  * anything else puts it straight back in its sorted place, because nothing
  * here is stored: the order is derived every time.
  */
-export function arrangeBook<T extends LibraryItem>(entries: T[], book: BookId, sort: SortKey): T[] {
+export function arrangeBook<T extends LibraryItem & { book?: string | null }>(
+  entries: T[],
+  book: BookId,
+  sort: SortKey,
+  books: readonly BookDef[] = DEFAULT_BOOKS
+): T[] {
   const sorted = arrangeLibrary(
-    entries.filter((e) => bookOf(e) === book),
+    entries.filter((e) => bookOf(e, books) === book),
     'all',
     sort
   );
   return [...sorted.filter((e) => ratingOf(e) !== -1), ...sorted.filter((e) => ratingOf(e) === -1)];
 }
 
-/** The books that have recipes, in shelf order, each with its pages. Empty
- *  books are left off the shelf entirely. */
-export function shelf<T extends LibraryItem>(entries: T[], sort: SortKey): Array<{ book: Book; pages: T[] }> {
-  return BOOKS.map((book) => ({ book, pages: arrangeBook(entries, book.id, sort) })).filter((b) => b.pages.length > 0);
+/** The shelf: the account's live books in their order, each with its pages.
+ *  A DEFAULT book is left off while it is empty (as the seven always were),
+ *  so nothing changes until someone customises; a book the person made
+ *  stays, empty, on its "Room for one more" page. */
+export function shelf<T extends LibraryItem & { book?: string | null }>(
+  entries: T[],
+  sort: SortKey,
+  books: readonly BookDef[] = DEFAULT_BOOKS
+): Array<{ book: Book; pages: T[] }> {
+  return liveBooks(books)
+    .map((b) => ({ book: asBook(b), pages: arrangeBook(entries, b.id, sort, books) }))
+    .filter((b) => b.pages.length > 0 || !isDefaultBook(b.book.id));
 }
+
+/** Is page `i` of a book of `n` pages the blank "Room for one more"? The
+ *  right-hand page after an odd book's last recipe, and the first page of
+ *  an empty book. */
+export const isRoomPage = (i: number, n: number): boolean => i === n && (n % 2 === 1 || n === 0);
 
 // ---------------------------------------------------------------- spreads --
 
@@ -221,17 +237,18 @@ export interface BoxHit<T> {
  * Hits come in shelf order and page order, each with the page a tap should
  * open to. Removed recipes never match, whatever the caller passed.
  */
-export function searchBox<T extends LibraryItem & { removedAt?: number | null }>(
+export function searchBox<T extends LibraryItem & { removedAt?: number | null; book?: string | null }>(
   entries: T[],
   query: string,
-  sort: SortKey
+  sort: SortKey,
+  books: readonly BookDef[] = DEFAULT_BOOKS
 ): Array<BoxHit<T>> {
   const needle = query.trim().toLowerCase();
   if (!needle) return [];
   const live = entries.filter(inRecipeBox);
   const byText = new Set(searchLibrary(live, query));
   const out: Array<BoxHit<T>> = [];
-  for (const { book, pages } of shelf(live, sort)) {
+  for (const { book, pages } of shelf(live, sort, books)) {
     const bookMatches = book.name.toLowerCase().includes(needle);
     pages.forEach((entry, page) => {
       if (bookMatches || byText.has(entry)) out.push({ entry, book, page });

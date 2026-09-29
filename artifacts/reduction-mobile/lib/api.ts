@@ -16,6 +16,7 @@
 import type { Recipe } from '@/shared/layout';
 import type { OrderPreference } from '@/shared/sequence';
 import type { OriginalRecipe } from '@/shared/original';
+import type { BookDef } from '@/shared/books';
 
 let authToken: string | null = null;
 
@@ -35,12 +36,16 @@ export class ApiError extends Error {
   code?: string;
   details?: string[];
   entry?: unknown;
-  constructor(message: string, status: number, extra?: { code?: string; details?: string[]; entry?: unknown }) {
+  /** The whole JSON body of the refusal — a books 409 carries the current
+   *  `{ books, version }` here. */
+  body?: unknown;
+  constructor(message: string, status: number, extra?: { code?: string; details?: string[]; entry?: unknown; body?: unknown }) {
     super(message);
     this.status = status;
     this.code = extra?.code;
     this.details = extra?.details;
     this.entry = extra?.entry;
+    this.body = extra?.body;
   }
 }
 
@@ -158,6 +163,7 @@ async function request(path: string, init?: RequestInit, timeoutMs: number = REQ
       code: typeof body.code === 'string' ? body.code : undefined,
       details: Array.isArray(body.details) ? body.details : undefined,
       entry: body.entry,
+      body,
     });
   }
   return body;
@@ -378,6 +384,10 @@ export interface Entry {
    *  and a write to a removed row do. `inRecipeBox` (lib/libraryView.ts) is
    *  the one test of it. */
   removedAt?: number | null;
+  /** The book it is in, by id, or null when it has none and its meal type
+   *  decides (recipe-model books.ts resolveBookId). A versioned field like
+   *  any other: moved through the sync engine, last change wins. */
+  book?: string | null;
 }
 
 /** The photo's URL for an <Image>: private, so it needs the bearer token
@@ -423,8 +433,27 @@ export const createEntry = (entry: {
   timer?: StepTimer | null;
   /** From the extract response: keeps the original wording with the recipe. */
   sourceKey?: string;
+  /** The book chosen in the preview. A server without books ignores it. */
+  book?: string | null;
 }): Promise<{ entry: Entry }> =>
   request('/api/library', { method: 'POST', body: JSON.stringify(entry) });
+
+// -------------------------------------------------------------- books -----
+
+/** The account's books, as one versioned document (api-server routes/books.ts). */
+export interface BooksDoc {
+  books: BookDef[];
+  version: number;
+}
+
+/** 503 `books_unavailable` when the server has no books yet (its DDL not
+ *  run): the phone then shows today's seven, and nothing else changes. */
+export const loadBooks = (): Promise<BooksDoc> => request('/api/books');
+
+/** Replace the list if `ifVersion` still matches. A 409 is an ApiError whose
+ *  `body` carries the current `{ books, version }` for the merge. */
+export const putBooks = (books: BookDef[], ifVersion: number): Promise<BooksDoc> =>
+  request('/api/books', { method: 'PUT', body: JSON.stringify({ books, ifVersion }) });
 
 export interface OriginalResponse {
   original: OriginalRecipe | null;

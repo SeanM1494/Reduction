@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { MEAL_TYPES } from '@workspace/recipe-model';
+import { MEAL_TYPES, addBook, deleteBook, freshDefaultBooks, renameBook } from '@workspace/recipe-model';
 import {
   BOOKS,
   CAROUSEL,
@@ -45,6 +45,8 @@ import {
   removedCountLabel,
   restoredToast,
   removedWaitingNote,
+  bookById,
+  isRoomPage,
 } from './recipeBox';
 
 const recipe = (over: Record<string, unknown> = {}) => ({ title: 'X', servings: 4, sections: [], ...over }) as any;
@@ -376,4 +378,33 @@ test('removed recipes: the date, the count, the restore toast and the empty-libr
   assert.equal(removedWaitingNote(0), null);
   assert.equal(removedWaitingNote(1), '1 removed recipe is waiting in Settings → Removed recipes.');
   assert.equal(removedWaitingNote(2), '2 removed recipes are waiting in Settings → Removed recipes.');
+});
+
+
+// ------------------------------------------------ the person's own books --
+
+test("custom books: a placement beats the meal type; a made book shows empty, a default does not", () => {
+  const books = addBook(addBook(freshDefaultBooks(), { id: 'soups', name: 'Soups', now: 1 }), { id: 'bread', name: 'Bread', now: 2 });
+  const chili = { ...entry('chili', {}, { mealTypes: ['dinner'] }), book: 'soups' };
+  const toast = entry('toast', {}, { mealTypes: ['breakfast'] });
+  assert.equal(bookOf(chili, books), 'soups', 'placed');
+  assert.equal(bookOf(toast, books), 'breakfast', 'no placement: its meal type');
+  const s = shelf([chili, toast], 'added', books);
+  assert.deepEqual(s.map((b) => [b.book.name, b.pages.length]), [['Breakfast', 1], ['Soups', 1], ['Bread', 0]], 'Bread is empty and still there; empty defaults are not');
+  assert.equal(isRoomPage(0, 0), true, "an empty book opens on 'Room for one more'");
+  assert.equal(isRoomPage(1, 0), false);
+  assert.equal(isRoomPage(3, 3), true);
+  assert.equal(isRoomPage(4, 4), false);
+});
+
+test("custom books: renamed and merged books carry their recipes; search finds a book by its new name", () => {
+  let books = addBook(freshDefaultBooks(), { id: 'mains', name: 'Mains', now: 1 });
+  books = deleteBook(books, 'dinner', { into: 'mains', now: 2 });
+  books = renameBook(books, 'mains', 'Weeknight');
+  const chili = entry('chili', {}, { mealTypes: ['dinner'] });
+  assert.equal(bookOf(chili, books), 'mains', 'the old Dinner sends it on');
+  assert.equal(bookById('mains', books).name, 'Weeknight');
+  assert.equal(bookById('dinner', books).name, 'Other', 'a stale id reads as Other, never as a book that is gone');
+  const hits = searchBox([chili], 'weeknight', 'added', books);
+  assert.deepEqual(hits.map((h) => `${h.entry.id}@${h.book.name}`), ['chili@Weeknight']);
 });

@@ -33,6 +33,7 @@ import { RecipeBox } from '@/components/recipeBox/RecipeBox';
 import { PreviewSheet } from '@/components/recipeBox/PreviewSheet';
 import { useBoxStyle } from '@/lib/boxStyle';
 import { removedWaitingNote, searchBox } from '@/lib/recipeBox';
+import { useBooks } from '@/lib/books-context';
 import { loadRemoved } from '@/lib/api';
 import { BoxNoMatches, BoxSearchField } from '@/components/recipeBox/BoxSearch';
 import { SortSheet } from '@/components/library/SortSheet';
@@ -44,6 +45,7 @@ export default function LibraryScreen() {
   const colors = useColors();
   const styles = makeStyles(colors);
   const { entries, loading, error, refresh, notice, clearNotice } = useLibrary();
+  const { books } = useBooks();
   const [filter, setFilter] = useState<Filter>('all');
   const [sort, setSort] = useState<SortKey>('added');
   const [sortOpen, setSortOpen] = useState(false);
@@ -109,9 +111,9 @@ export default function LibraryScreen() {
   // Searching spans every category: the strip hides while it runs.
   const shown = useMemo(() => {
     if (!searching) return arrangeLibrary(entries, effectiveFilter, sort);
-    const hit = new Set(searchBox(entries, query, sort).map((h) => h.entry.id));
+    const hit = new Set(searchBox(entries, query, sort, books).map((h) => h.entry.id));
     return arrangeLibrary(entries.filter((e) => hit.has(e.id)), 'all', sort);
-  }, [entries, effectiveFilter, sort, searching, query]);
+  }, [entries, effectiveFilter, sort, searching, query, books]);
   // An odd last card would otherwise fill its whole row: the card is
   // `flex: 1` and a row of one has no sibling to halve it. A hole keeps
   // the grid a grid.

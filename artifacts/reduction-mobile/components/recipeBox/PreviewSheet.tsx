@@ -23,12 +23,11 @@ import { sanitizeMealTypes } from '@/shared/mealTypes';
 import {
   PREVIEW_INGREDIENTS,
   RATING_EMOJI,
-  bookById,
-  bookOf,
   keyIngredients,
   previewCookedLine,
   previewStats,
 } from '@/lib/recipeBox';
+import { useBooks } from '@/lib/books-context';
 import { useColors, type Colors } from '@/hooks/useColors';
 import { fonts } from '@/constants/colors';
 import type { Entry } from '@/lib/api';
@@ -76,7 +75,7 @@ function PreviewBody({ entry, onClose, onOpen }: { entry: Entry; onClose: () => 
   const colors = useColors();
   const styles = makeStyles(colors);
   const recipe = entry.recipe;
-  const book = bookById(bookOf(entry));
+  const book = useBooks().bookFor(entry);
   const photo = useRecipePhoto(entry);
   const primary = sanitizeMealTypes(recipe.mealTypes)[0] ?? null;
   const stats = previewStats(recipe);

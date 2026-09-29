@@ -33,6 +33,7 @@ import { useLibrary } from '@/lib/library-context';
 import { extractFromUrl, isCancelled, suggestRecipes, type ApiError, type SearchResult } from '@/lib/api';
 import { createLatest } from '@/lib/latestRequest';
 import { searchBox } from '@/lib/recipeBox';
+import { useBooks } from '@/lib/books-context';
 import { pageIdentity, searchUrl } from '@/lib/browseAddress';
 import { BoxSearchField, ResultRow } from '@/components/recipeBox/BoxSearch';
 import { useReductionStage } from '@/components/ExtractionProgress';
@@ -70,7 +71,8 @@ export function MyRecipesPane({
   }, [prefill?.token]);
 
   // Shelf order, as the box shows them; the sort is the box's default.
-  const hits = useMemo(() => searchBox(entries, query, 'added'), [entries, query]);
+  const { books } = useBooks();
+  const hits = useMemo(() => searchBox(entries, query, 'added', books), [entries, query, books]);
 
   // Suggestions: only when nothing of theirs matched. Only the newest
   // request counts (lib/latestRequest.ts), and a keystroke cancels the one

@@ -57,6 +57,8 @@ export type EntryPatch = Partial<{
   /** Out of the recipe box (a stamp) or back in (null). The server keeps
    *  its own stamp; what syncs is whether it is removed. */
   removedAt: number | null;
+  /** Its book, by id (a move, from ⋮ → Move to another book). */
+  book: string | null;
 }>;
 
 export interface LibraryNotice {
@@ -78,7 +80,7 @@ interface LibraryState {
   getEntry: (id: string) => Entry | undefined;
   /** `sourceKey` (from the extract response) keeps the recipe's original
    *  wording with it, server-side. */
-  saveRecipe: (recipe: Recipe, sourceKey?: string) => Promise<Entry>;
+  saveRecipe: (recipe: Recipe, sourceKey?: string, book?: string | null) => Promise<Entry>;
   update: (id: string, patch: EntryPatch) => void;
   /** The photo's meta, as the server reported it after an upload, a
    *  removal or a from-source fetch. Local only: the photo is server-owned
@@ -119,7 +121,7 @@ const LibraryContext = createContext<LibraryState | null>(null);
 const transport: EngineApi<Entry> = {
   list: async () => (await loadLibrary()).entries,
   create: async (e) =>
-    (await apiCreateEntry({ id: e.id, recipe: e.recipe, done: e.done, servings: e.servings, mode: e.mode, timer: e.timer })).entry,
+    (await apiCreateEntry({ id: e.id, recipe: e.recipe, done: e.done, servings: e.servings, mode: e.mode, timer: e.timer, book: e.book ?? undefined })).entry,
   patch: async (id, body) => (await apiPatchEntry(id, body)).entry,
   remove: async (id) => {
     await apiDeleteEntry(id);
@@ -246,10 +248,11 @@ export function LibraryProvider({ children }: { children: React.ReactNode }) {
   const getEntry = useCallback((id: string) => entries.find((e) => e.id === id), [entries]);
 
   const saveRecipe = useCallback(
-    async (recipe: Recipe, sourceKey?: string): Promise<Entry> => {
+    async (recipe: Recipe, sourceKey?: string, book?: string | null): Promise<Entry> => {
       // Awaited rather than queued: the draft screen navigates to the saved
-      // id, which has to exist first.
-      const { entry } = await apiCreateEntry({ id: newEntryId(), recipe, mode: 'diagram', sourceKey });
+      // id, which has to exist first. `book` is the one chosen in the
+      // preview; a server without books ignores it, and nothing waits on it.
+      const { entry } = await apiCreateEntry({ id: newEntryId(), recipe, mode: 'diagram', sourceKey, book: book ?? undefined });
       engine.hydrate([entry]);
       setEntries((prev) => [entry, ...prev.filter((e) => e.id !== entry.id)]);
       return entry;

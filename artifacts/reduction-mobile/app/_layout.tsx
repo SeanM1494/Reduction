@@ -8,6 +8,7 @@ import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { AuthProvider, useAuth } from '@/lib/auth-context';
 import { ThemeProvider } from '@/lib/theme-context';
 import { LibraryProvider } from '@/lib/library-context';
+import { BooksProvider } from '@/lib/books-context';
 import { ToastProvider } from '@/components/Toast';
 import { SignInScreen } from '@/components/SignInScreen';
 import { DemoScreen } from '@/components/DemoScreen';
@@ -107,11 +108,14 @@ function Gate() {
   }
   return (
     <LibraryProvider>
-      {/* Around the navigator, so a snackbar outlives the screen that raised
-          it — a removed recipe's Undo waits in the library it lands in. */}
-      <ToastProvider>
-        <RootLayoutNav />
-      </ToastProvider>
+      {/* Signed in only: the demo and sign-in never load books. */}
+      <BooksProvider>
+        {/* Around the navigator, so a snackbar outlives the screen that raised
+            it — a removed recipe's Undo waits in the library it lands in. */}
+        <ToastProvider>
+          <RootLayoutNav />
+        </ToastProvider>
+      </BooksProvider>
     </LibraryProvider>
   );
 }

@@ -56,6 +56,7 @@ import {
   pageA11yLabel,
   turnTarget,
   spreadCount,
+  isRoomPage,
   type Book as BookInfo,
 } from '@/lib/recipeBox';
 import { useColors } from '@/hooks/useColors';
@@ -119,7 +120,7 @@ export function Book({ book, pages, spread, onSpreadChange, onOpenPage, onBlankP
   openAtRef.current = (x: number) => {
     const i = 2 * spread + (x < pageW ? 0 : 1);
     if (i < n) onOpenPage(pages[i]);
-    else if (i === n && n % 2 === 1) onBlankPage();
+    else if (isRoomPage(i, n)) onBlankPage();
   };
 
   const committed = useCallback(
@@ -248,7 +249,7 @@ export function Book({ book, pages, spread, onSpreadChange, onOpenPage, onBlankP
   const content = useCallback(
     (i: number): PageContent => {
       if (i >= 0 && i < n) return { kind: 'recipe', entry: pages[i], number: i + 1 };
-      if (i === n && n % 2 === 1) return { kind: 'blank' };
+      if (isRoomPage(i, n)) return { kind: 'blank' };
       return { kind: 'empty' };
     },
     [n, pages]
@@ -277,7 +278,7 @@ export function Book({ book, pages, spread, onSpreadChange, onOpenPage, onBlankP
     switch (event.nativeEvent.actionName) {
       case 'activate':
         if (i < n) onOpenPage(pages[i]);
-        else if (i === n && n % 2 === 1) onBlankPage();
+        else if (isRoomPage(i, n)) onBlankPage();
         break;
       case 'nextPage':
         if (spread < last) onSpreadChange(spread + 1);
@@ -296,7 +297,7 @@ export function Book({ book, pages, spread, onSpreadChange, onOpenPage, onBlankP
   const a11yLabel = (i: number): string =>
     i < n
       ? `${pageA11yLabel(pages[i].recipe.title, book.name, pages[i].recipe, pages[i].rating)}, page ${i + 1} of ${n}`
-      : i === n && n % 2 === 1
+      : isRoomPage(i, n)
         ? `Room for one more ${book.name} recipe. Opens Find.`
         : '';
 

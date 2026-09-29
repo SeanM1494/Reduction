@@ -33,7 +33,8 @@ import { fonts } from '@/constants/colors';
 import { PhotoSheet } from '@/components/recipe/PhotoSheet';
 import { FinishPrompt, type FinishStage } from '@/components/recipeBox/FinishPrompt';
 import { useToast } from '@/components/Toast';
-import { asksToRemove, bookById, bookOf, keptToast, removedToast } from '@/lib/recipeBox';
+import { asksToRemove, keptToast, removedToast } from '@/lib/recipeBox';
+import { useBooks } from '@/lib/books-context';
 import { loadOriginal, type Entry } from '@/lib/api';
 import { originalStepTexts } from '@/shared/original';
 import { hasStepSources } from '@/shared/stepSource';
@@ -49,6 +50,7 @@ export default function RecipeDetailScreen() {
   const styles = makeStyles(colors);
   const { draft, setDraft, getEntry, update, remove, restore, saveRecipe, notice, clearNotice, queued } = useLibrary();
   const toast = useToast();
+  const { bookFor } = useBooks();
   // The Recipe Box's finish prompt: 'rate' when a cook is stamped, 'remove'
   // after a 👎. Remove closes it instantly, because it navigates.
   const [finish, setFinish] = useState<FinishStage | null>(null);
@@ -318,7 +320,7 @@ export default function RecipeDetailScreen() {
       <FinishPrompt
         stage={finish}
         title={entry.recipe.title}
-        bookName={bookById(bookOf(entry)).name}
+        bookName={bookFor(entry).name}
         rating={entry.rating}
         instant={finishInstant}
         onRate={(r) => {
@@ -331,7 +333,7 @@ export default function RecipeDetailScreen() {
         onSkip={() => setFinish(null)}
         onKeep={() => {
           setFinish(null);
-          toast({ message: keptToast(bookById(bookOf(entry)).name) });
+          toast({ message: keptToast(bookFor(entry).name) });
         }}
         onRemove={() => {
           // The entry as it goes out, for Undo: the list may not hold it by
