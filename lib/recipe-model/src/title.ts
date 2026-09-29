@@ -24,8 +24,11 @@ export const TITLE_MAX = 100;
 /** "From": who or where a pasted or photographed recipe came from. */
 export const FROM_MAX = 80;
 
-const tidy = (raw: unknown, max: number): string =>
+/** The shared tidy: surrounding whitespace off, runs of it to one space,
+ *  cut to `max`. Titles, "From" lines and book names (books.ts) all use it. */
+export const tidyText = (raw: unknown, max: number): string =>
   typeof raw === "string" ? raw.replace(/\s+/g, " ").trim().slice(0, max).trim() : "";
+const tidy = tidyText;
 
 /** The title as it will be saved; "" when there is none. */
 export const cleanTitle = (raw: unknown): string => tidy(raw, TITLE_MAX);

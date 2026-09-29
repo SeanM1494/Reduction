@@ -17,7 +17,8 @@
     "./original": "./src/original.ts",
     "./stepSource": "./src/stepSource.ts",
     "./sourceText": "./src/sourceText.ts",
-    "./title": "./src/title.ts"
+    "./title": "./src/title.ts",
+    "./books": "./src/books.ts"
   },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json"

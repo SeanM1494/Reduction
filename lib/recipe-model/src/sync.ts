@@ -48,6 +48,9 @@ export interface SyncableEntry {
   /** Epoch ms when taken out of the recipe box, or null. Merged on WHETHER
    *  it is removed, never on the timestamp — see mergeEntry. */
   removedAt?: number | null;
+  /** The book this recipe is in (books.ts), by id — or null when it has no
+   *  placement and its meal type decides. Last change wins. */
+  book?: string | null;
 }
 
 export interface MergeResult {
@@ -252,6 +255,12 @@ export function mergeEntry(
   // besides — a stale winner is pruned on the next write and ignored by the
   // walk meanwhile.
   const order = pick("order", () => mine.order ?? null);
+  /**
+   * Which book it is in: two devices that both moved it — mine, the later
+   * write. Nothing is lost either way: the recipe is in one book or the
+   * other, and a book since deleted sends it on (books.ts resolveBookId).
+   */
+  const book = pick("book", () => mine.book ?? null);
 
   /**
    * Removal merges on whether the recipe is removed, NEVER on when. The
@@ -299,6 +308,7 @@ export function mergeEntry(
       rating: rating ?? null,
       order: order ?? null,
       removedAt,
+      book: book ?? null,
     },
     treeConflict,
   };
