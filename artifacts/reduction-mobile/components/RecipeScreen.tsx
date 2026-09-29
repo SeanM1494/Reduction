@@ -51,6 +51,7 @@ import { useColors, type Colors } from '@/hooks/useColors';
 import { fonts } from '@/constants/colors';
 import type { Entry, StepTimer } from '@/lib/api';
 import type { EntryPatch } from '@/lib/library-context';
+import { clearProgressPatch } from '@/lib/cookReset';
 
 // ------------------------------------------------------------ done logic ---
 
@@ -298,6 +299,9 @@ export function RecipeScreen({
   // Clear progress asks first: it wipes every check on the recipe, and the
   // button sits where a thumb reaches for other things.
   const [confirmClear, setConfirmClear] = useState(false);
+  // Each confirmed Clear: Step-by-Step, if it is on screen, goes back to
+  // its first card (lib/cookReset.ts says why nothing else needs telling).
+  const [clearCount, setClearCount] = useState(0);
 
   // The diagram's press-and-hold drag: the page must not scroll under it,
   // and it scrolls the page itself while the finger is near an edge. The
@@ -611,6 +615,7 @@ export function RecipeScreen({
           header={sessionRow}
           sourceSteps={sourceSteps}
           footer={originalRow}
+          resetSignal={clearCount}
         />
       )}
 
@@ -649,7 +654,8 @@ export function RecipeScreen({
           onPress={() => {
             // Progress only: the cooking history and the rating are the
             // recipe's record, not tonight's, and stay.
-            onUpdate({ done: [], timer: null });
+            onUpdate(clearProgressPatch());
+            setClearCount((n) => n + 1);
             setConfirmClear(false);
           }}
           style={({ pressed }) => [styles.dangerBtn, pressed && { opacity: 0.85 }]}

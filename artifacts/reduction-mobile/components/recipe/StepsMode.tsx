@@ -44,6 +44,7 @@ import { ReorderView } from '@/components/recipe/ReorderView';
 import { useColors, type Colors } from '@/hooks/useColors';
 import { cardShadow, fonts } from '@/constants/colors';
 import type { StepTimer } from '@/lib/api';
+import { firstOpenCard, freshCookState } from '@/lib/cookReset';
 
 interface StepCard {
   key: string;
@@ -144,6 +145,10 @@ interface Props {
    *  source's whole wording is one tap from cooking as well as from the
    *  diagram. */
   footer?: React.ReactNode;
+  /** Bumped by the parent when "Clear progress" is confirmed: back to the
+   *  very first card (its "Before you start" card included), scrolled to
+   *  the top, with nothing this screen remembered (lib/cookReset.ts). */
+  resetSignal?: number;
 }
 
 export function StepsMode({
@@ -162,6 +167,7 @@ export function StepsMode({
   header = null,
   sourceSteps = null,
   footer = null,
+  resetSignal = 0,
 }: Props) {
   const colors = useColors();
   const styles = makeStyles(colors);
@@ -170,10 +176,7 @@ export function StepsMode({
   // Position in the sequence, taken at mount: RecipeScreen unmounts this
   // whenever the diagram is showing, so re-entering resumes at the first
   // thing not yet done, matching whatever happened in the diagram meanwhile.
-  const [cardIndex, setCardIndex] = useState(() => {
-    const first = cards.findIndex((c) => !done.has(c.stepId));
-    return first === -1 ? cards.length : first;
-  });
+  const [cardIndex, setCardIndex] = useState(() => firstOpenCard(cards.map((c) => c.stepId), done));
   const [returnIndex, setReturnIndex] = useState<number | null>(null);
   // The full-page cooking-order list. State here rather than in RecipeScreen
   // so the demo (which never sets canReorder) cannot reach it at all.
@@ -271,6 +274,26 @@ export function StepsMode({
     [onSetTimer]
   );
 
+  // ---- clear progress --------------------------------------------------------
+  // Everything this screen remembers goes with the checks: the position, a
+  // "Before you start" card passed without a tick, the way back to a timer,
+  // a "Time's up" still showing, an unfolded source text — and the scroll.
+  const scrollRef = useRef<ScrollView>(null);
+  const lastReset = useRef(resetSignal);
+  useEffect(() => {
+    if (resetSignal === lastReset.current) return;
+    lastReset.current = resetSignal;
+    const fresh = freshCookState();
+    setCardIndex(fresh.cardIndex);
+    setPassed(fresh.passed);
+    setReturnIndex(fresh.returnIndex);
+    setFinishedStep(fresh.finishedStep);
+    setExpandedFor(fresh.expandedFor);
+    notifiedForRef.current = null;
+    setReordering(false);
+    scrollRef.current?.scrollTo({ y: 0, animated: false });
+  }, [resetSignal]);
+
   // ---- parallel work -------------------------------------------------------
   const parallelSuggestion = useMemo(() => {
     if (!card || stepMinutes(card.step.minutes) == null) return null;
@@ -312,7 +335,13 @@ export function StepsMode({
   }
 
   return (
-    <ScrollView showsVerticalScrollIndicator={false} showsHorizontalScrollIndicator={false} contentContainerStyle={styles.wrap} testID="recipe-cook">
+    <ScrollView
+      ref={scrollRef}
+      showsVerticalScrollIndicator={false}
+      showsHorizontalScrollIndicator={false}
+      contentContainerStyle={styles.wrap}
+      testID="recipe-cook"
+    >
       {header}
       {returnIndex != null && cardIndex !== returnIndex ? (
         <Pressable accessibilityRole="button" onPress={backToTimer} style={styles.returnBtn} testID="cook-return">

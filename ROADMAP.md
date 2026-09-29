@@ -2146,6 +2146,28 @@ drawable it no longer writes. All three were seen in a local prebuild.
 - The reveal's clip on iOS.
 - How the cadence feels over a day.
 
+## Clear progress returns Step-by-Step to the first card (Sep 29)
+
+**Decided and built (phone, over the air).** Confirming "Clear progress" on
+the phone now puts an on-screen Step-by-Step back on its very first card:
+the "Before you start" preheat card comes back when the recipe has one, the
+view scrolls to the top, and anything that screen remembered is dropped
+(the way back to a timer, a "Time's up", unfolded source text). Clear still
+writes only `done: []` and `timer: null` through the normal PATCH, so the
+cooked history and the rating stay, and the server cancels the timer's
+pending notification as before. Cancel changes nothing.
+
+**Where the current card lives: nowhere persistent**, so nothing else
+needed resetting. Step-by-Step keeps its position in memory and, whenever
+it mounts, starts at the first card not done. A reload or another device
+therefore follows the cleared `done` to the first card by itself
+(`lib/cookReset.ts`, tested).
+
+**Gap, logged, not fixed: the website.** Its Step-by-Step
+(`artifacts/reduction/src/components/StepsMode.tsx`) is separate code with
+the same in-memory index, so a Clear there leaves the open card where it
+was until the view is left and reopened.
+
 ## Still open from earlier work
 
 - **allrecipes.com cannot be read by the server, by either fetch (Sep
