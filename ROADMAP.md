@@ -2249,6 +2249,36 @@ coach line and tips. Porting the guide means the web Diagram, StepsMode and
 finish strip taking the same `spotlight` and scrolling their own targets;
 `lib/demoGuide.ts` is pure and would move to `lib/recipe-model` for both.
 
+## Renaming a recipe: where it is, and a better way in (Sep 29, proposed, not built)
+
+**All three ways in work** (checked on main in Chromium at iPhone 13,
+Pixel 5 and iPhone SE, against the local stack): the saved recipe's ⋮ menu
+→ Rename (second item, after Edit recipe; one Window, blank refused in
+place, a messy title saved tidied, and offline it waits in the queue and
+lands when the network returns); the unsaved preview's title row with its
+pencil and "Rename" (44pt, 52pt on an SE where the title wraps; Save
+carries the new title); and the editor's Title field (⋮ → Edit recipe →
+Recipe… → Title, same rule, blank refused in the field's own slot).
+
+**Discoverability, honestly: the preview's is good, the saved recipe's is
+not.** The preview shows the title with a pencil and the word Rename, where
+the eye already is. On a saved recipe the title sits in the navigation bar
+and does nothing when tapped; Rename is behind ⋮, which reads as "more
+options", and the editor's field is three taps deep behind a mode that
+changes what tapping means. Someone who wants to fix a title will tap the
+title first, and nothing happens.
+
+**Proposal: tap the title on the recipe screen to rename it.** The header
+title becomes a button (a `headerTitle` component on the recipe route,
+not a change to RecipeScreen) with a small pencil after the text, opening
+the SAME TitleWindow the ⋮ item opens — one window, one rule, one write
+path. It must be 44pt tall, truncate on one line before the pencil so the
+pencil never wraps off, and say "Rename" to VoiceOver. ⋮ → Rename stays,
+for anyone who looks there. Risks: an accidental tap costs one Cancel; on
+iOS 26 the title is centred and the target is the text's width, which for
+a short title may be small (pad it to at least 120pt). No server or model
+change; an OTA. Not added to the Recipe Box preview sheet, as asked.
+
 ## Still open from earlier work
 
 - **allrecipes.com cannot be read by the server, by either fetch (Sep
