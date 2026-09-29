@@ -159,6 +159,9 @@ interface RecipeScreenProps {
   /** A preview's title is the person's to change before it is saved: the
    *  banner shows it with a Rename, and a blank one opens it from Save. */
   onEditTitle?: () => void;
+  /** The book the preview will be saved into, beside Save, and the way to
+   *  change it. Absent when the server has no books: Save saves, as ever. */
+  bookChoice?: { name: string; color: string; onPress: () => void } | null;
   /** Opens the recipe as its source worded it (app/original/[id].tsx);
    *  absent, there is no row for it. */
   onOpenOriginal?: () => void;
@@ -218,6 +221,7 @@ export function RecipeScreen({
   isDraft,
   onSave,
   onEditTitle,
+  bookChoice,
   onOpenOriginal,
   sourceSteps = null,
   saving,
@@ -664,9 +668,26 @@ export function RecipeScreen({
       </Window>
 
       {isDraft ? (
-        <View style={styles.saveBar}>
+        <View style={[styles.saveBar, bookChoice ? styles.saveBarRow : null]}>
+          {bookChoice ? (
+            // The book, one tap from Save: the default is the extraction's
+            // meal-type guess, so the common case never opens this.
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={`Book: ${bookChoice.name}. Change book`}
+              onPress={bookChoice.onPress}
+              style={({ pressed }) => [styles.bookChip, pressed && { opacity: 0.85 }]}
+              testID="draft-book"
+            >
+              <View style={[styles.bookDot, { backgroundColor: bookChoice.color }]} />
+              <Text style={styles.bookChipText} numberOfLines={1}>
+                {bookChoice.name}
+              </Text>
+              <Feather name="chevron-down" size={16} color={colors.foreground} />
+            </Pressable>
+          ) : null}
           <Pressable
-            style={styles.saveButton}
+            style={[styles.saveButton, bookChoice ? styles.saveButtonFlex : null]}
             // A blank title is asked for, not refused: Save opens the
             // title window, and saving is one more tap from there.
             onPress={untitled && onEditTitle ? onEditTitle : onSave}
@@ -854,6 +875,23 @@ function makeStyles(colors: Colors) {
       alignItems: 'center',
     },
     saveButtonText: { color: colors.primaryForeground, fontFamily: fonts.headingMedium, fontSize: 16 },
+    saveBarRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+    saveButtonFlex: { flex: 1 },
+    bookChip: {
+      flexShrink: 1,
+      maxWidth: '46%',
+      minHeight: 48,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+      paddingHorizontal: 12,
+      borderRadius: colors.radiusButton,
+      borderWidth: 1,
+      borderColor: colors.borderStrong,
+      backgroundColor: colors.card,
+    },
+    bookDot: { width: 14, height: 14, borderRadius: 7 },
+    bookChipText: { flexShrink: 1, fontSize: 15, fontFamily: fonts.headingMedium, color: colors.foreground },
 
   });
 }

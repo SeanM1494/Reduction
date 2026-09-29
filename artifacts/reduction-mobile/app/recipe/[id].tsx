@@ -40,6 +40,7 @@ import { originalStepTexts } from '@/shared/original';
 import { hasStepSources } from '@/shared/stepSource';
 import { applyEdit } from '@/shared/edits';
 import { TitleWindow } from '@/components/TitleWindow';
+import { BookPicker } from '@/components/books/BookPicker';
 import { titleProblem } from '@/shared/title';
 
 export default function RecipeDetailScreen() {
@@ -50,7 +51,7 @@ export default function RecipeDetailScreen() {
   const styles = makeStyles(colors);
   const { draft, setDraft, getEntry, update, remove, restore, saveRecipe, notice, clearNotice, queued } = useLibrary();
   const toast = useToast();
-  const { bookFor } = useBooks();
+  const { bookFor, available: booksAvailable, live: liveBooks } = useBooks();
   // The Recipe Box's finish prompt: 'rate' when a cook is stamped, 'remove'
   // after a 👎. Remove closes it instantly, because it navigates.
   const [finish, setFinish] = useState<FinishStage | null>(null);
@@ -68,6 +69,10 @@ export default function RecipeDetailScreen() {
   const [confirmDelete, setConfirmDelete] = useState(false);
   // Rename (saved, from ⋮) and the preview's title: one window, one rule.
   const [titleOpen, setTitleOpen] = useState(false);
+  // Which book: the preview's choice before Save, and ⋮ › Move to another
+  // book after. One picker, two callers.
+  const [bookPickerOpen, setBookPickerOpen] = useState(false);
+  const [draftBook, setDraftBook] = useState<string | null>(null);
   // "Edit recipe" in the menu opens edit mode in RecipeScreen, which owns it.
   // ⋮ requests for the recipe screen (RecipeScreen's `request`).
   const [request, setRequest] = useState<RecipeRequest | null>(null);
@@ -140,11 +145,15 @@ export default function RecipeDetailScreen() {
     navigation.dispatch(pendingLeave.current as never);
     pendingLeave.current = null;
   }, [discarding, navigation]);
+  // The preview's book: the person's pick, else where the extraction's
+  // meal-type guess points (through any merge, else Other). Never asked
+  // for: Save saves with whatever this is.
+  const draftBookShown = draft ? bookFor({ ...draft, savedAt: 0, recipe: draft.recipe, book: draftBook }) : null;
   const saveDraft = async () => {
     if (!draft || saving) return;
     setSaving(true);
     try {
-      const saved = await saveRecipe(draft.recipe, draft.sourceKey);
+      const saved = await saveRecipe(draft.recipe, draft.sourceKey, booksAvailable === true ? draftBookShown?.id ?? null : null);
       // The SAVE is what spends the free allowance (the server counts
       // a created row, not an extraction), so the entitlement the
       // Find tab and Settings read has to be re-read here. Without
@@ -199,6 +208,11 @@ export default function RecipeDetailScreen() {
           saving={saving}
           onSave={saveDraft}
           onEditTitle={() => setTitleOpen(true)}
+          bookChoice={
+            booksAvailable === true && draftBookShown
+              ? { name: draftBookShown.name, color: draftBookShown.color, onPress: () => setBookPickerOpen(true) }
+              : null
+          }
           // Only when the extraction brought wording: a preview has nothing
           // to fetch it from later.
           onOpenOriginal={draft.original ? () => router.push('/original/draft') : undefined}
@@ -214,6 +228,16 @@ export default function RecipeDetailScreen() {
           heading={titleProblemFree(draft.recipe.title) ? 'Rename recipe' : 'Name this recipe'}
           onSave={(title) => setDraft({ ...draft, recipe: { ...draft.recipe, title } })}
           onClose={() => setTitleOpen(false)}
+        />
+        <BookPicker
+          open={bookPickerOpen}
+          title="Save to…"
+          current={draftBookShown?.id ?? null}
+          onPick={(id) => {
+            setDraftBook(id);
+            setBookPickerOpen(false);
+          }}
+          onClose={() => setBookPickerOpen(false)}
         />
         <Window
           open={leaveOpen}
@@ -376,6 +400,9 @@ export default function RecipeDetailScreen() {
         <View style={styles.menu} accessibilityRole="menu">
           <MenuItem label="Edit recipe" onPress={() => menuThen(() => askScreen('edit'))} colors={colors} testID="menu-edit" />
           <MenuItem label="Rename" onPress={() => menuThen(() => setTitleOpen(true))} colors={colors} testID="menu-rename" />
+          {booksAvailable === true && liveBooks.length > 1 ? (
+            <MenuItem label="Move to another book" onPress={() => menuThen(() => setBookPickerOpen(true))} colors={colors} testID="menu-move-book" />
+          ) : null}
           <MenuItem label="Reorder steps" onPress={() => menuThen(() => askScreen('reorder'))} colors={colors} testID="menu-reorder" />
           <MenuItem label="Servings" onPress={() => menuThen(() => askScreen('servings'))} colors={colors} testID="menu-servings" />
           {/* A rating is an opinion about a dish, so it is offered once the
@@ -407,6 +434,22 @@ export default function RecipeDetailScreen() {
         title={entry.recipe.title ?? ''}
         onSave={(title) => write({ recipe: applyEdit(entry.recipe, { type: 'setRecipeFields', fields: { title } }) })}
         onClose={() => setTitleOpen(false)}
+      />
+
+      {/* A move is a field on the entry, through the sync engine like any
+          edit: it waits out a dead spot, and two devices moving it at once
+          is an ordinary 409 where the later move wins. */}
+      <BookPicker
+        open={bookPickerOpen}
+        title="Move to…"
+        current={bookFor(entry).id}
+        onPick={(id, name) => {
+          setBookPickerOpen(false);
+          if (id === bookFor(entry).id) return;
+          write({ book: id });
+          toast({ message: `Moved to ${name}.` });
+        }}
+        onClose={() => setBookPickerOpen(false)}
       />
 
       <PhotoSheet open={photoSheetOpen} entry={entry} onClose={() => setPhotoSheetOpen(false)} />
