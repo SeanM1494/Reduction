@@ -119,10 +119,19 @@ async function adaptive() {
 
 const copy = (f) => async () => fs.readFileSync(f);
 
+/** The splash's image: fully transparent, so the splash is the plain
+ *  background colour (the opening sequence starts on empty cream). Not the
+ *  plugin's "no image" option: in expo-splash-screen 57 that path leaves
+ *  the iOS launch screen on the SYSTEM background (white, or black in dark
+ *  mode) with constraints naming a view it removed, and Android's theme
+ *  naming a drawable it no longer writes. A transparent image keeps every
+ *  generated file on the plugin's normal path. */
+const blank = () => png(64, 64, Buffer.alloc(64 * 64 * 4), false);
+
 const outputs = [
   // The phone (native: these ship in the binary, not over the air).
   [app('icon.png'), copy(brand('reduction-icon-1024.png')), 'iOS app icon'],
-  [app('splash-icon.png'), copy(brand('reduction-mark-1024.png')), 'splash image'],
+  [app('splash-blank.png'), blank, 'splash image (transparent: a plain splash)'],
   [app('adaptive-icon.png'), adaptive, 'Android adaptive icon foreground'],
   // Over the air: the sign-in screen's mark (BrandLogo), 128pt at 3x.
   [app('brand-mark.png'), () => resized(brand('reduction-mark-1024.png'), 384, false), 'in-app mark'],

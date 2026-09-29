@@ -1230,7 +1230,10 @@ parts: `lib/opening/brandShapes.ts` holds the icon's elements as data, and
 its test parses both brand SVGs and fails on any difference, so a new
 master fails there until the data follows it. The icon and splash are in the BINARY: a change to them needs a
 build, and no bundle depends on them, so it does not by itself need an
-`expo.version` bump.
+`expo.version` bump. The splash is deliberately PLAIN (the opening sequence
+starts on empty cream): its image is a fully transparent PNG, because the
+splash plugin's own no-image option generates a broken launch screen (ROADMAP
+"The opening sequence").
 
 ## The opening sequence: a pure function of time, and two traps it found
 

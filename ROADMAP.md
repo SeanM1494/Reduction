@@ -1985,7 +1985,8 @@ Replit's agent applied it to the phone first (940a2f9, icon and splash
 correct, the Android foreground uncropped by the safe zone, nothing on the
 website); this finishes it. Decided:
 
-- **The splash is the mark on the ICON's cream, `#efe2c8`, 240pt wide**
+- **(Superseded the same day: the splash is now plain; see "The opening
+  sequence".) The splash is the mark on the ICON's cream, `#efe2c8`, 240pt wide**
   (was the app's tan `#e8d5b2` at 200). The icon zooms into the splash on
   launch, so matching the icon's colour makes that one continuous surface;
   the parchment of the first screen is a shade darker and follows a moment
@@ -2118,6 +2119,22 @@ proposal: record the last recipe screen and when it was left (device-only,
 one write), and land there if a timer is running, or if it was the open
 screen within 3 hours and has partial progress. About a day with tests;
 the risk is landing somewhere unexpected.
+
+**The splash is plain (decided Sep 29, reversing the icon's hand-off).**
+The sequence starts on empty cream and the pot fades in, and Apple's
+guidance is not to brand a launch screen. So the native splash is plain
+`#efe2c8` in light mode and plain `#131110` in dark mode. It is dark in dark
+mode, not the owner's first lean of cream in both, because the splash shows
+on EVERY launch and the sequence on at most one a day: a cream splash would
+flash every dark launch to save one fade a day. On a dark-mode launch that
+plays the sequence, it opens on `#131110` and fades to cream over 250 ms.
+Light mode's cream splash hands over to the app's tan (`#e8d5b2`), a
+one-shade step. It is a plain splash by way of a TRANSPARENT image
+(`splash-blank.png`, from `scripts/brand-icons.mjs`), not the plugin's
+no-image option. In expo-splash-screen 57, that option leaves the iOS launch
+screen on the system background (white, or black in dark mode), keeps
+constraints naming a view it removed, and leaves Android's theme naming a
+drawable it no longer writes. All three were seen in a local prebuild.
 
 **Needs the phone:**
 
