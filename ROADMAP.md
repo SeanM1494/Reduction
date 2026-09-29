@@ -2014,6 +2014,25 @@ website); this finishes it. Decided:
   at the same size; the fix is a scroll view on the sign-in screen, which
   is auth UI and was out of scope.
 
+**The website (its own commit, a Publish):** the favicon (SVG and a 32px
+PNG), the 180px `apple-touch-icon`, the manifest's 192 and 512 and the web
+push notification's icon and badge are all the new icon, from the same
+script; the nav's mark on the landing page and the signed-in app is
+`reduction-mark.svg`, at the same 44px. The favicon is the ICON, cream
+square and all, like the app's; the manifest declares no `maskable` icon,
+because the artwork reaches the edge of the 40% circle a maskable icon
+promises to keep — a maskable one would be the mark scaled down on the
+cream, the Android treatment above, when Android Chrome install is taken
+up. `theme-color` and the manifest's colours moved from `#F0E2C8` to the
+icon's `#efe2c8` (one unit apart). Removed: the old mark's transparent,
+dark and inverted SVGs and its 64px PNG, and `public/favicon.svg`,
+Replit's orange placeholder, which nothing referenced. Not changed: the
+legal pages call the product "Recipe Reduction" in their header where
+both apps say "Reduction"; there is no social preview (`og:image`) image
+anywhere, and none was added; the push BADGE is the full-colour 32px icon,
+where Android draws a badge as a white silhouette (it will show as a
+white square there — a silhouette is a new drawing).
+
 **Needs the phone:** the icon on the home screen, in Spotlight, in Settings
 and in TestFlight; the splash in light and dark; whether the icon-to-splash
 hand-off reads as one surface.
@@ -2424,7 +2443,7 @@ hand-off reads as one surface.
   intercepts requests. Offline support is its own decision with its own
   versioning story — not a side effect of wanting timers to buzz. The cost is
   that Android Chrome will not consider the app installable (it wants a fetch
-  handler and a 192px icon; `artifacts/reduction/public/brand/` has 32/64/180/512). iOS uses the
+  handler; the 192px icon it also wants exists since Sep 29 — `artifacts/reduction/public/brand/` has 32/180/192/512). iOS uses the
   180px `apple-touch-icon`, which exists, so the target platform is
   unaffected.
 

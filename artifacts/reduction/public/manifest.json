@@ -5,8 +5,8 @@
   "start_url": "/",
   "display": "standalone",
   "orientation": "portrait",
-  "theme_color": "#F0E2C8",
-  "background_color": "#F0E2C8",
+  "theme_color": "#efe2c8",
+  "background_color": "#efe2c8",
   "icons": [
     {
       "src": "/brand/reduction-icon-32.png",
@@ -14,13 +14,13 @@
       "type": "image/png"
     },
     {
-      "src": "/brand/reduction-icon-64.png",
-      "sizes": "64x64",
+      "src": "/brand/reduction-icon-180.png",
+      "sizes": "180x180",
       "type": "image/png"
     },
     {
-      "src": "/brand/reduction-icon-180.png",
-      "sizes": "180x180",
+      "src": "/brand/reduction-icon-192.png",
+      "sizes": "192x192",
       "type": "image/png"
     },
     {

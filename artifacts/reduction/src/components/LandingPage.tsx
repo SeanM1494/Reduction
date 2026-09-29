@@ -256,7 +256,7 @@ export default function LandingPage({
         <span className="rd-brand rd-brand-static">
           <img
             className="rd-logo"
-            src="/brand/reduction-icon-transparent.svg"
+            src="/brand/reduction-mark.svg"
             alt=""
             aria-hidden="true"
           />

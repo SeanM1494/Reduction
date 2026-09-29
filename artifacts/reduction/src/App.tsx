@@ -623,7 +623,7 @@ export default function App() {
         <button className="rd-brand" onClick={() => setOpenId(null)}>
           <img
             className="rd-logo"
-            src="/brand/reduction-icon-transparent.svg"
+            src="/brand/reduction-mark.svg"
             alt=""
             aria-hidden="true"
           />
