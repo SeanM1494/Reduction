@@ -1225,7 +1225,10 @@ in-app mark either side ships is COPIED or RESIZED from those four by
 transparent pixels are transparent black and a plain resize fringes every
 edge); `--check` says whether any output has drifted. Nothing redraws the
 artwork — the sign-in screen's `BrandLogo` is an image of it, not a port of
-its paths. The icon and splash are in the BINARY: a change to them needs a
+its paths. The one port is the opening sequence, which has to move the
+parts: `lib/opening/brandShapes.ts` holds the icon's elements as data, and
+its test parses both brand SVGs and fails on any difference, so a new
+master fails there until the data follows it. The icon and splash are in the BINARY: a change to them needs a
 build, and no bundle depends on them, so it does not by itself need an
 `expo.version` bump.
 

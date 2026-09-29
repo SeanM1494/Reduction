@@ -21,6 +21,6 @@
   ],
   "exclude": [
     "components/diagram/*.test.ts",
-    "lib/*.test.ts"
+    "lib/**/*.test.ts"
   ]
 }
