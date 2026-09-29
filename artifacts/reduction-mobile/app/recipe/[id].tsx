@@ -40,6 +40,7 @@ import { originalStepTexts } from '@/shared/original';
 import { hasStepSources } from '@/shared/stepSource';
 import { applyEdit } from '@/shared/edits';
 import { TitleWindow } from '@/components/TitleWindow';
+import { TitleButton } from '@/components/recipe/TitleButton';
 import { BookPicker } from '@/components/books/BookPicker';
 import { titleProblem } from '@/shared/title';
 
@@ -297,6 +298,8 @@ export default function RecipeDetailScreen() {
       <Stack.Screen
         options={{
           title: recipeTitle,
+          // The title renames: tap it, the same window as ⋮ › Rename.
+          headerTitle: () => <TitleButton title={recipeTitle} onPress={() => setTitleOpen(true)} />,
           gestureEnabled: false,
           headerRight: () => (
             <Pressable

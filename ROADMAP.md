@@ -2249,7 +2249,7 @@ coach line and tips. Porting the guide means the web Diagram, StepsMode and
 finish strip taking the same `spotlight` and scrolling their own targets;
 `lib/demoGuide.ts` is pure and would move to `lib/recipe-model` for both.
 
-## Renaming a recipe: where it is, and a better way in (Sep 29, proposed, not built)
+## Renaming a recipe: where it is, and a better way in (Sep 29, built)
 
 **All three ways in work** (checked on main in Chromium at iPhone 13,
 Pixel 5 and iPhone SE, against the local stack): the saved recipe's ⋮ menu
@@ -2278,6 +2278,21 @@ for anyone who looks there. Risks: an accidental tap costs one Cancel; on
 iOS 26 the title is centred and the target is the text's width, which for
 a short title may be small (pad it to at least 120pt). No server or model
 change; an OTA. Not added to the Recipe Box preview sheet, as asked.
+
+**Built (Sep 29, over the air).** The saved recipe's header title is a
+button (`components/recipe/TitleButton.tsx`, the route's `headerTitle`)
+with a pencil after the text, opening the same TitleWindow as ⋮ › Rename;
+⋮ › Rename and the editor's Title field stay. One line, truncated before
+the pencil; 44pt tall and at least 120pt wide; VoiceOver reads a button
+"Rename recipe" with the title as its value. Its ceiling follows the
+platform's title alignment (`lib/headerTitle.ts`, tested): iOS centres the
+title, so it leaves 92pt free on BOTH sides (206pt on a 390pt phone, 136pt
+on an SE); Android and the web lead with it, so it runs from the back arrow
+to ⋮. Chromium can only exercise the leading case (measured with a 130-
+character title beside a real back button: never over the arrow or ⋮, 44pt
+tall, no sideways scroll, at all three sizes, light and dark); the centred
+iOS layout, VoiceOver and the native header's own sizing of a custom title
+are the phone's to confirm.
 
 ## Still open from earlier work
 
