@@ -255,6 +255,23 @@ export function deleteBook(
   return opts.into !== null && opts.rename !== undefined ? renameBook(next, opts.into, opts.rename) : next;
 }
 
+/**
+ * Delete a book and send its recipes into a NEW book made in the same step
+ * ("A new book…" in the delete window). One change, so one write: the new
+ * book cannot exist without the deletion, nor the deletion without it. The
+ * book that is going frees its place under the cap and its name first.
+ */
+export function deleteIntoNewBook(
+  books: readonly BookDef[],
+  id: string,
+  opts: { newId: string; name: string; color?: string; now: number }
+): BookDef[] {
+  if (id === OTHER_BOOK_ID) throw new BookEditError("Other can’t be deleted. You can rename it instead.");
+  liveOrThrow(books, id);
+  const gone = replace(books, id, { deletedAt: opts.now, mergedInto: opts.newId });
+  return addBook(gone, { id: opts.newId, name: opts.name, color: opts.color, now: opts.now });
+}
+
 // ------------------------------------------------------------- merge -----
 
 const same = (a: unknown, b: unknown) => JSON.stringify(a ?? null) === JSON.stringify(b ?? null);

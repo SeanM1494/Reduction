@@ -13,6 +13,7 @@ import {
   cleanBookName,
   defaultBookIdFor,
   deleteBook,
+  deleteIntoNewBook,
   freshDefaultBooks,
   isDefaultBook,
   liveBooks,
@@ -261,4 +262,15 @@ test("a recipe's book: one device moved it → that move; both did → the later
   assert.equal(mergeEntry(entry("dinner"), entry("dinner"), entry("mains")).merged.book, "mains", "only theirs moved it");
   assert.equal(mergeEntry(entry("dinner"), entry("soups"), entry("mains")).merged.book, "soups", "both: mine, the later write");
   assert.equal(mergeEntry(entry(null), entry(null), entry(null)).merged.book, null, "no placement stays none");
+});
+
+test("delete into a new book made on the spot: one change, the cap and the name freed by the book that goes", () => {
+  let books = freshDefaultBooks();
+  for (let i = 0; liveBooks(books).length < MAX_BOOKS; i++) books = addBook(books, { id: `b${i}`, name: `Book ${i}`, now: NOW });
+  const next = deleteIntoNewBook(books, "dinner", { newId: "mains", name: "Dinner", now: NOW });
+  assert.equal(liveBooks(next).length, MAX_BOOKS, "twelve before, twelve after");
+  assert.equal(resolveBookId(next, "dinner"), "mains");
+  assert.equal(liveBooks(next).find((b) => b.id === "mains")!.name, "Dinner", "it may take the name of the book that went");
+  assert.deepEqual(validateBooks(next), []);
+  assert.throws(() => deleteIntoNewBook(next, OTHER_BOOK_ID, { newId: "x", name: "X", now: NOW }), BookEditError);
 });

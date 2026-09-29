@@ -66,6 +66,7 @@ import {
 } from '@/lib/recipeBox';
 import { sortLabel, type SortKey } from '@/lib/libraryView';
 import { useBooks } from '@/lib/books-context';
+import { router } from 'expo-router';
 import { useColors, type Colors } from '@/hooks/useColors';
 import { fonts } from '@/constants/colors';
 import type { Entry } from '@/lib/api';
@@ -248,6 +249,18 @@ export function RecipeBox({ entries, sort, onOpenSort, onOpenRecipe, onAddRecipe
               testID="box-sort"
             >
               <Feather name="sliders" size={18} color={colors.foreground} />
+            </Pressable>
+            {/* The shortcut to Manage books (Settings has the other way in).
+                Not a long-press on a book's tab: the tab is 22pt and not a
+                control, and the book already sorts taps from swipes. */}
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Manage books"
+              onPress={() => router.push('/books')}
+              style={({ pressed }) => [styles.iconBtn, pressed && styles.iconBtnPressed]}
+              testID="box-manage-books"
+            >
+              <Feather name="layers" size={18} color={colors.foreground} />
             </Pressable>
           </View>
         </View>

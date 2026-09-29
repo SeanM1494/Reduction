@@ -27,10 +27,12 @@ import { SubscribeBox } from '@/components/SubscribeBox';
 import { LegalLinks } from '@/components/LegalLinks';
 import { manageSubscription } from '@/lib/purchase';
 import { useColors, type Colors } from '@/hooks/useColors';
+import { useBooks } from '@/lib/books-context';
 import { cardShadow, fonts } from '@/constants/colors';
 
 export default function SettingsScreen() {
   const colors = useColors();
+  const liveBookCount = useBooks().live.length;
   const styles = makeStyles(colors);
   const { user, entitlement, webUrl, signOut, deleteAccount } = useAuth();
   const { entries } = useLibrary();
@@ -171,6 +173,20 @@ export default function SettingsScreen() {
       <TimersCard />
 
       <BoxStyleCard />
+
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={`Manage books, ${liveBookCount} ${liveBookCount === 1 ? 'book' : 'books'}`}
+        onPress={() => router.push('/books')}
+        style={({ pressed }) => [styles.section, styles.navRow, pressed && styles.navRowPressed]}
+        testID="settings-books"
+      >
+        <View style={styles.navText}>
+          <Text style={styles.label}>Manage books</Text>
+          <Text style={styles.value}>{liveBookCount === 1 ? '1 book' : `${liveBookCount} books`}</Text>
+        </View>
+        <Feather name="chevron-right" size={20} color={colors.mutedForeground} />
+      </Pressable>
 
       <Pressable
         accessibilityRole="button"
