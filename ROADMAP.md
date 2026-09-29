@@ -2037,6 +2037,98 @@ white square there — a silhouette is a new drawing).
 and in TestFlight; the splash in light and dark; whether the icon-to-splash
 hand-off reads as one surface.
 
+## The opening sequence (Sep 29)
+
+**Built from `docs/prototypes/opening-sequence.html`** (the approved design,
+v4): spice and vinegar pour into a bubbling pot, the camera rises to look
+into it, dives through the surface, and a bubble pops to reveal the app.
+The code is `lib/opening/` (pure, tested) and `components/opening/`; the
+artwork is `brand/`'s, as data (`brandShapes.ts`, checked against both brand
+SVGs by a test). The particles come from the prototype's own generator and
+seed, and a test runs the prototype's script and matches every one.
+
+**When it plays — decided by the owner, implemented exactly:**
+
+- **Full (4.3 s) once**, on the first launch after install; never again,
+  updates included. **Quick (2.2 s)** on a COLD start only (a new JS
+  process; a return from the background is the same process and never
+  plays it), at most once per **24 hours of elapsed time** since either
+  version last started. A stored time in the future (the clock moved
+  back) counts as elapsed. Never both in one launch; Full stamps the time.
+- **Skipped** after a notification tap, a link (the app's scheme with a
+  path; there are no universal links yet) or a share (no share extension
+  exists yet; the rule is in place for it), and when VoiceOver is running.
+- **Reduce Motion** plays the still artwork for 0.5 s and a 0.4 s crossfade
+  instead, and counts as the version it replaced.
+- **Nothing is decided in the background.** The decision waits until the
+  app is active; the stamps are written only when the sequence is on
+  screen and its clock has started. A tap anywhere skips (150 ms fade),
+  and a skip counts as shown.
+- `OPENING_ENABLED` in `lib/opening/config.ts` turns it off for every
+  launch, over the air. Settings > Replay intro plays it over Settings
+  and changes no stamps.
+
+**Where a cold start lands — on EVERY cold start, not only sequence ones
+(decided Sep 29):** signed out, the demo; signed in, the Recipe Box on the
+book last open on this device (stored by book ID, the first book when that
+one is gone); signed in with nothing saved, the "Nothing saved yet"
+invitation. Never the paywall. Never over a notification tap or a link,
+never on a return from the background. `LAND_ON_RECIPE_BOX` reverts it to
+Find.
+
+**It never delays the app.** The app boots underneath as normal. The native
+splash stays up only until the launch is decided (capped at 400 ms once the
+app is active). If the app is not ready when the reveal comes due, the
+sequence holds on the dark bubbling frame for up to 1.5 s, then reveals
+whatever the app is showing. Before sign-in state is known, that is the
+page colour with a spinner that appears only after 300 ms, so a quick launch
+never flashes one. Measured in Chromium, with every API answer held back 6 s:
+the reveal waited 1.5 s and showed the spinner, never a blank screen.
+
+**The testing sheet** is a long press on "Replay intro", for the owner's
+account only. The allowlist holds a SHA-256 of the email, not the address;
+an account id can be added. It is a convenience, not a security control. It
+plays any version, resets either stamp, shows them, and shows the last
+run's frame rate: average, worst frame, and frames under 55 fps.
+
+**The timings were tuned by eye in a browser; re-tune them on the phone.**
+They are the F and Q objects, verbatim, in `config.ts`. The owner's call
+after watching it on the device.
+
+**Kill criterion: 55 fps or better on the owner's iPhone.** The testing
+sheet reads it out after any run. If it falls short, cut in this order and
+report before anything else: the bubble counts (`BUBBLES`, 26 large + 18
+small, cut from the end so the same bubbles remain), then `FADE_LEVELS` (6;
+each level is one drawn path for the ripples and one for the bubbles), and
+only then consider a pre-rendered animation. About 35 SVG nodes change per
+frame, all as path strings, opacities or widths computed on the UI thread;
+the shaker and the bottle are separate layers moved by the GPU.
+
+**The one thing only the phone can prove about the drawing: the reveal is
+an animated `ClipPath`** (the scene clipped to outside a growing circle,
+so the live app shows through). Chromium draws it; react-native-svg on iOS
+re-resolving an animated clip each frame has not been seen here. If the
+hole does not open on the phone, that is where to look.
+
+**Not built (idea only): land on a recipe that was mid-cook.** Nothing
+stored says "mid-cook". An entry has `done`, `timer` and `savedAt`, but no
+last-opened time, and nothing records the open screen. A running `timer` is a
+strong signal; a partial `done` is weak, since it can sit for days. The
+proposal: record the last recipe screen and when it was left (device-only,
+one write), and land there if a timer is running, or if it was the open
+screen within 3 hours and has partial progress. About a day with tests;
+the risk is landing somewhere unexpected.
+
+**Needs the phone:**
+
+- The frame rate.
+- The splash-to-sequence hand-off, in light and dark.
+- Reduce Motion.
+- The VoiceOver skip, and the notification and link skips (unit-tested only;
+  the web build has neither).
+- The reveal's clip on iOS.
+- How the cadence feels over a day.
+
 ## Still open from earlier work
 
 - **allrecipes.com cannot be read by the server, by either fetch (Sep

@@ -1232,6 +1232,29 @@ master fails there until the data follows it. The icon and splash are in the BIN
 build, and no bundle depends on them, so it does not by itself need an
 `expo.version` bump.
 
+## The opening sequence: a pure function of time, and two traps it found
+
+`sceneAt` (`lib/opening/scene.ts`) returns every frame from one time value,
+on the UI thread. The renderer only maps it to props; nothing per-frame
+touches the JS thread, and any frame can be tested. Keep it that way: a
+new beat is a change to `sceneAt` and a test, not state in a component.
+ROADMAP "The opening sequence" has the cadence rules, which are decided.
+
+**The React Compiler is on (`experiments.reactCompiler`), so a render body
+must be pure.** A module value read during render (`const run =
+lastRunStats()`) is memoized into a constant, so it never updates. In the
+testing sheet it came back correct only when a `console.log` sat beside it
+and broke the memo. A side effect in render (the Gate once called
+`noteAuthSettled` there) is no safer. Read module state in an effect or a
+lazy `useState` initializer.
+
+**On the web, an `Svg` sizes itself from its viewBox's aspect ratio**, not
+from `StyleSheet.absoluteFill`. The scene came out 390x823 on a 390x664
+screen and 430x907 on a 430x932 one: 160px low on the first, with the
+bottom of the second uncovered by the dive. Give a full-screen `Svg`
+explicit `width` and `height`. Native fills either way, so a
+Chromium-only check would otherwise have measured a different scene.
+
 ## Recipe books: by id, and deleting rewrites nothing
 
 **A recipe names its book by ID** (`recipe_placements`), never by name, so a

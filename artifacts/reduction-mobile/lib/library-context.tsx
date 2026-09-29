@@ -75,6 +75,11 @@ const OFFLINE_RETRY_MS = 10_000;
 interface LibraryState {
   entries: Entry[];
   loading: boolean;
+  /** The shelf has something true to show for this account: the cached
+   *  library, or the first network read (or its failure). Before it, an
+   *  empty list means "not read yet", not "nothing saved" — which is what
+   *  the opening sequence waits on before it reveals the app. */
+  settled: boolean;
   error: string | null;
   refresh: () => Promise<void>;
   getEntry: (id: string) => Entry | undefined;
@@ -146,6 +151,7 @@ export function LibraryProvider({ children }: { children: React.ReactNode }) {
   const entriesRef = useRef<Entry[]>([]);
   entriesRef.current = entries;
   const [loading, setLoading] = useState(false);
+  const [settled, setSettled] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<LibraryNotice | null>(null);
   const [queued, setQueued] = useState<string[]>([]);
@@ -206,6 +212,7 @@ export function LibraryProvider({ children }: { children: React.ReactNode }) {
     let cancelled = false;
     engine.reset();
     setEntries([]);
+    setSettled(false);
     setNotice(null);
     if (!userId) return;
     (async () => {
@@ -216,8 +223,10 @@ export function LibraryProvider({ children }: { children: React.ReactNode }) {
       if (cached?.length) {
         engine.hydrate(cached);
         setEntries(cached);
+        setSettled(true);
       }
       await refresh();
+      if (!cancelled) setSettled(true);
     })();
     return () => {
       cancelled = true;
@@ -312,9 +321,9 @@ export function LibraryProvider({ children }: { children: React.ReactNode }) {
   const inBox = useMemo(() => entries.filter(inRecipeBox), [entries]);
 
   const value = useMemo<LibraryState>(
-    () => ({ entries: inBox, loading, error, refresh, getEntry, saveRecipe, update,
+    () => ({ entries: inBox, loading, settled, error, refresh, getEntry, saveRecipe, update,
       setPhoto, remove, restore, notice, clearNotice, queued, draft, setDraft }),
-    [inBox, loading, error, refresh, getEntry, saveRecipe, update, setPhoto, remove, restore, notice, clearNotice, queued, draft]
+    [inBox, loading, settled, error, refresh, getEntry, saveRecipe, update, setPhoto, remove, restore, notice, clearNotice, queued, draft]
   );
 
   return <LibraryContext.Provider value={value}>{children}</LibraryContext.Provider>;

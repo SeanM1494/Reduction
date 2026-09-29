@@ -10,7 +10,7 @@
  */
 
 import React, { useCallback, useState } from 'react';
-import { Alert, Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { AccessibilityInfo, Alert, Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router, useFocusEffect } from 'expo-router';
 import { useAuth } from '@/lib/auth-context';
@@ -28,6 +28,9 @@ import { LegalLinks } from '@/components/LegalLinks';
 import { manageSubscription } from '@/lib/purchase';
 import { useColors, type Colors } from '@/hooks/useColors';
 import { useBooks } from '@/lib/books-context';
+import { requestReplay } from '@/lib/opening/launch';
+import { isOwner } from '@/lib/opening/owner';
+import { IntroTestingSheet } from '@/components/opening/IntroTestingSheet';
 import { cardShadow, fonts } from '@/constants/colors';
 
 export default function SettingsScreen() {
@@ -35,6 +38,8 @@ export default function SettingsScreen() {
   const liveBookCount = useBooks().live.length;
   const styles = makeStyles(colors);
   const { user, entitlement, webUrl, signOut, deleteAccount } = useAuth();
+  const owner = isOwner(user);
+  const [introTesting, setIntroTesting] = useState(false);
   const { entries } = useLibrary();
   const insets = useSafeAreaInsets();
   const [manageError, setManageError] = useState<string | null>(null);
@@ -219,6 +224,30 @@ export default function SettingsScreen() {
         </View>
         <Feather name="chevron-right" size={20} color={colors.mutedForeground} />
       </Pressable>
+
+      {/* Plays the opening sequence over this screen and changes nothing
+          about when it next plays by itself (lib/opening/launch.ts). A long
+          press is the owner's testing sheet, and nobody else's. */}
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="Replay intro: the opening sequence"
+        onPress={() => {
+          void AccessibilityInfo.isReduceMotionEnabled()
+            .catch(() => false)
+            .then((reduce) => requestReplay(reduce ? 'static' : 'full'));
+        }}
+        onLongPress={owner ? () => setIntroTesting(true) : undefined}
+        delayLongPress={600}
+        style={({ pressed }) => [styles.section, styles.navRow, pressed && styles.navRowPressed]}
+        testID="settings-intro"
+      >
+        <View style={styles.navText}>
+          <Text style={styles.label}>Replay intro</Text>
+          <Text style={styles.value}>The opening, from the start</Text>
+        </View>
+        <Feather name="play" size={18} color={colors.mutedForeground} />
+      </Pressable>
+      {owner ? <IntroTestingSheet open={introTesting} onClose={() => setIntroTesting(false)} /> : null}
 
       <AppearanceCard />
 

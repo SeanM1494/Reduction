@@ -29,3 +29,23 @@ export function restoreBookIndex(shelfIds: string[], storedId: string | null): n
   const i = shelfIds.indexOf(storedId);
   return i >= 0 ? i : 0;
 }
+
+/**
+ * Whether the URL the app was opened with is a link INTO the app — so the
+ * launch goes where it points rather than playing the intro or landing on
+ * the Recipe Box. The app's own scheme with a path is one; a bare scheme,
+ * the sign-in return (handled inside a session, never a launch) and the
+ * development client's own launch URL are not. There are no universal
+ * links configured today (no associatedDomains); an https link would be
+ * one if there were.
+ */
+export function isAppLink(url: string | null | undefined, scheme: string): boolean {
+  if (!url) return false;
+  const m = url.match(/^([a-z][a-z0-9+.-]*):\/\/([^?#]*)/i);
+  if (!m) return false;
+  const [, s, rest] = m;
+  if (s.toLowerCase() === 'https') return true;
+  if (s.toLowerCase() !== scheme.toLowerCase()) return false;
+  const path = rest.replace(/^\/+|\/+$/g, '');
+  return path !== '' && path !== 'auth' && !path.startsWith('expo-development-client');
+}

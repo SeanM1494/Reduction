@@ -36,3 +36,17 @@ test('a book that no longer exists, or none stored: the first book', () => {
   assert.equal(restoreBookIndex(['a', 'b'], null), 0);
   assert.equal(restoreBookIndex([], 'a'), 0);
 });
+
+test('links into the app are told apart from launches that only carry a URL', async () => {
+  const { isAppLink } = await import('./destination');
+  const S = 'reduction-mobile';
+  assert.equal(isAppLink(null, S), false);
+  assert.equal(isAppLink('reduction-mobile://', S), false);
+  assert.equal(isAppLink('reduction-mobile:///', S), false);
+  assert.equal(isAppLink('reduction-mobile://auth?code=x', S), false, 'the sign-in return');
+  assert.equal(isAppLink('exp+reduction-mobile://expo-development-client/?url=http%3A%2F%2F10.0.0.2', S), false, 'the dev client');
+  assert.equal(isAppLink('reduction-mobile://recipe/abc', S), true);
+  assert.equal(isAppLink('reduction-mobile://library', S), true);
+  assert.equal(isAppLink('https://recipe-reduction.replit.app/recipe/abc', S), true);
+  assert.equal(isAppLink('otherapp://recipe/abc', S), false);
+});

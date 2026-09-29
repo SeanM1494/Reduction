@@ -66,6 +66,9 @@ import {
 } from '@/lib/recipeBox';
 import { sortLabel, type SortKey } from '@/lib/libraryView';
 import { useBooks } from '@/lib/books-context';
+import { useAuth } from '@/lib/auth-context';
+import { readLastBook, writeLastBook } from '@/lib/lastBook';
+import { restoreBookIndex } from '@/lib/opening/destination';
 import { router } from 'expo-router';
 import { useColors, type Colors } from '@/hooks/useColors';
 import { fonts } from '@/constants/colors';
@@ -89,7 +92,8 @@ export function RecipeBox({ entries, sort, onOpenSort, onOpenRecipe, onAddRecipe
   const colors = useColors();
   const styles = makeStyles(colors);
   const reduceMotion = useReducedMotion();
-  const { books: allBooks } = useBooks();
+  const { books: allBooks, available: booksKnown } = useBooks();
+  const userId = useAuth().user?.id ?? null;
   const books = useMemo(() => shelf(entries, sort, allBooks), [entries, sort, allBooks]);
   const m = books.length;
   const [stage, setStage] = useState<{ w: number; h: number } | null>(null);
@@ -129,6 +133,37 @@ export function RecipeBox({ entries, sort, onOpenSort, onOpenRecipe, onAddRecipe
   useEffect(() => {
     frontId.current = current?.book.id ?? null;
   });
+
+  // The book last open on this device, by id (lib/lastBook.ts): restored
+  // once, when the shelf is on screen and the account's books are known —
+  // or sooner if the stored book is already on the shelf — then saved on
+  // every change of book. Placed without animating, like the shelf
+  // changing under the carousel above: nothing the person did moved it.
+  const restored = useRef(false);
+  useEffect(() => {
+    if (restored.current || !userId || !m) return;
+    let live = true;
+    readLastBook(userId).then((id) => {
+      if (!live || restored.current) return;
+      const ids = books.map((b) => b.book.id);
+      if (booksKnown === null && id && !ids.includes(id)) return; // wait for the books
+      restored.current = true;
+      const i = restoreBookIndex(ids, id);
+      if (i !== shelfIndex(at, m)) {
+        const next = at - shelfIndex(at, m) + i;
+        setAt(next);
+        pos.value = next;
+      }
+    });
+    return () => {
+      live = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userId, books, booksKnown]);
+  const currentId = current?.book.id ?? null;
+  useEffect(() => {
+    if (restored.current && userId && currentId) writeLastBook(userId, currentId);
+  }, [userId, currentId]);
 
   const tick = useCallback(() => {
     if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
