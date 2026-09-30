@@ -13,7 +13,8 @@ import { sql } from "drizzle-orm";
 import { getDb } from "../db";
 import { extractionEvents } from "@workspace/db";
 import { needsDatabase } from "./testdb";
-import { hostOf, recordExtraction } from "./extractionLog";
+import { eventRow, hostOf, isMissingColumn, recordExtraction, writeEvent } from "./extractionLog";
+import { emptyUsage } from "./extractionConfig";
 
 test("hostOf keeps the site and drops everything that identifies a page", () => {
   assert.equal(hostOf("https://www.seriouseats.com/recipes/2015/chili"), "seriouseats.com");
@@ -142,4 +143,65 @@ test("host is capped, so a hostile URL cannot write an unbounded row", async (t)
   assert.ok(rows[0].host!.length <= 253, `host was ${rows[0].host!.length} chars`);
 
   await db.delete(extractionEvents).where(sql`${extractionEvents.host} like ${like}`);
+});
+
+// ---- Cost (Sep 30) ---------------------------------------------------------
+
+const usage = (over: Partial<ReturnType<typeof emptyUsage>> = {}) => ({ ...emptyUsage(), ...over });
+
+test("a cache hit is logged at zero cost and zero tokens, whatever usage it is handed", () => {
+  const row = eventRow({ source: "url", cached: true, ok: true, usage: usage({ inputTokens: 999, outputTokens: 999 }) });
+  assert.deepEqual([row.inputTokens, row.outputTokens, row.estCostUsd], [0, 0, "0"]);
+});
+
+test("a fresh extraction is priced from its usage: every prompt token, and the estimate", () => {
+  const row = eventRow({
+    source: "text",
+    cached: false,
+    ok: true,
+    userId: "u-1",
+    usage: usage({ inputTokens: 6000, outputTokens: 2000, cacheReadTokens: 1000 }),
+  });
+  assert.equal(row.inputTokens, 7000, "cached and uncached prompt tokens together");
+  assert.equal(row.outputTokens, 2000);
+  assert.equal(row.estCostUsd, "0.032200", "6000x$2 + 2000x$10 + 1000x$0.20, per million");
+  assert.equal(row.userId, "u-1");
+});
+
+test("a fresh attempt with no usage is UNKNOWN cost, not free; a trial has no user", () => {
+  const row = eventRow({ source: "url", cached: false, ok: false });
+  assert.deepEqual([row.inputTokens, row.outputTokens, row.estCostUsd, row.userId], [null, null, null, null]);
+});
+
+test("the write falls back to the old columns when the cost columns are missing, and only then", async () => {
+  const row = eventRow({ source: "url", cached: false, ok: true, usage: usage({ inputTokens: 1, outputTokens: 1 }) });
+  const calls: string[] = [];
+  const missing = Object.assign(new Error('column "user_id" does not exist'), { code: "42703" });
+  assert.equal(
+    await writeEvent(row, async () => { calls.push("full"); throw missing; }, async () => { calls.push("legacy"); }),
+    "legacy"
+  );
+  assert.deepEqual(calls, ["full", "legacy"]);
+  // Wrapped the way Drizzle wraps a driver error.
+  assert.equal(isMissingColumn({ cause: { code: "42703" } }), true);
+  // Anything else is not papered over.
+  const other = Object.assign(new Error("relation does not exist"), { code: "42P01" });
+  await assert.rejects(writeEvent(row, async () => { throw other; }, async () => assert.fail("no fallback")), /relation/);
+  assert.equal(await writeEvent(row, async () => {}, async () => assert.fail("no fallback")), "full");
+});
+
+test("recordExtraction writes the account and the estimated cost", async (t) => {
+  if (!(await needsDatabase(t, "extraction_events"))) return;
+  const db = getDb();
+  const host = `costtest-${Date.now()}.invalid`;
+  recordExtraction({ source: "url", cached: false, via: "self", host, ok: true, ms: 5, userId: "cost-user", usage: usage({ inputTokens: 5000, outputTokens: 1000 }) });
+  recordExtraction({ source: "url", cached: true, via: "self", host, ok: true, ms: 1, userId: "cost-user" });
+  await new Promise((r) => setTimeout(r, 300));
+  const rows = await db.select().from(extractionEvents).where(sql`${extractionEvents.host} = ${host}`).orderBy(extractionEvents.id);
+  assert.equal(rows.length, 2);
+  assert.deepEqual(rows.map((r) => [r.cached, r.userId, r.inputTokens, r.outputTokens, Number(r.estCostUsd)]), [
+    [false, "cost-user", 5000, 1000, 0.02],
+    [true, "cost-user", 0, 0, 0],
+  ]);
+  await db.delete(extractionEvents).where(sql`${extractionEvents.host} = ${host}`);
 });

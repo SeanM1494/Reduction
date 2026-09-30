@@ -85,6 +85,13 @@ accountRouter.delete("/", async (req: Request, res: Response) => {
           await sp.delete(recipeBooks).where(eq(recipeBooks.userId, userId));
         })
         .catch((e) => console.warn(`[account:delete] ${userId}: books not deleted:`, (e as Error).message));
+      // The extraction log keeps its totals and loses the link to the
+      // account (a hand-run column since Sep 30, so a savepoint too).
+      await tx
+        .transaction(async (sp) => {
+          await sp.execute(sql`update extraction_events set user_id = null where user_id = ${userId}`);
+        })
+        .catch((e) => console.warn(`[account:delete] ${userId}: extraction log not unlinked:`, (e as Error).message));
       await tx.delete(recipes).where(eq(recipes.userId, userId));
       await tx.delete(accessEvents).where(eq(accessEvents.userId, userId));
       await tx.update(trials).set({ claimedByUserId: null }).where(eq(trials.claimedByUserId, userId));

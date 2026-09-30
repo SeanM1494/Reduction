@@ -640,6 +640,48 @@ README section holding its DDL, and the same line is logged at boot
 {"ok":true,"commit":"…","schema":{"ok":false,"missing":["recipes.removed_at (README \"The recipe box\")"]}}
 ```
 
+### Extraction costs
+
+Every extraction attempt and cache hit is a row in `extraction_events`
+(`lib/extractionLog.ts`). Since Sep 30 a fresh one also records the
+signed-in account (null for a signed-out trial), the prompt and output
+tokens the model calls reported, and an **ESTIMATED** cost at list price
+(`lib/extractionCost.ts`, the one place the prices live, shared with the
+eval). A cache hit records 0. The route is the existing `source` column:
+`url` (a link), `text` (a paste), `file` (a photo or PDF), `page` (a page
+the phone's browser handed over), `reextract`. Hand-run DDL, safe to run
+twice:
+
+```sql
+alter table extraction_events add column if not exists user_id text;
+alter table extraction_events add column if not exists input_tokens integer;
+alter table extraction_events add column if not exists output_tokens integer;
+alter table extraction_events add column if not exists est_cost_usd numeric(10, 6);
+create index if not exists extraction_events_user_at_idx on extraction_events (user_id, at);
+```
+
+All nullable, no defaults: instant, and harmless to the code already
+running. Run it before the deploy anyway. Unlike most columns, the code
+copes with the other order: the writer falls back to the old column set
+when these are missing (one `[extractionLog] cost columns missing` line per
+process), so no extraction is ever lost to it. `GET /api/admin/costs`
+answers 503 `schema_behind` until the SQL runs, and `/api/health` lists all
+four under `schema.missing`.
+
+Deleting an account sets its rows' `user_id` to null. The totals stay; the
+link to the person goes.
+
+`GET /api/admin/costs` (header `x-admin-secret`) returns, for the last 7
+and 30 days: fresh extractions (and how many failed), cache hits, the
+estimated total, what one fresh extraction costs (mean, median, p90),
+totals by route, signed-out trials as one total, and the top 20 accounts
+by fresh extractions and by estimated spend. Accounts are ids only, never
+an email. It caps nothing.
+
+```sh
+curl -s -H "x-admin-secret: $ADMIN_SECRET" https://<deployment>/api/admin/costs
+```
+
 ### A development build for a physical iPhone
 
 `artifacts/reduction-mobile/eas.json` has three profiles. `development` is

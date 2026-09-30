@@ -30,7 +30,7 @@ function getClient(): Anthropic {
   return _client;
 }
 
-const MODEL = "claude-sonnet-5";
+export const MODEL = "claude-sonnet-5";
 const BETA = "web-fetch-2025-09-10";
 const MAX_ATTEMPTS = 2;
 

@@ -26,6 +26,7 @@ import { checkAccess, subscriptionRequired } from "../lib/billing/access";
 import { ensureTrialId, refundTrial, spendTrial, storeTrialRecipe, trialOwnerKey } from "../lib/trial";
 import { urlKeyOf } from "../lib/urlKey";
 import { hostOf, recordExtraction, type ExtractionEvent } from "../lib/extractionLog";
+import type { CallUsage } from "../lib/extractionConfig";
 import {
   sanitizeOriginal,
   type OriginalFrom,
@@ -425,6 +426,8 @@ function extractionRecorder(req: Request, res: Response) {
       host: facts.host ?? null,
       ok: res.statusCode < 400,
       ms: Date.now() - startedAt,
+      userId: userIdOf(req) ?? null,
+      usage: facts.usage ?? null,
     });
   });
 
@@ -482,7 +485,7 @@ recipesRouter.post("/extract", requireExtractionAllowance, async (req: Request, 
       const { sourceUrl: _omit, ...shareable } = out.recipe;
       await cacheSet(key, shareable as Recipe);
       await keepOriginal(key, out.original);
-      mark({ cached: false, via: "self", attempts: out.attempts, repaired: out.repaired.length });
+      mark({ cached: false, via: "self", attempts: out.attempts, repaired: out.repaired.length, usage: out.usage });
       return sendRecipe(req, res, {
         recipe: out.recipe,
         original: out.original,
@@ -530,7 +533,7 @@ recipesRouter.post("/extract", requireExtractionAllowance, async (req: Request, 
       await cacheSetUrl(url, recipe);
       const sourceKey = hash(`url:${url}`);
       await keepOriginal(sourceKey, original);
-      mark({ cached: false, via, attempts, repaired: repaired.length });
+      mark({ cached: false, via, attempts, repaired: repaired.length, usage: read.usage });
       return sendRecipe(req, res, {
         recipe,
         original,
@@ -585,7 +588,7 @@ recipesRouter.post("/extract", requireExtractionAllowance, async (req: Request, 
       const original = sanitizeOriginal(out.original, "text");
       await cacheSet(key, recipe);
       await keepOriginal(key, original);
-      mark({ cached: false, via: "self", attempts, repaired: repaired.length });
+      mark({ cached: false, via: "self", attempts, repaired: repaired.length, usage: out.usage });
       return sendRecipe(req, res, {
         recipe,
         meta: { cached: false, source: "text", attempts, repaired },
@@ -633,7 +636,7 @@ recipesRouter.post("/extract", requireExtractionAllowance, async (req: Request, 
     const original = sanitizeOriginal(out.original, "photo");
     await cacheSet(key, recipe);
     await keepOriginal(key, original);
-    mark({ cached: false, via: "self", attempts, repaired: repaired.length });
+    mark({ cached: false, via: "self", attempts, repaired: repaired.length, usage: out.usage });
     return sendRecipe(req, res, {
       recipe,
       meta: { cached: false, source: "file", attempts, repaired },
@@ -646,6 +649,9 @@ recipesRouter.post("/extract", requireExtractionAllowance, async (req: Request, 
     // their one free extraction.
     const trialId = (req as Request & { trialId?: string }).trialId;
     if (trialId) await refundTrial(trialId).catch(() => {});
+    // A failed read still spent tokens; the error carries what they were.
+    const spent = (e as { usage?: CallUsage }).usage;
+    if (spent) mark({ usage: spent });
 
     const err = e as Error & { details?: string[] };
     const isUserFacing =
@@ -773,7 +779,7 @@ recipesRouter.post("/reextract", async (req: Request, res: Response) => {
     // wrong — the cheaper mistake of the two.
     await cacheDropUrl(url);
 
-    const { recipe, attempts, repaired, original } = await readRecipeAtUrl(url, {
+    const { recipe, attempts, repaired, original, usage } = await readRecipeAtUrl(url, {
       onFallback: () => mark({ via: "claude" }),
     });
 
@@ -782,9 +788,11 @@ recipesRouter.post("/reextract", async (req: Request, res: Response) => {
     // This account's saved copies of the page forget their old wording; the
     // next open of each takes the new reading from the cache.
     await forgetRecipeOriginalsFor(userId, url).catch((e) => warnOriginal("reextract", e));
-    mark({ attempts, repaired: repaired.length });
+    mark({ attempts, repaired: repaired.length, usage });
     return res.json({ recipe, meta: { cached: false, source: "url", attempts, repaired } });
   } catch (e) {
+    const spent = (e as { usage?: CallUsage }).usage;
+    if (spent) mark({ usage: spent });
     const err = e as Error & { details?: string[] };
     const isUserFacing =
       /URL|host|page|refused|blocked|too large|too short|recipe from that page|valid diagram/i.test(

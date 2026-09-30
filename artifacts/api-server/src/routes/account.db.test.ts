@@ -31,6 +31,7 @@ import {
   subscriptions,
   trials,
   users,
+  extractionEvents,
 } from "@workspace/db";
 import { needsDatabase } from "../lib/testdb";
 import { setStripeCancelForTests } from "../lib/billing/stripe";
@@ -165,6 +166,21 @@ test("account: a free account is deleted whole — every row it owns, the trial 
   assert.deepEqual(await footprint(id), GONE);
   const [trial] = await getDb().select().from(trials).where(eq(trials.id, trialId));
   assert.equal(trial.claimedByUserId, null, "the trial no longer names a user that does not exist");
+});
+
+test("account: the extraction log keeps its totals and loses the account (Sep 30)", async (t) => {
+  if (!(await needsDatabase(t, ...TABLES, "extraction_events"))) return;
+  setStripeCancelForTests(async () => assert.fail("no subscription, nothing to cancel"));
+  const { id } = await makeAccount();
+  const db = getDb();
+  const host = `acct-${id}.invalid`;
+  await db.insert(extractionEvents).values({ source: "url", cached: false, ok: true, host, userId: id, inputTokens: 10, outputTokens: 5, estCostUsd: "0.000070" });
+  assert.equal((await del(id)).status, 200);
+  const rows = await db.select().from(extractionEvents).where(eq(extractionEvents.host, host));
+  assert.equal(rows.length, 1, "the row stays: it is a total, not the person");
+  assert.equal(rows[0].userId, null, "but it no longer names the account");
+  assert.equal(Number(rows[0].estCostUsd), 0.00007);
+  await db.delete(extractionEvents).where(eq(extractionEvents.host, host));
 });
 
 test("account: a Stripe subscription is cancelled at the provider FIRST, then the account goes", async (t) => {

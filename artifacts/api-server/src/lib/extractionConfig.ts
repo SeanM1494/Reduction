@@ -124,8 +124,14 @@ export function resolveCall(opts: ModelCallOptions = {}): {
 
 /** What a call cost, for the comparison script and the logs. */
 export interface CallUsage {
+  /** Uncached input tokens, as the API reports `input_tokens`. */
   inputTokens: number;
   outputTokens: number;
+  /** Prompt-cache writes and reads, priced differently (extractionCost.ts). */
+  cacheWriteTokens: number;
+  cacheReadTokens: number;
+  /** Server-side web searches (web fetches are not metered). */
+  webSearches: number;
   /** One per attempt, in order: "end_turn", "max_tokens", … */
   stopReasons: string[];
   /** Why each answer that did NOT become the tree was turned down, in
@@ -135,7 +141,15 @@ export interface CallUsage {
   failures: string[][];
 }
 
-export const emptyUsage = (): CallUsage => ({ inputTokens: 0, outputTokens: 0, stopReasons: [], failures: [] });
+export const emptyUsage = (): CallUsage => ({
+  inputTokens: 0,
+  outputTokens: 0,
+  cacheWriteTokens: 0,
+  cacheReadTokens: 0,
+  webSearches: 0,
+  stopReasons: [],
+  failures: [],
+});
 
 /** One usage into another: the URL path adds its first path's calls to the
  *  fallback's. */
@@ -143,12 +157,26 @@ export function mergeUsage(into: CallUsage, from?: CallUsage): void {
   if (!from) return;
   into.inputTokens += from.inputTokens;
   into.outputTokens += from.outputTokens;
+  into.cacheWriteTokens += from.cacheWriteTokens ?? 0;
+  into.cacheReadTokens += from.cacheReadTokens ?? 0;
+  into.webSearches += from.webSearches ?? 0;
   into.stopReasons.push(...from.stopReasons);
   into.failures.push(...(from.failures ?? []));
 }
 
-export function addUsage(u: CallUsage, msg: { usage?: { input_tokens?: number; output_tokens?: number } | null; stop_reason?: string | null }): void {
+export interface WireUsage {
+  input_tokens?: number | null;
+  output_tokens?: number | null;
+  cache_creation_input_tokens?: number | null;
+  cache_read_input_tokens?: number | null;
+  server_tool_use?: { web_search_requests?: number | null } | null;
+}
+
+export function addUsage(u: CallUsage, msg: { usage?: WireUsage | null; stop_reason?: string | null }): void {
   u.inputTokens += msg.usage?.input_tokens ?? 0;
   u.outputTokens += msg.usage?.output_tokens ?? 0;
+  u.cacheWriteTokens += msg.usage?.cache_creation_input_tokens ?? 0;
+  u.cacheReadTokens += msg.usage?.cache_read_input_tokens ?? 0;
+  u.webSearches += msg.usage?.server_tool_use?.web_search_requests ?? 0;
   u.stopReasons.push(msg.stop_reason ?? "unknown");
 }

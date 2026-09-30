@@ -28,6 +28,8 @@ import { appleConfig, clientSecret, describeKeyEnv } from "../lib/apple";
 import { appleIapConfig, describeAppleIapEnv, requestAppleTestNotification } from "../lib/billing/apple";
 import Anthropic from "@anthropic-ai/sdk";
 import { MODEL as EXTRACTION_MODEL } from "../lib/structureRecipe";
+import { windowReport } from "../lib/costReport";
+import { isMissingColumn } from "../lib/extractionLog";
 
 export const adminRouter = Router();
 
@@ -544,6 +546,37 @@ adminRouter.get("/coupons", async (req: Request, res: Response) => {
   } catch (e) {
     console.error("[admin:coupons]", (e as Error).message);
     return res.status(500).json({ error: "Could not list codes." });
+  }
+});
+
+/**
+ * GET /api/admin/costs — what extraction is costing: totals for the last 7
+ * and 30 days, what one fresh extraction typically costs, by route, and the
+ * top 20 accounts by fresh extractions and by spend. ESTIMATES at list price
+ * (lib/extractionCost.ts); account ids only, never an email. Read-only, and
+ * it caps nothing: it is how an alert level is chosen, not an alert.
+ *
+ * Against a database without the Sep 30 columns it answers 503 and names
+ * the README section with the SQL, rather than a bare 500.
+ */
+adminRouter.get("/costs", async (req: Request, res: Response) => {
+  if (!requireAdmin(req, res)) return;
+  try {
+    const [week, month] = [await windowReport(7), await windowReport(30)];
+    return res.json({
+      estimate:
+        "Estimated at list price for the extraction model (lib/extractionCost.ts). The Anthropic Console's usage page is the truth.",
+      last7Days: week,
+      last30Days: month,
+    });
+  } catch (e) {
+    if (isMissingColumn(e))
+      return res.status(503).json({
+        error: 'The cost columns are not in this database yet. Run the SQL in README "Extraction costs".',
+        code: "schema_behind",
+      });
+    console.error("[admin:costs]", (e as Error).message);
+    return res.status(500).json({ error: "Could not read the costs." });
   }
 });
 

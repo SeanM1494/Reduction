@@ -29,6 +29,7 @@
  */
 
 import type { Recipe } from "../shared/layout";
+import { estimateCostUsd } from "../lib/extractionCost";
 import { originalStepTexts, stepSource, type OriginalRecipe } from "@workspace/recipe-model";
 
 export interface EvalConfig {
@@ -73,7 +74,10 @@ export interface EvalResult {
 }
 
 /** Sonnet 5, list price per token (the claude-api reference, Sep 2026). */
-export const costUsd = (input: number, output: number): number => input * 2e-6 + output * 10e-6;
+/** List-price estimate; the prices live in lib/extractionCost.ts, shared
+ *  with the live log so the two never disagree. */
+export const costUsd = (input: number, output: number): number =>
+  estimateCostUsd({ inputTokens: input, outputTokens: output });
 
 // --------------------------------------------------------- tag checking --
 

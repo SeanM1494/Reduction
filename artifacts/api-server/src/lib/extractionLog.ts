@@ -29,8 +29,11 @@
  * error here would be a recipe the user did not get.
  */
 
+import { sql } from "drizzle-orm";
 import { getDb } from "../db";
 import { extractionEvents } from "@workspace/db";
+import { estimateCostUsd, promptTokens } from "./extractionCost";
+import type { CallUsage } from "./extractionConfig";
 
 export interface ExtractionEvent {
   /** "page": a page the phone's in-app browser already had (Sep 28). */
@@ -42,6 +45,71 @@ export interface ExtractionEvent {
   host?: string | null;
   ok: boolean;
   ms?: number | null;
+  /** The signed-in account; null for a signed-out trial. */
+  userId?: string | null;
+  /** What the model calls reported. Absent on a fresh attempt that failed
+   *  before any call answered: the cost is then unknown, not zero. Ignored
+   *  on a cache hit, which is always zero. */
+  usage?: CallUsage | null;
+}
+
+/** The row as written: tokens and the ESTIMATED cost from the usage. */
+export function eventRow(event: ExtractionEvent) {
+  const priced = event.cached
+    ? { inputTokens: 0, outputTokens: 0, estCostUsd: "0" }
+    : event.usage
+      ? {
+          inputTokens: promptTokens(event.usage),
+          outputTokens: event.usage.outputTokens,
+          estCostUsd: estimateCostUsd(event.usage).toFixed(6),
+        }
+      : { inputTokens: null, outputTokens: null, estCostUsd: null };
+  return {
+    source: event.source,
+    cached: event.cached,
+    via: event.via ?? null,
+    attempts: event.attempts ?? null,
+    repaired: event.repaired ?? null,
+    // Capped HERE rather than in hostOf, so no caller can route round it.
+    // `host` is the only column fed by a user-supplied string, `text` has
+    // no length limit in Postgres, and this table's whole premise is that
+    // it is cheap to keep for ever. 253 is the DNS maximum.
+    host: event.host ? event.host.slice(0, 253) : null,
+    ok: event.ok,
+    ms: event.ms ?? null,
+    userId: event.userId ?? null,
+    ...priced,
+  };
+}
+
+type Row = ReturnType<typeof eventRow>;
+
+/** Postgres' "undefined_column", however the driver wraps it. */
+export function isMissingColumn(e: unknown): boolean {
+  const code = (e as { code?: string })?.code ?? (e as { cause?: { code?: string } })?.cause?.code;
+  return code === "42703";
+}
+
+/**
+ * The write, with its fallback. The Sep 30 columns are hand-run DDL, and a
+ * Drizzle insert names every column in the schema, so against a database
+ * that has not had the ALTER yet the full insert fails outright. Rather than
+ * lose every row until someone runs the SQL, it writes the columns that
+ * have always existed. Injected for the test; production passes the db.
+ */
+export async function writeEvent(
+  row: Row,
+  full: (row: Row) => Promise<unknown>,
+  legacy: (row: Row) => Promise<unknown>
+): Promise<"full" | "legacy"> {
+  try {
+    await full(row);
+    return "full";
+  } catch (e) {
+    if (!isMissingColumn(e)) throw e;
+    await legacy(row);
+    return "legacy";
+  }
 }
 
 /**
@@ -72,20 +140,19 @@ export function hostOf(rawUrl: string): string | null {
 export function recordExtraction(event: ExtractionEvent): void {
   void (async () => {
     try {
-      await getDb().insert(extractionEvents).values({
-        source: event.source,
-        cached: event.cached,
-        via: event.via ?? null,
-        attempts: event.attempts ?? null,
-        repaired: event.repaired ?? null,
-        // Capped HERE rather than in hostOf, so no caller can route round it.
-        // `host` is the only column fed by a user-supplied string, `text` has
-        // no length limit in Postgres, and this table's whole premise is that
-        // it is cheap to keep for ever. 253 is the DNS maximum.
-        host: event.host ? event.host.slice(0, 253) : null,
-        ok: event.ok,
-        ms: event.ms ?? null,
-      });
+      const db = getDb();
+      const how = await writeEvent(
+        eventRow(event),
+        (row) => db.insert(extractionEvents).values(row),
+        (row) =>
+          db.execute(sql`
+            insert into extraction_events (source, cached, via, attempts, repaired, host, ok, ms)
+            values (${row.source}, ${row.cached}, ${row.via}, ${row.attempts}, ${row.repaired}, ${row.host}, ${row.ok}, ${row.ms})`)
+      );
+      if (how === "legacy" && !warnedLegacy) {
+        warnedLegacy = true;
+        console.warn('[extractionLog] cost columns missing; writing without them (README "Extraction costs")');
+      }
     } catch (e) {
       // Deliberately quiet beyond one line. If the table is missing — the
       // migration has not been run — this would otherwise print on every
@@ -94,3 +161,6 @@ export function recordExtraction(event: ExtractionEvent): void {
     }
   })();
 }
+
+/** Once per process: the missing-column fallback is a state, not an event. */
+let warnedLegacy = false;

@@ -1067,10 +1067,10 @@ select via, attempts, count(*) from extraction_events
  where not cached group by via, attempts;
 ```
 
-It is **operational, not behavioural**: no user id, no trial id, and host
-rather than URL. That is a boundary, not an oversight — a column identifying a
-person would turn it into a record of what people read, with a retention
-policy attached, in exchange for answering nothing it does not already answer.
+It is **operational, not behavioural**: host rather than URL, and no trial
+id. It had no user id either, as a boundary, until cost made the case for
+one (Sep 30, "Launch readiness" below): a nullable `user_id`, nulled when
+the account is deleted, read only by the admin cost route as ids.
 A 400, 413 or 429 records nothing, because counting requests that never
 reached the model would wreck the denominator of every query above.
 
@@ -2317,6 +2317,38 @@ that case, so the fallback cannot help there.
 only /privacy.html and /terms.html. A /support.html in the same static
 style is proposed, not added (wording in the Sep 30 report, waiting for
 approval).
+
+### 2. Cost visibility — built (server Publish, after the SQL)
+
+`extraction_events` now records, for every fresh extraction, the signed-in
+account (nullable), the prompt and output tokens, and an ESTIMATED cost
+(`lib/extractionCost.ts`: $2 in, $10 out, cache write $2.50, cache read
+$0.20 per million, for `claude-sonnet-5`, with a test that fails if either
+call site's model changes without these). Cache hits record 0; a failed
+attempt records what it spent. The eval report now reads the same prices.
+
+Decisions:
+
+- **No new route column.** The `source` column already is the route
+  (`url`/`text`/`file`/`page`/`reextract`); a second column saying the same
+  thing would only drift.
+- **Tokens as well as the cost**, so a price change can be re-costed from
+  history rather than being frozen into it. `input_tokens` counts cached
+  and uncached prompt tokens together; the cost prices them separately.
+- **An unknown cost is null, not zero**: a fresh attempt that failed
+  before any model call answered. `unpriced` in the report counts them.
+- **The user id is new, and it took a decision** (the table's comment had
+  ruled it out). Nulled when the account is deleted; read only by the
+  admin route; never joined to an email.
+- **Code before SQL is safe**: the writer falls back to the old columns
+  (measured against a database without them), the route answers 503, and
+  `/api/health` names the four columns.
+- **No caps, no behaviour change.** Search (`POST /api/recipes/search`) also
+  calls the model and is not in this table; that is a separate question.
+
+`GET /api/admin/costs` is README "Extraction costs". The privacy policy
+does not yet say this; one sentence is proposed in the Sep 30 report,
+waiting for approval.
 
 ## Still open from earlier work
 

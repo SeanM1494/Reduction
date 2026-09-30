@@ -24,6 +24,7 @@ import {
   primaryKey,
   bigserial,
   customType,
+  numeric,
 } from "drizzle-orm/pg-core";
 import type { Recipe } from "./layout";
 
@@ -316,26 +317,33 @@ export const extractionCache = pgTable(
  * often the repair retry fires. Both were already on the wire as `meta.via`
  * and `meta.attempts` and nothing recorded them.
  *
- * TWO OMISSIONS THAT ARE THE POINT, not oversights:
+ * WHAT IT HOLDS ABOUT A PERSON, AND WHY (decided Sep 30, launch readiness):
  *
- *   - **No user id, and no trial id.** None of the questions this table
- *     answers need one. Adding one would turn an operations table into a
- *     record of what individual people read, with a retention policy and a
- *     deletion story attached, in exchange for nothing.
+ *   - **A user id, nullable, since Sep 30.** Until then there was none, on
+ *     purpose: no question needed one. Cost is the question that does —
+ *     "which accounts spend the most on fresh extractions" is how a runaway
+ *     account or a scripted client is seen before the invoice — so that
+ *     conversation happened and the column was added with its deletion
+ *     story: deleting an account NULLS its rows here (routes/account.ts),
+ *     keeping the totals and dropping the link. Null for a signed-out trial,
+ *     and still no trial id. It is read only by the admin cost route, as
+ *     ids, never with an email.
  *   - **Host, never the URL.** "Which sites force the expensive path" is the
  *     next question after the two above, and the host answers it. The path is
  *     what would make this a log of what somebody was cooking.
  *
- * Keep it that way. If you find yourself adding a column that identifies a
- * person, you are building a different table and it needs a different
- * conversation.
+ * The four Sep 30 columns (user_id, input_tokens, output_tokens,
+ * est_cost_usd) are HAND-RUN DDL (README "Extraction costs") and the writer
+ * falls back to the old column set when they are missing
+ * (lib/extractionLog.ts), so the code can ship before the SQL.
  */
 export const extractionEvents = pgTable(
   "extraction_events",
   {
     id: bigserial("id", { mode: "number" }).primaryKey(),
     at: timestamp("at", { withTimezone: true }).notNull().defaultNow(),
-    /** url | text | file | reextract */
+    /** The route: url (a link) | text (a paste) | file (a photo or PDF) |
+     *  page (a page the phone's browser handed over) | reextract */
     source: text("source").notNull(),
     /** True when this was served from extraction_cache: the denominator for
      *  the hit rate, and the rows that cost nothing. */
@@ -350,8 +358,21 @@ export const extractionEvents = pgTable(
     host: text("host"),
     ok: boolean("ok").notNull(),
     ms: integer("ms"),
+    /** The signed-in account, null for a signed-out trial (and after that
+     *  account is deleted). */
+    userId: text("user_id"),
+    /** Every prompt token sent, cached or not; 0 on a cache hit; null when
+     *  the attempt failed before reporting any. */
+    inputTokens: integer("input_tokens"),
+    outputTokens: integer("output_tokens"),
+    /** ESTIMATED US dollars at list price (lib/extractionCost.ts), 0 on a
+     *  cache hit. An estimate: the invoice is the truth. */
+    estCostUsd: numeric("est_cost_usd", { precision: 10, scale: 6 }),
   },
-  (table) => [index("extraction_events_at_idx").on(table.at)]
+  (table) => [
+    index("extraction_events_at_idx").on(table.at),
+    index("extraction_events_user_at_idx").on(table.userId, table.at),
+  ]
 );
 
 // ---------------------------------------------------------------- accounts --
