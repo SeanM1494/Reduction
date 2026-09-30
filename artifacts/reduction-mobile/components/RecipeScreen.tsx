@@ -112,6 +112,9 @@ interface RecipeScreenProps {
   offlineQueued?: boolean;
   isDraft?: boolean;
   onSave?: () => void;
+  /** One more sentence for the preview's banner, e.g. that saving a
+   *  starter uses the free recipe (lib/reelView.ts). */
+  draftNote?: string | null;
   /** A preview's title is the person's to change before it is saved: the
    *  banner shows it with a Rename, and a blank one opens it from Save. */
   onEditTitle?: () => void;
@@ -186,6 +189,7 @@ export function RecipeScreen({
   isDraft,
   onSave,
   onEditTitle,
+  draftNote = null,
   bookChoice,
   onOpenOriginal,
   sourceSteps = null,
@@ -430,6 +434,11 @@ export function RecipeScreen({
               <Text style={styles.draftBannerStrong}>Preview — not saved.</Text> Save it to keep it and to check off steps.
               Leaving this screen or closing the app discards it.
             </Text>
+            {draftNote ? (
+              <Text style={[styles.draftBannerText, styles.draftBannerStrong]} testID="draft-note">
+                {draftNote}
+              </Text>
+            ) : null}
             {onEditTitle ? (
               <Pressable
                 accessibilityRole="button"

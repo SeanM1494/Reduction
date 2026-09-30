@@ -41,6 +41,8 @@ import { hasStepSources } from '@/shared/stepSource';
 import { applyEdit } from '@/shared/edits';
 import { TitleWindow } from '@/components/TitleWindow';
 import { TitleButton } from '@/components/recipe/TitleButton';
+import { FREE_RECIPE_LINE, savedCounter, usesFreeRecipe } from '@/lib/reelView';
+import { reportCounter } from '@/lib/api';
 import { BookPicker } from '@/components/books/BookPicker';
 import { titleProblem } from '@/shared/title';
 
@@ -61,7 +63,7 @@ export default function RecipeDetailScreen() {
     setFinishInstant(false);
     setFinish(stage);
   };
-  const { refresh: refreshAccount } = useAuth();
+  const { refresh: refreshAccount, entitlement } = useAuth();
   const [saving, setSaving] = useState(false);
   const [draftServings, setDraftServings] = useState<number | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -161,6 +163,8 @@ export default function RecipeDetailScreen() {
       // this, Settings said "Free recipe available" after the first
       // recipe was already saved and counted.
       await refreshAccount();
+      // Anonymous: that a starter card became a saved recipe, by kind.
+      if (draft.fromReel) reportCounter(savedCounter(draft.fromReel));
       setSavedId(saved.id);
     } catch {
       // saveRecipe surfaces its own error via LibraryContext.error; the
@@ -209,6 +213,9 @@ export default function RecipeDetailScreen() {
           saving={saving}
           onSave={saveDraft}
           onEditTitle={() => setTitleOpen(true)}
+          // A starter's preview says what its Save spends (ROADMAP: an open
+          // product question; the allowance itself is unchanged).
+          draftNote={draft.fromReel && usesFreeRecipe(entitlement) ? FREE_RECIPE_LINE : null}
           bookChoice={
             booksAvailable === true && draftBookShown
               ? { name: draftBookShown.name, color: draftBookShown.color, onPress: () => setBookPickerOpen(true) }

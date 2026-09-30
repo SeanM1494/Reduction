@@ -13,6 +13,7 @@
  * account by the server.
  */
 
+import { EMPTY_REEL, parseReel, type ReelCounter, type ReelResponse } from './reelView';
 import type { Recipe } from '@/shared/layout';
 import type { OrderPreference } from '@/shared/sequence';
 import type { OriginalRecipe } from '@/shared/original';
@@ -249,6 +250,23 @@ export interface Entitlement {
   used: number;
   enforced: boolean;
 }
+
+/** The starter reel (Add New, the empty library): cached pages, nothing
+ *  about anyone. Parsed to the promised shape; empty on any failure — a
+ *  reel that cannot load is a reel that is not shown. */
+export const fetchReel = async (): Promise<ReelResponse> => {
+  try {
+    return parseReel(await request('/api/reel'));
+  } catch {
+    return EMPTY_REEL;
+  }
+};
+
+/** One of the reel's anonymous counters (the server's allow-list). Fire and
+ *  forget: a count that does not land is a gap in a total, nothing more. */
+export const reportCounter = (name: ReelCounter): void => {
+  request('/api/counters', { method: 'POST', body: JSON.stringify({ name }) }).catch(() => {});
+};
 
 export const fetchEntitlement = (): Promise<{ entitlement: Entitlement | null }> =>
   request('/api/billing/status');

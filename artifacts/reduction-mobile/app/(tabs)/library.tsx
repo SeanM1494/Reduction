@@ -40,9 +40,13 @@ import { SortSheet } from '@/components/library/SortSheet';
 import { SheetButton } from '@/components/Sheet';
 import { useColors, type Colors } from '@/hooks/useColors';
 import { fonts } from '@/constants/colors';
+import { StarterReel } from '@/components/reel/StarterReel';
+import { useOpenStarter } from '@/components/reel/useOpenStarter';
 
 export default function LibraryScreen() {
   const colors = useColors();
+  // The starter reel under the empty library's two buttons (Sep 30).
+  const starter = useOpenStarter();
   const styles = makeStyles(colors);
   const { entries, loading, error, refresh, notice, clearNotice } = useLibrary();
   const { books } = useBooks();
@@ -152,6 +156,9 @@ export default function LibraryScreen() {
             </>
           ) : null}
         </View>
+        {/* Below the empty box and its two buttons, full width: a reel
+            scrolls sideways, and inside the centred box it overflowed. */}
+        <StarterReel busy={false} onPick={starter.open} openingUrl={starter.openingUrl} testID="library-reel" />
       </ScrollView>
     );
   }

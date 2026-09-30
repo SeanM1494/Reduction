@@ -28,6 +28,8 @@ import { EMPTY_NAMES, NameFields, type NameValues } from '@/components/find/Name
 import { withUserFields } from '@/shared/title';
 import type { PreparedPhoto } from '@/lib/photo';
 import { useColors, type Colors } from '@/hooks/useColors';
+import { StarterReel } from '@/components/reel/StarterReel';
+import { useOpenStarter } from '@/components/reel/useOpenStarter';
 import { fonts } from '@/constants/colors';
 
 export function AddNewPane({
@@ -45,6 +47,7 @@ export function AddNewPane({
   const styles = makeStyles(colors);
   const { refresh } = useAuth();
   const { setDraft, entries } = useLibrary();
+  const starter = useOpenStarter();
 
   const [input, setInput] = useState('');
   const [photo, setPhoto] = useState<PreparedPhoto | null>(null);
@@ -210,6 +213,11 @@ export function AddNewPane({
             // under the photo otherwise.
             fields={textMode ? null : <NameFields value={names} onChange={setNames} disabled={!!busy} testID="photo-names" />}
           />
+
+          {/* Below everything the person came here to do, so it never moves
+              the paste box or the photo buttons; on a small phone it is
+              reached by scrolling (measured Sep 30). */}
+          <StarterReel busy={!!busy} onPick={starter.open} openingUrl={starter.openingUrl} />
         </>
       )}
     </ScrollView>

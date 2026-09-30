@@ -117,6 +117,9 @@ export interface Draft {
   sourceUrl?: string | null;
   original?: OriginalRecipe | null;
   sourceKey?: string;
+  /** Opened from the starter reel: which kind of card, for its save counter
+   *  and the preview's free-recipe line. In memory only, like the draft. */
+  fromReel?: 'data' | 'curated';
 }
 
 const LibraryContext = createContext<LibraryState | null>(null);

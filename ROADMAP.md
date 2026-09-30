@@ -2408,7 +2408,7 @@ is not the same as the wall appearing on a screen: the phone also shows
 the wall from its own entitlement check without asking the server. Counting
 that would be one more allow-listed name, if wanted.
 
-### 5. Starter recipes reel — server built (Sep 30); app next
+### 5. Starter recipes reel — built (Sep 30): server Publish, then over the air
 
 Decided Sep 30: data first (pages other people saved and cooked), the
 owner's curated list to fill; the search suggestions' privacy rules; every
@@ -2418,6 +2418,20 @@ warm-up as an admin route on the deployment (report by default, extract
 only with --write, re-read only a named row), called by `scripts/reel.mjs`;
 empty for walled accounts; "Loved by Reduction users" only when every card
 is data-backed and clears the ratings floor. README "Starter recipes reel".
+
+**On the phone** (`components/reel/`, `lib/reelView.ts`): under the photo
+buttons on Add New, and under the empty library's box and its two buttons
+— never above anything, so on an iPhone 13 or SE the Add New reel is
+reached by scrolling (measured Sep 30: the photo buttons already end at
+y=510 of 664 and 532 of 568). Cards 140x158pt on our meal-type art, "Title,
+site" to VoiceOver, a time only when stated, a usage line only when earned.
+Hidden while an extraction runs, while the keyboard is up (native only:
+Chromium has no soft keyboard), and when nothing qualifies. A tap is the
+ordinary link extraction; the preview adds "Saving this uses your free
+recipe." for an account with a free recipe left. Counted anonymously:
+shown (once a session), tapped and saved, by kind. With Reduce Motion the
+scroll does not snap — which only a phone shows, since the web build has
+no snapping either way.
 
 **The minimums are PROVISIONAL**, chosen before there was data: cooked by
 at least 3 distinct accounts; the 👍 share used (and shown) only from 5
