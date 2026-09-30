@@ -17,6 +17,7 @@ import { Router, type Request, type Response } from "express";
 import { userIdOf } from "../middleware/session";
 import { entitlementFor } from "../lib/billing/entitlement";
 import { buildReel, type ReelBuild } from "../lib/reelStore";
+import { reelPhotoRow } from "../lib/reelPhotos";
 
 export const reelRouter = Router();
 
@@ -62,5 +63,30 @@ reelRouter.get("/", async (req: Request, res: Response) => {
     // Decoration: a reel that cannot be built is a reel that is not shown.
     console.error("[reel]", (e as Error).message);
     return res.json({ heading: null, cards: [] });
+  }
+});
+
+/**
+ * GET /api/reel/photo/:key?v=<version> — a reel card's picture: the page's
+ * own image as this server stored it (lib/reelPhotos.ts). Signed in, like
+ * the reel; not braked, because a reel of ten cards is ten of these and
+ * each is one indexed read. The version in the URL makes `immutable`
+ * honest: a replaced picture has a new URL.
+ */
+reelRouter.get("/photo/:key", async (req: Request, res: Response) => {
+  if (!userIdOf(req)) return res.status(401).json({ error: "Sign in first." });
+  const key = String(req.params.key);
+  if (!/^[0-9a-f]{64}$/.test(key)) return res.status(404).json({ error: "No picture." });
+  try {
+    const photo = await reelPhotoRow(key);
+    if (!photo) return res.status(404).json({ error: "No picture." });
+    res.setHeader("Content-Type", photo.mediaType);
+    res.setHeader("Content-Length", String(photo.bytes.length));
+    res.setHeader("Cache-Control", "private, max-age=31536000, immutable");
+    res.setHeader("ETag", `"r${photo.version}"`);
+    return res.end(photo.bytes);
+  } catch (e) {
+    console.error("[reel:photo]", (e as Error).message);
+    return res.status(500).json({ error: "Could not load the picture." });
   }
 });

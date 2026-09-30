@@ -2452,6 +2452,20 @@ shown (once a session), tapped and saved, by kind. With Reduce Motion the
 scroll does not snap — which only a phone shows, since the web build has
 no snapping either way.
 
+**Cards became Recipe Box pages, with pictures (decided Sep 30, after the
+first cards reached the phone).** The owner asked for the book page's face
+— picture, title, time, serves and steps, first ingredients — and for
+"Cooked by N people" and "N likes" as use arrives. That reverses the first
+spec's "no third-party photos": a page's picture in a row shown to people
+who have not chosen that recipe is closer to a link preview than to their
+own copy, so every card credits its site, and `hide` takes a page out
+without a deploy if a site objects. The picture is the page's OWN image,
+fetched and stored by the server (`reel_photos`); nothing reads anyone's
+`recipe_photos` to build a card (README "Starter recipes reel"). "Likes"
+replaced the 👍 share on the card: the count of accounts whose latest
+rating is 👍, shown from five ratings, with the 60% floor still deciding
+whether the page is offered at all.
+
 **The minimums are PROVISIONAL**, chosen before there was data: cooked by
 at least 3 distinct accounts; the 👍 share used (and shown) only from 5
 ratings; excluded under 60% 👍 at 5+ ratings; at most 10 cards; the reel

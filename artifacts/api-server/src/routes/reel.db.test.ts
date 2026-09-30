@@ -30,6 +30,12 @@ import { extractionEvents } from "@workspace/db";
 import { emptyUsage } from "../lib/extractionConfig";
 import { cacheGetUrlRow, cacheSetUrl, cacheDropUrl } from "./recipes";
 import { HEADING_CURATED } from "../lib/reel";
+import { Jimp } from "jimp";
+import { recipePhotos } from "@workspace/db";
+import { setPagePhotoFetcherForTests } from "../lib/photos";
+import { resetReelPhotoFillForTests } from "../lib/reelPhotos";
+import { buildReel } from "../lib/reelStore";
+import { urlKeyOf } from "../lib/urlKey";
 
 const TABLES = ["users", "recipes", "extraction_cache", "account_access", "reel_entries", "admin_events"];
 const SECRET = "test-admin-secret-reel-0123456789";
@@ -142,6 +148,10 @@ after(async () => {
   await cacheDropUrl(`https://drive.google.com/file/d/${RUN}/view`);
   await db.execute(sql`delete from reel_entries where url like ${`%${HOST}%`}`);
   await db.delete(adminEvents).where(like(adminEvents.note, `%${HOST}%`));
+  for (const id of accounts) await db.delete(recipePhotos).where(eq(recipePhotos.ownerKey, `user:${id}`));
+  await db.execute(sql`delete from reel_photos where image_url like ${`%${HOST}%`}`).catch(() => {});
+  for (const p of ["pictured"]) await cacheDropUrl(page(p));
+  setPagePhotoFetcherForTests(null);
   server?.close();
 });
 
@@ -193,9 +203,10 @@ test("reel: every privacy rule, by the case that would break it", async (t) => {
   assert.equal(r.body.cards.filter((c: { title: string }) => c.title === "Loved Omelette").length, 1, "the paste of the same dish is not a second card");
 
   const loved = r.body.cards.find((c: { url: string }) => c.url === page("loved"));
-  assert.deepEqual(Object.keys(loved).sort(), ["kind", "mealType", "site", "title", "totalMinutes", "url", "usage"]);
+  assert.deepEqual(Object.keys(loved).sort(), ["cookedBy", "ingredients", "kind", "likes", "mealType", "moreIngredients", "photo", "servings", "site", "steps", "title", "totalMinutes", "url", "usage"]);
   assert.equal(loved.kind, "data");
-  assert.equal(loved.usage, "Cooked by 5 people · 100% loved it");
+  assert.equal(loved.usage, "Cooked by 5 people · 5 likes");
+  assert.deepEqual([loved.cookedBy, loved.likes], [5, 5]);
   const unrated = r.body.cards.find((c: { url: string }) => c.url === page("unrated"));
   assert.equal(unrated.usage, "Cooked by 3 people", "no share without five ratings");
   assert.equal(r.body.heading, HEADING_CURATED, "an unrated card means the reel cannot say 'Loved'");
@@ -345,4 +356,124 @@ test("reel warm: write extracts an uncached page once, caches, pins, logs its co
   const audited = await getDb().select().from(adminEvents).where(like(adminEvents.note, `%${page("warm-new")}%`));
   assert.ok(audited.some((a) => /extracted/.test(a.note ?? "")) && audited.some((a) => /refreshed/.test(a.note ?? "")));
   setWarmReaderForTests(null);
+});
+
+const png = (width: number, height: number, color: number): Promise<Buffer> =>
+  new Jimp({ width, height, color }).getBuffer("image/png");
+
+async function photoGet(path: string, user: string | null) {
+  const res = await fetch(`${await listen()}${path}`, { headers: user ? { "x-test-user": user } : {} });
+  return { status: res.status, type: res.headers.get("content-type"), cache: res.headers.get("cache-control"), bytes: Buffer.from(await res.arrayBuffer()) };
+}
+
+test("reel photos: the page's own picture, stored by the warm-up, served signed in, and never anybody's own photo", async (t) => {
+  if (!(await needsDatabase(t, ...TABLES, "reel_photos", "recipe_photos"))) return;
+  await seed();
+  resetReelPhotoFillForTests();
+  const pageImage = await png(1600, 900, 0x3366ffff);
+  const userImage = await png(40, 40, 0xff0000ff);
+  const fetched: string[] = [];
+  setPagePhotoFetcherForTests(async (url) => {
+    fetched.push(url);
+    return { ok: true, status: 200, contentType: "image/png", bytes: pageImage };
+  });
+  try {
+    const viewer = await account();
+
+    // A curated page whose tree names its picture: stored as it is curated.
+    const pictureUrl = `https://${HOST}/img/pie.jpg`;
+    await cacheSetUrl(page("pictured"), { ...tree(page("pictured"), "Pictured Pie"), image: pictureUrl } as never);
+    const wrote = await admin("POST", "/reel/warm", { url: page("pictured"), write: true });
+    assert.deepEqual([wrote.body.status, wrote.body.estCostUsd, wrote.body.photo], ["cached", 0, "stored"]);
+    assert.deepEqual(fetched, [pictureUrl]);
+    const again = await admin("POST", "/reel/warm", { url: page("pictured"), write: true });
+    assert.equal(again.body.photo, "kept", "the same picture is not fetched twice");
+    assert.equal(fetched.length, 1);
+
+    const r = await reel(viewer);
+    const card = r.body.cards.find((c: { url: string }) => c.url === page("pictured"));
+    const key = urlKeyOf(page("pictured"))!;
+    assert.equal(card.photo, `/api/reel/photo/${key}?v=1`);
+
+    assert.equal((await photoGet(card.photo, null)).status, 401, "signed in, like the reel");
+    const got = await photoGet(card.photo, viewer);
+    assert.equal(got.status, 200);
+    assert.equal(got.type, "image/jpeg");
+    assert.match(got.cache ?? "", /immutable/);
+    const img = await Jimp.read(got.bytes);
+    assert.deepEqual([img.width, img.height], [1024, 576], "our copy, shrunk like every stored picture");
+    assert.equal((await photoGet(`/api/reel/photo/${"0".repeat(64)}?v=1`, viewer)).status, 404);
+    assert.equal((await photoGet("/api/reel/photo/..%2Fsecrets", viewer)).status, 404);
+
+    // A data-backed page whose saver attached their OWN photo: that photo is
+    // theirs, and nothing reads recipe_photos to build a card.
+    const [saved] = await getDb().select().from(recipes).where(eq(recipes.userId, accounts[0]));
+    await getDb().insert(recipePhotos).values({
+      ownerKey: saved.ownerKey, id: saved.id, bytes: userImage, mediaType: "image/png", width: 40, height: 40, source: "user",
+    } as never).onConflictDoNothing();
+    const loved = (await reel(viewer)).body.cards.find((c: { url: string }) => c.url === page("loved"));
+    assert.equal(loved.photo, null, "the tree names no picture, so the card has none");
+    assert.equal(fetched.length, 1, "and nothing was fetched for it");
+
+    // Once the cached tree names the page's picture, the NEXT builds fetch it
+    // (fire-and-forget) — the page's bytes, never the saver's.
+    await cacheSetUrl(page("loved"), { ...tree(page("loved"), "Loved Omelette"), image: `https://${HOST}/img/omelette.jpg` } as never);
+    const first = await buildReel();
+    assert.equal(first.cards.find((c) => c.url === page("loved"))!.photo, null, "not shown until it is stored");
+    await first.photoFill;
+    assert.ok(fetched.includes(`https://${HOST}/img/omelette.jpg`));
+    const second = await buildReel();
+    const lovedPhoto = second.cards.find((c) => c.url === page("loved"))!.photo!;
+    await second.photoFill;
+    const bytes = (await photoGet(lovedPhoto, viewer)).bytes;
+    assert.equal((await Jimp.read(bytes)).width, 1024, "the page's picture, not the saver's 40px photo");
+    const fetchesSoFar = fetched.length;
+    await (await buildReel()).photoFill;
+    assert.equal(fetched.length, fetchesSoFar, "a stored picture is not fetched again");
+  } finally {
+    setPagePhotoFetcherForTests(null);
+    resetReelPhotoFillForTests();
+  }
+});
+
+test("reel photos: a picture that cannot be fetched is tried once per instance, and a missing table only means no pictures", async (t) => {
+  if (!(await needsDatabase(t, ...TABLES, "reel_photos"))) return;
+  await seed();
+  resetReelPhotoFillForTests();
+  let tries = 0;
+  setPagePhotoFetcherForTests(async () => {
+    tries++;
+    return { ok: false, status: 403, contentType: "text/html", bytes: Buffer.from("no") };
+  });
+  const db = getDb();
+  try {
+    await cacheSetUrl(page("unrated"), { ...tree(page("unrated"), "Unrated Stew"), image: `https://${HOST}/img/stew.jpg` } as never);
+    await (await buildReel()).photoFill;
+    await (await buildReel()).photoFill;
+    assert.equal(tries, 1, "a failing picture is not fetched on every build");
+    const viewer = await account();
+    assert.equal((await reel(viewer)).body.cards.find((c: { url: string }) => c.url === page("unrated")).photo, null);
+
+    // Without the table (hand-run DDL not yet run): the reel still builds,
+    // cards carry no picture, the route answers 404, a warm-up says so.
+    await db.execute(sql`alter table reel_photos rename to reel_photos_parked`);
+    try {
+      resetReelPhotoFillForTests();
+      const built = await buildReel();
+      await built.photoFill;
+      assert.ok(built.cards.length > 0);
+      assert.ok(built.cards.every((c) => c.photo === null));
+      assert.equal((await photoGet(`/api/reel/photo/${urlKeyOf(page("pictured"))}?v=1`, viewer)).status, 404);
+      await cacheSetUrl(page("pictured"), { ...tree(page("pictured"), "Pictured Pie"), image: `https://${HOST}/img/pie.jpg` } as never);
+      setPagePhotoFetcherForTests(async () => ({ ok: true, status: 200, contentType: "image/png", bytes: await png(8, 8, 0x00ff00ff) }));
+      const wrote = await admin("POST", "/reel/warm", { url: page("pictured"), write: true });
+      assert.deepEqual([wrote.body.status, wrote.body.curated, wrote.body.photo], ["cached", true, "no_table"]);
+    } finally {
+      await db.execute(sql`alter table reel_photos_parked rename to reel_photos`);
+    }
+  } finally {
+    await cacheSetUrl(page("unrated"), tree(page("unrated"), "Unrated Stew") as never);
+    setPagePhotoFetcherForTests(null);
+    resetReelPhotoFillForTests();
+  }
 });

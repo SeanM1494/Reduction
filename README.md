@@ -781,12 +781,48 @@ calls the admin routes on the deployment (PUBLIC_BASE_URL, ADMIN_SECRET):
   extract, or not public; for a cached page, what it predates (step order,
   picture, original wording).
 - `... --write` — extracts what is not cached (once, logged as `warmup` in
-  the cost report) and curates every clean page with a pinned copy.
+  the cost report) and curates every clean page with a pinned copy and its
+  card picture.
 - `... --write --refresh <url>` — also re-reads that named cached page.
 - `node scripts/reel.mjs hide <url>` / `unhide <url>`.
 
 Every write is in `admin_events` (action `reel`, target `(reel)`, the URL
 in the note).
+
+**A card is the Recipe Box page's face** (Sep 30): the page's picture, the
+title, the stated time, "Serves N · N steps", the first ingredients (the
+recipe model's `keyIngredients`/`stepCount`, so the reel and the box can
+never disagree), the site, and — on data-backed cards, each above its
+floor — "Cooked by N people" and "N likes" (accounts whose latest rating
+is 👍, once five have rated). `usage` still carries the joined line for the
+app versions that read only that.
+
+**The picture is the page's own image, stored by this server, one per page**
+in `reel_photos` (`lib/reelPhotos.ts`) — fetched from the URL the page's
+extraction recorded and shrunk like every stored photo. NEVER an account's
+`recipe_photos` row: a `user` photo is someone's own picture and nothing
+builds a card from that table. The warm-up stores a curated page's picture
+as it curates it (`picture: stored` in its report, no model call); a
+data-backed card's is fetched in the background by the reel builds that
+follow, at most three per build, and a picture that cannot be fetched is
+tried once per instance. `GET /api/reel/photo/<url key>?v=<version>` serves
+it, signed in, `immutable`. Hand-run DDL, safe to run twice:
+
+```sql
+create table if not exists reel_photos (
+  url_key text primary key,
+  image_url text not null,
+  bytes bytea not null,
+  media_type text not null,
+  width integer not null,
+  height integer not null,
+  version integer not null default 1,
+  updated_at timestamptz not null default now()
+);
+```
+
+Without it every card shows its meal-type art, `/api/health` lists it, and
+a warm-up reports `picture: no reel_photos table yet`.
 
 ### A development build for a physical iPhone
 

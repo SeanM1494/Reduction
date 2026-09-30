@@ -9,6 +9,7 @@ import {
   cardFrom,
   qualifies,
   rankPages,
+  reelUsage,
   reelUsageLine,
   staleFlags,
   usageByPage,
@@ -99,12 +100,34 @@ test("ranking: distinct cooks first, then the thumbs-up share, then the URL", ()
 test("the usage line says only what clears its floor, in people, never raw cooks", () => {
   assert.equal(reelUsageLine({ url: "", cookedBy: 2, rated: 0, loved: 0 }), null);
   assert.equal(reelUsageLine({ url: "", cookedBy: 3, rated: 4, loved: 4 }), "Cooked by 3 people");
-  assert.equal(reelUsageLine({ url: "", cookedBy: 6, rated: 5, loved: 4 }), "Cooked by 6 people · 80% loved it");
+  assert.equal(reelUsageLine({ url: "", cookedBy: 6, rated: 5, loved: 4 }), "Cooked by 6 people · 4 likes");
+  assert.equal(reelUsageLine({ url: "", cookedBy: 12, rated: 30, loved: 25 }), "Cooked by 12 people · 25 likes");
+  assert.equal(reelUsageLine({ url: "", cookedBy: 3, rated: 5, loved: 1 }), "Cooked by 3 people · 1 like");
+});
+
+test("the counts are the line's numbers, each null below its floor", () => {
+  assert.deepEqual(reelUsage({ url: "", cookedBy: 2, rated: 9, loved: 9 }), { cookedBy: null, likes: 9 });
+  assert.deepEqual(reelUsage({ url: "", cookedBy: 10, rated: 4, loved: 4 }), { cookedBy: 10, likes: null }, "four ratings are not yet a like count");
+  assert.deepEqual(reelUsage({ url: "", cookedBy: 10, rated: 30, loved: 25 }), { cookedBy: 10, likes: 25 });
+  assert.deepEqual(reelUsage(undefined), { cookedBy: null, likes: null });
+});
+
+test("a card carries the book page's summary of the page, from the recipe model", () => {
+  const c = cardFrom(tree(), "curated", undefined)!;
+  assert.equal(c.servings, 4);
+  assert.equal(c.steps, 1);
+  assert.deepEqual(c.ingredients, ["ground beef", "can kidney beans"]);
+  assert.equal(c.moreIngredients, 0);
+  assert.equal(c.photo, null, "the photo is the store's to set");
+  assert.deepEqual([c.cookedBy, c.likes, c.usage], [null, null, null], "a curated card says nothing about use");
+  const d = cardFrom(tree(), "data", { url: "", cookedBy: 7, rated: 6, loved: 5 })!;
+  assert.deepEqual([d.cookedBy, d.likes, d.usage], [7, 5, "Cooked by 7 people · 5 likes"]);
+  assert.equal(cardFrom(tree({ servings: 0 }), "curated", undefined)!.servings, null);
 });
 
 test("a card only from a clean URL extraction: pastes, photos and browser pages have no sourceUrl", () => {
   const card = cardFrom(tree(), "curated", undefined)!;
-  assert.deepEqual(Object.keys(card).sort(), ["kind", "mealType", "site", "title", "totalMinutes", "url", "usage"], "nothing about any person");
+  assert.deepEqual(Object.keys(card).sort(), ["cookedBy", "ingredients", "kind", "likes", "mealType", "moreIngredients", "photo", "servings", "site", "steps", "title", "totalMinutes", "url", "usage"], "nothing about any person");
   assert.equal(card.site, "Example Recipes");
   assert.equal(card.mealType, "dinner");
   assert.equal(card.totalMinutes, null, "time is stated, never computed");
@@ -116,7 +139,10 @@ test("a card only from a clean URL extraction: pastes, photos and browser pages 
   assert.equal(cardFrom(null, "curated", undefined), null);
 });
 
-const card = (url: string, kind: ReelCard["kind"]): ReelCard => ({ url, title: url, site: "s", totalMinutes: null, mealType: null, usage: null, kind });
+const card = (url: string, kind: ReelCard["kind"]): ReelCard => ({
+  url, title: url, site: "s", totalMinutes: null, mealType: null, servings: null, steps: 1, ingredients: [], moreIngredients: 0,
+  usage: null, cookedBy: null, likes: null, photo: null, kind,
+});
 const rated = { url: "", cookedBy: 5, rated: 5, loved: 5 };
 const unrated = { url: "", cookedBy: 5, rated: 0, loved: 0 };
 

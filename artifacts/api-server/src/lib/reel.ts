@@ -18,7 +18,9 @@
  *  - usage is counted per ACCOUNT, signed-in accounts only, removed recipes
  *    excluded, and said aloud only above its floor;
  *  - nothing about any person leaves: a card carries a URL, a title, a
- *    site, a stated time, a meal type, a usage line and its kind.
+ *    site, a stated time, a meal type, the page's own summary (servings,
+ *    steps, first ingredients), counts above their floors, the page's
+ *    picture as the server stored it, and its kind.
  *
  * NEVER RAW EVENT COUNTS. An account that cooked a recipe forty times counts
  * once, so no one account can lift a page into everyone's reel.
@@ -27,7 +29,7 @@
  * before there was data to choose them from, to be revisited once there is.
  */
 
-import { hasStepSources, primaryMealType, recipeTotalMinutes, sanitizeMealTypes, validateRecipe, type MealType, type Recipe } from "@workspace/recipe-model";
+import { hasStepSources, keyIngredients, primaryMealType, recipeTotalMinutes, sanitizeMealTypes, stepCount, validateRecipe, type MealType, type Recipe } from "@workspace/recipe-model";
 import { normalizeUrl } from "./urlKey";
 import { surfaceableUrl } from "./searchLibrary";
 
@@ -114,13 +116,24 @@ export function rankPages(usage: Map<string, PageUsage>): PageUsage[] {
   });
 }
 
-/** The line a data-backed card may carry, or null below every floor. */
+/** What a data-backed card may say, each number only above its floor:
+ *  distinct accounts that cooked it, and distinct accounts whose latest
+ *  rating is 👍 once enough have rated it to mean something. */
+export function reelUsage(u: PageUsage | undefined): { cookedBy: number | null; likes: number | null } {
+  if (!u) return { cookedBy: null, likes: null };
+  return {
+    cookedBy: u.cookedBy >= REEL.minCookedBy ? u.cookedBy : null,
+    likes: lovedShare(u) !== null ? u.loved : null,
+  };
+}
+
+/** The same, as one line ("Cooked by 10 people · 25 likes"), or null below
+ *  every floor. Kept for the app versions that show only this line. */
 export function reelUsageLine(u: PageUsage | undefined): string | null {
-  if (!u) return null;
+  const { cookedBy, likes } = reelUsage(u);
   const parts: string[] = [];
-  if (u.cookedBy >= REEL.minCookedBy) parts.push(`Cooked by ${u.cookedBy} people`);
-  const share = lovedShare(u);
-  if (share !== null) parts.push(`${Math.round(share * 100)}% loved it`);
+  if (cookedBy !== null) parts.push(`Cooked by ${cookedBy} ${cookedBy === 1 ? "person" : "people"}`);
+  if (likes !== null) parts.push(`${likes} ${likes === 1 ? "like" : "likes"}`);
   return parts.length ? parts.join(" · ") : null;
 }
 
@@ -131,7 +144,17 @@ export interface ReelCard {
   /** Stated by the source, never computed; null shows no time. */
   totalMinutes: number | null;
   mealType: MealType | null;
+  /** The book page's summary lines (recipe-model summary.ts). */
+  servings: number | null;
+  steps: number;
+  ingredients: string[];
+  moreIngredients: number;
   usage: string | null;
+  cookedBy: number | null;
+  likes: number | null;
+  /** The page's picture as the SERVER stored it (`/api/reel/photo/…`), or
+   *  null — set by lib/reelStore.ts, never from anyone's recipe_photos. */
+  photo: string | null;
   kind: "data" | "curated";
 }
 
@@ -157,13 +180,21 @@ export function cardFrom(recipe: Recipe | null, kind: ReelCard["kind"], usage: P
   const title = typeof r.title === "string" ? r.title.trim() : "";
   if (!title) return null;
   if (validateRecipe(recipe).length) return null;
+  const { names, more } = keyIngredients(recipe);
+  const counts = kind === "data" ? reelUsage(usage) : { cookedBy: null, likes: null };
   return {
     url,
     title,
     site: (typeof r.source === "string" && r.source.trim()) || siteOf(url),
     totalMinutes: recipeTotalMinutes(recipe),
     mealType: primaryMealType(sanitizeMealTypes(r.mealTypes)),
+    servings: typeof r.servings === "number" && r.servings > 0 ? r.servings : null,
+    steps: stepCount(recipe),
+    ingredients: names,
+    moreIngredients: more,
     usage: kind === "data" ? reelUsageLine(usage) : null,
+    ...counts,
+    photo: null,
     kind,
   };
 }

@@ -17,6 +17,9 @@
  *       public; and for a cached page, what it predates (step order,
  *       picture, original wording).
  *
+ *       With --write, each curated page's card picture is stored too (the
+ *       page's own image, fetched by the server; no model call).
+ *
  *   node scripts/reel.mjs warm urls.txt --write
  *       Extracts each URL that is NOT cached, once, and adds every clean
  *       page to the curated list with a pinned copy. Cached pages are
@@ -59,6 +62,13 @@ async function call(method, path, body) {
   return json;
 }
 
+const PHOTO_WORDS = {
+  stored: "stored",
+  kept: "already stored",
+  none: "the page names none (the card shows its meal-type art)",
+  failed: "could not be fetched (the card shows its meal-type art; the server log says why)",
+  no_table: 'no reel_photos table yet (README "Starter recipes reel")',
+};
 const money = (v) => (v === null || v === undefined ? "?" : `$${Number(v).toFixed(3)}`);
 const [cmd, ...rest] = process.argv.slice(2);
 
@@ -66,7 +76,7 @@ if (cmd === "preview") {
   const { entries, preview } = await call("GET", "/reel");
   console.log(`Heading: ${preview.cards.length ? preview.heading : "(reel hidden: nothing qualifies)"}`);
   preview.cards.forEach((c, i) => {
-    console.log(`${String(i + 1).padStart(2)}. [${c.kind === "data" ? "data   " : "curated"}] ${c.title} — ${c.site}${c.totalMinutes ? ` · ${c.totalMinutes} min` : ""}${c.usage ? ` · ${c.usage}` : ""}`);
+    console.log(`${String(i + 1).padStart(2)}. [${c.kind === "data" ? "data   " : "curated"}] ${c.title} — ${c.site}${c.totalMinutes ? ` · ${c.totalMinutes} min` : ""}${c.usage ? ` · ${c.usage}` : ""}${c.photo ? "" : " · no picture"}`);
   });
   const x = preview.excluded;
   console.log(`Left out: ${x.belowMinimums} below the minimums, ${x.notCached} not cached, ${x.notClean} not clean, ${x.hidden} hidden.`);
@@ -103,6 +113,7 @@ if (cmd === "preview") {
         console.log(`${"".padEnd(22)}predates: ${r.flags.join(", ")}`);
         flagged.push(url);
       }
+      if (r.photo) console.log(`${"".padEnd(22)}picture: ${PHOTO_WORDS[r.photo] ?? r.photo}`);
       if (r.error) console.log(`${"".padEnd(22)}error: ${r.error}`);
     } catch (e) {
       console.log(`error         ${url}\n${"".padEnd(22)}${e.message}`);

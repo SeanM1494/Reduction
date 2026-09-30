@@ -13,7 +13,8 @@
  */
 
 import {
-  componentIngredientIds,
+  keyIngredients,
+  stepCount,
   formatMinutes,
   recipeTotalMinutes,
   DEFAULT_BOOKS,
@@ -121,32 +122,10 @@ export function pagesLabel(k: number, pages: number): string {
 
 // ------------------------------------------------------------ page content --
 
-/**
- * The first few ingredients in recipe order — no ranking is invented — each
- * named once, and never a section's finished result ("Dry ingredients" in a
- * Dough section is not something you buy): that is componentIngredientIds,
- * the same rule the cooking order uses, not a copy of it.
- */
-export function keyIngredients(recipe: Recipe, max = 3): { names: string[]; more: number } {
-  const skip = componentIngredientIds(recipe);
-  const seen = new Set<string>();
-  const names: string[] = [];
-  for (const section of recipe.sections ?? []) {
-    for (const ing of section.ingredients ?? []) {
-      if (skip.has(ing.id)) continue;
-      const name = (ing.name ?? '').trim();
-      const key = name.toLowerCase();
-      if (!name || seen.has(key)) continue;
-      seen.add(key);
-      names.push(name);
-    }
-  }
-  return { names: names.slice(0, max), more: Math.max(0, names.length - max) };
-}
-
-export function stepCount(recipe: Recipe): number {
-  return (recipe.sections ?? []).reduce((n, s) => n + (s.nodes?.length ?? 0), 0);
-}
+/** The first few ingredients and the step count now live in the recipe
+ *  model (summary.ts), because the starter reel's cards, built on the
+ *  server, say the same things about a recipe and must agree with a page. */
+export { keyIngredients, stepCount };
 
 /** The time line, or null to hide it — the recipe's STATED total, never a
  *  sum of steps (recipe-model totalTime.ts). */

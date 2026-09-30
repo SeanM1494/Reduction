@@ -34,6 +34,7 @@ import { extractionOriginal } from "../lib/original";
 import { recordExtraction, hostOf } from "../lib/extractionLog";
 import { estimateCostUsd } from "../lib/extractionCost";
 import { clientKey } from "../lib/clientAddress";
+import { pageImageOf, storeReelPhoto, type ReelPhotoOutcome } from "../lib/reelPhotos";
 import type { CallUsage } from "../lib/extractionConfig";
 
 const urlHash = (url: string) => crypto.createHash("sha256").update(`url:${url}`).digest("hex");
@@ -66,7 +67,7 @@ export function registerReelAdmin(router: Router, requireAdmin: (req: Request, r
     if (!requireAdmin(req, res)) return;
     try {
       const entries = await loadEntries();
-      const preview = await buildReel();
+      const { photoFill: _fill, ...preview } = await buildReel();
       clearReelMemo();
       return res.json({
         entries: entries.map((e) => ({ url: e.url, status: e.status, note: e.note, pinned: !!e.pinned, updatedAt: e.updatedAt })),
@@ -139,16 +140,19 @@ export function registerReelAdmin(router: Router, requireAdmin: (req: Request, r
     if (row && !(doWrite && doRefresh)) {
       const flags = staleFlags(row.recipe, !!(await extractionOriginal(row.hash, "page").catch(() => null)));
       const info = describe(row.recipe);
+      let photo: ReelPhotoOutcome | undefined;
       if (doWrite && info.clean) {
         try {
           const before = (await loadEntries()).find((e) => e.urlKey === urlKeyOf(url))?.status ?? null;
           await upsertEntry(url, "curated", typeof note === "string" ? note : null, row.recipe);
           await audit(req, before, "curated", `${url} (cached, pinned)`);
-          clearReelMemo();
         } catch (e) {
           if (isMissingTable(e)) return schemaBehind(res);
           throw e;
         }
+        // The card's picture: no model call, so a cached page stays $0.
+        photo = await storeReelPhoto(urlKeyOf(url)!, pageImageOf(row.recipe));
+        clearReelMemo();
       }
       return report({
         status: "cached",
@@ -157,6 +161,7 @@ export function registerReelAdmin(router: Router, requireAdmin: (req: Request, r
         needsRefresh: flags.length > 0,
         ...info,
         curated: doWrite && info.clean,
+        ...(photo ? { photo } : {}),
       });
     }
     if (!row && !doWrite) return report({ status: "would_extract", estCostUsd: null });
@@ -174,18 +179,20 @@ export function registerReelAdmin(router: Router, requireAdmin: (req: Request, r
       const status = row ? "refreshed" : "extracted";
       recordExtraction({ source: "warmup", cached: false, via: read.via, attempts: read.attempts, repaired: read.repaired.length, host: hostOf(url), ok: true, ms: Date.now() - started, usage });
       let curated = false;
+      let photo: ReelPhotoOutcome | undefined;
       if (info.clean) {
         try {
           const before = (await loadEntries()).find((e) => e.urlKey === urlKeyOf(url))?.status ?? null;
           await upsertEntry(url, "curated", typeof note === "string" ? note : null, read.recipe);
           curated = true;
           await audit(req, before, "curated", `${url} (${status}, est $${estimateCostUsd(usage).toFixed(4)})`);
-          clearReelMemo();
         } catch (e) {
           if (!isMissingTable(e)) throw e;
         }
+        photo = await storeReelPhoto(urlKeyOf(url)!, pageImageOf(read.recipe));
+        clearReelMemo();
       }
-      return report({ status, ms: Date.now() - started, estCostUsd: estimateCostUsd(usage), flags: [], ...info, curated });
+      return report({ status, ms: Date.now() - started, estCostUsd: estimateCostUsd(usage), flags: [], ...info, curated, ...(photo ? { photo } : {}) });
     } catch (e) {
       usage = usage ?? (e as { usage?: CallUsage }).usage;
       recordExtraction({ source: "warmup", cached: false, host: hostOf(url), ok: false, ms: Date.now() - started, usage: usage ?? null });

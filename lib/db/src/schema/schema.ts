@@ -874,3 +874,26 @@ export const reelEntries = pgTable("reel_entries", {
   note: text("note"),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
+
+/**
+ * The starter reel's pictures (Sep 30), one per PAGE, keyed like
+ * reel_entries by `url_key`. The page's OWN image — the URL its extraction
+ * recorded — fetched by the SERVER and stored as our copy, the same way a
+ * saved recipe's `page` photo is (lib/photos.ts). Never an account's
+ * recipe_photos row: those belong to an account, and a `user` photo is a
+ * person's own picture that must never reach anyone else's screen.
+ * `image_url` is what the bytes were fetched from, so a page whose picture
+ * changes is fetched again. HAND-RUN DDL (README "Starter recipes reel");
+ * without it every card shows its meal-type art.
+ */
+export const reelPhotos = pgTable("reel_photos", {
+  urlKey: text("url_key").primaryKey(),
+  imageUrl: text("image_url").notNull(),
+  bytes: bytea("bytes").notNull(),
+  mediaType: text("media_type").notNull(),
+  width: integer("width").notNull(),
+  height: integer("height").notNull(),
+  /** Bumps on every replacement; the cache-busting token in the URL. */
+  version: integer("version").notNull().default(1),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});

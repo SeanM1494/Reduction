@@ -15,6 +15,7 @@ import { getDb } from "../db";
 import { normalizeUrl, urlKeyOf } from "./urlKey";
 import { REEL, assembleReel, cardFrom, rankPages, usageByPage, type Reel, type ReelCard, type UsageRow } from "./reel";
 import { cacheGetUrlRow, cacheSetUrl } from "../routes/recipes";
+import { fillReelPhotos, pageImageOf, reelPhotoMetas, reelPhotoPath } from "./reelPhotos";
 
 export type EntryStatus = "curated" | "hidden";
 
@@ -116,6 +117,8 @@ export interface ReelBuild extends Reel {
   /** Counts only, for the admin preview: why candidates were left out. */
   excluded: { belowMinimums: number; notCached: number; notClean: number; hidden: number };
   restored: number;
+  /** Picture fetches this build started (fire-and-forget), for the tests. */
+  photoFill: Promise<unknown>;
 }
 
 /** The reel as it stands, from the database. */
@@ -127,6 +130,8 @@ export async function buildReel(): Promise<ReelBuild> {
   const excluded = { belowMinimums: usage.size - ranked.length, notCached: 0, notClean: 0, hidden: 0 };
 
   const data: Array<{ card: ReelCard; usage: (typeof ranked)[number] }> = [];
+  // Each card's page picture, as its cached tree names it.
+  const images = new Map<string, string | null>();
   for (const page of ranked.slice(0, REEL.candidateLimit)) {
     if (hidden.has(normalizeUrl(page.url) ?? page.url)) {
       excluded.hidden++;
@@ -142,6 +147,7 @@ export async function buildReel(): Promise<ReelBuild> {
       excluded.notClean++;
       continue;
     }
+    images.set(card.url, pageImageOf(row.recipe));
     data.push({ card, usage: page });
   }
 
@@ -151,9 +157,25 @@ export async function buildReel(): Promise<ReelBuild> {
     const { recipe, restored: r } = await curatedTree(e);
     if (r) restored++;
     const card = cardFrom(recipe, "curated", undefined);
-    if (card) curated.push(card);
-    else if (!recipe) excluded.notCached++;
+    if (card) {
+      images.set(card.url, pageImageOf(recipe));
+      curated.push(card);
+    } else if (!recipe) excluded.notCached++;
     else excluded.notClean++;
   }
-  return { ...assembleReel(data, curated, hidden), excluded, restored };
+  const reel = assembleReel(data, curated, hidden);
+
+  // Pictures: what is stored is shown; what is missing is fetched for the
+  // builds that follow (lib/reelPhotos.ts).
+  const keyed = reel.cards.map((card) => ({ card, urlKey: urlKeyOf(card.url), imageUrl: images.get(card.url) ?? null }));
+  const stored = await reelPhotoMetas(keyed.flatMap((k) => (k.urlKey ? [k.urlKey] : [])));
+  const cards = keyed.map(({ card, urlKey }) => {
+    const meta = urlKey ? stored.get(urlKey) : undefined;
+    return meta ? { ...card, photo: reelPhotoPath(urlKey!, meta.version) } : card;
+  });
+  const photoFill = fillReelPhotos(
+    keyed.flatMap((k) => (k.urlKey ? [{ urlKey: k.urlKey, imageUrl: k.imageUrl }] : [])),
+    stored
+  ).catch(() => []);
+  return { ...reel, cards, excluded, restored, photoFill };
 }
