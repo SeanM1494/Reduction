@@ -2384,6 +2384,19 @@ on /api/health at a slow interval, because every ping wakes the Autoscale
 deployment. A Sentry-style SDK is costed in the report, not proposed. All
 waiting for approval, with a privacy sentence.
 
+### The per-IP extraction limit may be one bucket for everyone (Sep 30)
+
+`app.ts` never sets `trust proxy`, so `req.ip` is the socket's peer. Behind
+Replit's proxy that is the proxy, not the person — in which case the
+extraction limit (20 fresh extractions an hour per "IP", per instance), the
+search limit and the admin throttle each treat every user as ONE address:
+the 21st fresh extraction in an hour, by anyone, is refused for everyone on
+that instance. **Temporary diagnostic:** `GET /api/admin/diagnostics/ip`
+(x-admin-secret) returns `req.ip`, the socket address and the forwarding
+headers; one curl against the deployment settles it. The fix (a hop count
+for `trust proxy`, never `true`) is proposed in the Sep 30 report and
+waits for approval; remove the route with it.
+
 ### 5. Starter recipes reel — planned (waiting for URLs)
 
 A curated list (a file in the server repo), served by a signed-in route

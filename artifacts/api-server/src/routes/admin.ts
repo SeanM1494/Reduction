@@ -550,6 +550,38 @@ adminRouter.get("/coupons", async (req: Request, res: Response) => {
 });
 
 /**
+ * GET /api/admin/diagnostics/ip — TEMPORARY (Sep 30). What this server sees
+ * of the request that reached it, to answer one question from a single curl
+ * against the deployment: does `req.ip` — which the per-IP extraction limit
+ * (20 an hour) and this router's throttle key on — name the CLIENT, or the
+ * proxy in front of us? With no `trust proxy` setting Express reports the
+ * socket's peer, which behind Replit's proxy would be the proxy for everyone,
+ * putting every user in ONE limiter bucket.
+ *
+ * Headers are echoed only to the holder of the admin secret, and only the
+ * ones that carry addresses. Remove once the trust-proxy fix is decided.
+ */
+adminRouter.get("/diagnostics/ip", (req: Request, res: Response) => {
+  if (!requireAdmin(req, res)) return;
+  return res.json({
+    temporary: "Remove once the trust-proxy setting is decided (ROADMAP, launch readiness).",
+    reqIp: req.ip ?? null,
+    reqIps: req.ips,
+    socketRemoteAddress: req.socket.remoteAddress ?? null,
+    trustProxy: req.app.get("trust proxy") ?? false,
+    headers: {
+      "x-forwarded-for": req.get("x-forwarded-for") ?? null,
+      "x-real-ip": req.get("x-real-ip") ?? null,
+      forwarded: req.get("forwarded") ?? null,
+      "x-forwarded-proto": req.get("x-forwarded-proto") ?? null,
+      "x-envoy-external-address": req.get("x-envoy-external-address") ?? null,
+    },
+    /** What the extraction limiter keys this request on today. */
+    extractionLimitKey: req.ip ?? "unknown",
+  });
+});
+
+/**
  * GET /api/admin/costs — what extraction is costing: totals for the last 7
  * and 30 days, what one fresh extraction typically costs, by route, and the
  * top 20 accounts by fresh extractions and by spend. ESTIMATES at list price
