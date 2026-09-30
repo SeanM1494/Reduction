@@ -25,6 +25,7 @@ import { CouponBox } from '@/components/CouponBox';
 import { TimersCard } from '@/components/settings/TimersCard';
 import { SubscribeBox } from '@/components/SubscribeBox';
 import { LegalLinks } from '@/components/LegalLinks';
+import { FeedbackRow } from '@/components/settings/FeedbackRow';
 import { manageSubscription } from '@/lib/purchase';
 import { useColors, type Colors } from '@/hooks/useColors';
 import { useBooks } from '@/lib/books-context';
@@ -248,6 +249,8 @@ export default function SettingsScreen() {
         <Feather name="play" size={18} color={colors.mutedForeground} />
       </Pressable>
       {owner ? <IntroTestingSheet open={introTesting} onClose={() => setIntroTesting(false)} /> : null}
+
+      <FeedbackRow styles={styles} />
 
       <AppearanceCard />
 

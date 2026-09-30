@@ -23,7 +23,7 @@ import { fonts } from '@/constants/colors';
 
 type Clipboard = { setStringAsync: (s: string) => Promise<boolean> };
 
-function loadClipboard(): Clipboard | null {
+export function loadClipboard(): Clipboard | null {
   try {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     return require('expo-clipboard') as Clipboard;

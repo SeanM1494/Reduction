@@ -2294,6 +2294,30 @@ tall, no sideways scroll, at all three sizes, light and dark); the centred
 iOS layout, VoiceOver and the native header's own sizing of a custom title
 are the phone's to confirm.
 
+## Launch readiness (Sep 30)
+
+### 1. Send feedback — built (phone, over the air)
+
+Settings › Send feedback (under Replay intro) opens an email to the legal
+pages' contact, `sean@recruitthebench.com`, subject "Reduction feedback",
+with three blank lines for the message and then: app version and build,
+runtime version, the over-the-air update id (or "none (built-in)"), the iOS
+version and the device MODEL. Never the account id, an email address or the
+device's NAME (`Device.deviceName` is "Sean's iPhone"; `modelName` is
+"iPhone 15"). `lib/feedback.ts` builds it and is tested.
+
+`Linking.openURL` in a try and never `canOpenURL`: for `mailto:` canOpenURL
+needs `LSApplicationQueriesSchemes` in the Info.plist, a native change. When
+opening throws (no mail app), the address is copied and a toast says so.
+When Mail is installed but has no account, iOS itself shows "No Mail
+Accounts" and openURL has already succeeded — nothing in the app can see
+that case, so the fallback cannot help there.
+
+**Support URL: no page exists.** App Store Connect needs one; the site has
+only /privacy.html and /terms.html. A /support.html in the same static
+style is proposed, not added (wording in the Sep 30 report, waiting for
+approval).
+
 ## Still open from earlier work
 
 - **allrecipes.com cannot be read by the server, by either fetch (Sep
