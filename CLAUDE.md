@@ -269,19 +269,19 @@ them is the whole point:
 
 | result | meaning |
 |---|---|
-| ***n* pass, 153 skipped** | no `DATABASE_URL` at all. Fine on a machine with no Postgres. |
-| ***n*+153 pass, 0 skipped** | a local database with a current schema. This is the real gate — `pnpm run test:db` produces it. |
+| ***n* pass, 159 skipped** | no `DATABASE_URL` at all. Fine on a machine with no Postgres. |
+| ***n*+159 pass, 0 skipped** | a local database with a current schema. This is the real gate — `pnpm run test:db` produces it. |
 | **failures saying "Refusing to run database tests against …"** | `DATABASE_URL` in the shell points somewhere non-local — on Replit, that is production. Working as designed: use `pnpm run test:db`, which ignores the env var entirely. |
 | **failures naming a missing table** | a reachable local database whose schema is behind `lib/db/src/schema/schema.ts`. `test:db` re-pushes on every start, so this means a hand-run database — push it or use the script. |
 
 The total grows as suites are added — pin your expectation to the **skip
 count**, not the pass count (an earlier version of this table hard-coded
 23/39 and went stale within a week, so treat the number above as needing an
-edit whenever a database-backed suite is added). The 153 are seventeen suites:
+edit whenever a database-backed suite is added). The 159 are eighteen suites:
 `claim.db.test.ts` (the anonymous library), `trial.db.test.ts` (the free
 extraction), `cache.db.test.ts` (the URL alias and the cached flag),
 `extractionLog.test.ts` (the cost table), `push.db.test.ts` (timer
-notifications) `access.db.test.ts` (the paywall), `admin.db.test.ts` (the operator lookup), `billingApple.db.test.ts` (the App Store routes), `mobileHandoff.db.test.ts` (the mobile sign-in handoff), `account.db.test.ts` (account deletion), `photos.db.test.ts` (recipe pictures), `removed.db.test.ts` (taking a recipe out of the box) `searchLibrary.db.test.ts` (the cached half of a search and its counts) `originals.db.test.ts` (a recipe's original wording) `page.db.test.ts` (a page the phone's browser hands over) `books.db.test.ts` (recipe books) and `costs.db.test.ts` (the admin cost report). The first two are transactional guarantees — all-or-nothing
+notifications) `access.db.test.ts` (the paywall), `admin.db.test.ts` (the operator lookup), `billingApple.db.test.ts` (the App Store routes), `mobileHandoff.db.test.ts` (the mobile sign-in handoff), `account.db.test.ts` (account deletion), `photos.db.test.ts` (recipe pictures), `removed.db.test.ts` (taking a recipe out of the box) `searchLibrary.db.test.ts` (the cached half of a search and its counts) `originals.db.test.ts` (a recipe's original wording) `page.db.test.ts` (a page the phone's browser hands over) `books.db.test.ts` (recipe books), `costs.db.test.ts` (the admin cost report) and `counters.db.test.ts` (the anonymous daily counts). The first two are transactional guarantees — all-or-nothing
 rollback, idempotent repeats, never taking another user's rows. The third is a
 promise about correctness: that a normalised URL never serves a different page.
 The fourth guards a denominator — a cache hit that recorded a `via` would
@@ -315,7 +315,10 @@ a recipe's book rides the versioned write like any other field, and that
 deleting a book rewrites no recipe. The seventeenth guards that the cost
 report counts a cache hit as neither fresh nor spend, ranks accounts by
 fresh extractions and by spend separately, keeps signed-out trials a total
-rather than a row, and never answers with an email. **The full suite — 634 tests at the
+rather than a row, and never answers with an email. The eighteenth
+guards that the daily counts stay anonymous — a table with no column that
+could name anyone, an app that may report only the reel's closed list of
+names and only signed in — and that concurrent increments all land. **The full suite — 634 tests at the
 time of writing — has been run against a real Postgres and passes 634/0.** The
 ones that are not api-server or model tests include the mobile library's
 filter and sort (`artifacts/reduction-mobile/lib/libraryView.test.ts`), the

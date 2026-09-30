@@ -2397,6 +2397,17 @@ headers; one curl against the deployment settles it. The fix (a hop count
 for `trust proxy`, never `true`) is proposed in the Sep 30 report and
 waits for approval; remove the route with it.
 
+### 3b. Usage counters — built (server Publish, after the SQL)
+
+`daily_counters` (README "Usage counters"): anonymous counts by UTC day and
+name. The server counts saves, wall hits by kind and coupon redemptions;
+the app may report only the reel's five events. Extractions stay in
+`extraction_events` and are shown beside the counts rather than counted
+twice. "Paywall shown" is counted as the server's 402 (`wall_hit`), which
+is not the same as the wall appearing on a screen: the phone also shows
+the wall from its own entitlement check without asking the server. Counting
+that would be one more allow-listed name, if wanted.
+
 ### 5. Starter recipes reel — planned (waiting for URLs)
 
 A curated list (a file in the server repo), served by a signed-in route

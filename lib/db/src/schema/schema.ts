@@ -25,6 +25,7 @@ import {
   bigserial,
   customType,
   numeric,
+  date,
 } from "drizzle-orm/pg-core";
 import type { Recipe } from "./layout";
 
@@ -838,4 +839,20 @@ export const adminEvents = pgTable(
     note: text("note"),
   },
   (table) => [index("admin_events_at_idx").on(table.at)]
+);
+
+/**
+ * Anonymous daily usage counts (Sep 30, lib/counters.ts). One row per UTC
+ * day and name, and NOTHING that identifies anyone — privacy.html promises
+ * these are totals linked to no account or device. HAND-RUN DDL (README
+ * "Usage counters"); the writer fails open without it.
+ */
+export const dailyCounters = pgTable(
+  "daily_counters",
+  {
+    day: date("day").notNull(),
+    name: text("name").notNull(),
+    count: integer("count").notNull().default(0),
+  },
+  (table) => [primaryKey({ columns: [table.day, table.name] })]
 );

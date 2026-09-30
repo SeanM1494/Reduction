@@ -27,6 +27,7 @@ import { ensureTrialId, refundTrial, spendTrial, storeTrialRecipe, trialOwnerKey
 import { urlKeyOf } from "../lib/urlKey";
 import { hostOf, recordExtraction, type ExtractionEvent } from "../lib/extractionLog";
 import type { CallUsage } from "../lib/extractionConfig";
+import { countEvent } from "../lib/counters";
 import {
   sanitizeOriginal,
   type OriginalFrom,
@@ -339,6 +340,7 @@ async function requireExtractionAllowance(
     const trialId = ensureTrialId(req, res);
     const spent = await spendTrial(trialId);
     if (!spent) {
+      void countEvent("wall_hit.trial_spent");
       return res.status(402).json({
         error: "You have used your free recipe. Create an account to keep going.",
         code: "trial_spent",

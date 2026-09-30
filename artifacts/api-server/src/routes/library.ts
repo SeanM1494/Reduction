@@ -11,6 +11,7 @@
  *   DELETE /api/library/:id
  */
 
+import { countEvent } from "../lib/counters";
 import { Router, type Request, type Response, type NextFunction } from "express";
 import { eq, and, desc, isNull, isNotNull, sql, type SQL } from "drizzle-orm";
 import { getDb } from "../db";
@@ -428,6 +429,7 @@ libraryRouter.post("/", async (req: Request, res: Response) => {
      * they already have.
      */
     if (row?.version === 1) {
+      void countEvent("save");
       const userId = userIdOf(req);
       if (userId) {
         try {

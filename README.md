@@ -685,6 +685,32 @@ an email. It caps nothing.
 curl -s -H "x-admin-secret: $ADMIN_SECRET" https://<deployment>/api/admin/costs
 ```
 
+### Usage counters
+
+Anonymous daily counts (`lib/counters.ts`): one row per UTC day and name,
+and nothing that identifies anyone — privacy.html promises "totals ... not
+linked to your account or device". The server counts `save` (a new recipe
+in a library), `wall_hit.subscription_required` and `wall_hit.trial_spent`
+(where the 402 is written) and `coupon_redeemed`. The app may report only
+the reel's events (`reel_shown`, `reel_tap_data`/`_curated`,
+`reel_saved_data`/`_curated`) through `POST /api/counters`, signed in, 120
+an hour per account. Extractions are not counted here: `extraction_events`
+already has every one by route, and `GET /api/admin/counters?days=30`
+(x-admin-secret) shows both side by side. Hand-run DDL, safe to run twice:
+
+```sql
+create table if not exists daily_counters (
+  day date not null,
+  name text not null,
+  count integer not null default 0,
+  primary key (day, name)
+);
+```
+
+Without it nothing is counted (one `[counters]` warning per process) and
+nothing else changes; `/api/health` lists `daily_counters` and the admin
+read answers 503 `schema_behind`.
+
 ### A development build for a physical iPhone
 
 `artifacts/reduction-mobile/eas.json` has three profiles. `development` is

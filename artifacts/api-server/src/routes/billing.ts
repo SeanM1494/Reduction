@@ -12,6 +12,7 @@
  * every event, permanently, with a message that does not say why.
  */
 
+import { countEvent } from "../lib/counters";
 import { Router, type Request, type Response } from "express";
 import { userIdOf } from "../middleware/session";
 import {
@@ -157,6 +158,7 @@ billingRouter.post("/coupon", async (req: Request, res: Response) => {
               : "We don't recognise that code.";
       return res.status(422).json({ error: message, code: out.code });
     }
+    void countEvent("coupon_redeemed");
     return res.json({ ok: true, recipes: out.recipes, entitlement: await entitlementFor(userId) });
   } catch (e) {
     console.error("[billing:coupon]", (e as Error).message);

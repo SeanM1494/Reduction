@@ -18,6 +18,7 @@
  *    where decision = 'would_block' group by 1 order by 2 desc;
  */
 
+import { countEvent } from "../counters";
 import type { Request, Response } from "express";
 import { getDb } from "../../db";
 import { accessEvents } from "@workspace/db";
@@ -115,6 +116,7 @@ export async function logAccess(event: {
  * here cannot silently break the funnel.
  */
 export function subscriptionRequired(res: Response, ent: Entitlement | null) {
+  void countEvent("wall_hit.subscription_required");
   return res.status(402).json({
     error: "You've used your free recipe. Subscribe to add more.",
     code: "subscription_required",

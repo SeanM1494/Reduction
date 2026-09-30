@@ -29,6 +29,7 @@ import { appleIapConfig, describeAppleIapEnv, requestAppleTestNotification } fro
 import Anthropic from "@anthropic-ai/sdk";
 import { MODEL as EXTRACTION_MODEL } from "../lib/structureRecipe";
 import { windowReport } from "../lib/costReport";
+import { readCounters } from "../lib/counters";
 import { isMissingColumn } from "../lib/extractionLog";
 
 export const adminRouter = Router();
@@ -546,6 +547,25 @@ adminRouter.get("/coupons", async (req: Request, res: Response) => {
   } catch (e) {
     console.error("[admin:coupons]", (e as Error).message);
     return res.status(500).json({ error: "Could not list codes." });
+  }
+});
+
+/**
+ * GET /api/admin/counters?days=30 — the anonymous daily counts (lib/
+ * counters.ts), newest day first, beside extractions per day by route from
+ * extraction_events. Totals only; there is nothing per person to show.
+ */
+adminRouter.get("/counters", async (req: Request, res: Response) => {
+  if (!requireAdmin(req, res)) return;
+  const asked = Number(req.query.days ?? 30);
+  const days = Number.isFinite(asked) ? Math.min(90, Math.max(1, Math.floor(asked))) : 30;
+  try {
+    return res.json(await readCounters(days));
+  } catch (e) {
+    if ((e as { cause?: { code?: string }; code?: string })?.cause?.code === "42P01" || (e as { code?: string })?.code === "42P01")
+      return res.status(503).json({ error: 'No counters table yet. Run the SQL in README "Usage counters".', code: "schema_behind" });
+    console.error("[admin:counters]", (e as Error).message);
+    return res.status(500).json({ error: "Could not read the counters." });
   }
 });
 
