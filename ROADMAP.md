@@ -2360,6 +2360,38 @@ covers each item's logic named, so those can be skipped. Two stale entries
 were found while gathering: §1 and "Suggested order" #8 still say Sign in
 with Apple "has not been started" (it is built; Phase 4 is current).
 
+### 3. Seeing problems — audited, proposed (not built)
+
+What exists (Sep 30 audit): no crash reporter anywhere. The phone's root
+ErrorBoundary shows "Something went wrong" and logs nothing, so a render
+crash reaches nobody; the web's error boundary is written and never
+mounted. The server logs through pino (requests) and ~140 `console.*`
+lines to Replit's deployment logs, with no error middleware, no log
+shipping and no uptime check. `trust proxy` is not set, so `req.ip`, which
+the extraction limit and the admin throttle key on, may be the proxy's
+address on the deployment — worth one log line to confirm. Usage counts
+exist only as `extraction_events` (now with cost) and `access_events`.
+
+Proposed, lightest first: (a) Apple's own crash reports — free, no code;
+(b) a `daily_counters` table (day, name, count; no user id) incremented
+fire-and-forget by the server, with a closed allow-list client endpoint for
+the two starter events and an admin read route; (c) a free uptime monitor
+on /api/health at a slow interval, because every ping wakes the Autoscale
+deployment. A Sentry-style SDK is costed in the report, not proposed. All
+waiting for approval, with a privacy sentence.
+
+### 5. Starter recipes reel — planned (waiting for URLs)
+
+A curated list (a file in the server repo), served by a signed-in route
+that returns only entries already in the extraction cache and valid; a
+horizontal reel of cards on Add New; a tap is the ordinary link extraction,
+so a cache hit. Two findings shape it: Add New has almost no blank space
+(about 40pt on an iPhone 13 and none on an SE, where the photo buttons are
+already below the fold), and saving a starter spends a new account's one
+free recipe. The warm-up runs through an admin route on the deployment
+rather than a script with production database access. Plan in the Sep 30
+report.
+
 ## Still open from earlier work
 
 - **allrecipes.com cannot be read by the server, by either fetch (Sep
