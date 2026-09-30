@@ -15,24 +15,18 @@
  */
 
 import React, { memo } from 'react';
-import { Image, Platform, StyleSheet, Text, View } from 'react-native';
+import { Platform, StyleSheet, Text, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { sanitizeMealTypes } from '@/shared/mealTypes';
-import { MealTypeArt } from '@/components/library/MealTypeArt';
 import { useRecipePhoto } from '@/lib/recipePhoto';
 import { cookedLabel, keyIngredients, pageLayout, RATING_EMOJI, stepCount, timeLine, type Book } from '@/lib/recipeBox';
-import { fonts } from '@/constants/colors';
 import type { Entry } from '@/lib/api';
+import { FACE_PAD_TOP, FAINT, MUTED, PAPER, PageFace, faceStyles } from './PageFace';
 
-export const PAPER = '#fbf6ea';
+export { PAPER };
 // Half the prototype's warmth (#ece2cc), over the inner 12% rather than 22%:
 // the fold should read as a fold, not a shadow.
 const PAPER_SPINE = '#f4ecdb';
-const INK = '#2a2118';
-const INK_SOFT = '#5c4d3c';
-const MUTED = '#8a7a66';
-const FAINT = '#a8977f';
-const RULE = '#dccfb4';
 
 export type PageContent = { kind: 'recipe'; entry: Entry; number: number } | { kind: 'blank' } | { kind: 'empty' };
 
@@ -74,68 +68,51 @@ export const BookPage = memo(function BookPage({ content, side, book, width, hei
 function RecipeFace({ entry, number, side, book, width, height }: { entry: Entry; number: number; side: 'left' | 'right'; book: Book; width: number; height: number }) {
   const recipe = entry.recipe;
   const photo = useRecipePhoto(entry);
-  const primary = sanitizeMealTypes(recipe.mealTypes)[0] ?? null;
   const time = timeLine(recipe);
   const layout = pageLayout(width, time !== null);
-  const { names, more } = keyIngredients(recipe);
-  const steps = stepCount(recipe);
   const cooked = cookedLabel(entry.cooked, layout.shortPill);
   const rating = entry.rating;
-  const serves = recipe.servings ? `Serves ${recipe.servings} · ` : '';
   // The prototype's photo is 34% of the page's content box.
-  const photoH = Math.round((height - PAD_TOP - PAD_BOTTOM) * 0.34);
+  const photoH = Math.round((height - FACE_PAD_TOP - PAD_BOTTOM) * 0.34);
   return (
-    <View style={styles.content} testID={`book-page-${entry.id}`}>
-      <View style={[styles.photo, { height: photoH }]}>
-        {photo ? (
-          <Image source={photo} style={StyleSheet.absoluteFill} resizeMode="cover" accessibilityIgnoresInvertColors />
-        ) : (
-          <MealTypeArt type={primary} size={Math.round(photoH * 0.4)} tone="light" />
-        )}
-        {rating === 1 || rating === 0 || rating === -1 ? (
+    <PageFace
+      testID={`book-page-${entry.id}`}
+      photo={photo}
+      mealType={sanitizeMealTypes(recipe.mealTypes)[0] ?? null}
+      photoHeight={photoH}
+      badge={
+        rating === 1 || rating === 0 || rating === -1 ? (
           <View style={styles.badge} testID="book-page-rating">
             <Text style={styles.badgeText}>{RATING_EMOJI[String(rating)]}</Text>
           </View>
-        ) : null}
-      </View>
-      <Text style={styles.title} numberOfLines={2}>
-        {recipe.title}
-      </Text>
-      {time ? (
-        <Text style={styles.time} numberOfLines={1} testID="book-page-time">
-          {time}
-        </Text>
-      ) : null}
-      <Text style={styles.serves} numberOfLines={1}>
-        {serves}
-        {steps} {steps === 1 ? 'step' : 'steps'}
-      </Text>
-      {names.length ? (
-        <Text style={styles.ingredients} numberOfLines={layout.ingredientLines}>
-          {names.join(', ')}
-          {more > 0 ? <Text style={styles.more}> +{more} more</Text> : null}
-        </Text>
-      ) : null}
-      <View
-        style={[styles.pill, cooked ? { backgroundColor: `${book.color}1f` } : styles.pillNever]}
-        testID="book-page-cooked"
-      >
-        <Text style={[styles.pillText, { color: cooked ? book.color : MUTED }]} numberOfLines={1}>
-          {cooked ?? 'Not cooked yet'}
-        </Text>
-      </View>
-      <Text style={[styles.number, side === 'left' ? { left: 11 } : { right: 11 }]}>{number}</Text>
-    </View>
+        ) : null
+      }
+      title={recipe.title}
+      time={time}
+      servings={recipe.servings || null}
+      steps={stepCount(recipe)}
+      ingredients={keyIngredients(recipe)}
+      ingredientLines={layout.ingredientLines}
+      paddingBottom={PAD_BOTTOM}
+      footer={
+        <View
+          style={[faceStyles.pill, cooked ? { backgroundColor: `${book.color}1f` } : faceStyles.pillNever]}
+          testID="book-page-cooked"
+        >
+          <Text style={[faceStyles.pillText, { color: cooked ? book.color : MUTED }]} numberOfLines={1}>
+            {cooked ?? 'Not cooked yet'}
+          </Text>
+        </View>
+      }
+      corner={<Text style={[styles.number, side === 'left' ? { left: 11 } : { right: 11 }]}>{number}</Text>}
+    />
   );
 }
 
-const PAD_TOP = 12;
 const PAD_BOTTOM = 20;
 
 const styles = StyleSheet.create({
   page: { backgroundColor: PAPER, overflow: 'hidden' },
-  content: { flex: 1, paddingTop: PAD_TOP, paddingHorizontal: 11, paddingBottom: PAD_BOTTOM },
-  photo: { borderRadius: 6, overflow: 'hidden' },
   badge: {
     position: 'absolute',
     top: 6,
@@ -150,24 +127,6 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 1 },
   },
   badgeText: { fontSize: 13, lineHeight: 16 },
-  title: { marginTop: 8, fontFamily: fonts.heading, fontSize: 14.5, lineHeight: 18, color: INK },
-  time: { marginTop: 5, fontFamily: fonts.mono, fontSize: 11, lineHeight: 14, color: MUTED },
-  serves: {
-    marginTop: 7,
-    paddingTop: 6,
-    borderTopWidth: 1,
-    borderStyle: 'dashed',
-    borderTopColor: RULE,
-    fontFamily: fonts.mono,
-    fontSize: 10.5,
-    lineHeight: 14,
-    color: MUTED,
-  },
-  ingredients: { marginTop: 3, fontSize: 11.5, lineHeight: 15.5, color: INK_SOFT },
-  more: { color: FAINT },
-  pill: { marginTop: 'auto', alignSelf: 'flex-start', maxWidth: '100%', borderRadius: 99, paddingVertical: 3, paddingHorizontal: 8 },
-  pillNever: { backgroundColor: '#ece3d0' },
-  pillText: { fontSize: 10.5, lineHeight: 13, fontWeight: '600' },
   number: {
     position: 'absolute',
     bottom: 6,

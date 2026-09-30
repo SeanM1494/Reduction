@@ -417,6 +417,11 @@ export const photoUrl = (id: string, version: number): string =>
 export const photoHeaders = (): Record<string, string> =>
   authToken ? { Authorization: `Bearer ${authToken}` } : {};
 
+/** A starter-reel card's picture: a path on OUR server, which stored the
+ *  page's image (the phone never fetches a recipe site). Signed in, so it
+ *  takes the same header as a recipe's photo. */
+export const reelPhotoUrl = (path: string): string => `${baseUrl()}${path}`;
+
 /** Attach the person's own photo (already shrunk by lib/photo.ts). */
 export const uploadPhoto = (id: string, base64: string, mediaType: string): Promise<{ photo: PhotoMeta }> =>
   request(

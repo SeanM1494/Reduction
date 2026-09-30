@@ -2442,8 +2442,9 @@ is data-backed and clears the ratings floor. README "Starter recipes reel".
 buttons on Add New, and under the empty library's box and its two buttons
 — never above anything, so on an iPhone 13 or SE the Add New reel is
 reached by scrolling (measured Sep 30: the photo buttons already end at
-y=510 of 664 and 532 of 568). Cards 140x158pt on our meal-type art, "Title,
-site" to VoiceOver, a time only when stated, a usage line only when earned.
+y=510 of 664 and 532 of 568). The first cards were 140x158pt on our
+meal-type art; they became Recipe Box pages the same day (below). "Title,
+site" to VoiceOver, a time only when stated, use only when earned.
 Hidden while an extraction runs, while the keyboard is up (native only:
 Chromium has no soft keyboard), and when nothing qualifies. A tap is the
 ordinary link extraction; the preview adds "Saving this uses your free
@@ -2465,6 +2466,33 @@ fetched and stored by the server (`reel_photos`); nothing reads anyone's
 replaced the 👍 share on the card: the count of accounts whose latest
 rating is 👍, shown from five ratings, with the 60% floor still deciding
 whether the page is offered at all.
+
+**On the phone, the card and the ticker (Sep 30).** The card IS the Recipe
+Box page's face (`PageFace.tsx`, which the book's pages now draw through —
+the book's spread was compared byte for byte before and after the split,
+at iPhone 13 and SE). Likes ride the picture as a "👍 N" badge, where a
+book page puts its rating, and "Cooked by N people" is the footer's line
+above the site: one joined pill did not fit a phone's card. The cards are
+as tall as the room left above the tab bar (`reelCardSize`, the owner's
+choice: "as big as can fit … without scrolling"), from a floor of 177pt
+(158 with no use line) to the height that shows every row; rows arrive in
+order — title, time, use and site always, then serves and steps, then
+ingredients — and the rest is picture, at most 4:3. Measured at app-sized
+screens in Chromium: the empty library shows full cards on an iPhone 13
+(164x314), a Pro Max (185x330) and an SE 3rd gen (158x287) with nothing
+scrolled; Add New shows a 185x225 card on a Pro Max, and on an iPhone 13
+has about 182pt by the owner's screenshot (Chromium's layout of that
+screen runs ~63pt taller than the phone's, so only the phone can say);
+on an SE it is below the fold, as before.
+
+**The ticker** (the owner's request, Sep 30): the row drifts left at
+22pt/s on the UI thread (`tickerStep`, one frame callback), looping over
+a second, VoiceOver-hidden set; any touch stops it at once and it resumes
+5s after the last one (decided). It never moves under Reduce Motion or
+VoiceOver, off screen, on a hidden Find folder, or with too few cards to
+loop — and then the cards are shown once. react-native-web answers `true`
+to "is a screen reader on?" always, so only the phone's answer is
+believed; that cost a round of "the ticker never starts" in Chromium.
 
 **The minimums are PROVISIONAL**, chosen before there was data: cooked by
 at least 3 distinct accounts; the 👍 share used (and shown) only from 5

@@ -47,6 +47,9 @@ export default function LibraryScreen() {
   const colors = useColors();
   // The starter reel under the empty library's two buttons (Sep 30).
   const starter = useOpenStarter();
+  // The empty library's height, so the reel under its buttons can be as
+  // tall as the room left above the tab bar.
+  const [emptyH, setEmptyH] = useState<number | null>(null);
   const styles = makeStyles(colors);
   const { entries, loading, error, refresh, notice, clearNotice } = useLibrary();
   const { books } = useBooks();
@@ -139,6 +142,7 @@ export default function LibraryScreen() {
         style={styles.container}
         contentContainerStyle={[styles.content, { paddingBottom: tabBarHeight + 24 }]}
         refreshControl={<RefreshControl refreshing={loading} onRefresh={refresh} tintColor={colors.foreground} />}
+        onLayout={(e) => setEmptyH(e.nativeEvent.layout.height)}
       >
         {error ? <ErrorBox message={error} onRetry={refresh} colors={colors} /> : null}
         <View style={styles.empty} testID="library-empty">
@@ -158,7 +162,13 @@ export default function LibraryScreen() {
         </View>
         {/* Below the empty box and its two buttons, full width: a reel
             scrolls sideways, and inside the centred box it overflowed. */}
-        <StarterReel busy={false} onPick={starter.open} openingUrl={starter.openingUrl} testID="library-reel" />
+        <StarterReel
+          busy={false}
+          onPick={starter.open}
+          openingUrl={starter.openingUrl}
+          viewportBottom={emptyH === null ? null : emptyH - tabBarHeight}
+          testID="library-reel"
+        />
       </ScrollView>
     );
   }

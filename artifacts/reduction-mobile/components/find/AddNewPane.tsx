@@ -36,18 +36,24 @@ export function AddNewPane({
   blocked,
   onOpenBrowse,
   bottomInset,
+  active = true,
 }: {
   /** The wall is up (the Find screen's one predicate). */
   blocked: boolean;
   /** Switch to Browse, opening `url` there when there is one. */
   onOpenBrowse: (url: string | null) => void;
   bottomInset: number;
+  /** This folder is the one showing (the reel drifts only then). */
+  active?: boolean;
 }) {
   const colors = useColors();
   const styles = makeStyles(colors);
   const { refresh } = useAuth();
   const { setDraft, entries } = useLibrary();
   const starter = useOpenStarter();
+  // How tall the pane is, so the reel can be as tall as the room left
+  // above the tab bar without making the page scroll.
+  const [paneH, setPaneH] = useState<number | null>(null);
 
   const [input, setInput] = useState('');
   const [photo, setPhoto] = useState<PreparedPhoto | null>(null);
@@ -124,6 +130,7 @@ export function AddNewPane({
       // extract button sat under the bar, unreachable.
       contentContainerStyle={[styles.content, { paddingBottom: bottomInset + 24 }]}
       keyboardShouldPersistTaps="handled"
+      onLayout={(e) => setPaneH(e.nativeEvent.layout.height)}
       testID="find-pane-add"
     >
       <Text style={styles.heading} accessibilityRole="header">
@@ -217,7 +224,13 @@ export function AddNewPane({
           {/* Below everything the person came here to do, so it never moves
               the paste box or the photo buttons; on a small phone it is
               reached by scrolling (measured Sep 30). */}
-          <StarterReel busy={!!busy} onPick={starter.open} openingUrl={starter.openingUrl} />
+          <StarterReel
+            busy={!!busy}
+            onPick={starter.open}
+            openingUrl={starter.openingUrl}
+            viewportBottom={paneH === null ? null : paneH - bottomInset}
+            active={active}
+          />
         </>
       )}
     </ScrollView>

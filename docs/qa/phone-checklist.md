@@ -176,6 +176,24 @@ one phone; the whole pass takes about ten minutes plus the timer.
   downscale). (R Phase 1 (c))
 - [ ] **Keyboard:** the paste box and the Title/From fields are not
   covered by the keyboard on an SE.
+- [ ] **The starter reel ("Try one of these")**, with an account that has
+  no recipes (it is also under the empty library's two buttons). *Expect:*
+  Recipe Box pages — picture (or meal-type art), title, time, serves and
+  steps and ingredients when there is room, the site at the bottom, "👍 N"
+  on the picture and "Cooked by N people" only on data-backed cards. On an
+  iPhone 13 the whole reel is visible above the tab bar without scrolling
+  (Chromium cannot measure this: its layout of that screen runs ~63pt
+  taller than the phone's); on a Pro Max, too; on an SE it is below the
+  fold. *Auto:* reelView.test.ts (sizes, counts), reel.db.test.ts.
+- [ ] **The ticker:** the row drifts left by itself and loops with no seam;
+  a finger on it stops it at once; tapping a card opens its preview; it
+  drifts again 5s after the last touch. It does NOT move with Reduce
+  Motion on (Settings › Accessibility › Motion) or with VoiceOver on, and
+  then shows each card once. VoiceOver reads "Title, site, Cooked by N
+  people, N likes, button" and never a card twice. *Auto:* the drift,
+  hold and resume, measured in Chromium (reelView.test.ts for the rules).
+- [ ] **Snapping** after a hand-scroll lands a card at the left edge
+  (off under Reduce Motion). Chromium has no snapping at all.
 
 ### Find › My Recipes
 

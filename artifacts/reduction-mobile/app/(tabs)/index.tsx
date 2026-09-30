@@ -84,7 +84,7 @@ export default function FindScreen() {
         <MyRecipesPane prefill={minePrefill} blocked={blocked} onOpenBrowse={openBrowse} bottomInset={bottomInset} />
       </View>
       <View style={shown('add')}>
-        <AddNewPane blocked={blocked} onOpenBrowse={openBrowse} bottomInset={bottomInset} />
+        <AddNewPane blocked={blocked} onOpenBrowse={openBrowse} bottomInset={bottomInset} active={tab === 'add'} />
       </View>
       <View style={shown('browse')}>
         <BrowsePane request={browseRequest} blocked={blocked} bottomInset={bottomInset} />
