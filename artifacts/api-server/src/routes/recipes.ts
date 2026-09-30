@@ -152,7 +152,7 @@ export async function cacheSetUrl(rawUrl: string, recipe: Recipe): Promise<void>
 
 /** Drops whatever is cached for a URL, under either key — and the original
  *  wording stored beside each dropped row. */
-async function cacheDropUrl(rawUrl: string): Promise<void> {
+export async function cacheDropUrl(rawUrl: string): Promise<void> {
   const db = getDb();
   const dropped = await db
     .delete(extractionCache)
@@ -174,7 +174,7 @@ async function cacheDropUrl(rawUrl: string): Promise<void> {
  * cache hit. Decoration both ways: a failure is logged and the extraction
  * goes on (lib/original.ts).
  */
-async function keepOriginal(key: string, original: OriginalRecipe | null): Promise<void> {
+export async function keepOriginal(key: string, original: OriginalRecipe | null): Promise<void> {
   await saveExtractionOriginal(key, original).catch((e) => warnOriginal("save", e));
 }
 async function cachedOriginal(key: string, from: OriginalFrom): Promise<OriginalRecipe | null> {

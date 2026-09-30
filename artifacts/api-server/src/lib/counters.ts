@@ -60,7 +60,10 @@ export async function countEvent(name: CounterName): Promise<void> {
   } catch (e) {
     if (!warned) {
       warned = true;
-      console.warn('[counters] not counting (README "Usage counters"):', (e as Error).message);
+      // The driver's own sentence ("relation ... does not exist"), not the
+      // wrapper's, which repeats the whole query.
+      const err = e as Error & { cause?: Error };
+      console.warn('[counters] not counting (README "Usage counters"):', (err.cause ?? err).message);
     }
   }
 }

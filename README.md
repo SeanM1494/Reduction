@@ -711,6 +711,61 @@ Without it nothing is counted (one `[counters]` warning per process) and
 nothing else changes; `/api/health` lists `daily_counters` and the admin
 read answers 503 `schema_behind`.
 
+### Starter recipes reel
+
+A horizontal reel of recipes on Find › Add New and the empty library, for
+someone with nothing saved yet (`lib/reel.ts` rules, `lib/reelStore.ts`
+data, `routes/reel.ts`). **Data first:** pages other people saved and
+cooked, ranked by DISTINCT accounts that cooked them, then by the share of
+👍 among their ratings. **Curated second:** the owner's list fills what the
+data leaves. The privacy rules are search suggestions' rules: URL
+extractions only, public-looking addresses only, never a paste, photo or
+browser-read page, counts per account and only above their floors, and
+nothing about any person in the answer. Every card is already in the
+extraction cache, so a tap is the ordinary link extraction answered from
+the cache: instant and free. Minimums are PROVISIONAL (ROADMAP).
+
+`GET /api/reel` — signed in, not walled, but EMPTY for an account the wall
+has stopped (a tap would only meet the wall); 30 an hour per account;
+built once an hour per instance. Heading "Loved by Reduction users" only
+when every card is data-backed and clears the ratings floor, otherwise
+"Try one of these"; no heading and no reel when nothing qualifies.
+
+The owner's list is `reel_entries` — hand-run DDL, safe to run twice:
+
+```sql
+create table if not exists reel_entries (
+  url_key text primary key,
+  url text not null,
+  status text not null check (status in ('curated', 'hidden')),
+  pinned jsonb,
+  note text,
+  updated_at timestamptz not null default now()
+);
+```
+
+Without it the reel is data-backed only and nothing can be hidden or
+curated; `/api/health` lists it and the admin writes answer 503. A curated
+page keeps a PINNED copy of its tree: if its cache row is lost (a failed
+re-read is the one thing that deletes a row and leaves nothing), the next
+reel build puts the copy back into the cache, with no model call.
+
+The owner works it from the Replit shell with `scripts/reel.mjs`, which
+calls the admin routes on the deployment (PUBLIC_BASE_URL, ADMIN_SECRET):
+
+- `node scripts/reel.mjs preview` — the dry run: what a stranger would see,
+  data-backed or curated, and counts of what was left out and why.
+- `node scripts/reel.mjs warm urls.txt` — report only: cached ($0), would
+  extract, or not public; for a cached page, what it predates (step order,
+  picture, original wording).
+- `... --write` — extracts what is not cached (once, logged as `warmup` in
+  the cost report) and curates every clean page with a pinned copy.
+- `... --write --refresh <url>` — also re-reads that named cached page.
+- `node scripts/reel.mjs hide <url>` / `unhide <url>`.
+
+Every write is in `admin_events` (action `reel`, target `(reel)`, the URL
+in the note).
+
 ### A development build for a physical iPhone
 
 `artifacts/reduction-mobile/eas.json` has three profiles. `development` is

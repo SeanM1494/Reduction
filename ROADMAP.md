@@ -2408,17 +2408,29 @@ is not the same as the wall appearing on a screen: the phone also shows
 the wall from its own entitlement check without asking the server. Counting
 that would be one more allow-listed name, if wanted.
 
-### 5. Starter recipes reel — planned (waiting for URLs)
+### 5. Starter recipes reel — server built (Sep 30); app next
 
-A curated list (a file in the server repo), served by a signed-in route
-that returns only entries already in the extraction cache and valid; a
-horizontal reel of cards on Add New; a tap is the ordinary link extraction,
-so a cache hit. Two findings shape it: Add New has almost no blank space
-(about 40pt on an iPhone 13 and none on an SE, where the photo buttons are
-already below the fold), and saving a starter spends a new account's one
-free recipe. The warm-up runs through an admin route on the deployment
-rather than a script with production database access. Plan in the Sep 30
-report.
+Decided Sep 30: data first (pages other people saved and cooked), the
+owner's curated list to fill; the search suggestions' privacy rules; every
+card already cached; a pinned copy for curated pages (option B); hide and
+curate without a deploy through `reel_entries` and admin routes; the
+warm-up as an admin route on the deployment (report by default, extract
+only with --write, re-read only a named row), called by `scripts/reel.mjs`;
+empty for walled accounts; "Loved by Reduction users" only when every card
+is data-backed and clears the ratings floor. README "Starter recipes reel".
+
+**The minimums are PROVISIONAL**, chosen before there was data: cooked by
+at least 3 distinct accounts; the 👍 share used (and shown) only from 5
+ratings; excluded under 60% 👍 at 5+ ratings; at most 10 cards; the reel
+built once an hour per instance. Revisit when the counters show real use.
+
+**Open product question: a starter's save spends the free recipe.** Tapping
+a card is free (a signed-in cache hit spends nothing), but saving it is a
+save like any other and uses a free account's only recipe. Someone who
+saves our pick to see what happens then meets the wall on their own
+recipe. Not changed (decided Sep 30); the preview says "Saving this uses
+your free recipe" for accounts on the free allowance. Worth deciding
+before the wall goes on.
 
 ## Still open from earlier work
 

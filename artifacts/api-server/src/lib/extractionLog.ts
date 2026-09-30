@@ -36,8 +36,9 @@ import { estimateCostUsd, promptTokens } from "./extractionCost";
 import type { CallUsage } from "./extractionConfig";
 
 export interface ExtractionEvent {
-  /** "page": a page the phone's in-app browser already had (Sep 28). */
-  source: "url" | "text" | "file" | "reextract" | "page";
+  /** "page": a page the phone's in-app browser already had (Sep 28).
+   *  "warmup": the owner warming the reel's curated list (Sep 30). */
+  source: "url" | "text" | "file" | "reextract" | "page" | "warmup";
   cached: boolean;
   via?: "self" | "claude" | null;
   attempts?: number | null;

@@ -30,6 +30,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { MODEL as EXTRACTION_MODEL } from "../lib/structureRecipe";
 import { windowReport } from "../lib/costReport";
 import { readCounters } from "../lib/counters";
+import { registerReelAdmin } from "./adminReel";
 import { isMissingColumn } from "../lib/extractionLog";
 
 export const adminRouter = Router();
@@ -95,7 +96,7 @@ export function resetAdminThrottle(): void {
   failures.clear();
 }
 
-function requireAdmin(req: Request, res: Response): boolean {
+export function requireAdmin(req: Request, res: Response): boolean {
   const expected = process.env.ADMIN_SECRET?.trim();
   // Unset means the route does not exist, rather than existing unguarded.
   if (!expected) {
@@ -675,3 +676,6 @@ adminRouter.post("/preflight/apple-iap/test-notification", async (req: Request, 
   if (!out.ok) return res.status(502).json({ error: "Apple refused the request.", ...out });
   return res.json({ ok: true, environment: out.environment, testNotificationToken: out.token, next: "Watch the deployment logs for 'TEST acknowledged'." });
 });
+
+// The starter reel's controls (routes/adminReel.ts), behind the same guard.
+registerReelAdmin(adminRouter, requireAdmin);

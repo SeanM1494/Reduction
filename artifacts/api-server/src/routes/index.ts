@@ -13,6 +13,7 @@ import { adminRouter } from "./admin";
 import { accountRouter } from "./account";
 import { booksRouter } from "./books";
 import { countersRouter } from "./counters";
+import { reelRouter } from "./reel";
 
 import { EXTRACTION_MAX_TOKENS, extractionEffort, extractionFallbackEffort, stepSourcesEnabled } from "../lib/extractionConfig";
 
@@ -47,6 +48,7 @@ router.use("/recipes", recipesRouter);
 router.use("/library", libraryRouter);
 router.use("/books", booksRouter);
 router.use("/counters", countersRouter);
+router.use("/reel", reelRouter);
 router.use("/trial", trialRouter);
 router.use("/push", pushRouter);
 // The dispatch trigger. See lib/timerDispatch.ts: the work is a plain

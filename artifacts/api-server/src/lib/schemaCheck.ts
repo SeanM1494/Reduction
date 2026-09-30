@@ -38,6 +38,7 @@ export const REQUIRED_SCHEMA: readonly Required[] = [
   { table: "extraction_events", column: "output_tokens", readme: 'README "Extraction costs"' },
   { table: "extraction_events", column: "est_cost_usd", readme: 'README "Extraction costs"' },
   { table: "daily_counters", readme: 'README "Usage counters"' },
+  { table: "reel_entries", readme: 'README "Starter recipes reel"' },
 ];
 
 export interface SchemaReport {

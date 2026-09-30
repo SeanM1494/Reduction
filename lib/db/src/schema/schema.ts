@@ -856,3 +856,21 @@ export const dailyCounters = pgTable(
   },
   (table) => [primaryKey({ columns: [table.day, table.name] })]
 );
+
+/**
+ * The starter reel's owner list (Sep 30, lib/reelStore.ts): pages the owner
+ * CURATED (offered when the data leaves room, with a pinned copy of the
+ * tree so a failed re-read cannot take one away) or HIDDEN (never offered,
+ * data or not). Keyed by the cache's URL alias, so every spelling of a page
+ * is one entry. HAND-RUN DDL (README "Starter recipes reel"); the reel is
+ * data-backed only without it.
+ */
+export const reelEntries = pgTable("reel_entries", {
+  urlKey: text("url_key").primaryKey(),
+  url: text("url").notNull(),
+  /** 'curated' | 'hidden' (a CHECK in the hand-run DDL). */
+  status: text("status").notNull(),
+  pinned: jsonb("pinned").$type<Recipe>(),
+  note: text("note"),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
