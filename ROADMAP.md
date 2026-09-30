@@ -2350,6 +2350,16 @@ Decisions:
 does not yet say this; one sentence is proposed in the Sep 30 report,
 waiting for approval.
 
+### 4. Phone QA checklist — written (no code)
+
+`docs/qa/phone-checklist.md`: an 18-item, ten-minute smoke test, then
+everything device-only by screen, each item with what to do and what should
+happen. It was gathered from this file, CLAUDE.md, MOBILE_PARITY.md, README
+and the session reports, with duplicates merged and the automated test that
+covers each item's logic named, so those can be skipped. Two stale entries
+were found while gathering: §1 and "Suggested order" #8 still say Sign in
+with Apple "has not been started" (it is built; Phase 4 is current).
+
 ## Still open from earlier work
 
 - **allrecipes.com cannot be read by the server, by either fetch (Sep
