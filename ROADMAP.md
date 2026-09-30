@@ -2408,11 +2408,13 @@ Google proxy hop shows where it is, so never a client. The admin audit
 rows' `actorIp` is now the client key; the rejected-secret log shows an
 HMAC of it.
 
-**Still to do:** the diagnostic route (`GET /api/admin/diagnostics/ip`) now
-returns only `anchored`, the matched listed address and an HMAC of the key.
-Delete it in a follow-up commit once the owner has checked both hostnames
-after the Publish. Limits remain per instance and fail open across
-instances, as the process-memory rule allows.
+**Verified on the deployment (Sep 30, `b2cb5cb`):** both hostnames
+anchored on their own load balancer, the key's HMAC matched the owner's
+public address recomputed by hand, and a forged `X-Forwarded-For` left it
+unchanged. The temporary diagnostic route was then deleted; its request-path
+coverage lives on as a test-only probe in `routes/clientKey.test.ts`.
+Limits remain per instance and fail open across instances, as the
+process-memory rule allows.
 
 ### 3b. Usage counters — built (server Publish, after the SQL)
 

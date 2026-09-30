@@ -1,9 +1,11 @@
 /**
- * routes/adminDiagnostics.test.ts — the per-client key through real requests
- * (Sep 30): the TEMPORARY diagnostic, which may say whether the key anchored
- * and never show an address; the admin throttle, which now locks out one
- * client rather than everybody; and a guard that no route keys a brake on
- * `req.ip` again. No database: the admin guard reads only the secret.
+ * routes/clientKey.test.ts — the per-client key through real requests
+ * (Sep 30): a TEST-ONLY probe behind the real admin guard, reporting what
+ * the deployment's temporary diagnostic reported (verified through both
+ * hostnames on Sep 30, then deleted) and never an address; the admin
+ * throttle, which locks out one client rather than everybody; and a guard
+ * that no route keys a brake on `req.ip` again. No database: the admin
+ * guard reads only the secret.
  */
 
 import test, { after } from "node:test";
@@ -13,9 +15,9 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import express from "express";
 import http, { createServer, type Server } from "node:http";
-import { adminRouter, resetAdminThrottle } from "./admin";
+import { adminRouter, requireAdmin, resetAdminThrottle } from "./admin";
 import { overLimit, resetRateLimitForTests } from "./recipes";
-import { keyDigest, resetClientAddressForTests } from "../lib/clientAddress";
+import { edgeConfig, keyDigest, requestClient, resetClientAddressForTests } from "../lib/clientAddress";
 
 const SECRET = "test-admin-secret-ip-0123456789";
 const EDGES = "34.111.179.208,34.117.33.233";
@@ -27,6 +29,21 @@ async function listen(): Promise<number> {
   if (port) return port;
   const app = express();
   app.use("/api/admin", adminRouter);
+  // What the deployment's diagnostic answered, kept here so the request
+  // path stays covered after the route itself was deleted.
+  app.get("/probe", (req, res) => {
+    if (!requireAdmin(req, res)) return;
+    const config = edgeConfig();
+    const r = requestClient(req);
+    res.json({
+      anchored: r.reason === "anchored",
+      reason: r.reason,
+      matchedEdge: r.edge,
+      listedEdges: config.ips.size,
+      settingRefused: config.problem !== null,
+      clientKeyHash: keyDigest(r.key),
+    });
+  });
   server = createServer(app);
   await new Promise<void>((r) => server!.listen(0, "127.0.0.1", r));
   const addr = server.address();
@@ -38,13 +55,13 @@ after(() => server?.close());
 
 /** http.request rather than fetch: an ARRAY value goes out as separate
  *  header lines, which fetch would merge before sending. */
-async function get(secret: string | null, xff?: string | string[]): Promise<{ status: number; body: any; text: string }> {
+async function get(secret: string | null, xff?: string | string[], path = "/probe"): Promise<{ status: number; body: any; text: string }> {
   const p = await listen();
   return new Promise((resolve, reject) => {
     const headers: Record<string, string | string[]> = {};
     if (secret) headers["x-admin-secret"] = secret;
     if (xff !== undefined) headers["x-forwarded-for"] = xff;
-    const req = http.request({ host: "127.0.0.1", port: p, path: "/api/admin/diagnostics/ip", headers }, (res) => {
+    const req = http.request({ host: "127.0.0.1", port: p, path, headers }, (res) => {
       let text = "";
       res.on("data", (c) => (text += c));
       res.on("end", () => {
@@ -79,7 +96,7 @@ async function withEnv<T>(env: { secret?: string | null; edges?: string | null }
 
 const NO_ADDRESS = /\d+\.\d+\.\d+\.\d+|::/;
 
-test("ip diagnostic: absent without ADMIN_SECRET, refused without the right one", async () => {
+test("probe: absent without ADMIN_SECRET, refused without the right one", async () => {
   await withEnv({ secret: null }, async () => assert.equal((await get(SECRET)).status, 404));
   await withEnv({}, async () => {
     assert.equal((await get("wrong")).status, 401);
@@ -87,7 +104,11 @@ test("ip diagnostic: absent without ADMIN_SECRET, refused without the right one"
   });
 });
 
-test("ip diagnostic: anchored through each hostname, the key's HMAC and no raw client or socket address", async () => {
+test("the deployment's temporary diagnostic route is gone", async () => {
+  await withEnv({ edges: EDGES }, async () => assert.equal((await get(SECRET, CHAIN, "/api/admin/diagnostics/ip")).status, 404));
+});
+
+test("probe: anchored through each hostname, the key's HMAC and no raw client or socket address", async () => {
   await withEnv({ edges: EDGES }, async () => {
     for (const [chain, edge] of [
       [CHAIN, "34.111.179.208"],
@@ -102,7 +123,6 @@ test("ip diagnostic: anchored through each hostname, the key's HMAC and no raw c
       assert.equal(r.body.listedEdges, 2);
       assert.equal(r.body.settingRefused, false);
       assert.equal(r.body.clientKeyHash, keyDigest("34.70.186.43", SECRET));
-      assert.match(r.body.temporary, /Delete/);
       // The matched edge is the operator's own setting; nothing else in the
       // answer may look like an address.
       assert.ok(!NO_ADDRESS.test(r.text.replace(edge, "EDGE")), r.text);
@@ -110,7 +130,7 @@ test("ip diagnostic: anchored through each hostname, the key's HMAC and no raw c
   });
 });
 
-test("ip diagnostic: separate X-Forwarded-For header lines are one chain", async () => {
+test("probe: separate X-Forwarded-For header lines are one chain", async () => {
   await withEnv({ edges: EDGES }, async () => {
     const r = await get(SECRET, ["203.0.113.9", "34.70.186.43, 34.111.179.208", "35.191.18.188,34.123.18.144"]);
     assert.equal(r.body.anchored, true);
@@ -118,7 +138,7 @@ test("ip diagnostic: separate X-Forwarded-For header lines are one chain", async
   });
 });
 
-test("ip diagnostic: unset, refused and unrecognised settings all report the shared bucket, still with no address", async () => {
+test("probe: unset, refused and unrecognised settings all report the shared bucket, still with no address", async () => {
   const shared = keyDigest("127.0.0.1", SECRET);
   const cases: Array<[string | null, string | undefined, string, boolean]> = [
     [null, CHAIN, "unset", false],

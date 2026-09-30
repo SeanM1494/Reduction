@@ -30,7 +30,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { MODEL as EXTRACTION_MODEL } from "../lib/structureRecipe";
 import { windowReport } from "../lib/costReport";
 import { readCounters } from "../lib/counters";
-import { clientKey, edgeConfig, keyDigest, requestClient } from "../lib/clientAddress";
+import { clientKey, keyDigest } from "../lib/clientAddress";
 import { registerReelAdmin } from "./adminReel";
 import { isMissingColumn } from "../lib/extractionLog";
 
@@ -569,30 +569,6 @@ adminRouter.get("/counters", async (req: Request, res: Response) => {
     console.error("[admin:counters]", (e as Error).message);
     return res.status(500).json({ error: "Could not read the counters." });
   }
-});
-
-/**
- * GET /api/admin/diagnostics/ip — TEMPORARY (Sep 30). Whether the client-key
- * fix (lib/clientAddress.ts) recognises the request it is looking at, from
- * one curl per hostname against the deployment. NO RAW ADDRESS of any kind:
- * whether a listed load-balancer address anchored, which LISTED address it
- * was (the operator's own setting, read back), and an HMAC of the key the
- * limits used, which the operator can recompute from their own public
- * address. Delete in a follow-up once both hostnames have been checked.
- */
-adminRouter.get("/diagnostics/ip", (req: Request, res: Response) => {
-  if (!requireAdmin(req, res)) return;
-  const config = edgeConfig();
-  const r = requestClient(req);
-  return res.json({
-    temporary: "Delete once both hostnames have been checked (ROADMAP, launch readiness).",
-    anchored: r.reason === "anchored",
-    reason: r.reason,
-    matchedEdge: r.edge,
-    listedEdges: config.ips.size,
-    settingRefused: config.problem !== null,
-    clientKeyHash: keyDigest(r.key),
-  });
 });
 
 /**

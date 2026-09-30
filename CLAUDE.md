@@ -252,7 +252,7 @@ balancer's own address (`TRUSTED_EDGE_IPS`, README "Per-client limits") and
 falls back to the shared bucket, never to an address the client wrote. Do
 not replace it with a `trust proxy` hop count: a count is right only while
 the chain keeps its length, and one hop fewer trusts a forged entry
-silently. `adminDiagnostics.test.ts` fails on any `req.ip` in a route.
+silently. `routes/clientKey.test.ts` fails on any `req.ip` in a route.
 
 ## How work gets committed
 
