@@ -25,8 +25,8 @@
  * the shared bucket this replaced, which is merely today's behaviour. When the
  * setting is present but no listed address appears, the log names the entry
  * where one should have been (see `edgeCandidate`) so the fix is a secret
- * edit. A client address is never logged, and the diagnostic shows only an
- * HMAC of the key.
+ * edit. A client address is never logged; where a key must be shown, it
+ * is an HMAC of it (`keyDigest`).
  */
 
 import crypto from "node:crypto";

@@ -2408,11 +2408,15 @@ Google proxy hop shows where it is, so never a client. The admin audit
 rows' `actorIp` is now the client key; the rejected-secret log shows an
 HMAC of it.
 
-**Verified on the deployment (Sep 30, `b2cb5cb`):** both hostnames
-anchored on their own load balancer, the key's HMAC matched the owner's
-public address recomputed by hand, and a forged `X-Forwarded-For` left it
-unchanged. The temporary diagnostic route was then deleted; its request-path
-coverage lives on as a test-only probe in `routes/clientKey.test.ts`.
+**The anchor check was verified on the deployment through both hostnames
+(Sep 30, `b2cb5cb`):** recipereduction.com anchored on `34.111.179.208`
+and recipe-reduction.replit.app on `34.117.33.233`, the key's HMAC matched
+the owner's public address recomputed by hand, and a forged
+`X-Forwarded-For` left it unchanged. The temporary diagnostic route that
+checked it (`GET /api/admin/diagnostics/ip`) has been deleted, and with it
+its tests; what stays is `lib/clientAddress.test.ts` (the key) and
+`routes/clientKey.test.ts` (the admin throttle per client, the extraction
+limit per key, and the guard that fails on any `req.ip` in a route).
 Limits remain per instance and fail open across instances, as the
 process-memory rule allows.
 
