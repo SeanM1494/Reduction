@@ -243,6 +243,17 @@ memory may fail here. If you add a `Map` that a later request reads, ask
 what happens when that request is served by a process that never saw the
 write.
 
+**A per-client brake keys on `clientKey(req)`, never on `req.ip`.** Behind
+the deployment `req.ip` is a loopback proxy — `::ffff:127.0.0.1` for every
+request, measured Sep 30 — so every user on an instance shared one bucket
+of 20 extractions an hour, and it passed every local test because locally
+the socket IS the client. `lib/clientAddress.ts` anchors on the load
+balancer's own address (`TRUSTED_EDGE_IPS`, README "Per-client limits") and
+falls back to the shared bucket, never to an address the client wrote. Do
+not replace it with a `trust proxy` hop count: a count is right only while
+the chain keeps its length, and one hop fewer trusts a forged entry
+silently. `adminDiagnostics.test.ts` fails on any `req.ip` in a route.
+
 ## How work gets committed
 
 **Commit directly to `main` and push.** Do not create a branch, and do not

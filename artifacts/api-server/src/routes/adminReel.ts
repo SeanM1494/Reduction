@@ -33,6 +33,7 @@ import { readRecipeAtUrl } from "../lib/readRecipe";
 import { extractionOriginal } from "../lib/original";
 import { recordExtraction, hostOf } from "../lib/extractionLog";
 import { estimateCostUsd } from "../lib/extractionCost";
+import { clientKey } from "../lib/clientAddress";
 import type { CallUsage } from "../lib/extractionConfig";
 
 const urlHash = (url: string) => crypto.createHash("sha256").update(`url:${url}`).digest("hex");
@@ -52,7 +53,7 @@ async function audit(req: Request, before: string | null, after: string, note: s
     targetUserId: "(reel)",
     before,
     after,
-    actorIp: req.ip ?? null,
+    actorIp: clientKey(req),
     note: note.slice(0, 500),
   });
 }

@@ -2384,18 +2384,35 @@ on /api/health at a slow interval, because every ping wakes the Autoscale
 deployment. A Sentry-style SDK is costed in the report, not proposed. All
 waiting for approval, with a privacy sentence.
 
-### The per-IP extraction limit may be one bucket for everyone (Sep 30)
+### The per-IP extraction limit was one bucket for everyone — fixed (Sep 30)
 
-`app.ts` never sets `trust proxy`, so `req.ip` is the socket's peer. Behind
-Replit's proxy that is the proxy, not the person — in which case the
-extraction limit (20 fresh extractions an hour per "IP", per instance), the
-search limit and the admin throttle each treat every user as ONE address:
-the 21st fresh extraction in an hour, by anyone, is refused for everyone on
-that instance. **Temporary diagnostic:** `GET /api/admin/diagnostics/ip`
-(x-admin-secret) returns `req.ip`, the socket address and the forwarding
-headers; one curl against the deployment settles it. The fix (a hop count
-for `trust proxy`, never `true`) is proposed in the Sep 30 report and
-waits for approval; remove the route with it.
+Measured on the deployment: `req.ip` was `::ffff:127.0.0.1` for every
+request (a loopback proxy), so the extraction and search limit (20 fresh an
+hour) and the admin failure throttle each treated every user on an instance
+as ONE client. Six samples through both hostnames showed the shape of
+X-Forwarded-For: `<client>, <load balancer>, <Google proxy 35.191.x>,<a
+last hop that changes every request>`, with the load balancer fixed per
+hostname — `34.111.179.208` for recipereduction.com, `34.117.33.233` for
+recipe-reduction.replit.app (the phone app).
+
+**Decided and built:** `lib/clientAddress.ts` keys on the entry immediately
+left of the RIGHTMOST address listed in `TRUSTED_EDGE_IPS` (deployment
+secret only), not on a `trust proxy` hop count, which trusts a client-written
+entry the day a hop disappears; `req.ip` is untouched. No listed address, no
+valid entry left of it, no header or no valid setting: the socket's peer,
+i.e. the old shared bucket — it fails shared, never spoofable. IPv6 keys by
+/64. The setting is validated at boot (addresses only, comma-separated, at
+most 10; anything else refused whole with one warning). A chain with no
+listed address logs the load balancer's address to add — named only when a
+Google proxy hop shows where it is, so never a client. The admin audit
+rows' `actorIp` is now the client key; the rejected-secret log shows an
+HMAC of it.
+
+**Still to do:** the diagnostic route (`GET /api/admin/diagnostics/ip`) now
+returns only `anchored`, the matched listed address and an HMAC of the key.
+Delete it in a follow-up commit once the owner has checked both hostnames
+after the Publish. Limits remain per instance and fail open across
+instances, as the process-memory rule allows.
 
 ### 3b. Usage counters — built (server Publish, after the SQL)
 

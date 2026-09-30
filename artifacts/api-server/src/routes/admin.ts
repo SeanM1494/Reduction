@@ -30,6 +30,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { MODEL as EXTRACTION_MODEL } from "../lib/structureRecipe";
 import { windowReport } from "../lib/costReport";
 import { readCounters } from "../lib/counters";
+import { clientKey, edgeConfig, keyDigest, requestClient } from "../lib/clientAddress";
 import { registerReelAdmin } from "./adminReel";
 import { isMissingColumn } from "../lib/extractionLog";
 
@@ -103,7 +104,7 @@ export function requireAdmin(req: Request, res: Response): boolean {
     res.status(404).json({ error: "Not found." });
     return false;
   }
-  const ip = req.ip ?? "unknown";
+  const ip = clientKey(req);
   if (lockedOut(ip)) {
     res.status(429).json({ error: "Too many attempts." });
     return false;
@@ -111,7 +112,7 @@ export function requireAdmin(req: Request, res: Response): boolean {
   if (!secretMatches(req.get("x-admin-secret"), expected)) {
     recordFailure(ip);
     // Logged because a wrong secret against this route is worth noticing.
-    console.error(`[admin] rejected lookup from ${ip}`);
+    console.error(`[admin] rejected lookup from client ${keyDigest(ip, expected)}`);
     res.status(401).json({ error: "Bad admin secret." });
     return false;
   }
@@ -265,7 +266,7 @@ adminRouter.patch("/user", async (req: Request, res: Response) => {
     const { before, after } = await setEnforceOverrideAudited({
       userId,
       value,
-      actorIp: req.ip ?? null,
+      actorIp: clientKey(req),
       note,
     });
 
@@ -571,34 +572,26 @@ adminRouter.get("/counters", async (req: Request, res: Response) => {
 });
 
 /**
- * GET /api/admin/diagnostics/ip — TEMPORARY (Sep 30). What this server sees
- * of the request that reached it, to answer one question from a single curl
- * against the deployment: does `req.ip` — which the per-IP extraction limit
- * (20 an hour) and this router's throttle key on — name the CLIENT, or the
- * proxy in front of us? With no `trust proxy` setting Express reports the
- * socket's peer, which behind Replit's proxy would be the proxy for everyone,
- * putting every user in ONE limiter bucket.
- *
- * Headers are echoed only to the holder of the admin secret, and only the
- * ones that carry addresses. Remove once the trust-proxy fix is decided.
+ * GET /api/admin/diagnostics/ip — TEMPORARY (Sep 30). Whether the client-key
+ * fix (lib/clientAddress.ts) recognises the request it is looking at, from
+ * one curl per hostname against the deployment. NO RAW ADDRESS of any kind:
+ * whether a listed load-balancer address anchored, which LISTED address it
+ * was (the operator's own setting, read back), and an HMAC of the key the
+ * limits used, which the operator can recompute from their own public
+ * address. Delete in a follow-up once both hostnames have been checked.
  */
 adminRouter.get("/diagnostics/ip", (req: Request, res: Response) => {
   if (!requireAdmin(req, res)) return;
+  const config = edgeConfig();
+  const r = requestClient(req);
   return res.json({
-    temporary: "Remove once the trust-proxy setting is decided (ROADMAP, launch readiness).",
-    reqIp: req.ip ?? null,
-    reqIps: req.ips,
-    socketRemoteAddress: req.socket.remoteAddress ?? null,
-    trustProxy: req.app.get("trust proxy") ?? false,
-    headers: {
-      "x-forwarded-for": req.get("x-forwarded-for") ?? null,
-      "x-real-ip": req.get("x-real-ip") ?? null,
-      forwarded: req.get("forwarded") ?? null,
-      "x-forwarded-proto": req.get("x-forwarded-proto") ?? null,
-      "x-envoy-external-address": req.get("x-envoy-external-address") ?? null,
-    },
-    /** What the extraction limiter keys this request on today. */
-    extractionLimitKey: req.ip ?? "unknown",
+    temporary: "Delete once both hostnames have been checked (ROADMAP, launch readiness).",
+    anchored: r.reason === "anchored",
+    reason: r.reason,
+    matchedEdge: r.edge,
+    listedEdges: config.ips.size,
+    settingRefused: config.problem !== null,
+    clientKeyHash: keyDigest(r.key),
   });
 });
 

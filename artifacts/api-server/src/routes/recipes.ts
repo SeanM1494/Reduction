@@ -28,6 +28,7 @@ import { urlKeyOf } from "../lib/urlKey";
 import { hostOf, recordExtraction, type ExtractionEvent } from "../lib/extractionLog";
 import type { CallUsage } from "../lib/extractionConfig";
 import { countEvent } from "../lib/counters";
+import { clientKey } from "../lib/clientAddress";
 import {
   sanitizeOriginal,
   type OriginalFrom,
@@ -273,17 +274,25 @@ function searchCacheGet(key: string): SearchResult[] | null {
   return hit.results;
 }
 
-// Extraction is expensive enough to be worth a crude per-IP throttle.
+// Extraction is expensive enough to be worth a crude per-client throttle,
+// keyed by lib/clientAddress.ts (NOT req.ip, which behind the deployment's
+// proxy is one loopback address for everybody). Per instance and in memory
+// on purpose: a miss only lets a few more through.
 const rate = new Map<string, number[]>();
 const RATE_LIMIT = 20;
 const RATE_WINDOW_MS = 60 * 60 * 1000;
 
-function overLimit(ip: string): boolean {
+export function overLimit(ip: string): boolean {
   const now = Date.now();
   const hits = (rate.get(ip) ?? []).filter((t) => now - t < RATE_WINDOW_MS);
   hits.push(now);
   rate.set(ip, hits);
   return hits.length > RATE_LIMIT;
+}
+
+/** Test seam: the limiter is process-global. */
+export function resetRateLimitForTests(): void {
+  rate.clear();
 }
 
 /**
@@ -478,7 +487,7 @@ recipesRouter.post("/extract", requireExtractionAllowance, async (req: Request, 
         });
       }
 
-      if (overLimit(req.ip ?? "unknown"))
+      if (overLimit(clientKey(req)))
         return res
           .status(429)
           .json({ error: "Too many extractions this hour. Try again later." });
@@ -520,7 +529,7 @@ recipesRouter.post("/extract", requireExtractionAllowance, async (req: Request, 
         });
       }
 
-      if (overLimit(req.ip ?? "unknown"))
+      if (overLimit(clientKey(req)))
         return res
           .status(429)
           .json({ error: "Too many extractions this hour. Try again later." });
@@ -580,7 +589,7 @@ recipesRouter.post("/extract", requireExtractionAllowance, async (req: Request, 
         });
       }
 
-      if (overLimit(req.ip ?? "unknown"))
+      if (overLimit(clientKey(req)))
         return res
           .status(429)
           .json({ error: "Too many extractions this hour. Try again later." });
@@ -625,7 +634,7 @@ recipesRouter.post("/extract", requireExtractionAllowance, async (req: Request, 
       });
     }
 
-    if (overLimit(req.ip ?? "unknown"))
+    if (overLimit(clientKey(req)))
       return res
         .status(429)
         .json({ error: "Too many extractions this hour. Try again later." });
@@ -853,9 +862,8 @@ recipesRouter.post("/suggestions", async (req: Request, res: Response) => {
 });
 
 recipesRouter.post("/search", async (req: Request, res: Response) => {
-  const ip = req.ip ?? "unknown";
   // Same throttle as extraction — a search also costs an API call.
-  if (overLimit(ip))
+  if (overLimit(clientKey(req)))
     return res
       .status(429)
       .json({ error: "Too many searches this hour. Try again later." });

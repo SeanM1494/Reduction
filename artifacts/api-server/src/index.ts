@@ -5,6 +5,7 @@ import { startSessionSweep } from "./lib/sessions";
 import { startTimerDispatch } from "./lib/timerDispatch";
 import { logSchemaAtBoot } from "./lib/schemaCheck";
 import { cleanupSeedRecipes } from "./cleanupSeed";
+import { edgeConfig } from "./lib/clientAddress";
 
 const rawPort = process.env["PORT"];
 
@@ -37,3 +38,14 @@ startSessionSweep();
 startTimerDispatch();
 // Hand-run DDL the code needs and the database lacks, named at boot.
 void logSchemaAtBoot();
+// Which load-balancer addresses the per-client limits anchor on. A refused
+// TRUSTED_EDGE_IPS warns here, once (lib/clientAddress.ts), and leaves the
+// shared bucket; unset is said too, because it is the same bucket.
+{
+  const edges = edgeConfig();
+  if (!edges.problem)
+    logger.info(
+      { trustedEdges: edges.ips.size },
+      edges.ips.size ? "Client keys anchor on TRUSTED_EDGE_IPS" : "TRUSTED_EDGE_IPS unset: every client shares one limit bucket"
+    );
+}

@@ -685,6 +685,28 @@ an email. It caps nothing.
 curl -s -H "x-admin-secret: $ADMIN_SECRET" https://<deployment>/api/admin/costs
 ```
 
+### Per-client limits: `TRUSTED_EDGE_IPS`
+
+The extraction and search limit (20 fresh an hour, per instance) and the
+admin failure throttle key on the CLIENT, which behind the deployment is
+not `req.ip` (that is a loopback proxy, the same for everyone).
+`lib/clientAddress.ts` takes the entry immediately left of the rightmost
+address in `TRUSTED_EDGE_IPS` in X-Forwarded-For — Replit's load balancer
+appends the client and then itself, so nothing a client writes can land to
+the right of it. Set it in the **deployment's** secrets only:
+
+```
+TRUSTED_EDGE_IPS=34.111.179.208,34.117.33.233
+```
+
+(recipereduction.com and recipe-reduction.replit.app respectively, measured
+Sep 30.) Addresses only, comma-separated, at most 10; anything else is
+refused whole with one boot warning. Unset or refused, every client shares
+one bucket, which is how it was before. If Replit adds or moves a load
+balancer, the log says `[client-key] a request arrived through <address>,
+which TRUSTED_EDGE_IPS does not list` — add that address. The workspace
+dev server needs none: nothing there sits behind the load balancer.
+
 ### Usage counters
 
 Anonymous daily counts (`lib/counters.ts`): one row per UTC day and name,
