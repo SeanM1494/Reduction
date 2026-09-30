@@ -253,6 +253,9 @@ wants them in the binary as well as the metadata.
 What to put in App Store Connect: **App Information → Privacy Policy URL** =
 `https://recipereduction.com/privacy.html`; the version's **License Agreement**
 field, or a line in the description, = `https://recipereduction.com/terms.html`.
+The version's **Support URL** = `https://recipereduction.com/support.html`
+(the contact address and a pointer to Settings › Send feedback; added Sep 30,
+linked from both legal pages).
 The **App Privacy** questionnaire has to say what the policy says: name,
 email and an identifier from sign-in; the recipes and progress people save;
 purchase records; a push token when timers are on; server logs. Photos are

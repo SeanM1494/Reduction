@@ -26,9 +26,12 @@ what the retired "Where this has got to" appendix was.
   sign-out, the claim-retry banner, post-sign-in extraction — has not been
   exercised against a live session yet.**
 
-**Apple has not been started.** It needs an https callback on a verified
-domain, so it cannot be tested locally. Required if this ships to the iOS App
-Store alongside another provider, which is the plan.
+**Sign in with Apple is built** (`lib/apple.ts`, `routes/auth.ts`; README
+"Sign in with Apple"; CLAUDE.md "Sign in with Apple: four things that fail
+silently"). What remains is the phone: the token exchange with Apple has
+never run anywhere but a real sign-in, which Phase 4 ("Sign in with Apple
+must be live on the deployment — VERIFY") tracks. *(Corrected Sep 30: this
+paragraph used to say Apple had not been started.)*
 
 **`owner_key` did not become `user_id`; it was added alongside.** The original
 plan was a column swap. What actually happened is that `user_id` was added
@@ -1762,8 +1765,8 @@ actually left, cheapest and most blocking first.
 7. **Cross-user search + cache reuse** (#2 and #3 together) — the same
    feature seen from two sides, and it needs the correction path from step 5
    to be safe.
-8. **Apple sign-in** (#1) — no rush until the App Store build is real, and it
-   needs an https callback on a verified domain, so it cannot be done here.
+8. **Apple sign-in** (#1) — BUILT; verifying it from a phone is Phase 4's
+   "Sign in with Apple must be live on the deployment — VERIFY".
 9. **Variations at the prompt level** (#5, cheap version).
 10. **Recipe builder** (#4) — mostly falls out of #6 once editing is complete.
 11. **Structural variation comparison** (#5, real version) — needs the corpus
@@ -2313,10 +2316,11 @@ When Mail is installed but has no account, iOS itself shows "No Mail
 Accounts" and openURL has already succeeded — nothing in the app can see
 that case, so the fallback cannot help there.
 
-**Support URL: no page exists.** App Store Connect needs one; the site has
-only /privacy.html and /terms.html. A /support.html in the same static
-style is proposed, not added (wording in the Sep 30 report, waiting for
-approval).
+**Support URL: `/support.html`** (approved and added Sep 30), in the same
+static style as the legal pages: the contact address and a pointer to Send
+feedback. Privacy and terms link to it. It is linked by FILE name, like the
+other two, so it needs no rewrite on Replit's static hosting. App Store
+Connect's Support URL = `https://recipereduction.com/support.html`.
 
 ### 2. Cost visibility — built (server Publish, after the SQL)
 
@@ -2347,8 +2351,7 @@ Decisions:
   calls the model and is not in this table; that is a separate question.
 
 `GET /api/admin/costs` is README "Extraction costs". The privacy policy
-does not yet say this; one sentence is proposed in the Sep 30 report,
-waiting for approval.
+says so since Sep 30 (Technical records), approved wording.
 
 ### 4. Phone QA checklist — written (no code)
 
@@ -2358,7 +2361,8 @@ happen. It was gathered from this file, CLAUDE.md, MOBILE_PARITY.md, README
 and the session reports, with duplicates merged and the automated test that
 covers each item's logic named, so those can be skipped. Two stale entries
 were found while gathering: §1 and "Suggested order" #8 still say Sign in
-with Apple "has not been started" (it is built; Phase 4 is current).
+with Apple "has not been started" (it is built; Phase 4 is current). Both
+corrected Sep 30.
 
 ### 3. Seeing problems — audited, proposed (not built)
 
