@@ -2792,6 +2792,12 @@ app).
 channel shown after it, and the way back. If the override is refused, the
 fallback is the second TestFlight build (option B).
 
+**Proved on the owner's phone (Oct 1, build 7):** the preview channel set
+up (`channel:create preview`, from `artifacts/reduction-mobile` — run once
+from the repo root it offered to create a new `@seans-apps/workspace`
+project, declined), and the switch works there. From here every update
+is preview → the phone → `--promote` (docs/next-publish.md section D).
+
 ## Still open from earlier work
 
 - **allrecipes.com cannot be read by the server, by either fetch (Sep
