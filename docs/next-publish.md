@@ -21,6 +21,8 @@ The pull brings, oldest first:
 | `691cdb5` Terms: a removal request is acted on within three business days | Website: the terms' removal sentence | This Publish |
 | `9b8c5c7` Reel: the curated list holds at most 20 | Server + `scripts/reel.mjs`: the 21st curation is refused | This Publish |
 | the docs commit that wrote this section | Nothing that runs | Nothing |
+| `727b3e7` Web: the landing demo starts with nothing checked | Website: the landing demo opens with nothing checked; the avocados make "halve and scoop" the one amber step | This Publish |
+| `df4a092` Web: the demo's coach line is a step instruction, like the phone's | Website: "Demo · Step 1 of 4" over a bold instruction in the landing demo; the two tips are gone | This Publish |
 
 Another thread may push to `main` in between; its commits come with the
 pull and are fine. What matters is that the five above are listed.
@@ -73,6 +75,13 @@ curl -s https://recipereduction.com/terms.html | grep -c "three business days"
 ```sh
 curl -s https://recipereduction.com/privacy.html | grep -c "Suggested recipes"
 ```
+
+**8b.** The website's demo, by hand: open https://recipereduction.com
+signed out (a private window), tap "See guacamole as a reduction (demo)".
+Nothing is checked, and the line reads "Demo · Step 1 of 4 / Tap the ripe
+avocados to check them off." Tap the avocados: "halve and scoop" is the
+only amber step and the line moves to Step 2. If the old line ("Guacamole,
+as a diagram…") shows, the browser has the old page cached: reload.
 
 **9.** The owner's list, with the cap:
 ```sh
