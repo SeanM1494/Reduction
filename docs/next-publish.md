@@ -462,8 +462,12 @@ On preview, in this order — each line is what it should look like:
 5. **One saved recipe:** opens on Diagram; tap a ready (red) step — it
    turns green; Step-by-Step shows the next card; Clear progress empties
    it; the title has its pencil.
-6. **The demo** (Settings › How it works): "Start the demo" card; one
-   step works.
+6. **The demo** (Settings › How it works): opens on "Welcome to
+   Reduction." with Start the tour, Skip and Watch instead; nothing on the
+   recipe is checked (0/12). Start the tour: step 2 rings the ripe
+   avocados; tapping them makes halve and scoop the one amber step. Back
+   to the welcome, then Watch instead: a hand glides to each thing and
+   taps it; Pause holds it; it ends on "That's it".
 7. **Dark mode** (Settings › Appearance › Dark): warm brown page, cells
    with visible edges, Recipe Box pages cream; back to your usual setting.
 8. **Fully close and reopen once more:** it opens normally (no crash on

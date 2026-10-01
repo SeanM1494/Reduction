@@ -17,13 +17,16 @@
  */
 
 import React, { useEffect, useState, type ReactNode } from 'react';
-import { AccessibilityInfo, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { AccessibilityInfo, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useColors, type Colors } from '@/hooks/useColors';
 import { fonts } from '@/constants/colors';
 import { counter, GUIDE_STEPS, NUDGE } from '@/lib/demoGuide';
 
 export type GuideCardProps =
-  | { phase: 'idle'; onStart: () => void; onWatch: () => void }
+  /** Before every run: the welcome card. */
+  | { phase: 'welcome'; onStart: () => void; onSkip: () => void; onWatch: () => void }
+  /** Skipped on the landing: the demo is free to explore, the tour a tap away. */
+  | { phase: 'free'; onStart: () => void; onWatch: () => void }
   | {
       phase: 'watching';
       index: number;
@@ -51,7 +54,17 @@ export type GuideCardProps =
       onReplay: () => void;
     };
 
-const IDLE_TEXT = 'New here? Learn to read a recipe in six short steps.';
+/** The welcome card's words: settled with the owner (Oct 1); change them
+ *  only with the owner. */
+export const WELCOME = {
+  title: 'Welcome to Reduction.',
+  body:
+    "Every recipe, reduced to a simple diagram. Ingredients are on the left, each step feeds the next, and you always see what's ready. Prefer one step at a time? Switch to Step-by-Step whenever you like.",
+  invite: 'Take a one-minute tour with a real recipe.',
+  start: 'Start the tour',
+  skip: 'Skip',
+  watch: 'Watch instead',
+} as const;
 
 export function announce(text: string) {
   // RN-web's AccessibilityInfo is a stub; a live region carries it there.
@@ -73,16 +86,43 @@ export function GuideCard(props: GuideCardProps) {
     if (nudge) announce(NUDGE);
   }, [nudge]);
 
-  if (props.phase === 'idle') {
+  if (props.phase === 'welcome') {
+    // Read in order by VoiceOver: the heading, the body, then the buttons.
     return (
-      <View style={styles.card} testID="guide-card">
-        <Text style={styles.idleText} maxFontSizeMultiplier={1.4} testID="guide-text">
-          {IDLE_TEXT}
-        </Text>
+      <View style={[styles.card, styles.welcome]} testID="welcome-card">
+        <ScrollView style={styles.welcomeScroll} contentContainerStyle={styles.welcomeContent} showsVerticalScrollIndicator={false} showsHorizontalScrollIndicator={false} bounces={false}>
+          <Text style={styles.welcomeTitle} maxFontSizeMultiplier={1.5} accessibilityRole="header" testID="welcome-title">
+            {WELCOME.title}
+          </Text>
+          <Text style={styles.welcomeBody} maxFontSizeMultiplier={1.5} testID="welcome-body">
+            {WELCOME.body}
+          </Text>
+          <Text style={styles.welcomeInvite} maxFontSizeMultiplier={1.5}>
+            {WELCOME.invite}
+          </Text>
+        </ScrollView>
         <View style={styles.row}>
-          <Primary label="Start the demo" onPress={props.onStart} testID="guide-start" styles={styles} />
-          <Secondary label="Watch instead" onPress={props.onWatch} testID="guide-watch" styles={styles} />
+          <Primary label={WELCOME.start} onPress={props.onStart} testID="welcome-start" styles={styles} />
+          <Secondary label={WELCOME.skip} onPress={props.onSkip} testID="welcome-skip" styles={styles} />
         </View>
+        <Pressable accessibilityRole="button" onPress={props.onWatch} style={styles.welcomeLink} testID="welcome-watch">
+          <Text style={styles.linkText} maxFontSizeMultiplier={1.3}>
+            {WELCOME.watch}
+          </Text>
+        </Pressable>
+      </View>
+    );
+  }
+
+  if (props.phase === 'free') {
+    return (
+      <View style={[styles.card, styles.free]} testID="guide-card">
+        <Primary label="Take the tour" onPress={props.onStart} testID="guide-start" styles={styles} />
+        <Pressable accessibilityRole="button" onPress={props.onWatch} style={styles.link} testID="guide-watch">
+          <Text style={styles.linkText} maxFontSizeMultiplier={1.3}>
+            {WELCOME.watch}
+          </Text>
+        </Pressable>
       </View>
     );
   }
@@ -279,8 +319,16 @@ function makeStyles(colors: Colors) {
     text: { fontFamily: fonts.headingBold, fontSize: 22, lineHeight: 27, letterSpacing: -0.3, color: colors.foreground },
     measure: { position: 'absolute', top: 0, left: 0, right: 0, opacity: 0 },
     measureText: { position: 'absolute', top: 0, left: 0, right: 0 },
-    // The line before the guide starts, at its old size.
-    idleText: { fontFamily: fonts.headingMedium, fontSize: 17, lineHeight: 23, minHeight: 46, color: colors.foreground },
+    // The welcome card: as large as the guide's instruction, and allowed to
+    // scroll its words (never its buttons) if Dynamic Type outgrows a phone.
+    welcome: { maxHeight: '82%', paddingTop: 16 },
+    welcomeScroll: { flexGrow: 0, flexShrink: 1 },
+    welcomeContent: { gap: 10, paddingBottom: 12 },
+    welcomeTitle: { fontFamily: fonts.headingBold, fontSize: 26, lineHeight: 31, letterSpacing: -0.4, color: colors.foreground },
+    welcomeBody: { fontSize: 17, lineHeight: 24, color: colors.foreground },
+    welcomeInvite: { fontFamily: fonts.heading, fontSize: 17, lineHeight: 24, color: colors.foreground },
+    welcomeLink: { minHeight: 44, alignSelf: 'center', justifyContent: 'center', paddingHorizontal: 12, marginTop: 2 },
+    free: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingTop: 10 },
     nudgeSlot: { minHeight: 22, justifyContent: 'center' },
     nudge: { fontSize: 14, lineHeight: 19, color: colors.warmInk },
     hint: { fontSize: 14, lineHeight: 19, color: colors.mutedForeground },

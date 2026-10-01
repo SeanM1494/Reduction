@@ -2353,6 +2353,33 @@ never on the phone. The legend under the diagram (not yet / do this now /
 done) stays: it is the only place the green "done" state is named. The
 pre-start line goes with item 4.
 
+**4. A welcome card opens every run.** The owner's wording, verbatim
+(`WELCOME` in `GuideCard.tsx`; change it only with the owner): "Welcome to
+Reduction." / the body / "Take a one-minute tour with a real recipe." /
+[Start the tour] [Skip], with "Watch instead" as a link below. It replaces
+the pre-start card ("New here? Learn to read a recipe in six short
+steps."), and it opens every run in all three entry points: the signed-out
+landing, Settings › How it works and the empty library's "See how it
+works" — and again after Replay, or Back out of step 1, since each is a new
+run from the clean start.
+
+- **What Skip does:** on the landing, the welcome closes and the recipe is
+  free to explore, with a slim bar (Take the tour, Watch instead) because
+  the landing has no other way back to the tour. From Settings or the
+  library the card simply closes: the recipe is free to explore, the
+  header's back button leaves, and opening the demo again shows the welcome.
+- **Size:** title 26pt bold in the heading face, body 17pt, Dynamic Type to
+  1.5x; the words (never the buttons) scroll if Dynamic Type outgrows the
+  phone. Measured: 330pt tall on an iPhone 13 and a Pixel 5, 378pt on an SE
+  (top at y=190 of 568), with no scrolling, no sideways scroll, every button
+  44pt, in light and dark. VoiceOver order: the heading, the body, the
+  invitation, Start the tour, Skip, Watch instead.
+- **"One minute" holds.** Timed in Chromium on an iPhone 13 with real taps,
+  each instruction read at 3.5 words a second and 0.8s per tap: the tour is
+  21.6s from Start to the final card, 37.5s with the welcome card read
+  first; at a slow 2.5 words a second and 1.5s per tap, 31.1s and 53.5s.
+  Watching it is 29.0s. No request reached the server during either.
+
 **Gap, logged, not fixed: the website's landing demo still starts with the
 avocados checked.** It keeps its own fixture (`artifacts/reduction/src/
 data/demo.ts`, `DEMO_PRECHECKED = ["avocados"]`); the phone's

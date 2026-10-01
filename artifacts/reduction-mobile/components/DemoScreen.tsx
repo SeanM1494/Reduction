@@ -9,8 +9,8 @@
  *
  * The teaching is a GUIDE (Sep 29): one instruction at a time on a card
  * under the recipe (components/demo/GuideCard.tsx), the thing to tap ringed
- * and the rest dimmed. It does not start by itself — "Start the demo" — and
- * until then the recipe is free to explore. The steps and every rule about
+ * and the rest dimmed. Every run opens on a welcome card (Oct 1): "Start the
+ * tour", "Skip" (the recipe is free to explore) or "Watch instead". The steps and every rule about
  * them are lib/demoGuide.ts (pure, tested); this screen only keeps the
  * state and wires the buttons. A do-step advances on the demo's real state
  * changing the way it asked; a tap it did not ask for is kept and nudged,
@@ -73,7 +73,9 @@ const ADVANCE_DELAY_MS = 700;
 /** Show me's taps, one after another, at a pace that can be followed. */
 const SHOW_ME_STEP_MS = 700;
 
-type Phase = 'idle' | 'guided' | 'watching';
+/** welcome: the card before every run. free: the welcome skipped, the
+ *  recipe to explore. guided / watching: the tour, done or watched. */
+type Phase = 'welcome' | 'free' | 'guided' | 'watching';
 
 export function DemoScreen({ onSignIn }: { onSignIn?: () => void }) {
   const colors = useColors();
@@ -86,7 +88,7 @@ export function DemoScreen({ onSignIn }: { onSignIn?: () => void }) {
   const [state, setStateRaw] = useState<DemoState>({ done: DEMO_PRECHECKED, mode: 'diagram' });
   const [timer, setTimer] = useState<StepTimer | null>(null);
   const [servings, setServings] = useState<number | null>(null);
-  const [phase, setPhase] = useState<Phase>('idle');
+  const [phase, setPhase] = useState<Phase>('welcome');
   const [run, setRun] = useState<GuideRun | null>(null);
   const [nudge, setNudge] = useState(false);
   const [showMeReady, setShowMeReady] = useState(false);
@@ -139,8 +141,9 @@ export function DemoScreen({ onSignIn }: { onSignIn?: () => void }) {
       setShowMeReady(false);
       setActivity((n) => n + 1);
       if (!next) {
+        // Back out of the guide: the start of a run, so the welcome again.
         setRunBoth(null);
-        setPhaseBoth('idle');
+        setPhaseBoth('welcome');
         setState({ done: DEMO_PRECHECKED, mode: 'diagram' });
         return;
       }
@@ -356,9 +359,19 @@ export function DemoScreen({ onSignIn }: { onSignIn?: () => void }) {
     else router.dismissTo('/');
   }, [onSignIn]);
 
+  // Skip: on the landing the demo stays open to explore, with the tour a
+  // tap away (there is nowhere else to find it); from Settings or the
+  // library the card simply closes — the header's back button leaves, and
+  // coming back shows the welcome again.
+  const skip = useCallback(() => setPhaseBoth('free'), [setPhaseBoth]);
+  // Replay is a new run: the welcome card, from a clean start.
+  const replay = useCallback(() => goTo(null), [goTo]);
+
   const card =
-    phase === 'idle' ? (
-      <GuideCard phase="idle" onStart={() => goTo(startRun(graph))} onWatch={watch} />
+    phase === 'welcome' ? (
+      <GuideCard phase="welcome" onStart={() => goTo(startRun(graph))} onSkip={skip} onWatch={watch} />
+    ) : phase === 'free' ? (
+      onSignIn ? <GuideCard phase="free" onStart={() => goTo(startRun(graph))} onWatch={watch} /> : null
     ) : phase === 'watching' && run ? (
       <GuideCard
         phase="watching"
@@ -384,7 +397,7 @@ export function DemoScreen({ onSignIn }: { onSignIn?: () => void }) {
         onShowMe={doShowMe}
         onWatch={watch}
         onFinish={finish}
-        onReplay={() => goTo(startRun(graph))}
+        onReplay={replay}
       />
     );
 
