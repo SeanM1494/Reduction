@@ -24,9 +24,10 @@ The pull brings, oldest first:
 | `727b3e7` Web: the landing demo starts with nothing checked | Website: the landing demo opens with nothing checked; the avocados make "halve and scoop" the one amber step | This Publish |
 | `df4a092` Web: the demo's coach line is a step instruction, like the phone's | Website: "Demo · Step 1 of 4" over a bold instruction in the landing demo; the two tips are gone | This Publish |
 | `1e316d7` Contact address: admin@recipereduction.com everywhere | Website: privacy, terms (removal requests, copyright agent) and support mail to the new address. Phone: Send feedback addresses it too | This Publish; the phone part rides the next over-the-air update (preview, then promote) |
+| `e6d5e74` Phone: Recipe Box pages fit small phones and large text | Phone only: on a short page (320pt wide with two or more books, or large Dynamic Type) rows give way in order — short pill, one ingredient line, no serves line, no ingredients — and nothing overlaps; bigger phones at the default text size unchanged. ROADMAP "Recipe Box pages on small phones" | Nothing on the server. Rides the next over-the-air update (preview, then promote — "D" below). On preview: three or more books, then Settings › Accessibility › Display & Text Size › Larger Text turned up — no overlaps |
 
 Another thread may push to `main` in between; its commits come with the
-pull and are fine. What matters is that the five above are listed.
+pull and are fine. What matters is that the commits above are listed.
 
 **1.**
 ```sh
