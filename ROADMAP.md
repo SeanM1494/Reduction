@@ -2227,9 +2227,9 @@ on." Idle card: "New here? Learn to read a recipe in six short steps."
   the tab and marks the first card done from outside Step-by-Step, so the
   card shows as ticked rather than turning; the guide has already moved to
   "That's it" by then.
-- **Watch instead is the old autoplay** (narration in the card), and ends
-  on "That's it", so watching is a way through the guide. Any tap stops it.
-  Under Reduce Motion it is one commit, as before.
+- **Watch instead was the old autoplay** (narration in the card) until
+  Oct 1; it is now the guide played by itself with a visible pointer — see
+  "Demo polish", item 2.
 - **The ring is drawn by the target** (a solid 3pt ring and a halo that
   breathes, opacity only; static under Reduce Motion), and the target
   scrolls itself into view. See CLAUDE.md, "The demo teaches through a
@@ -2288,6 +2288,46 @@ Steps 4 to 6 are unchanged.
 - **"Amber"** is the word the guide and the web use for the ready state;
   the ready fill is the terracotta warm tint (red in the 5-minute check's
   wording). Left as it is; the owner may prefer "red".
+
+**2. "Watch instead": the guide, played by itself, with a pointer.** It
+replaces the narrated autoplay (and its six sentences): watching is the
+same six steps, each step's instruction on screen for the whole step, and
+the taps are the guide's own Show me actions, so it can only do what a
+finger could. `lib/demoWatch.ts` (pure, tested) turns a step into beats —
+wait, point, tap, advance — and `DemoScreen` only runs them on timers.
+
+- **The pace is `WATCH_PACE` at the top of `lib/demoWatch.ts`**: 1.5s with
+  the instruction alone, then per action a 1s pause, a 1.3s glide and a
+  0.7s tap (about 2s an action), 1s to see the result, 4s on step 1. The
+  whole tour is 29s in Chromium, iPhone 13 (measured: avocados checked at
+  8.5s, halve and scoop at 14.0s, everything at 19.6s, Next Step at 28.0s,
+  the final card at 29.0s).
+- **The pointer is drawn INSIDE its target**, exactly as the ring is: the
+  spotlight gained `pointer: { id, phase, seq, still }` (an id, never a
+  position), and the four ring renderers — a diagram cell (both copies in
+  the pinned column), a finish-strip step, the Step-by-Step tab, Next
+  Step — draw `components/demo/TapPointer.tsx` in themselves. So it
+  scrolls with the diagram and the reveal with no measuring. A global
+  overlay was not used: it would have to re-measure on every scroll,
+  including the reveal's own animated scroll. The hand (react-native-svg,
+  already a dependency) glides 18pt in from the upper left so it never
+  spills into a later cell, which would draw over it; the ring is sized to
+  the cell. The state changes only when the tap's ring has finished.
+- **Controls: Back, Pause/Resume, Next**, and "Try it yourself" (the guide,
+  at the same step, as it began). Pause holds everything, pointer included;
+  Resume replays the interrupted beat. A tap of your own during the tour
+  takes over: the guide, at that step, judging the tap like any other. It
+  always starts from the clean start and ends on the final card; Replay
+  there is the clean start.
+- **Reduce Motion: no gliding.** The hand is on the target from its first
+  frame (measured: no movement), the ring is drawn still, and every hold is
+  longer (`WATCH_PACE_REDUCED`; the tour is 42.5s).
+- **VoiceOver: each step is announced as it happens (the card's step
+  announcement, and "Tapping ripe avocados." at each tap), the step is
+  performed, and the tour does not move on by itself** — the beats carry no
+  advance, and the card says "Each step plays, then waits for Next."
+  (`useA11yFlags`). RN-web's `isScreenReaderEnabled` answers TRUE in every
+  browser, so the web does not ask (it made Chromium wait for Next).
 
 **Gap, logged, not fixed: the website's landing demo still starts with the
 avocados checked.** It keeps its own fixture (`artifacts/reduction/src/

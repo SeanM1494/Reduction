@@ -18,7 +18,18 @@ import { counter, GUIDE_STEPS, NUDGE } from '@/lib/demoGuide';
 
 export type GuideCardProps =
   | { phase: 'idle'; onStart: () => void; onWatch: () => void }
-  | { phase: 'watching'; narration: string | null; onStop: () => void }
+  | {
+      phase: 'watching';
+      index: number;
+      paused: boolean;
+      /** VoiceOver on: the tour does each step and waits for Next. */
+      screenReader: boolean;
+      onBack: () => void;
+      onNext: () => void;
+      onPause: () => void;
+      onResume: () => void;
+      onTry: () => void;
+    }
   | {
       phase: 'guided';
       index: number;
@@ -35,9 +46,8 @@ export type GuideCardProps =
     };
 
 const IDLE_TEXT = 'New here? Learn to read a recipe in six short steps.';
-const WATCH_TEXT = 'Watch the guacamole make itself.';
 
-function announce(text: string) {
+export function announce(text: string) {
   // RN-web's AccessibilityInfo is a stub; a live region carries it there.
   if (Platform.OS !== 'web') AccessibilityInfo.announceForAccessibility(text);
 }
@@ -46,7 +56,7 @@ export function GuideCard(props: GuideCardProps) {
   const colors = useColors();
   const styles = makeStyles(colors);
 
-  const index = props.phase === 'guided' ? props.index : -1;
+  const index = props.phase === 'guided' || props.phase === 'watching' ? props.index : -1;
   const nudge = props.phase === 'guided' && props.nudge;
   // VoiceOver hears each step as it arrives, and the nudge when it appears:
   // nothing else on the screen changes to tell them.
@@ -72,17 +82,46 @@ export function GuideCard(props: GuideCardProps) {
   }
 
   if (props.phase === 'watching') {
+    // The step's own instruction stays up for the whole step; the pointer
+    // does the tapping. Pause, Back and Next so nobody is rushed.
+    const step = GUIDE_STEPS[props.index];
     return (
       <View style={styles.card} testID="guide-card">
-        <Text style={styles.counter} maxFontSizeMultiplier={1.4}>
-          Watching
+        <View style={styles.top}>
+          <Text style={styles.counter} maxFontSizeMultiplier={1.4} testID="guide-counter">
+            Watching · {counter(props.index)}
+          </Text>
+          <Pressable accessibilityRole="button" onPress={props.onTry} style={styles.link} testID="guide-try">
+            <Text style={styles.linkText} maxFontSizeMultiplier={1.4}>
+              Try it yourself
+            </Text>
+          </Pressable>
+        </View>
+        <Text
+          style={styles.text}
+          maxFontSizeMultiplier={1.4}
+          accessibilityLiveRegion="polite"
+          accessibilityRole="header"
+          testID="guide-text"
+        >
+          {step.text}
         </Text>
-        <Text style={styles.text} maxFontSizeMultiplier={1.4} accessibilityLiveRegion="polite" testID="guide-text">
-          {props.narration ?? WATCH_TEXT}
-        </Text>
-        <View style={styles.nudgeSlot} />
+        <View style={styles.nudgeSlot}>
+          {props.screenReader ? (
+            <Text style={styles.hint} maxFontSizeMultiplier={1.2}>
+              Each step plays, then waits for Next.
+            </Text>
+          ) : null}
+        </View>
         <View style={styles.row}>
-          <Secondary label="Stop" onPress={props.onStop} testID="guide-stop" styles={styles} />
+          <Secondary label="Back" onPress={props.onBack} testID="guide-back" styles={styles} />
+          <Primary
+            label={props.paused ? 'Resume' : 'Pause'}
+            onPress={props.paused ? props.onResume : props.onPause}
+            testID="guide-pause"
+            styles={styles}
+          />
+          <Secondary label="Next" onPress={props.onNext} testID="guide-next" styles={styles} />
         </View>
       </View>
     );
@@ -203,6 +242,7 @@ function makeStyles(colors: Colors) {
     text: { fontFamily: fonts.headingMedium, fontSize: 17, lineHeight: 23, minHeight: 46, color: colors.foreground },
     nudgeSlot: { minHeight: 22, justifyContent: 'center' },
     nudge: { fontSize: 14, lineHeight: 19, color: colors.warmInk },
+    hint: { fontSize: 14, lineHeight: 19, color: colors.mutedForeground },
     row: { flexDirection: 'row', gap: 8, marginTop: 4 },
     primary: {
       flex: 1,

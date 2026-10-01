@@ -2,9 +2,10 @@
  * components/demo/DemoCoach.tsx — the demo's autoplay, its legend and its
  * tag. The teaching itself is the guided demo (lib/demoGuide.ts and
  * GuideCard.tsx, Sep 29), which replaced the coach line and the two tips
- * that used to live here: they relied on small text.
+ * that used to live here: they relied on small text. "Watch instead" is
+ * the guide played by itself (lib/demoWatch.ts, Oct 1), which replaced the
+ * narrated autoplay that lived here.
  *   CoachLegend     the three cell states, as swatches in the diagram's tokens
- *   useWatchPlayer  the autoplay behind "Watch instead"
  *
  * This layer wraps RecipeScreen — it never reaches into it. No testIDs, no
  * anchoring to a cell, no imports from layout.ts. Everything here is derived
@@ -13,101 +14,11 @@
  * not a fork").
  */
 
-import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { AccessibilityInfo, StyleSheet, Text, View } from 'react-native';
+import React from 'react';
+import { StyleSheet, Text, View } from 'react-native';
 import { useColors, type Colors } from '@/hooks/useColors';
 import { fonts } from '@/constants/colors';
 import { doneBackground } from '@/components/diagram/DiagramView';
-
-/** Steps advance this fast during autoplay. Slow enough to read a label. */
-const WATCH_STEP_MS = 600;
-/** A step that brings a new sentence with it holds longer. */
-const WATCH_NARRATED_MS = 1400;
-
-/** The demo, told as someone cooking it. Keyed by id, never by position, so
- *  editing the fixture drops a sentence rather than attaching it to the
- *  wrong step. Ids with no entry hold whatever sentence is already up. */
-const DEMO_NARRATION: Record<string, string> = {
-  d1: 'Olivia halved three avocados and scooped them into a bowl.',
-  lime: 'She squeezed in the lime and added a pinch of salt.',
-  d2: 'Mashed it until it was chunky, not smooth.',
-  onion: 'Onion, tomato, jalapeño and cilantro went in together.',
-  d4: 'She folded the two bowls into one.',
-  d5: 'Then a ten-minute rest, while the flavors came together.',
-};
-
-// The autoplay order lives with the guide (lib/demoGuide.ts), pure and tested.
-export { watchOrder } from '@/lib/demoGuide';
-
-// ---------------------------------------------------------------- watch ----
-
-/** Autoplay for "Watch it". Always replays from the opening position; any
- *  interaction stops it mid-run and leaves the progress it made in place. */
-export function useWatchPlayer(
-  order: string[],
-  prechecked: string[],
-  setDone: (next: string[]) => void,
-  /** Called when a run plays to its end (not when it is stopped). */
-  onEnd?: () => void
-): { playing: boolean; line: string | null; play: () => void; stop: () => void } {
-  const [playing, setPlaying] = useState(false);
-  const [line, setLine] = useState<string | null>(null);
-  const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
-  const reduceMotion = useRef(false);
-  useEffect(() => {
-    let cancelled = false;
-    AccessibilityInfo.isReduceMotionEnabled()
-      .catch(() => false)
-      .then((r) => {
-        if (!cancelled) reduceMotion.current = r;
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  const stop = useCallback(() => {
-    timers.current.forEach((t) => clearTimeout(t));
-    timers.current = [];
-    setPlaying(false);
-    setLine(null);
-  }, []);
-
-  useEffect(() => stop, [stop]);
-
-  const play = useCallback(() => {
-    stop();
-    if (reduceMotion.current) {
-      // One commit, and no narration: six sentences flashing past in as many
-      // frames is worse than none, and there is no motion left to narrate.
-      setDone([...prechecked, ...order]);
-      onEnd?.();
-      return;
-    }
-    setPlaying(true);
-    setDone([...prechecked]);
-    let at = 0;
-    order.forEach((id, i) => {
-      const sentence = DEMO_NARRATION[id];
-      at += sentence ? WATCH_NARRATED_MS : WATCH_STEP_MS;
-      timers.current.push(
-        setTimeout(() => {
-          setDone([...prechecked, ...order.slice(0, i + 1)]);
-          if (sentence) setLine(sentence);
-        }, at)
-      );
-    });
-    timers.current.push(
-      setTimeout(() => {
-        setPlaying(false);
-        setLine(null);
-        onEnd?.();
-      }, at + WATCH_NARRATED_MS)
-    );
-  }, [order, prechecked, setDone, stop, onEnd]);
-
-  return { playing, line, play, stop };
-}
 
 // --------------------------------------------------------------- pieces ----
 

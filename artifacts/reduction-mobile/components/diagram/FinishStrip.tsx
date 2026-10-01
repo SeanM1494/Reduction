@@ -20,7 +20,8 @@ import { formatMinutes } from "@/shared/amounts";
 import { tailStepReady } from "@/shared/collapse";
 import type { Colors } from "@/hooks/useColors";
 import { ReadyMark } from "./DiagramView";
-import { DIM_OPACITY, spotFor, type Spotlight } from "@/lib/spotlight";
+import { DIM_OPACITY, pointerFor, spotFor, type Spotlight } from "@/lib/spotlight";
+import { TapPointer } from "@/components/demo/TapPointer";
 import { SpotRing } from "@/components/demo/SpotRing";
 import { RevealAnchor } from "@/components/demo/reveal";
 
@@ -50,6 +51,7 @@ export function FinishStrip({ tail, done, focus, colors, onPress, dropFor, rowRe
         const drop = dropFor(n.id);
         const mins = formatMinutes(n.minutes);
         const spot = spotFor(spotlight, n.id);
+        const pointer = pointerFor(spotlight, n.id);
         const bg = drop === "over" ? colors.coolBg : isDone ? colors.coolBg : ready ? colors.warmBg : colors.card;
         const line = isDone ? colors.coolLine : ready ? colors.warmLine : colors.border;
         const ink = isDone ? colors.coolInk : ready ? colors.warmInk : colors.text;
@@ -100,6 +102,7 @@ export function FinishStrip({ tail, done, focus, colors, onPress, dropFor, rowRe
                     <RevealAnchor />
                   </>
                 ) : null}
+                {pointer ? <TapPointer pointer={pointer} /> : null}
               </Pressable>
             </View>
           </View>

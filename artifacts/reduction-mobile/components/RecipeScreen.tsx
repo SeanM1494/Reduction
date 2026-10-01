@@ -53,7 +53,8 @@ import type { Entry, StepTimer } from '@/lib/api';
 import type { EntryPatch } from '@/lib/library-context';
 import { clearProgressPatch } from '@/lib/cookReset';
 import { toggleDone } from '@/lib/doneClosure';
-import type { Spotlight } from '@/lib/spotlight';
+import { pointerFor, type Pointer, type Spotlight } from '@/lib/spotlight';
+import { TapPointer } from '@/components/demo/TapPointer';
 import { SpotRing } from '@/components/demo/SpotRing';
 import { makeReveal, RevealContext } from '@/components/demo/reveal';
 
@@ -477,6 +478,7 @@ export function RecipeScreen({
             onPress={() => pickView('cook')}
             colors={colors}
             spot={!!spotlight?.targets.has('mode:steps')}
+            pointer={pointerFor(spotlight, 'mode:steps')}
           />
         </View>
       </View>
@@ -609,6 +611,7 @@ export function RecipeScreen({
           footer={originalRow}
           resetSignal={clearCount}
           spotlightNext={!!spotlight?.targets.has('cook:next')}
+          pointerNext={pointerFor(spotlight, 'cook:next')}
         />
       )}
 
@@ -708,6 +711,7 @@ function ModeTab({
   onPress,
   colors,
   spot = false,
+  pointer = null,
 }: {
   label: string;
   active: boolean;
@@ -715,6 +719,8 @@ function ModeTab({
   colors: Colors;
   /** The demo guide is pointing at this tab. */
   spot?: boolean;
+  /** "Watch instead"'s pointer, when it is on this tab. */
+  pointer?: Pointer | null;
 }) {
   // The app's language for "one of these" (SheetOption: the Books/Grid
   // choice, the meal types): both segments are filled, bordered controls,
@@ -739,6 +745,7 @@ function ModeTab({
         {label}
       </Text>
       {spot ? <SpotRing radius={12} /> : null}
+      {pointer ? <TapPointer pointer={pointer} /> : null}
     </Pressable>
   );
 }

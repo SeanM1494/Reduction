@@ -46,6 +46,8 @@ import { cardShadow, fonts } from '@/constants/colors';
 import type { StepTimer } from '@/lib/api';
 import { firstOpenCard, freshCookState } from '@/lib/cookReset';
 import { SpotRing } from '@/components/demo/SpotRing';
+import { TapPointer } from '@/components/demo/TapPointer';
+import type { Pointer } from '@/lib/spotlight';
 import { makeReveal, RevealAnchor, RevealContext } from '@/components/demo/reveal';
 
 interface StepCard {
@@ -153,6 +155,8 @@ interface Props {
   resetSignal?: number;
   /** The demo guide is pointing at Next step (components/demo/SpotRing). */
   spotlightNext?: boolean;
+  /** "Watch instead"'s pointer, when it is on Next step. */
+  pointerNext?: Pointer | null;
 }
 
 export function StepsMode({
@@ -173,6 +177,7 @@ export function StepsMode({
   footer = null,
   resetSignal = 0,
   spotlightNext = false,
+  pointerNext = null,
 }: Props) {
   const colors = useColors();
   const styles = makeStyles(colors);
@@ -479,6 +484,7 @@ export function StepsMode({
                   <RevealAnchor />
                 </RevealContext.Provider>
               ) : null}
+              {pointerNext ? <TapPointer pointer={pointerNext} /> : null}
             </Pressable>
           </View>
         </View>

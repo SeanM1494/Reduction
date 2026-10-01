@@ -25,7 +25,6 @@ import {
   targetsFor,
   type DemoState,
   type ShowMeAction,
-  watchOrder,
 } from './demoGuide';
 
 const g = demoGraph(DEMO_RECIPE, DEMO_PRECHECKED);
@@ -272,12 +271,4 @@ test('every do-step, entered from ANY state taps can reach, has something to tap
       assert.ok(ok, `Show me completes ${st.id} from [${s.done}]`);
     }
   }
-});
-
-test('"Watch instead" starts clean and checks the avocados first', () => {
-  const order = watchOrder(DEMO_RECIPE.sections[0], DEMO_PRECHECKED);
-  assert.equal(order[0], 'avocados');
-  assert.equal(order[1], 'd1');
-  assert.equal(order[order.length - 1], 'd5');
-  assert.equal(order.length, g.ingredients.length + g.ops.length);
 });

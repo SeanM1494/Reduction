@@ -18,7 +18,7 @@
  * stays put in its pinned first column.
  */
 
-import type { Recipe, Section } from '@/shared/layout';
+import type { Recipe } from '@/shared/layout';
 import { toggleDone } from './doneClosure';
 
 export type DemoMode = 'diagram' | 'steps';
@@ -251,22 +251,4 @@ export function back(run: GuideRun): { run: GuideRun; state: DemoState } | null 
   if (run.index === 0) return null;
   const index = run.index - 1;
   return { run: { index, snapshots: run.snapshots.slice(0, index + 1) }, state: run.snapshots[index] };
-}
-
-/** Autoplay order: a post-order walk from the root, so every input is
- *  emitted before the step that consumes it. Anything already checked at
- *  the start is dropped — it is the baseline the player replays from. */
-export function watchOrder(section: Section, prechecked: string[]): string[] {
-  const inputs = new Map<string, string[]>();
-  for (const n of section.nodes) inputs.set(n.id, n.inputs || []);
-  const start = new Set(prechecked);
-  const out: string[] = [];
-  const seen = new Set<string>();
-  (function walk(id: string) {
-    if (seen.has(id)) return;
-    seen.add(id);
-    (inputs.get(id) || []).forEach(walk);
-    if (!start.has(id)) out.push(id);
-  })(section.root);
-  return out;
 }

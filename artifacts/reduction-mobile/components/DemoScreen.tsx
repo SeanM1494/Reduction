@@ -14,7 +14,11 @@
  * them are lib/demoGuide.ts (pure, tested); this screen only keeps the
  * state and wires the buttons. A do-step advances on the demo's real state
  * changing the way it asked; a tap it did not ask for is kept and nudged,
- * never blocked. "Watch instead" is the old autoplay.
+ * never blocked. "Watch instead" (Oct 1) is the same guide played by
+ * itself: lib/demoWatch.ts turns each step into beats (wait, point, tap,
+ * advance) and this screen runs them on timers, with a pointer drawn
+ * inside each target through the spotlight. Pause, Back and Next only stop,
+ * restart or replace those timers; a tap of your own takes over the guide.
  *
  * The ring is drawn by the screens it points into, through RecipeScreen's
  * `spotlight` — ids from the recipe's graph, never a position or a class
@@ -34,8 +38,8 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { RecipeScreen } from '@/components/RecipeScreen';
-import { CoachLegend, DemoTag, useWatchPlayer, watchOrder } from '@/components/demo/DemoCoach';
-import { GuideCard } from '@/components/demo/GuideCard';
+import { CoachLegend, DemoTag } from '@/components/demo/DemoCoach';
+import { announce, GuideCard } from '@/components/demo/GuideCard';
 import { DEMO_PRECHECKED, DEMO_RECIPE } from '@/data/demoRecipe';
 import { useColors, type Colors } from '@/hooks/useColors';
 import { fonts } from '@/constants/colors';
@@ -59,7 +63,9 @@ import {
   type DemoState,
   type GuideRun,
 } from '@/lib/demoGuide';
-import type { Spotlight } from '@/lib/spotlight';
+import type { Pointer, Spotlight } from '@/lib/spotlight';
+import { targetName, watchBeats, type Beat } from '@/lib/demoWatch';
+import { useA11yFlags } from '@/hooks/useA11yFlags';
 
 /** A do-step that has just been done holds a beat before the next one, so
  *  the result of the tap is seen before the instruction changes. */
@@ -86,6 +92,10 @@ export function DemoScreen({ onSignIn }: { onSignIn?: () => void }) {
   const [showMeReady, setShowMeReady] = useState(false);
   // Bumped by every change while guided: restarts the Show me clock.
   const [activity, setActivity] = useState(0);
+  // Watch instead: the pointer on screen, and whether the tour is paused.
+  const [pointer, setPointer] = useState<Pointer | null>(null);
+  const [paused, setPaused] = useState(false);
+  const a11y = useA11yFlags();
 
   // The handlers below run from timers and from callbacks built in earlier
   // renders, so they read the live values through refs.
@@ -93,6 +103,15 @@ export function DemoScreen({ onSignIn }: { onSignIn?: () => void }) {
   const runRef = useRef(run);
   const phaseRef = useRef(phase);
   const pending = useRef<ReturnType<typeof setTimeout>[]>([]);
+  const watchRef = useRef<{ beats: Beat[]; at: number } | null>(null);
+  const pausedRef = useRef(false);
+  const seqRef = useRef(0);
+  const a11yRef = useRef(a11y);
+  // Refs are written in effects, never during render (the React Compiler).
+  useEffect(() => {
+    a11yRef.current = { reduceMotion: a11y.reduceMotion, screenReader: a11y.screenReader };
+  }, [a11y.reduceMotion, a11y.screenReader]);
+  const startStepRef = useRef<() => void>(() => {});
   const setState = useCallback((next: DemoState) => {
     stateRef.current = next;
     setStateRaw(next);
@@ -114,6 +133,8 @@ export function DemoScreen({ onSignIn }: { onSignIn?: () => void }) {
   const goTo = useCallback(
     (next: { run: GuideRun; state: DemoState } | null) => {
       clearPending();
+      watchRef.current = null;
+      setPointer(null);
       setNudge(false);
       setShowMeReady(false);
       setActivity((n) => n + 1);
@@ -131,43 +152,17 @@ export function DemoScreen({ onSignIn }: { onSignIn?: () => void }) {
     [clearPending, setRunBoth, setPhaseBoth, setState]
   );
 
-  // Watch instead: the autoplay, from the opening position, and then the
-  // last step of the guide ("That's it") — watching is a way through it.
-  const order = useMemo(() => watchOrder(section, DEMO_PRECHECKED), [section]);
-  const setDoneFromPlayer = useCallback(
-    (done: string[]) => setState({ done, mode: 'diagram' }),
-    [setState]
-  );
-  const onWatchEnd = useCallback(() => {
-    let r = startRun(graph);
-    for (let i = 1; i < GUIDE_STEPS.length; i++) r = forward(r.run, stateRef.current, graph);
-    // Keep what the player left on screen: every step checked.
-    goTo({ run: r.run, state: stateRef.current });
-  }, [graph, goTo]);
-  const { line: narration, play, stop } = useWatchPlayer(order, DEMO_PRECHECKED, setDoneFromPlayer, onWatchEnd);
-
-  const watch = useCallback(() => {
-    clearPending();
-    setRunBoth(null);
-    setNudge(false);
-    setPhaseBoth('watching');
-    setState({ done: DEMO_PRECHECKED, mode: 'diagram' });
-    play();
-  }, [clearPending, setRunBoth, setPhaseBoth, setState, play]);
-
-  const stopWatching = useCallback(() => {
-    stop();
-    setPhaseBoth('idle');
-  }, [stop, setPhaseBoth]);
-
   /** Every change to the demo's state goes through here: a tap, a tab, and
    *  Show me's own taps — so Show me is judged by the same rule as a finger. */
   const apply = useCallback(
     (next: DemoState) => {
       if (phaseRef.current === 'watching') {
-        // Any interaction stops autoplay and keeps the progress it made.
-        stop();
-        setPhaseBoth('idle');
+        // A tap of your own takes over: the guide, at the step being
+        // watched, judging this tap like any other.
+        clearPending();
+        watchRef.current = null;
+        setPointer(null);
+        setPhaseBoth('guided');
       }
       const prev = stateRef.current;
       setState(next);
@@ -200,8 +195,123 @@ export function DemoScreen({ onSignIn }: { onSignIn?: () => void }) {
         }
       }
     },
-    [graph, goTo, clearPending, stop, setPhaseBoth, setState]
+    [graph, goTo, clearPending, setPhaseBoth, setState]
   );
+
+  // ------------------------------------------------------- Watch instead --
+
+  /** Run beat `i` of the current step, and schedule the next. */
+  const runBeat = useCallback(
+    function runBeat(i: number) {
+      const w = watchRef.current;
+      if (!w || phaseRef.current !== 'watching' || pausedRef.current) return;
+      w.at = i;
+      const beat = w.beats[i];
+      if (!beat) return; // the step is done; under VoiceOver, Next moves on
+      if (beat.kind === 'advance') {
+        const r = runRef.current;
+        if (!r) return;
+        const next = forward(r, stateRef.current, graph);
+        if (GUIDE_STEPS[next.run.index].kind === 'finish') {
+          goTo(next); // the final card, as the guide shows it
+          return;
+        }
+        setRunBoth(next.run);
+        setState(next.state);
+        startStepRef.current();
+        return;
+      }
+      if (beat.kind === 'wait') setPointer(null);
+      if (beat.kind === 'point') {
+        seqRef.current += 1;
+        setPointer({ id: beat.target, phase: 'approach', seq: seqRef.current, still: a11yRef.current.reduceMotion });
+      }
+      if (beat.kind === 'tap') {
+        setPointer({ id: beat.target, phase: 'tap', seq: seqRef.current, still: a11yRef.current.reduceMotion });
+        announce(`Tapping ${targetName(DEMO_RECIPE, beat.target)}.`);
+      }
+      pending.current.push(
+        setTimeout(() => {
+          if (watchRef.current !== w) return;
+          if (beat.kind === 'tap') {
+            // The state changes only once the tap has landed.
+            const s = stateRef.current;
+            const a = beat.action;
+            setState(a.kind === 'tap' ? tapState(DEMO_RECIPE, s, a.id) : a.kind === 'mode' ? { ...s, mode: a.mode } : nextState(DEMO_RECIPE, s, cardOrder));
+            setPointer(null);
+          }
+          runBeat(i + 1);
+        }, beat.ms)
+      );
+    },
+    [graph, goTo, cardOrder, setRunBoth, setState]
+  );
+
+  /** The current step's beats, from the state it starts in. */
+  const startStep = useCallback(() => {
+    clearPending();
+    setPointer(null);
+    const r = runRef.current;
+    if (!r) return;
+    const flags = a11yRef.current;
+    watchRef.current = { beats: watchBeats(GUIDE_STEPS[r.index].id, stateRef.current, graph, flags), at: 0 };
+    runBeat(0);
+  }, [clearPending, graph, runBeat]);
+  useEffect(() => {
+    startStepRef.current = startStep;
+  }, [startStep]);
+
+  /** Watch instead: always from the clean start. */
+  const watch = useCallback(() => {
+    clearPending();
+    const start = startRun(graph);
+    setTimer(null);
+    setNudge(false);
+    setShowMeReady(false);
+    pausedRef.current = false;
+    setPaused(false);
+    setRunBoth(start.run);
+    setState(start.state);
+    setPhaseBoth('watching');
+    startStep();
+  }, [clearPending, graph, setRunBoth, setState, setPhaseBoth, startStep]);
+
+  /** Back or Next while watching: that step, from where it starts. */
+  const watchMove = useCallback(
+    (next: { run: GuideRun; state: DemoState } | null) => {
+      const r = runRef.current;
+      if (!r) return;
+      const to = next ?? { run: r, state: r.snapshots[0] }; // Back on step 1: step 1 again
+      if (GUIDE_STEPS[to.run.index].kind === 'finish') {
+        goTo(to);
+        return;
+      }
+      setRunBoth(to.run);
+      setState(to.state);
+      startStep();
+    },
+    [goTo, setRunBoth, setState, startStep]
+  );
+
+  const pause = useCallback(() => {
+    pausedRef.current = true;
+    setPaused(true);
+    clearPending();
+  }, [clearPending]);
+  const resume = useCallback(() => {
+    pausedRef.current = false;
+    setPaused(false);
+    const w = watchRef.current;
+    if (w) runBeat(w.at); // the interrupted beat, from its start
+    else startStep();
+  }, [runBeat, startStep]);
+
+  /** Try it yourself: the guide, at the step being watched, as it began. */
+  const tryYourself = useCallback(() => {
+    const r = runRef.current;
+    if (!r) return;
+    goTo({ run: r, state: r.snapshots[r.index] });
+  }, [goTo]);
 
   const doShowMe = useCallback(() => {
     const r = runRef.current;
@@ -232,10 +342,14 @@ export function DemoScreen({ onSignIn }: { onSignIn?: () => void }) {
   }, [stepKind, run, activity]);
 
   const spotlight: Spotlight | null = useMemo(() => {
-    if (phase !== 'guided' || !run) return null;
+    if ((phase !== 'guided' && phase !== 'watching') || !run) return null;
     const id = GUIDE_STEPS[run.index].id;
-    return { targets: new Set(targetsFor(id, state, graph)), dimOthers: dimsFor(id, state, graph) };
-  }, [phase, run, state, graph]);
+    return {
+      targets: new Set(targetsFor(id, state, graph)),
+      dimOthers: dimsFor(id, state, graph),
+      pointer: phase === 'watching' ? pointer : null,
+    };
+  }, [phase, run, state, graph, pointer]);
 
   const finish = useCallback(() => {
     if (onSignIn) onSignIn();
@@ -245,8 +359,18 @@ export function DemoScreen({ onSignIn }: { onSignIn?: () => void }) {
   const card =
     phase === 'idle' ? (
       <GuideCard phase="idle" onStart={() => goTo(startRun(graph))} onWatch={watch} />
-    ) : phase === 'watching' ? (
-      <GuideCard phase="watching" narration={narration} onStop={stopWatching} />
+    ) : phase === 'watching' && run ? (
+      <GuideCard
+        phase="watching"
+        index={run.index}
+        paused={paused}
+        screenReader={a11y.screenReader}
+        onBack={() => watchMove(back(run))}
+        onNext={() => watchMove(forward(run, stateRef.current, graph))}
+        onPause={pause}
+        onResume={resume}
+        onTry={tryYourself}
+      />
     ) : (
       <GuideCard
         phase="guided"

@@ -49,7 +49,8 @@
  */
 
 import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { DIM_OPACITY, spotFor, type Spot, type Spotlight } from '@/lib/spotlight';
+import { DIM_OPACITY, pointerFor, spotFor, type Pointer, type Spot, type Spotlight } from '@/lib/spotlight';
+import { TapPointer } from '@/components/demo/TapPointer';
 import { RevealAnchor } from '@/components/demo/reveal';
 import {
   AccessibilityInfo,
@@ -332,6 +333,8 @@ interface DiagramCellProps {
   a11yHidden: boolean;
   /** The demo guide pointing at this cell, or dimming it (lib/spotlight.ts). */
   spot: Spot;
+  /** "Watch instead"'s pointer, when it is on this cell. */
+  pointer: Pointer | null;
 }
 
 /**
@@ -362,6 +365,7 @@ const DiagramCell = memo(function DiagramCell({
   editing,
   a11yHidden,
   spot,
+  pointer,
 }: DiagramCellProps) {
   const st: CellState = { isDone, ready, ownerDone };
   const tappable = c.kind !== "gap";
@@ -470,6 +474,7 @@ const DiagramCell = memo(function DiagramCell({
           <RevealAnchor />
         </>
       ) : null}
+      {pointer ? <TapPointer pointer={pointer} /> : null}
       {drop === "ok" || drop === "over" ? (
         /* .is-drop-ok: inset 2px cool-line; .is-drop-over: inset 3px cool-ink. */
         <View
@@ -882,6 +887,7 @@ export function SectionDiagram({ section, done, onToggle, scale = 1, edit = null
         editing={!!edit}
         a11yHidden={!!opts.a11yHidden}
         spot={spotFor(spotlight, c.key)}
+        pointer={pointerFor(spotlight, c.key)}
       />
     );
   };
