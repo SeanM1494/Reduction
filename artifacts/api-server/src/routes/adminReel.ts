@@ -12,6 +12,10 @@
  *   DELETE /reel?url=     takes a URL off the list
  *   POST   /reel/warm     { url, write?, refresh?, force?, note? } — one URL a call
  *
+ * The curated list holds at most REEL.maxCurated (20): curating a 21st —
+ * by PUT or by `warm --write` — is refused (409 / status "refused") before
+ * anything is read or written. Entries already past the cap are kept.
+ *
  * WARM REPORTS BY DEFAULT and changes nothing. With `write: true` it
  * extracts a URL that is not cached (once, through the same reading path
  * as a link extraction) and records it as curated with a pinned copy; a
@@ -44,8 +48,8 @@ import { adminEvents } from "@workspace/db";
 import { getDb } from "../db";
 import { surfaceableUrl } from "../lib/searchLibrary";
 import { urlKeyOf } from "../lib/urlKey";
-import { cardFrom, reelMinCards, staleFlags } from "../lib/reel";
-import { buildReel, deleteEntry, isMissingTable, loadEntries, upsertEntry, type EntryStatus } from "../lib/reelStore";
+import { cardFrom, reelMaxCurated, reelMinCards, staleFlags } from "../lib/reel";
+import { buildReel, curatedCapRefusal, deleteEntry, isMissingTable, loadEntries, upsertEntry, type EntryStatus } from "../lib/reelStore";
 import { cacheDropUrl, cacheGetUrlRow, cacheSetUrl, keepOriginal } from "./recipes";
 import { clearReelMemo } from "./reel";
 import { readRecipeAtUrl } from "../lib/readRecipe";
@@ -91,7 +95,7 @@ export function registerReelAdmin(router: Router, requireAdmin: (req: Request, r
       clearReelMemo();
       return res.json({
         entries: entries.map((e) => ({ url: e.url, status: e.status, note: e.note, pinned: !!e.pinned, updatedAt: e.updatedAt })),
-        preview: { ...preview, minCards: reelMinCards() },
+        preview: { ...preview, minCards: reelMinCards(), maxCurated: reelMaxCurated() },
       });
     } catch (e) {
       console.error("[admin:reel]", (e as Error).message);
@@ -108,6 +112,10 @@ export function registerReelAdmin(router: Router, requireAdmin: (req: Request, r
     if (status === "curated" && !surfaceableUrl(url))
       return res.status(422).json({ error: "Only a public-looking address can be curated (no query string, no documents or drives)." });
     try {
+      if (status === "curated") {
+        const full = await curatedCapRefusal(url);
+        if (full) return res.status(409).json({ error: full.reason, code: "curated_full", curated: full.count, max: full.cap });
+      }
       const before = (await loadEntries()).find((e) => e.urlKey === urlKeyOf(url))?.status ?? null;
       // Curating a page that is already cached pins it now; one that is
       // not cached waits for a warm.
@@ -167,6 +175,13 @@ export function registerReelAdmin(router: Router, requireAdmin: (req: Request, r
         estCostUsd: 0,
         reason: "This page is hidden, so it is never warmed: nothing was read, curated or stored. Run `node scripts/reel.mjs unhide <url>` first if it should come back.",
       });
+
+    // A write curates, so a full list refuses it before any read or spend.
+    // A report still reports.
+    if (doWrite) {
+      const full = await curatedCapRefusal(url);
+      if (full) return report({ status: "refused", estCostUsd: 0, reason: full.reason, curatedCount: full.count, maxCurated: full.cap });
+    }
 
     const row = await cacheGetUrlRow(url);
 

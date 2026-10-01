@@ -3093,6 +3093,16 @@ curated entry is loaded on every build, oldest first by `updated_at`, and
 the reel shows at most ten cards, data-backed first, so curated pages past
 the tenth slot are loaded and never shown.
 
+**Decided and built (owner, Oct 1): the cap is 20** (`REEL.maxCurated`).
+Curating a 21st — `PUT /reel` with status curated (409, code
+`curated_full`) or `warm --write` (status "refused", $0) — is refused out
+loud BEFORE anything is read, written or spent, and says how to make
+room. Re-curating a page already curated (a new note, a re-pin) is not a
+21st, and hiding is never capped. Entries already on the list are never
+dropped: a list that is past 20 when this ships keeps every entry, and
+only new curations wait until it is under 20. `reel.mjs preview` prints
+"N of 20 curated".
+
 ## Still open from earlier work
 
 - **allrecipes.com cannot be read by the server, by either fetch (Sep

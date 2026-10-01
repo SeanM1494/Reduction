@@ -138,7 +138,9 @@ if (cmd === "preview") {
     for (const m of preview.missingPicture) console.log(`    [${m.kind === "data" ? "data   " : "curated"}] ${m.title} — ${m.site}\n        ${m.url}`);
   }
   if (preview.restored) console.log(`Restored ${preview.restored} curated page(s) to the cache from their pinned copies.`);
-  console.log(`Owner list: ${entries.filter((e) => e.status === "curated").length} curated, ${entries.filter((e) => e.status === "hidden").length} hidden.`);
+  const curatedCount = entries.filter((e) => e.status === "curated").length;
+  const cap = preview.maxCurated ?? 20;
+  console.log(`Owner list: ${curatedCount} of ${cap} curated${curatedCount >= cap ? " (full: a new one is refused until one comes off)" : ""}, ${entries.filter((e) => e.status === "hidden").length} hidden.`);
 } else if (cmd === "warm") {
   // The list is the first argument that is neither a flag nor a flag's value.
   const valueOf = new Set(["--refresh", "--candidates"]);

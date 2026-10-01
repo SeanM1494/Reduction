@@ -13,7 +13,7 @@ import { sql } from "drizzle-orm";
 import type { Recipe } from "@workspace/recipe-model";
 import { getDb } from "../db";
 import { normalizeUrl, urlKeyOf } from "./urlKey";
-import { REEL, assembleReel, cardFrom, withMinimum, rankPages, usageByPage, type Reel, type ReelCard, type UsageRow } from "./reel";
+import { REEL, reelMaxCurated, assembleReel, cardFrom, withMinimum, rankPages, usageByPage, type Reel, type ReelCard, type UsageRow } from "./reel";
 import { cacheGetUrlRow, cacheSetUrl } from "../routes/recipes";
 import { fillReelPhotos, pageImageOf, reelPhotoMetas, reelPhotoPath } from "./reelPhotos";
 
@@ -90,6 +90,24 @@ export async function upsertEntry(url: string, status: EntryStatus, note: string
       note = coalesce(excluded.note, reel_entries.note),
       updated_at = now()`);
   return key;
+}
+
+/**
+ * Why `url` may not be curated now, or null when it may: the list is at
+ * REEL.maxCurated and this page is not already on it as curated. Re-curating
+ * a curated page (a new note, a re-pin) is never refused, and nothing
+ * already on the list is ever dropped to make room.
+ */
+export async function curatedCapRefusal(url: string): Promise<{ count: number; cap: number; reason: string } | null> {
+  const key = urlKeyOf(url);
+  const curated = (await loadEntries()).filter((e) => e.status === "curated");
+  const cap = reelMaxCurated();
+  if (curated.some((e) => e.urlKey === key) || curated.length < cap) return null;
+  return {
+    count: curated.length,
+    cap,
+    reason: `The curated list is full: ${curated.length} of ${cap}. Nothing was changed. Take a page off it first (node scripts/reel.mjs unhide <url>, or hide <url>).`,
+  };
 }
 
 export async function deleteEntry(url: string): Promise<boolean> {

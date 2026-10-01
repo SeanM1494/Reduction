@@ -29,7 +29,7 @@ import { setWarmReaderForTests } from "./adminReel";
 import { extractionEvents } from "@workspace/db";
 import { emptyUsage } from "../lib/extractionConfig";
 import { cacheGetUrlRow, cacheSetUrl, cacheDropUrl } from "./recipes";
-import { HEADING_CURATED, setReelMinCardsForTests } from "../lib/reel";
+import { HEADING_CURATED, setReelMaxCuratedForTests, setReelMinCardsForTests } from "../lib/reel";
 import { Jimp } from "jimp";
 import { recipePhotos, reelPhotos } from "@workspace/db";
 import { setPagePhotoFetcherForTests } from "../lib/photos";
@@ -541,6 +541,57 @@ test("reel: hide --purge deletes our stored picture (404 after), is audited, and
     setPagePhotoFetcherForTests(null);
     setWarmReaderForTests(null);
     resetReelPhotoFillForTests();
+  }
+});
+
+test("reel: the curated list is capped — the next one is refused out loud, by PUT and by warm --write, and nothing is dropped", async (t) => {
+  if (!(await needsDatabase(t, ...TABLES))) return;
+  await seed();
+  let reads = 0;
+  setWarmReaderForTests(async () => {
+    reads++;
+    throw new Error("a full list must refuse before any read");
+  });
+  const first = page("cap-1");
+  const second = page("cap-2");
+  const extra = page("cap-3");
+  try {
+    // The shared test database holds other tests' entries: cap at two more.
+    const already = (await loadEntries()).filter((e) => e.status === "curated").length;
+    setReelMaxCuratedForTests(already + 2);
+    assert.equal((await admin("PUT", "/reel", { url: first, status: "curated" })).status, 200);
+    assert.equal((await admin("PUT", "/reel", { url: second, status: "curated" })).status, 200);
+
+    const refused = await admin("PUT", "/reel", { url: extra, status: "curated" });
+    assert.equal(refused.status, 409);
+    assert.equal(refused.body.code, "curated_full");
+    assert.match(refused.body.error, /full: \d+ of \d+/);
+    assert.ok(!(await loadEntries()).some((e) => e.urlKey === urlKeyOf(extra)), "nothing written");
+
+    const warmed = await admin("POST", "/reel/warm", { url: extra, write: true });
+    assert.deepEqual([warmed.body.status, warmed.body.estCostUsd], ["refused", 0]);
+    assert.equal(reads, 0, "refused before any model call");
+    assert.equal((await admin("POST", "/reel/warm", { url: extra })).body.status !== "refused", true, "a report still reports");
+
+    // Re-curating one already on the list is not a 21st; hiding is never capped.
+    assert.equal((await admin("PUT", "/reel", { url: first, status: "curated", note: "renamed" })).status, 200);
+    assert.equal((await admin("PUT", "/reel", { url: extra, status: "hidden" })).status, 200);
+
+    // Past the cap (it was lowered): every entry is kept, none is dropped.
+    setReelMaxCuratedForTests(already + 1);
+    const kept = (await loadEntries()).filter((e) => e.urlKey === urlKeyOf(first) || e.urlKey === urlKeyOf(second));
+    assert.equal(kept.length, 2);
+    assert.equal((await admin("GET", "/reel")).body.preview.maxCurated, already + 1);
+
+    // Room made, a new one is accepted again.
+    setReelMaxCuratedForTests(already + 2);
+    await admin("DELETE", `/reel?url=${encodeURIComponent(extra)}`);
+    await admin("DELETE", `/reel?url=${encodeURIComponent(second)}`);
+    assert.equal((await admin("PUT", "/reel", { url: extra, status: "curated" })).status, 200);
+  } finally {
+    for (const u of [first, second, extra]) await admin("DELETE", `/reel?url=${encodeURIComponent(u)}`);
+    setReelMaxCuratedForTests(null);
+    setWarmReaderForTests(null);
   }
 });
 

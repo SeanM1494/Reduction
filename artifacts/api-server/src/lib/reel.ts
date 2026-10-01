@@ -48,6 +48,10 @@ export const REEL = {
   /** Data candidates to look up in the cache, best first: enough to fill
    *  the reel when some turn out uncached or unclean. */
   candidateLimit: 30,
+  /** The owner's curated list holds at most this many (decided Oct 1): twice
+   *  maxCards, so hides and pages that lose their picture have backups. The
+   *  21st is refused out loud; entries already past it are kept. */
+  maxCurated: 20,
 } as const;
 
 export const HEADING_CURATED = "Try one of these";
@@ -241,6 +245,14 @@ export const reelMinCards = (): number => minCardsOverride ?? REEL.minCards;
 /** Test seam: most database tests build reels of two cards on purpose. */
 export function setReelMinCardsForTests(n: number | null): void {
   minCardsOverride = n;
+}
+
+let maxCuratedOverride: number | null = null;
+/** The curated cap in force: REEL.maxCurated, or what a test set. */
+export const reelMaxCurated = (): number => maxCuratedOverride ?? REEL.maxCurated;
+/** Test seam: the shared test database already holds other tests' entries. */
+export function setReelMaxCuratedForTests(n: number | null): void {
+  maxCuratedOverride = n;
 }
 
 /** Below the minimum the reel is withheld whole — the cards come back as
