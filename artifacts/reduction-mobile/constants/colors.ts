@@ -3,7 +3,9 @@
  *
  * Mirrors the palette in artifacts/reduction/src/index.css (the "cookbook"
  * theme: warm parchment page, cream cards, terracotta "ready to cook" accent)
- * so the mobile companion feels like the same product as the web app.
+ * so the mobile companion feels like the same product as the web app. The
+ * dark palette has diverged: the phone's is "Cocoa" (Oct 1), the web's is
+ * still the original near-black.
  *
  * `warm`/`cool`/`danger` are extra semantic accents beyond the scaffold's
  * defaults — they carry the same meaning as on web: warm = "ready now" /
@@ -62,26 +64,45 @@ const colors = {
     dangerBg: '#fdeee5',
     dangerLine: '#eec9b4',
     dangerInk: '#92351b',
+
+    // Surfaces that used to be literals in their components (Oct 1), so the
+    // dark palette reaches them. Light values are exactly the old literals.
+    // Find's tabs behind the chosen one (FolderTabs).
+    tabBack: '#c9b48a',
+    tabBackLine: '#c9b48a',
+    // The Recipe Box's cream pages and the reel's cards (BookPage, PageFace,
+    // StarterReel): paper in both themes, toned down a step in dark.
+    paper: '#fbf6ea',
+    paperSpine: '#f4ecdb',
+    // The toast's dark pill (Toast.tsx), white text on it in both themes.
+    toastBg: '#2a2118',
   },
 
+  // "Cocoa" (Oct 1, the owner's choice from a mock): a warm brown page
+  // instead of near-black, diagram cells a clear step above it, and edges
+  // light enough to see — cell edges 3.2:1 against the cells, the frame
+  // 5.6:1 against the page. Before/after ratios in ROADMAP "Dark mode:
+  // Cocoa". The red ready, green done and green active tab are the same
+  // translucent tints as before, so they render over the new cells.
   dark: {
-    text: '#ece6d9',
-    tint: '#ece6d9',
+    text: '#f6eedd',
+    tint: '#f6eedd',
 
-    background: '#131110',
-    foreground: '#ece6d9',
+    background: '#211a16',
+    foreground: '#f6eedd',
 
-    card: '#2a2622',
-    cardForeground: '#ece6d9',
+    card: '#3b2f28',
+    cardForeground: '#f6eedd',
 
-    primary: '#ece6d9',
+    primary: '#f6eedd',
     primaryForeground: '#1c1a16',
 
     secondary: 'rgba(133,168,92,0.16)',
     secondaryForeground: '#b3c795',
 
-    muted: '#2b2723',
-    mutedForeground: '#a89f8f',
+    // The diagram's pinned ingredient column, and pressed surfaces.
+    muted: '#463930',
+    mutedForeground: '#c7b9a3',
 
     accent: 'rgba(228,92,70,0.26)',
     accentForeground: '#ffc0b1',
@@ -89,11 +110,17 @@ const colors = {
     destructive: 'rgba(146,53,27,0.28)',
     destructiveForeground: '#ff9c85',
 
-    border: '#3b352c',
-    input: '#3b352c',
+    // Cell edges and dividers.
+    border: '#8f7a69',
+    input: '#8f7a69',
 
-    borderStrong: '#4e463a',
-    faint: '#786f60',
+    // The diagram's outer frame (and every other strong rule).
+    borderStrong: '#a68f7b',
+    // Not in the mock: lifted from #786f60 so the small uppercase labels
+    // keep their contrast on the lighter cards (2.6:1 otherwise; now 3.55:1
+    // on a card, 4.7:1 on the page), and still read quieter than
+    // mutedForeground.
+    faint: '#928472',
     warmBg: 'rgba(228,92,70,0.26)',
     warmLine: '#ef6a53',
     warmInk: '#ffc0b1',
@@ -103,6 +130,15 @@ const colors = {
     dangerBg: 'rgba(146,53,27,0.28)',
     dangerLine: 'rgba(238,201,180,0.35)',
     dangerInk: '#ff9c85',
+
+    tabBack: '#3b2f28',
+    tabBackLine: '#76624f',
+    paper: '#ebdfc6',
+    // The same step toward the spine as light's (#fbf6ea -> #f4ecdb).
+    paperSpine: '#e4d5b7',
+    // The pinned column's colour: the old #2a2118 all but vanished on the
+    // new page (1.1:1); this is a step above it (1.6:1) with white text 10:1.
+    toastBg: '#463930',
   },
 
   // Colorblind mode — the web's :root[data-colorblind="true"] tokens: a

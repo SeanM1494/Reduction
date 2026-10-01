@@ -65,7 +65,7 @@ import {
   type ReelCard,
   type ReelResponse,
 } from '@/lib/reelView';
-import { PageFace, PAPER } from '@/components/recipeBox/PageFace';
+import { PageFace } from '@/components/recipeBox/PageFace';
 import { useReelPhoto } from './useReelPhoto';
 import { useColors, type Colors } from '@/hooks/useColors';
 import { fonts } from '@/constants/colors';
@@ -382,9 +382,9 @@ function makeStyles(colors: Colors) {
     // screen's edge rather than the padding's.
     scroller: { marginHorizontal: -16, flexGrow: 0 },
     row: { paddingHorizontal: 16, gap: CARD_METRICS.gap },
-    // A page of the book: cream paper in both themes, like the box.
+    // A page of the book: the box's paper, cream in both themes.
     card: {
-      backgroundColor: PAPER,
+      backgroundColor: colors.paper,
       borderRadius: 6,
       borderWidth: 1,
       borderColor: '#e3d6bb',

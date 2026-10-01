@@ -99,8 +99,11 @@ one phone; the whole pass takes about ten minutes plus the timer.
   TestFlight. *Expect:* the new mark, cream background, no halo at the
   edges. (R "The new icon and splash")
 - [ ] **Splash hand-off in light and in dark.** *Expect:* plain `#efe2c8`
-  or `#131110`; a dark launch fades to cream over 250ms. (R opening, "Needs
-  the phone")
+  or `#131110`; a dark launch fades to cream over 250ms. Since Cocoa (Oct
+  1) a dark launch WITHOUT the sequence steps from the splash's `#131110`
+  to the page's `#211a16` — expected until the splash changes in a build;
+  note how visible it is. (R opening, "Needs the phone"; R "Dark mode:
+  Cocoa")
 - [ ] **Full sequence (4.3s)** plays once, on the first launch after
   install. *Auto:* cadence.test.ts. (R opening)
 - [ ] **Quick sequence (2.2s)** on a COLD start at most once per 24 hours;
@@ -368,6 +371,17 @@ one phone; the whole pass takes about ten minutes plus the timer.
   crossfade.
 - [ ] **Dark mode** everywhere above: card edges carried by the hairline;
   no white flashes.
+- [ ] **Dark mode is Cocoa** (Oct 1): a warm brown page, not near-black;
+  diagram cells a step lighter with visible light-brown edges and frame;
+  the pinned ingredient column a step lighter again; red ready, green
+  done and the green Diagram/Step-by-Step choice as before; Recipe Box
+  pages and reel cards cream, a little darker than in light mode; Find's
+  back tabs brown with a darker edge; a toast lighter than the page. Read
+  it across a counter in a dim kitchen and at full brightness — Chromium
+  measured every ratio, not the phone's screen. (R "Dark mode: Cocoa")
+- [ ] **Edit a step in dark mode:** the small labels in the edit sheet
+  (Time, Temp, Name, Amount…) are readable — they were dark brown on
+  dark until Oct 1.
 
 ### iOS 26 (Liquid Glass) tab layout
 
@@ -376,6 +390,10 @@ one phone; the whole pass takes about ten minutes plus the timer.
   Chromium can only ever reach the other layout, so this is phone-only by
   definition. (C "There are TWO tab layouts")
 - [ ] **The recipe header** on iOS 26: the centred title button and ⋮.
+- [ ] **Dark mode on iOS 26:** the native tab bar and the headers take
+  their colours from the system, not from the Cocoa tokens. *Expect:*
+  they sit acceptably on the `#211a16` page; report if the tab bar reads
+  as a black band.
 
 ### Offline
 
@@ -405,6 +423,14 @@ one phone; the whole pass takes about ten minutes plus the timer.
   new behaviour on the second launch; the app still talks to the
   deployment (not the dev server). Only ever publish with
   `node scripts/publish-update.mjs`. (RM "Over-the-air updates"; C OTA)
+- [ ] **Settings ends with "Version 1.1.0 (build N)"** for everyone.
+- [ ] **Owner: long-press Replay intro › This launch.** *Expect:* Running
+  `Update xxxxxxxx` whose 8 characters start the id `eas update:list`
+  printed for the publish, Channel `production`, Runtime version `1.1.0`,
+  Published the publish time in UTC, Update error `none`. "Embedded
+  bundle" means the update has not run yet; "Waiting" means it is
+  downloaded and one more full close and reopen runs it. (R "An
+  over-the-air update that did not show")
 
 ---
 

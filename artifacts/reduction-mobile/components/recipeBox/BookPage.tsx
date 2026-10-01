@@ -10,8 +10,10 @@
  * is how the card stack came to ignore swipes — CLAUDE.md). What a page SAYS
  * is decided in lib/recipeBox.ts, under test.
  *
- * Cream paper in both themes, like the diagram's pages: a book is a physical
- * object. The paper darkens a little toward the spine on each side.
+ * Cream paper in both themes: a book is a physical object. In dark mode the
+ * paper is a step darker (`paper`, Cocoa, Oct 1) so it does not glare off
+ * the page; its inks are the same. The paper darkens a little toward the
+ * spine on each side (`paperSpine`).
  */
 
 import React, { memo } from 'react';
@@ -21,12 +23,8 @@ import { sanitizeMealTypes } from '@/shared/mealTypes';
 import { useRecipePhoto } from '@/lib/recipePhoto';
 import { cookedLabel, keyIngredients, pageLayout, RATING_EMOJI, stepCount, timeLine, type Book } from '@/lib/recipeBox';
 import type { Entry } from '@/lib/api';
-import { FACE_PAD_TOP, FAINT, MUTED, PAPER, PageFace, faceStyles } from './PageFace';
-
-export { PAPER };
-// Half the prototype's warmth (#ece2cc), over the inner 12% rather than 22%:
-// the fold should read as a fold, not a shadow.
-const PAPER_SPINE = '#f4ecdb';
+import { useColors } from '@/hooks/useColors';
+import { FACE_PAD_TOP, FAINT, MUTED, PageFace, faceStyles } from './PageFace';
 
 export type PageContent = { kind: 'recipe'; entry: Entry; number: number } | { kind: 'blank' } | { kind: 'empty' };
 
@@ -42,12 +40,15 @@ export const BookPage = memo(function BookPage({ content, side, book, width, hei
   const outer = side === 'left'
     ? { borderTopLeftRadius: 4, borderBottomLeftRadius: 4 }
     : { borderTopRightRadius: 4, borderBottomRightRadius: 4 };
+  const colors = useColors();
   return (
-    <View style={[styles.page, outer, { width, height }]}>
+    <View style={[styles.page, outer, { width, height, backgroundColor: colors.paper }]}>
       {/* The paper, darkening toward the spine: right on a left page, left on
           a right page. */}
+      {/* Half the prototype's warmth (#ece2cc), over the inner 12% rather
+          than 22%: the fold should read as a fold, not a shadow. */}
       <LinearGradient
-        colors={[PAPER, PAPER, PAPER_SPINE]}
+        colors={[colors.paper, colors.paper, colors.paperSpine]}
         locations={[0, 0.88, 1]}
         start={{ x: side === 'left' ? 0 : 1, y: 0 }}
         end={{ x: side === 'left' ? 1 : 0, y: 0 }}
@@ -112,7 +113,7 @@ function RecipeFace({ entry, number, side, book, width, height }: { entry: Entry
 const PAD_BOTTOM = 20;
 
 const styles = StyleSheet.create({
-  page: { backgroundColor: PAPER, overflow: 'hidden' },
+  page: { overflow: 'hidden' },
   badge: {
     position: 'absolute',
     top: 6,

@@ -15,6 +15,7 @@ import React, { createContext, useCallback, useContext, useEffect, useRef, useSt
 import { AccessibilityInfo, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
+import { useColors } from '@/hooks/useColors';
 
 export interface ToastSpec {
   message: string;
@@ -32,6 +33,7 @@ export const useToast = () => useContext(ToastContext);
 const ABOVE_TABS = 84 + 64;
 
 export function ToastProvider({ children }: { children: React.ReactNode }) {
+  const colors = useColors();
   const insets = useSafeAreaInsets();
   const [toast, setToast] = useState<(ToastSpec & { key: number }) | null>(null);
   const shown = useSharedValue(0);
@@ -70,7 +72,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
           style={[styles.wrap, { bottom: ABOVE_TABS + insets.bottom }, style]}
           accessibilityLiveRegion="polite"
         >
-          <View style={styles.toast} testID="toast">
+          <View style={[styles.toast, { backgroundColor: colors.toastBg }]} testID="toast">
             <Text style={styles.text} numberOfLines={2} testID="toast-message">
               {toast.message}
             </Text>
@@ -98,7 +100,8 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
 const styles = StyleSheet.create({
   wrap: { position: 'absolute', left: 12, right: 12, alignItems: 'center' },
   // Dark in both themes, like the prototype: it has to stand off whatever
-  // is under it, paper or night.
+  // is under it, paper or night. Its colour is the theme's `toastBg`: on
+  // the dark page it is a step LIGHTER than the page, not darker.
   toast: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -108,7 +111,6 @@ const styles = StyleSheet.create({
     paddingLeft: 16,
     paddingRight: 6,
     borderRadius: 12,
-    backgroundColor: '#2a2118',
     shadowColor: '#000',
     shadowOpacity: 0.25,
     shadowRadius: 12,

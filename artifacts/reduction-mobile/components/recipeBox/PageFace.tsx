@@ -17,7 +17,6 @@ import type { MealType } from '@workspace/recipe-model';
 import { MealTypeArt } from '@/components/library/MealTypeArt';
 import { fonts } from '@/constants/colors';
 
-export const PAPER = '#fbf6ea';
 export const INK = '#2a2118';
 export const INK_SOFT = '#5c4d3c';
 export const MUTED = '#8a7a66';

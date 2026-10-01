@@ -185,6 +185,19 @@ function Blocked({ text }: { text: string }) {
   );
 }
 
+/** A field's small label, with an optional quieter hint after it. Its
+ *  colours are the theme's: they were light-mode literals until Oct 1, so in
+ *  dark mode they drew dark brown on the dark sheet. */
+function SubLabel({ children, hint }: { children: React.ReactNode; hint?: string }) {
+  const colors = useColors();
+  return (
+    <Text style={[rowStyles.subLabel, { color: colors.mutedForeground }]}>
+      {children}
+      {hint ? <Text style={[rowStyles.subHint, { color: colors.faint }]}> {hint}</Text> : null}
+    </Text>
+  );
+}
+
 function Actions({ children }: { children: React.ReactNode }) {
   return <View style={rowStyles.actions}>{children}</View>;
 }
@@ -323,11 +336,11 @@ function StepForm({ recipe, stepId, onApply, onClose }: { recipe: Recipe; stepId
       <Field messages={[...at('minutes'), ...at('tempF')]}>
         <View style={rowStyles.pair}>
           <View style={rowStyles.half}>
-            <Text style={rowStyles.subLabel}>Time <Text style={rowStyles.subHint}>minutes</Text></Text>
+            <SubLabel hint="minutes">Time</SubLabel>
             <Input value={minutes} onChange={setMinutes} onCommit={() => commit('minutes', { minutes: parseTiming(minutes) })} placeholder="—" keyboard="decimal-pad" testID="edit-minutes" />
           </View>
           <View style={rowStyles.half}>
-            <Text style={rowStyles.subLabel}>Temp <Text style={rowStyles.subHint}>°F</Text></Text>
+            <SubLabel hint="°F">Temp</SubLabel>
             <Input value={tempF} onChange={setTempF} onCommit={() => commit('tempF', { tempF: parseTiming(tempF) })} placeholder="—" keyboard="decimal-pad" testID="edit-temp" />
           </View>
         </View>
@@ -457,15 +470,15 @@ function SplitForm({ recipe, stepId, onApply, onDone, onCancel }: { recipe: Reci
   const op: EditOp = { type: 'splitStep', stepId, firstLabel: firstLabel.trim(), secondLabel: secondLabel.trim(), toSecond };
   return (
     <Field label="Split in two" hint="the second follows the first" messages={problems}>
-      <Text style={rowStyles.subLabel}>First step</Text>
+      <SubLabel>First step</SubLabel>
       <Input value={firstLabel} onChange={setFirstLabel} testID="split-first" />
       <View style={rowStyles.gap} />
-      <Text style={rowStyles.subLabel}>Then</Text>
+      <SubLabel>Then</SubLabel>
       <Input value={secondLabel} onChange={setSecondLabel} placeholder="what happens next" testID="split-second" />
       {(node.inputs ?? []).length ? (
         <>
           <View style={rowStyles.gap} />
-          <Text style={rowStyles.subLabel}>Move to the second step <Text style={rowStyles.subHint}>tap to move</Text></Text>
+          <SubLabel hint="tap to move">Move to the second step</SubLabel>
           <View style={optionRow}>
             {(node.inputs ?? []).map((id) => (
               <SheetOption key={id} label={nameOf(id)} current={toSecond.includes(id)} onPress={() => setToSecond((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id]))} />
@@ -505,13 +518,13 @@ function AddIngredientForm({ recipe, stepId, onApply, onDone, onCancel }: { reci
   };
   return (
     <Field label={`Add to “${step.label}”`} hint="it joins this step" messages={problems}>
-      <Text style={rowStyles.subLabel}>Name</Text>
+      <SubLabel>Name</SubLabel>
       <Input value={name} onChange={setName} placeholder="egg yolks" autoFocus testID="add-name" />
       <View style={rowStyles.gap} />
-      <Text style={rowStyles.subLabel}>Amount</Text>
+      <SubLabel>Amount</SubLabel>
       <Input value={amount} onChange={setAmount} placeholder="2 or 2-3" testID="add-amount" />
       <View style={rowStyles.gap} />
-      <Text style={rowStyles.subLabel}>Unit</Text>
+      <SubLabel>Unit</SubLabel>
       <UnitPicker value={unit} onPick={setUnit} />
       <View style={rowStyles.gap} />
       <Actions>
@@ -605,13 +618,13 @@ function SectionList({ recipe, onApply, onClose }: { recipe: Recipe; onApply: (o
   const op: EditOp = { type: 'addSection', name: name.trim(), firstStep: firstStep.trim(), firstIngredient: firstIngredient.trim() };
   return (
     <Field label="New section" hint="a part made separately" messages={problems}>
-      <Text style={rowStyles.subLabel}>Called</Text>
+      <SubLabel>Called</SubLabel>
       <Input value={name} onChange={setName} placeholder="Streusel topping" testID="section-name" />
       <View style={rowStyles.gap} />
-      <Text style={rowStyles.subLabel}>First ingredient</Text>
+      <SubLabel>First ingredient</SubLabel>
       <Input value={firstIngredient} onChange={setFirstIngredient} placeholder="rolled oats" testID="section-ingredient" />
       <View style={rowStyles.gap} />
-      <Text style={rowStyles.subLabel}>First step</Text>
+      <SubLabel>First step</SubLabel>
       <Input value={firstStep} onChange={setFirstStep} placeholder="rub together" testID="section-step" />
       <View style={rowStyles.gap} />
       <Actions>
@@ -707,8 +720,8 @@ const rowStyles = StyleSheet.create({
   pair: { flexDirection: 'row', gap: 10 },
   half: { flex: 1, minWidth: 0 },
   gap: { height: 10 },
-  subLabel: { fontSize: 12.5, fontWeight: '600', color: '#6b6154', marginBottom: 5 },
-  subHint: { fontWeight: '400', color: '#948b7d' },
+  subLabel: { fontSize: 12.5, fontWeight: '600', marginBottom: 5 },
+  subHint: { fontWeight: '400' },
 });
 
 function makeStyles(colors: Colors) {

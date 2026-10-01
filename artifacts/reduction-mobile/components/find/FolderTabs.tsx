@@ -8,8 +8,8 @@
  * the page's colour with no line between it and the pane — the front
  * folder — and the others sit behind it: a shade DARKER than the page in
  * light (borderStrong, text in full foreground, 8.3:1), the raised card
- * brown of Settings in dark (card, muted text 5.7:1). Existing tokens only,
- * picked by the theme's own scheme. Unlike the book tab (22pt, 11pt
+ * brown of the cells in dark (`tabBack`, muted text 6.7:1, edge
+ * `tabBackLine`; Cocoa, Oct 1). Unlike the book tab (22pt, 11pt
  * uppercase — a label on an object) these are controls, so they take the
  * app's control type (15pt heading font, as the Diagram / Step-by-Step
  * switch) and a 44pt height.
@@ -92,10 +92,9 @@ function makeStyles(colors: Colors) {
     // The front folder: the pane's colour, drawn 1pt over the pane's edge so
     // no line separates them.
     tabActive: { backgroundColor: colors.background, borderColor: colors.borderStrong, marginBottom: -1, paddingBottom: 1 },
-    tabBack:
-      colors.scheme === 'dark'
-        ? { backgroundColor: colors.card, borderColor: colors.border }
-        : { backgroundColor: colors.borderStrong, borderColor: colors.borderStrong },
+    // The folders behind: their own tokens (Oct 1), so the dark palette
+    // sets them — the cell colour with a darker edge than the cell rules.
+    tabBack: { backgroundColor: colors.tabBack, borderColor: colors.tabBackLine },
     tabPressed: { borderColor: colors.borderStrong },
     label: { fontFamily: fonts.heading, fontSize: 15 },
   });

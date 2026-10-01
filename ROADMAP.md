@@ -1997,7 +1997,8 @@ website); this finishes it. Decided:
   the parchment of the first screen is a shade darker and follows a moment
   later. 240pt spans about half an SE's width (the drawing is ~70% of its
   square) and was small at 200 on a 390pt phone. **Dark mode keeps
-  `#131110`**, the app's dark background: the cream bars and the bottle's
+  `#131110`**, the app's dark background until Cocoa (Oct 1; the page is
+  now `#211a16`, see "Dark mode: Cocoa"): the cream bars and the bottle's
   label sit on the red pot and the orange bottle, never on the background,
   so they stay visible and no dark variant of the artwork is needed.
 - **`expo.version` stays 1.1.0.** The rule bumps it for native code a
@@ -2582,6 +2583,117 @@ Original recipe, then the source link, and the gap it leaves is the finish
 strip's own margin plus the card's 12pt. Measured in Chromium, the page is
 60pt shorter on a 390pt phone and 77pt on an SE. The phone change ships
 over the air; the website's ships with the next Publish.
+
+## Dark mode: Cocoa (Oct 1)
+
+**The owner's call, from a mock ("palette B"):** dark mode was too dark and
+the diagram's cells did not stand out. Phone app only; light mode is
+unchanged value for value. All of it is tokens in `constants/colors.ts`
+(`dark`); no component carries a Cocoa value.
+
+| token | before | Cocoa | what it paints |
+|---|---|---|---|
+| `background` | `#131110` | `#211a16` | the page, headers, the classic tab bar |
+| `card` | `#2a2622` | `#3b2f28` | diagram cells, Settings cards, sheets, dialogs, the demo card, the paywall, buttons |
+| `muted` | `#2b2723` | `#463930` | the pinned ingredient column, pressed surfaces |
+| `border`, `input` | `#3b352c` | `#8f7a69` | cell edges, dividers, card hairlines, the tab bar's top rule |
+| `borderStrong` | `#4e463a` | `#a68f7b` | the diagram's outer frame, the ingredient rule, strong rules |
+| `text`, `tint`, `foreground`, `cardForeground`, `primary` | `#ece6d9` | `#f6eedd` | text |
+| `mutedForeground` | `#a89f8f` | `#c7b9a3` | secondary text |
+| `faint` | `#786f60` | `#928472` | small uppercase labels — NOT in the mock: kept at their contrast, which the lighter cards would have cut to 2.6:1 |
+| `tabBack` (new) | (`card`) | `#3b2f28` | Find's tabs behind the chosen one |
+| `tabBackLine` (new) | (`border`) | `#76624f` | their edge |
+| `paper` (new) | `#fbf6ea` | `#ebdfc6` | Recipe Box pages and the reel's cards (light keeps `#fbf6ea`) |
+| `paperSpine` (new) | `#f4ecdb` | `#e4d5b7` | the page darkening toward the spine — the same step as light's; not in the mock |
+| `toastBg` (new) | `#2a2118` | `#463930` | the toast: the old pill was 1.2:1 against the new page; this is 1.5:1, white text 11:1 |
+
+The new tokens replace literals in FolderTabs, BookPage/PageFace,
+StarterReel and Toast; their light values are the old literals. Unchanged
+on purpose: `warmBg`/`warmLine`/`warmInk` (the red Oven row and ready
+cell), `coolBg`/`coolLine`/`coolInk`/`secondary` (done, and the green
+active Diagram/Step-by-Step choice), the danger tokens, colorblind's layer,
+the book covers. Those are translucent tints, so they render over the new
+cell: a ready cell is `#673b30` (was `#5a342b`), a done cell `#41392c`
+(was `#323127`).
+
+**Fixed on the way:** the edit sheet's small labels (Time, Temp, Name,
+Amount…) were light-mode literals, dark brown on the dark sheet at 2.5:1;
+they now take `mutedForeground`/`faint` (6.7:1).
+
+**Contrast, from the rendered colours** (pixels sampled from the iPhone 13
+screenshots match the tokens exactly; translucent tints composited over
+what they sit on):
+
+| pair | before | Cocoa |
+|---|---|---|
+| Body text on page | 15.14:1 | 14.86:1 |
+| Body text on diagram cell / card | 12.07:1 | 11.21:1 |
+| Body text on pinned ingredient col | 11.92:1 | 9.63:1 |
+| Secondary text on page | 7.19:1 | 8.90:1 |
+| Secondary text on card | 5.73:1 | 6.71:1 |
+| Secondary text on pinned col | 5.66:1 | 5.77:1 |
+| Faint label on card | 3.03:1 | 3.55:1 |
+| Faint label on page | 3.80:1 | 4.71:1 |
+| **Cell edge vs cell** | 1.24:1 | **3.18:1** |
+| Cell edge vs pinned col | 1.22:1 | 2.73:1 |
+| **Outer frame vs page** | 2.03:1 | **5.59:1** |
+| Cell vs page | 1.25:1 | 1.33:1 |
+| Inactive tab label on inactive tab | 5.73:1 | 6.71:1 |
+| Inactive tab edge vs page | 1.55:1 | 2.97:1 |
+| Ready ink on ready cell | 6.83:1 | 6.00:1 |
+| Ready ring vs ready cell | 3.49:1 | 3.06:1 |
+| Done ink on done cell | 10.56:1 | 9.84:1 |
+| Active tab ink on its tint | 8.14:1 | 7.26:1 |
+| Paper ink on paper | 14.65:1 | 11.96:1 |
+| Paper secondary `#8a7a66` on paper | 3.85:1 | 3.15:1 |
+| Paper faint `#a8977f` on paper | 2.63:1 | 2.15:1 |
+
+Every body text clears 4.5:1 and the cell edge clears 3:1. Two things do
+not, both on the paper and both the paper's own inks (constants in
+`PageFace.tsx`, the same in both themes): its secondary line ("Not cooked
+yet", the meta line) was already 3.85:1 on light paper and is 3.15:1 on
+`#ebdfc6`, and its faintest ink 2.15:1. OPEN: darken the paper's two inks
+in dark mode only, or accept it — not changed, because the paper's
+colour was the instruction and the inks were not.
+
+**Left alone:** the meal-type art tiles (illustrations with their own dark
+tones), the solid red delete buttons and the white text on book tabs, the
+scrims, the badge whites on the paper, Book.tsx's cover shading and rim,
+and the opening sequence (below).
+
+**The splash (not changed).** The native dark splash is `#131110` in the
+binary; the page is now `#211a16`. On a dark launch WITHOUT the opening
+sequence — every launch but at most one a day — the splash hides straight
+onto the app: a step from near-black to a visibly warmer brown,
+roughly the jump between the old page and the old cards. Options:
+1. **`#211a16` in `app.json`'s splash `dark.backgroundColor` in the next
+   build** — the right fix, free with a build already planned; a native
+   change, so that build bumps `expo.version` (or accepts it on the
+   icon-and-splash precedent: nothing a bundle calls). The opening's
+   `DARK` constant must change with it.
+2. **At app start, `SplashScreen.setOptions({ fade: true, duration: 300 })`**
+   before `hideAsync` — JS only, in the binary already: the step becomes a
+   300ms crossfade. Costs a third of a second on every launch.
+3. Leave it until the next build. Recommended: 3 now, 1 with the next
+   build.
+**The opening's dark fade needs no change:** it starts on `#131110` to
+match the splash it covers, fades to cream, and its end reveals the app
+underneath — whatever the page colour is. Only option 1 would move its
+start colour.
+
+**The website** has its own dark theme (`index.css`, `[data-theme="dark"]`,
+still `#131110`/`#2a2622`), copied once and never shared with these
+tokens. Not changed; it would be the same five values in `--page`,
+`--card`, the lines and ink if wanted.
+
+**Only the phone can check:** iOS 26's native tab bar and headers (Liquid
+Glass takes its colours from the system, not these tokens — Chromium only
+ever renders the classic layout); how the splash step looks; legibility on
+a real OLED screen across a counter; WebKit's rendering of the hairline
+edges at 3x. Chromium (iPhone 13, Pixel 5, SE): the diagram, Step-by-Step,
+the Recipe Box, Settings, the ⋮ dialog, the Servings sheet, the guided
+demo and the empty library before and after, no page-level sideways
+scroll on any.
 
 ## Still open from earlier work
 
