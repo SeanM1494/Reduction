@@ -3,7 +3,9 @@
  * the admin secret (mounted on adminRouter at /api/admin/reel):
  *
  *   GET    /reel          the list (curated / hidden) and a PREVIEW of the
- *                         reel as a stranger would get it now — the dry run
+ *                         reel as a stranger would get it now — the dry run,
+ *                         with what was left out and why: no stored picture
+ *                         (named), and cards withheld below the minimum
  *   PUT    /reel          { url, status: "curated" | "hidden", note? }
  *   DELETE /reel?url=     takes a URL off the list
  *   POST   /reel/warm     { url, write?, refresh?, note? } — one URL a call
@@ -25,7 +27,7 @@ import { adminEvents } from "@workspace/db";
 import { getDb } from "../db";
 import { surfaceableUrl } from "../lib/searchLibrary";
 import { urlKeyOf } from "../lib/urlKey";
-import { cardFrom, staleFlags } from "../lib/reel";
+import { cardFrom, reelMinCards, staleFlags } from "../lib/reel";
 import { buildReel, deleteEntry, isMissingTable, loadEntries, upsertEntry, type EntryStatus } from "../lib/reelStore";
 import { cacheDropUrl, cacheGetUrlRow, cacheSetUrl, keepOriginal } from "./recipes";
 import { clearReelMemo } from "./reel";
@@ -71,7 +73,7 @@ export function registerReelAdmin(router: Router, requireAdmin: (req: Request, r
       clearReelMemo();
       return res.json({
         entries: entries.map((e) => ({ url: e.url, status: e.status, note: e.note, pinned: !!e.pinned, updatedAt: e.updatedAt })),
-        preview,
+        preview: { ...preview, minCards: reelMinCards() },
       });
     } catch (e) {
       console.error("[admin:reel]", (e as Error).message);

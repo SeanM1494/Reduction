@@ -778,6 +778,17 @@ built once an hour per instance. Heading "Loved by Reduction users" only
 when every card is data-backed and clears the ratings floor, otherwise
 "Try one of these"; no heading and no reel when nothing qualifies.
 
+**A card needs its page's own picture, stored** (Oct 1, the owner's rule):
+a page — data-backed or curated — with no row in `reel_photos` is left
+out, BEFORE the reel is assembled, so the next candidate takes its place.
+A build still starts fetching the missing pictures it can (three a build,
+fire-and-forget), so a page whose tree names an image joins the reel a
+build later. **Fewer than three cards and there is no reel at all**
+(`REEL.minCards`): the phone already shows nothing for an empty list, so
+the minimum lives here and needs no update to change. The preview counts
+both (`no stored picture: N`, and the cards waiting for the minimum) and
+names the pictureless pages; the public answer says neither.
+
 The owner's list is `reel_entries` — hand-run DDL, safe to run twice:
 
 ```sql
@@ -801,7 +812,9 @@ The owner works it from the Replit shell with `scripts/reel.mjs`, which
 calls the admin routes on the deployment (PUBLIC_BASE_URL, ADMIN_SECRET):
 
 - `node scripts/reel.mjs preview` — the dry run: what a stranger would see,
-  data-backed or curated, and counts of what was left out and why.
+  data-backed or curated, counts of what was left out and why, the pages
+  left out for want of a stored picture by name, and any cards waiting for
+  the minimum.
 - `node scripts/reel.mjs warm urls.txt` — report only: cached ($0), would
   extract, or not public; for a cached page, what it predates (step order,
   picture, original wording).

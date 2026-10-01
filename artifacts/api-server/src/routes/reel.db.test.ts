@@ -29,9 +29,9 @@ import { setWarmReaderForTests } from "./adminReel";
 import { extractionEvents } from "@workspace/db";
 import { emptyUsage } from "../lib/extractionConfig";
 import { cacheGetUrlRow, cacheSetUrl, cacheDropUrl } from "./recipes";
-import { HEADING_CURATED } from "../lib/reel";
+import { HEADING_CURATED, setReelMinCardsForTests } from "../lib/reel";
 import { Jimp } from "jimp";
-import { recipePhotos } from "@workspace/db";
+import { recipePhotos, reelPhotos } from "@workspace/db";
 import { setPagePhotoFetcherForTests } from "../lib/photos";
 import { resetReelPhotoFillForTests } from "../lib/reelPhotos";
 import { buildReel } from "../lib/reelStore";
@@ -104,10 +104,23 @@ async function save(userId: string, url: string, opts: { cooked?: number; rating
   } as never);
 }
 
+/** A picture stored for a page, as the warm-up or a build's fill would leave
+ *  it (Oct 1: a card is offered only with one). The image URL names HOST so
+ *  the cleanup finds it. */
+async function picture(url: string) {
+  await getDb()
+    .insert(reelPhotos)
+    .values({ urlKey: urlKeyOf(url)!, imageUrl: `https://${HOST}/stored/${encodeURIComponent(url)}`, bytes: Buffer.from("jpeg"), mediaType: "image/jpeg", width: 1, height: 1 } as never)
+    .onConflictDoNothing();
+}
+
 /** Seeds once for the whole file. */
 async function seed() {
   if (seeded) return;
   seeded = true;
+  // Most reels here are two or three cards on purpose; the minimum has its
+  // own test.
+  setReelMinCardsForTests(1);
   const five = await Promise.all(Array.from({ length: 5 }, () => account()));
   // LOVED: cooked by five accounts, all rated 👍.
   for (const u of five) await save(u, page("loved"), { rating: 1 });
@@ -131,9 +144,14 @@ async function seed() {
   for (const u of five.slice(0, 4)) await save(u, page("uncached"));
   // A paste of the same dish, cached under its content with no sourceUrl.
   await getDb().insert(extractionCache).values({ hash: `reeltest-text-${RUN}`, recipe: tree(undefined, "Loved Omelette") as never });
+  // Every page above has a stored picture, so each one left out below is
+  // left out for its own reason and not for want of a picture.
+  for (const p of ["loved", "one-account", "removed", "unrated", "uncached"]) await picture(page(p));
+  await picture(drive);
 }
 
 after(async () => {
+  setReelMinCardsForTests(null);
   if (!seeded) return;
   const db = getDb();
   for (const id of accounts) {
@@ -150,7 +168,7 @@ after(async () => {
   await db.delete(adminEvents).where(like(adminEvents.note, `%${HOST}%`));
   for (const id of accounts) await db.delete(recipePhotos).where(eq(recipePhotos.ownerKey, `user:${id}`));
   await db.execute(sql`delete from reel_photos where image_url like ${`%${HOST}%`}`).catch(() => {});
-  for (const p of ["pictured"]) await cacheDropUrl(page(p));
+  for (const p of ["pictured", "own-photo", "nopic-data", "nopic-curated"]) await cacheDropUrl(page(p));
   setPagePhotoFetcherForTests(null);
   server?.close();
 });
@@ -249,6 +267,7 @@ test("reel: a hidden page is never offered; curated pages fill after the data", 
 
   // Curate a cached page nobody has cooked: it appears after the data cards.
   await cacheSetUrl(page("curated"), tree(page("curated"), "Curated Crumble") as never);
+  await picture(page("curated"));
   const put = await admin("PUT", "/reel", { url: page("curated"), status: "curated" });
   assert.equal(put.body.pinned, true, "a cached, clean page is pinned when curated");
   const r = await reel(viewer);
@@ -272,6 +291,7 @@ test("reel: a curated page whose cache row was lost is put back from its pinned 
   const viewer = await account();
   resetReelBrake();
   await cacheSetUrl(page("pinned"), tree(page("pinned"), "Pinned Pancakes") as never);
+  await picture(page("pinned"));
   await admin("PUT", "/reel", { url: page("pinned"), status: "curated" });
   // A failed re-read (/reextract) is what drops a row and leaves nothing.
   await cacheDropUrl(page("pinned"));
@@ -310,7 +330,10 @@ test("reel warm: reports by default, writes only when told, refreshes only a nam
   const list = await admin("GET", "/reel");
   const entry = list.body.entries.find((e: { url: string }) => e.url === page("warm-cached"));
   assert.deepEqual([entry.status, entry.pinned], ["curated", true]);
-  assert.ok(list.body.preview.cards.some((c: { url: string }) => c.url === page("warm-cached")), "the dry-run preview shows it");
+  // Curated, but its tree names no picture, so nothing can be stored: the
+  // dry-run preview names it as left out for that (Oct 1), not as a card.
+  assert.ok(!list.body.preview.cards.some((c: { url: string }) => c.url === page("warm-cached")));
+  assert.ok(list.body.preview.missingPicture.some((m: { url: string }) => m.url === page("warm-cached")), "the dry-run preview names it");
   assert.equal(typeof list.body.preview.excluded.notCached, "number");
   for (const id of accounts) assert.ok(!JSON.stringify(list.body).includes(id), "no account in the preview either");
 });
@@ -406,26 +429,34 @@ test("reel photos: the page's own picture, stored by the warm-up, served signed 
     assert.equal((await photoGet("/api/reel/photo/..%2Fsecrets", viewer)).status, 404);
 
     // A data-backed page whose saver attached their OWN photo: that photo is
-    // theirs, and nothing reads recipe_photos to build a card.
-    const [saved] = await getDb().select().from(recipes).where(eq(recipes.userId, accounts[0]));
+    // theirs, and nothing reads recipe_photos to build a card — so with no
+    // page picture stored, the page is not offered at all (Oct 1).
+    for (const u of accounts.slice(0, 3)) await save(u, page("own-photo"));
+    await cacheSetUrl(page("own-photo"), tree(page("own-photo"), "Own-Photo Omelette") as never);
+    const [saved] = await getDb()
+      .select()
+      .from(recipes)
+      .where(sql`${recipes.recipe}->>'sourceUrl' = ${page("own-photo")}`)
+      .limit(1);
     await getDb().insert(recipePhotos).values({
       ownerKey: saved.ownerKey, id: saved.id, bytes: userImage, mediaType: "image/png", width: 40, height: 40, source: "user",
     } as never).onConflictDoNothing();
-    const loved = (await reel(viewer)).body.cards.find((c: { url: string }) => c.url === page("loved"));
-    assert.equal(loved.photo, null, "the tree names no picture, so the card has none");
-    assert.equal(fetched.length, 1, "and nothing was fetched for it");
+    assert.ok(!urls((await reel(viewer)).body).includes(page("own-photo")), "no stored page picture: not offered");
+    const listed = await admin("GET", "/reel");
+    assert.ok(listed.body.preview.missingPicture.some((m: { url: string }) => m.url === page("own-photo")), "and the preview names it");
+    assert.equal(fetched.length, 1, "nothing was fetched for it: its tree names no picture");
 
     // Once the cached tree names the page's picture, the NEXT builds fetch it
     // (fire-and-forget) — the page's bytes, never the saver's.
-    await cacheSetUrl(page("loved"), { ...tree(page("loved"), "Loved Omelette"), image: `https://${HOST}/img/omelette.jpg` } as never);
+    await cacheSetUrl(page("own-photo"), { ...tree(page("own-photo"), "Own-Photo Omelette"), image: `https://${HOST}/img/omelette.jpg` } as never);
     const first = await buildReel();
-    assert.equal(first.cards.find((c) => c.url === page("loved"))!.photo, null, "not shown until it is stored");
+    assert.ok(!first.cards.some((c) => c.url === page("own-photo")), "not shown until it is stored");
     await first.photoFill;
     assert.ok(fetched.includes(`https://${HOST}/img/omelette.jpg`));
     const second = await buildReel();
-    const lovedPhoto = second.cards.find((c) => c.url === page("loved"))!.photo!;
+    const ownPhoto = second.cards.find((c) => c.url === page("own-photo"))!.photo!;
     await second.photoFill;
-    const bytes = (await photoGet(lovedPhoto, viewer)).bytes;
+    const bytes = (await photoGet(ownPhoto, viewer)).bytes;
     assert.equal((await Jimp.read(bytes)).width, 1024, "the page's picture, not the saver's 40px photo");
     const fetchesSoFar = fetched.length;
     await (await buildReel()).photoFill;
@@ -452,7 +483,8 @@ test("reel photos: a picture that cannot be fetched is tried once per instance, 
     await (await buildReel()).photoFill;
     assert.equal(tries, 1, "a failing picture is not fetched on every build");
     const viewer = await account();
-    assert.equal((await reel(viewer)).body.cards.find((c: { url: string }) => c.url === page("unrated")).photo, null);
+    // A failed refresh keeps the picture already stored: still offered.
+    assert.match((await reel(viewer)).body.cards.find((c: { url: string }) => c.url === page("unrated")).photo, /^\/api\/reel\/photo\//);
 
     // Without the table (hand-run DDL not yet run): the reel still builds,
     // cards carry no picture, the route answers 404, a warm-up says so.
@@ -461,8 +493,10 @@ test("reel photos: a picture that cannot be fetched is tried once per instance, 
       resetReelPhotoFillForTests();
       const built = await buildReel();
       await built.photoFill;
-      assert.ok(built.cards.length > 0);
-      assert.ok(built.cards.every((c) => c.photo === null));
+      // No table, no stored pictures, so no card qualifies: the reel is
+      // simply absent, which the phone already shows as nothing.
+      assert.deepEqual(built.cards, []);
+      assert.ok(built.excluded.noPicture > 0);
       assert.equal((await photoGet(`/api/reel/photo/${urlKeyOf(page("pictured"))}?v=1`, viewer)).status, 404);
       await cacheSetUrl(page("pictured"), { ...tree(page("pictured"), "Pictured Pie"), image: `https://${HOST}/img/pie.jpg` } as never);
       setPagePhotoFetcherForTests(async () => ({ ok: true, status: 200, contentType: "image/png", bytes: await png(8, 8, 0x00ff00ff) }));
@@ -476,4 +510,55 @@ test("reel photos: a picture that cannot be fetched is tried once per instance, 
     setPagePhotoFetcherForTests(null);
     resetReelPhotoFillForTests();
   }
+});
+
+test("reel: only pages with a stored picture are offered, data-backed or curated, and the preview says why", async (t) => {
+  if (!(await needsDatabase(t, ...TABLES, "reel_photos"))) return;
+  await seed();
+  const viewer = await account();
+  resetReelBrake();
+  // Data-backed: cooked by three accounts, cached and clean — but no picture.
+  for (const u of accounts.slice(0, 3)) await save(u, page("nopic-data"));
+  await cacheSetUrl(page("nopic-data"), tree(page("nopic-data"), "Pictureless Pilaf") as never);
+  // Curated, cached and clean — no picture.
+  await cacheSetUrl(page("nopic-curated"), tree(page("nopic-curated"), "Pictureless Pudding") as never);
+  await admin("PUT", "/reel", { url: page("nopic-curated"), status: "curated" });
+
+  const r = await reel(viewer);
+  const shown = urls(r.body);
+  assert.ok(!shown.includes(page("nopic-data")), "a data-backed page without a stored picture is left out");
+  assert.ok(!shown.includes(page("nopic-curated")), "so is a curated one");
+  assert.ok(shown.includes(page("loved")) && shown.includes(page("curated")), "pages with pictures still show, data and curated");
+  assert.ok(r.body.cards.every((c: { photo: string | null; site: string }) => typeof c.photo === "string" && c.site), "every card has its picture and its site");
+  assert.ok(!("excluded" in r.body) && !("missingPicture" in r.body), "the public answer says nothing about what was left out");
+
+  const { preview } = (await admin("GET", "/reel")).body;
+  const missing = preview.missingPicture.map((m: { url: string }) => m.url);
+  assert.ok(missing.includes(page("nopic-data")) && missing.includes(page("nopic-curated")));
+  assert.equal(preview.excluded.noPicture, missing.length);
+
+  // Picture it, and it is offered.
+  await picture(page("nopic-curated"));
+  clearReelMemo();
+  assert.ok(urls((await reel(viewer)).body).includes(page("nopic-curated")));
+});
+
+test("reel: below the minimum the reel is withheld whole — the phone gets an empty list, the preview names what waits", async (t) => {
+  if (!(await needsDatabase(t, ...TABLES, "reel_photos"))) return;
+  await seed();
+  const viewer = await account();
+  resetReelBrake();
+  try {
+    setReelMinCardsForTests(1000);
+    const r = await reel(viewer);
+    assert.deepEqual(r.body, { heading: null, cards: [] });
+    const { preview } = (await admin("GET", "/reel")).body;
+    assert.deepEqual(preview.cards, []);
+    assert.ok(preview.withheld.length > 0);
+    assert.equal(preview.excluded.tooFewCards, preview.withheld.length);
+  } finally {
+    setReelMinCardsForTests(1);
+  }
+  clearReelMemo();
+  assert.ok((await reel(viewer)).body.cards.length > 0, "at the minimum or above, the reel is back");
 });

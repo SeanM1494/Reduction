@@ -2798,6 +2798,26 @@ from the repo root it offered to create a new `@seans-apps/workspace`
 project, declined), and the switch works there. From here every update
 is preview → the phone → `--promote` (docs/next-publish.md section D).
 
+## The reel shows only cards with a stored picture (Oct 1)
+
+**Decided (owner):** a recipe belongs in the reel only with a real picture
+from its own page, stored in `reel_photos` — data-backed and curated alike.
+Built in `lib/reelStore.ts`: candidates are filtered on a stored picture
+BEFORE the reel is assembled, so a dropped card's slot goes to the next
+candidate rather than leaving the reel short; the build still starts
+fetching the missing pictures it can (three a build), so a page whose tree
+names an image joins a build later. The admin preview (and `reel.mjs
+preview`) counts "no stored picture: N" and names those pages; the public
+answer never says what was left out.
+
+**Decided: a minimum of three cards, on the server** (`REEL.minCards`).
+What the app did with 1 or 2 cards: shown them — `reelVisible` is "any
+cards" — as a short static row (two cards never fill even an SE's width, so
+the ticker would not run; one card sat alone under the heading). On the
+server because the phone already hides on an empty list (tested since Sep
+30), so the minimum changes with a Publish and no app update, and an old
+binary obeys it too. Below it the preview lists the cards waiting.
+
 ## Still open from earlier work
 
 - **allrecipes.com cannot be read by the server, by either fetch (Sep

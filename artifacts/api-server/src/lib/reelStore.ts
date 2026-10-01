@@ -13,7 +13,7 @@ import { sql } from "drizzle-orm";
 import type { Recipe } from "@workspace/recipe-model";
 import { getDb } from "../db";
 import { normalizeUrl, urlKeyOf } from "./urlKey";
-import { REEL, assembleReel, cardFrom, rankPages, usageByPage, type Reel, type ReelCard, type UsageRow } from "./reel";
+import { REEL, assembleReel, cardFrom, withMinimum, rankPages, usageByPage, type Reel, type ReelCard, type UsageRow } from "./reel";
 import { cacheGetUrlRow, cacheSetUrl } from "../routes/recipes";
 import { fillReelPhotos, pageImageOf, reelPhotoMetas, reelPhotoPath } from "./reelPhotos";
 
@@ -114,8 +114,17 @@ export async function curatedTree(entry: ReelEntry): Promise<{ recipe: Recipe | 
 }
 
 export interface ReelBuild extends Reel {
-  /** Counts only, for the admin preview: why candidates were left out. */
-  excluded: { belowMinimums: number; notCached: number; notClean: number; hidden: number };
+  /** Counts only, for the admin preview: why candidates were left out.
+   *  `noPicture`: a page with no picture stored in reel_photos (Oct 1: a
+   *  card is offered only with its page's own picture). `tooFewCards`:
+   *  cards that qualified but were withheld because fewer than the minimum
+   *  did. */
+  excluded: { belowMinimums: number; notCached: number; notClean: number; hidden: number; noPicture: number; tooFewCards: number };
+  /** For the admin preview only: the pages left out for want of a stored
+   *  picture (public pages; no account in them), and the cards withheld
+   *  below the minimum. Never sent by GET /api/reel. */
+  missingPicture: Array<{ url: string; title: string; site: string; kind: ReelCard["kind"] }>;
+  withheld: ReelCard[];
   restored: number;
   /** Picture fetches this build started (fire-and-forget), for the tests. */
   photoFill: Promise<unknown>;
@@ -127,7 +136,7 @@ export async function buildReel(): Promise<ReelBuild> {
   const hidden = new Set(entries.filter((e) => e.status === "hidden").map((e) => normalizeUrl(e.url) ?? e.url));
   const usage = usageByPage(await loadUsageRows());
   const ranked = rankPages(usage);
-  const excluded = { belowMinimums: usage.size - ranked.length, notCached: 0, notClean: 0, hidden: 0 };
+  const excluded = { belowMinimums: usage.size - ranked.length, notCached: 0, notClean: 0, hidden: 0, noPicture: 0, tooFewCards: 0 };
 
   const data: Array<{ card: ReelCard; usage: (typeof ranked)[number] }> = [];
   // Each card's page picture, as its cached tree names it.
@@ -163,19 +172,48 @@ export async function buildReel(): Promise<ReelBuild> {
     } else if (!recipe) excluded.notCached++;
     else excluded.notClean++;
   }
-  const reel = assembleReel(data, curated, hidden);
-
-  // Pictures: what is stored is shown; what is missing is fetched for the
-  // builds that follow (lib/reelPhotos.ts).
-  const keyed = reel.cards.map((card) => ({ card, urlKey: urlKeyOf(card.url), imageUrl: images.get(card.url) ?? null }));
-  const stored = await reelPhotoMetas(keyed.flatMap((k) => (k.urlKey ? [k.urlKey] : [])));
-  const cards = keyed.map(({ card, urlKey }) => {
+  // Pictures FIRST, before the reel is assembled (Oct 1): a card is offered
+  // only with its page's own picture stored in reel_photos. Filtering the
+  // candidates rather than the finished reel lets the next candidate take a
+  // dropped card's place instead of leaving the reel one short.
+  const candidates = [...data.map((d) => d.card), ...curated];
+  const keyOf = new Map(candidates.map((c) => [c.url, urlKeyOf(c.url)] as const));
+  const stored = await reelPhotoMetas([...new Set([...keyOf.values()].flatMap((k) => (k ? [k] : [])))]);
+  const missingPicture: ReelBuild["missingPicture"] = [];
+  const seenMissing = new Set<string>();
+  const pictured = (card: ReelCard): ReelCard | null => {
+    const urlKey = keyOf.get(card.url);
     const meta = urlKey ? stored.get(urlKey) : undefined;
-    return meta ? { ...card, photo: reelPhotoPath(urlKey!, meta.version) } : card;
+    if (meta) return { ...card, photo: reelPhotoPath(urlKey!, meta.version) };
+    const page = normalizeUrl(card.url) ?? card.url;
+    if (!seenMissing.has(page) && !hidden.has(page)) {
+      seenMissing.add(page);
+      missingPicture.push({ url: card.url, title: card.title, site: card.site, kind: card.kind });
+    }
+    return null;
+  };
+  const withPictures = data.flatMap((d) => {
+    const card = pictured(d.card);
+    return card ? [{ card, usage: d.usage }] : [];
   });
+  const curatedWithPictures = curated.flatMap((c) => {
+    const card = pictured(c);
+    return card ? [card] : [];
+  });
+  const { reel, withheld } = withMinimum(assembleReel(withPictures, curatedWithPictures, hidden));
+  excluded.noPicture = missingPicture.length;
+  excluded.tooFewCards = withheld.length;
+
+  // The pictures still missing are fetched for the builds that follow
+  // (lib/reelPhotos.ts), those first; a stored one whose page now names a
+  // different image is refreshed after them.
+  const missingFirst = [...candidates].sort((a, b) => Number(!!stored.get(keyOf.get(a.url) ?? "")) - Number(!!stored.get(keyOf.get(b.url) ?? "")));
   const photoFill = fillReelPhotos(
-    keyed.flatMap((k) => (k.urlKey ? [{ urlKey: k.urlKey, imageUrl: k.imageUrl }] : [])),
+    missingFirst.flatMap((c) => {
+      const urlKey = keyOf.get(c.url);
+      return urlKey ? [{ urlKey, imageUrl: images.get(c.url) ?? null }] : [];
+    }),
     stored
   ).catch(() => []);
-  return { ...reel, cards, excluded, restored, photoFill };
+  return { ...reel, excluded, restored, missingPicture, withheld, photoFill };
 }

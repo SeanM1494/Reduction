@@ -41,6 +41,10 @@ export const REEL = {
   /** With that many ratings, a page under this share of 👍 is not offered. */
   minLovedShare: 0.6,
   maxCards: 10,
+  /** Fewer cards than this and there is no reel at all (decided Oct 1): one
+   *  or two cards read as a broken row, and two never fill a phone's width,
+   *  so the ticker would not even run. The phone hides on an empty list. */
+  minCards: 3,
   /** Data candidates to look up in the cache, best first: enough to fill
    *  the reel when some turn out uncached or unclean. */
   candidateLimit: 30,
@@ -229,6 +233,21 @@ export function assembleReel(
   for (const c of curated) add(c, false);
   const allLoved = cards.length > 0 && cards.every((c) => c.kind === "data") && loved.every(Boolean);
   return { heading: allLoved ? HEADING_LOVED : HEADING_CURATED, cards };
+}
+
+let minCardsOverride: number | null = null;
+/** The minimum in force: REEL.minCards, or what a test set. */
+export const reelMinCards = (): number => minCardsOverride ?? REEL.minCards;
+/** Test seam: most database tests build reels of two cards on purpose. */
+export function setReelMinCardsForTests(n: number | null): void {
+  minCardsOverride = n;
+}
+
+/** Below the minimum the reel is withheld whole — the cards come back as
+ *  `withheld`, for the admin preview to say what is waiting. */
+export function withMinimum(reel: Reel, min: number = reelMinCards()): { reel: Reel; withheld: ReelCard[] } {
+  if (reel.cards.length >= min) return { reel, withheld: [] };
+  return { reel: { heading: reel.heading, cards: [] }, withheld: reel.cards };
 }
 
 /** What a warm-up flags on a cached tree: the features it predates. */

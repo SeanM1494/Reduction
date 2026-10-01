@@ -74,12 +74,25 @@ const [cmd, ...rest] = process.argv.slice(2);
 
 if (cmd === "preview") {
   const { entries, preview } = await call("GET", "/reel");
-  console.log(`Heading: ${preview.cards.length ? preview.heading : "(reel hidden: nothing qualifies)"}`);
+  const min = preview.minCards ?? 3;
+  console.log(
+    `Heading: ${preview.cards.length ? preview.heading : preview.withheld?.length ? `(reel hidden: only ${preview.withheld.length} card(s) qualify, the minimum is ${min})` : "(reel hidden: nothing qualifies)"}`
+  );
   preview.cards.forEach((c, i) => {
     console.log(`${String(i + 1).padStart(2)}. [${c.kind === "data" ? "data   " : "curated"}] ${c.title} — ${c.site}${c.totalMinutes ? ` · ${c.totalMinutes} min` : ""}${c.usage ? ` · ${c.usage}` : ""}${c.photo ? "" : " · no picture"}`);
   });
+  if (preview.withheld?.length) {
+    console.log("Waiting for the minimum:");
+    for (const c of preview.withheld) console.log(`    [${c.kind === "data" ? "data   " : "curated"}] ${c.title} — ${c.site}`);
+  }
   const x = preview.excluded;
-  console.log(`Left out: ${x.belowMinimums} below the minimums, ${x.notCached} not cached, ${x.notClean} not clean, ${x.hidden} hidden.`);
+  console.log(
+    `Left out: ${x.belowMinimums} below the minimums, ${x.notCached} not cached, ${x.notClean} not clean, ${x.hidden} hidden, ${x.noPicture ?? 0} no stored picture.`
+  );
+  if (preview.missingPicture?.length) {
+    console.log("No stored picture (a card is offered only with its page's own picture):");
+    for (const m of preview.missingPicture) console.log(`    [${m.kind === "data" ? "data   " : "curated"}] ${m.title} — ${m.site}\n        ${m.url}`);
+  }
   if (preview.restored) console.log(`Restored ${preview.restored} curated page(s) to the cache from their pinned copies.`);
   console.log(`Owner list: ${entries.filter((e) => e.status === "curated").length} curated, ${entries.filter((e) => e.status === "hidden").length} hidden.`);
 } else if (cmd === "warm") {

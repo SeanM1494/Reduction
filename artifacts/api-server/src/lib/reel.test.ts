@@ -13,6 +13,7 @@ import {
   reelUsageLine,
   staleFlags,
   usageByPage,
+  withMinimum,
   type ReelCard,
   type UsageRow,
 } from "./reel";
@@ -177,4 +178,24 @@ test("warm-up flags: the step order, the picture and the original wording", () =
   delete (old as { image?: unknown }).image;
   (old.sections[0].nodes[0] as { src?: number }).src = undefined;
   assert.deepEqual(staleFlags(old, false), ["no_step_order", "no_picture", "no_original_wording"]);
+});
+
+test("the minimum: three cards or no reel at all, and the withheld cards are named for the preview", () => {
+  assert.equal(REEL.minCards, 3);
+  const three = assembleReel([], [1, 2, 3].map((i) => card(`https://c.example.com/${i}`, "curated")), new Set());
+  assert.deepEqual(withMinimum(three).withheld, []);
+  assert.equal(withMinimum(three).reel.cards.length, 3);
+  const two = assembleReel([], [1, 2].map((i) => card(`https://c.example.com/${i}`, "curated")), new Set());
+  const held = withMinimum(two);
+  assert.deepEqual(held.reel.cards, [], "two cards are withheld whole, never shown as a short row");
+  assert.equal(held.withheld.length, 2);
+  assert.equal(withMinimum({ heading: HEADING_CURATED, cards: [] }).withheld.length, 0, "an empty reel stays empty");
+});
+
+test("the heading is decided by the cards that remain once the pictureless ones are gone", () => {
+  // The caller drops cards without a stored picture BEFORE assembling: with
+  // the unpictured curated card gone, three loved data cards say "Loved".
+  const loved = [1, 2, 3].map((i) => ({ card: card(`https://a.example.com/${i}`, "data"), usage: rated }));
+  assert.equal(assembleReel(loved, [], new Set()).heading, HEADING_LOVED);
+  assert.equal(assembleReel(loved, [card("https://c.example.com/1", "curated")], new Set()).heading, HEADING_CURATED, "kept, it would not");
 });
