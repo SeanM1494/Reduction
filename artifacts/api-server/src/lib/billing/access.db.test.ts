@@ -5,11 +5,11 @@
  * WHAT THESE EXIST TO CATCH. Every guarantee here is a property of a SQL
  * statement or of how two mechanisms meet, and none is visible against a stub:
  *
- *  - "one recipe EVER", not "one at a time": deleting must not hand a slot
+ *  - FREE_RECIPES "EVER", not "at a time": deleting must not hand a slot
  *    back, which means the counter is monotonic and not a row count;
- *  - ONE recipe across the whole free experience: a visitor who spends the
- *    pre-signup trial and then signs up must not also get a fresh account
- *    recipe;
+ *  - the same count across the whole free experience: a visitor who spends
+ *    the pre-signup trial and then signs up has used one of the account's
+ *    free recipes, not been given one on top of them;
  *  - the sign-out loophole stays closed: a second trial claimed into an
  *    account that is already full must be refused, not absorbed;
  *  - the kill switch composes in both directions;
@@ -38,6 +38,7 @@ import {
 import { needsDatabase } from "../testdb";
 import {
   entitlementFor,
+  FREE_RECIPES,
   grantRecipes,
   recordRecipeUsed,
   setEnforceOverride,
@@ -64,6 +65,11 @@ async function makeUser(): Promise<string> {
   return id;
 }
 
+/** Use up every free recipe, the way FREE_RECIPES saves would. */
+async function spendAll(userId: string, n = FREE_RECIPES) {
+  for (let i = 0; i < n; i++) assert.equal(await spendRecipeAllowance(userId), true);
+}
+
 async function cleanup(userId: string) {
   const db = getDb();
   await db.delete(accessEvents).where(eq(accessEvents.userId, userId));
@@ -74,12 +80,15 @@ async function cleanup(userId: string) {
   await db.delete(users).where(eq(users.id, userId));
 }
 
-test("a fresh account gets exactly one recipe", async (t) => {
+test("a fresh account gets exactly three recipes", async (t) => {
   if (!(await needsDatabase(t, ...TABLES))) return;
   const userId = await makeUser();
   try {
     const ent = await entitlementFor(userId);
-    assert.equal(ent.allowance, 1);
+    // Pinned as a literal: the number is a product decision (Oct 1 2026),
+    // not something a refactor may move.
+    assert.equal(FREE_RECIPES, 3);
+    assert.equal(ent.allowance, FREE_RECIPES);
     assert.equal(ent.used, 0);
     assert.equal(ent.allowed, true);
     assert.equal(ent.reason, "within_allowance");
@@ -92,19 +101,22 @@ test("a fresh account gets exactly one recipe", async (t) => {
   }
 });
 
-test("one recipe EVER — deleting does not hand the slot back", async (t) => {
+test("three recipes EVER — deleting does not hand a slot back", async (t) => {
   if (!(await needsDatabase(t, ...TABLES))) return;
   const userId = await makeUser();
   try {
+    await spendAll(userId, FREE_RECIPES - 1);
+    assert.equal((await entitlementFor(userId)).reason, "within_allowance", "one still to spend");
     assert.equal(await spendRecipeAllowance(userId), true);
     assert.equal((await entitlementFor(userId)).reason, "exhausted");
+    assert.equal(await spendRecipeAllowance(userId), false, "nothing left to spend");
 
     // The recipe is deleted. A row COUNT would now say zero and let them
     // start again; the monotonic counter is what makes this "ever".
     await getDb().delete(recipes).where(eq(recipes.userId, userId));
 
     const ent = await entitlementFor(userId);
-    assert.equal(ent.used, 1, "used never decreases");
+    assert.equal(ent.used, FREE_RECIPES, "used never decreases");
     assert.equal(ent.allowed, false);
   } finally {
     await cleanup(userId);
@@ -115,13 +127,14 @@ test("the allowance cannot be spent twice by two concurrent saves", async (t) =>
   if (!(await needsDatabase(t, ...TABLES))) return;
   const userId = await makeUser();
   try {
+    await spendAll(userId, FREE_RECIPES - 1); // the last one is what is raced for
     const [a, b, c] = await Promise.all([
       spendRecipeAllowance(userId),
       spendRecipeAllowance(userId),
       spendRecipeAllowance(userId),
     ]);
     assert.equal([a, b, c].filter(Boolean).length, 1, "exactly one of three wins");
-    assert.equal((await entitlementFor(userId)).used, 1);
+    assert.equal((await entitlementFor(userId)).used, FREE_RECIPES);
   } finally {
     await cleanup(userId);
   }
@@ -131,7 +144,7 @@ test("a subscription entitles regardless of the counter", async (t) => {
   if (!(await needsDatabase(t, ...TABLES))) return;
   const userId = await makeUser();
   try {
-    await spendRecipeAllowance(userId);
+    await spendAll(userId);
     assert.equal((await entitlementFor(userId)).allowed, false);
 
     await getDb().insert(subscriptions).values({
@@ -155,7 +168,7 @@ test("grace entitles; expired does not", async (t) => {
   if (!(await needsDatabase(t, ...TABLES))) return;
   const userId = await makeUser();
   try {
-    await spendRecipeAllowance(userId);
+    await spendAll(userId);
     const ref = `sub_${randomUUID()}`;
     const db = getDb();
     await db.insert(subscriptions).values({
@@ -176,7 +189,7 @@ test("entitlement is provider-agnostic — a third provider needs no schema chan
   if (!(await needsDatabase(t, ...TABLES))) return;
   const userId = await makeUser();
   try {
-    await spendRecipeAllowance(userId);
+    await spendAll(userId);
     // 'google_play' is not referenced anywhere in entitlement.ts. If this
     // passes, adding Play later is an adapter and a string — no migration.
     await getDb().insert(subscriptions).values({
@@ -198,7 +211,7 @@ test("two providers on one account: the better one wins", async (t) => {
   if (!(await needsDatabase(t, ...TABLES))) return;
   const userId = await makeUser();
   try {
-    await spendRecipeAllowance(userId);
+    await spendAll(userId);
     const db = getDb();
     // Someone who subscribed on the web before the App Store build, then
     // bought again through IAP. Double-charging is a refund conversation —
@@ -223,7 +236,7 @@ test("the kill switch composes in both directions", async (t) => {
   if (!(await needsDatabase(t, ...TABLES))) return;
   const userId = await makeUser();
   try {
-    await spendRecipeAllowance(userId);
+    await spendAll(userId);
     assert.equal((await entitlementFor(userId)).enforced, false, "global default off");
 
     // Force it on for one account while the world is still free — the whole
@@ -250,7 +263,7 @@ test("shadow mode records the decision it did not act on", async (t) => {
   if (!(await needsDatabase(t, ...TABLES))) return;
   const userId = await makeUser();
   try {
-    await spendRecipeAllowance(userId);
+    await spendAll(userId);
     const ent = await entitlementFor(userId);
     assert.equal(ent.allowed, false);
     assert.equal(ent.enforced, false);
@@ -286,7 +299,7 @@ async function parkTrialRecipe(trialId: string, recipeId: string) {
   });
 }
 
-test("ONE recipe total: trial recipe carried in spends the account's only slot", async (t) => {
+test("one count in total: a trial recipe carried in is one of the account's free recipes", async (t) => {
   if (!(await needsDatabase(t, ...TABLES))) return;
   const userId = await makeUser();
   const trialId = `trial-${randomUUID()}`;
@@ -298,8 +311,11 @@ test("ONE recipe total: trial recipe carried in spends the account's only slot",
 
     const ent = await entitlementFor(userId);
     assert.equal(ent.used, 1);
-    // The whole point: not one before signup and another after.
-    assert.equal(ent.allowed, false, "one recipe across the WHOLE free experience");
+    assert.equal(ent.allowed, true, "two still to come");
+    // The whole point: the trial is one of the three, not a fourth.
+    await spendAll(userId, FREE_RECIPES - 1);
+    assert.equal(await spendRecipeAllowance(userId), false, "FREE_RECIPES across the WHOLE free experience");
+    assert.equal((await entitlementFor(userId)).allowed, false);
   } finally {
     await getDb().delete(trials).where(eq(trials.id, trialId));
     await cleanup(userId);
@@ -319,6 +335,7 @@ test("the sign-out loophole is closed: a second trial is refused, not absorbed",
     await parkTrialRecipe(second, r2);
 
     assert.equal((await claimTrialRecipe(userId, first)).claimed, 1);
+    await spendAll(userId, FREE_RECIPES - 1); // the account is now full
 
     // Sign out, fresh cookie, extract again, sign back in. Without the spend
     // inside the claim transaction this is an unlimited free tier for anyone
@@ -334,7 +351,7 @@ test("the sign-out loophole is closed: a second trial is refused, not absorbed",
     assert.ok(parked, "the second recipe is still there");
     assert.equal(parked.userId, null, "and still unowned");
 
-    assert.equal((await entitlementFor(userId)).used, 1, "and was not charged for");
+    assert.equal((await entitlementFor(userId)).used, FREE_RECIPES, "and was not charged for");
   } finally {
     const db = getDb();
     await db.delete(recipes).where(eq(recipes.ownerKey, trialOwnerKey(second)));
@@ -355,12 +372,13 @@ test("with the wall off, an over-allowance claim still counts", async (t) => {
     await parkTrialRecipe(first, r1);
     await parkTrialRecipe(second, r2);
     await claimTrialRecipe(userId, first);
+    await spendAll(userId, FREE_RECIPES - 1); // full
     // Flag off: the recipe IS handed over...
     const out = await claimTrialRecipe(userId, second);
     assert.equal(out.claimed, 1);
     // ...and still counted, or flipping the flag later would hand everybody a
     // bonus recipe on top of what they already collected.
-    assert.equal((await entitlementFor(userId)).used, 2);
+    assert.equal((await entitlementFor(userId)).used, FREE_RECIPES + 1);
   } finally {
     const db = getDb();
     await db.delete(trials).where(eq(trials.id, first));
@@ -379,14 +397,14 @@ test("a recipes coupon raises the allowance and lifts the wall", async (t) => {
   const code = normaliseCode(`test-${randomUUID().slice(0, 8)}`);
   try {
     await createCoupon({ code, recipes: 10 });
-    await spendRecipeAllowance(userId);
+    await spendAll(userId);
     assert.equal((await entitlementFor(userId)).allowed, false);
 
     const out = await redeemCoupon(userId, code);
     assert.deepEqual(out, { ok: true, recipes: 10 });
 
     const ent = await entitlementFor(userId);
-    assert.equal(ent.allowance, 11, "added to the ONE allowance system, not a second one");
+    assert.equal(ent.allowance, FREE_RECIPES + 10, "added to the ONE allowance system, not a second one");
     assert.equal(ent.allowed, true);
   } finally {
     const db = getDb();
@@ -442,7 +460,7 @@ test("a code is redeemable once per account, even under a double tap", async (t)
       "already_redeemed",
       "and the refusal names the actual reason"
     );
-    assert.equal((await entitlementFor(userId)).allowance, 6);
+    assert.equal((await entitlementFor(userId)).allowance, FREE_RECIPES + 5);
   } finally {
     const db = getDb();
     await db.delete(couponRedemptions).where(eq(couponRedemptions.code, code));

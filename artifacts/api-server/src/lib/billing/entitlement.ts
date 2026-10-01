@@ -25,6 +25,17 @@ import { and, desc, eq, sql } from "drizzle-orm";
 import { getDb } from "../../db";
 import { accountAccess, adminEvents, subscriptions } from "@workspace/db";
 
+/**
+ * How many recipes a new account may add before the wall. Every way a recipe
+ * arrives — a link, pasted text, a photo, a starter from the reel, the
+ * website's signed-out try once it is claimed — spends from this one count.
+ *
+ * Written into the row by the code that creates it, not left to the column's
+ * default, so the number is whatever the RUNNING server says: a publish
+ * changes it with no DDL first. The column default says the same, for tidiness.
+ */
+export const FREE_RECIPES = 3;
+
 /** Normalised across providers. Never a provider's own string. */
 export type SubStatus = "active" | "grace" | "expired";
 
@@ -86,7 +97,7 @@ async function ensureAccess(userId: string) {
   const db = getDb();
   await db
     .insert(accountAccess)
-    .values({ userId })
+    .values({ userId, recipeAllowance: FREE_RECIPES })
     .onConflictDoNothing({ target: accountAccess.userId });
   const [row] = await db
     .select()
@@ -124,7 +135,7 @@ export async function entitlementFor(userId: string): Promise<Entitlement> {
   const status = (sub?.status as SubStatus | undefined) ?? null;
   const subscribed = status != null && ENTITLING.has(status);
 
-  const allowance = access?.recipeAllowance ?? 1;
+  const allowance = access?.recipeAllowance ?? FREE_RECIPES;
   const used = access?.recipesUsed ?? 0;
 
   // The per-account override wins over the global flag in BOTH directions:

@@ -5,8 +5,9 @@
  * first, the owner's list to fill, the search suggestions' privacy rules)
  * and says nothing about anyone. This decides only how a card reads, when
  * the reel is on screen at all, and the one sentence a starter's preview
- * adds: that saving it uses the free recipe, which it does (ROADMAP,
- * "Starter recipes reel" — an open product question, not changed).
+ * adds: that saving it uses one of the free recipes, which it does
+ * (ROADMAP, "Starter recipes reel" — decided Oct 1: a starter's save counts
+ * like any other).
  */
 
 import { formatMinutes, type MealType } from '@workspace/recipe-model';
@@ -108,7 +109,14 @@ export function reelVisible(reel: ReelResponse, state: { keyboardUp: boolean; bu
   return reel.cards.length > 0 && !state.keyboardUp && !state.busy;
 }
 
-export const FREE_RECIPE_LINE = 'Saving this uses your free recipe.';
+/** The sentence under a starter's preview for an account still on its free
+ *  recipes: which one of them saving it would use. */
+export function freeRecipeLine(ent: { allowance: number; used: number }): string {
+  const left = ent.allowance - ent.used;
+  return left <= 1
+    ? 'Saving this uses your last free recipe.'
+    : `Saving this uses one of your free recipes (${left} left).`;
+}
 
 /** Is this account on the free allowance, with a recipe still to spend? A
  *  subscriber spends nothing; an account with none left is walled (or, in

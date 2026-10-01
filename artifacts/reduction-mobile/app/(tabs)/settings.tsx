@@ -118,8 +118,8 @@ export default function SettingsScreen() {
     ? 'Unlimited recipes'
     : entitlement?.reason === 'within_allowance'
       ? remaining === 1
-        ? 'Free recipe available'
-        : `${remaining} free recipes available`
+        ? '1 free recipe left'
+        : `${remaining} free recipes left`
       : entitlement?.reason === 'exhausted'
         ? 'Free recipes used'
         : '—';

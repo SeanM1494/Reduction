@@ -629,11 +629,13 @@ export const timerNotifications = pgTable(
  * `recipes_used` IS MONOTONIC. It counts recipes ever added to the account —
  * incremented when one is created and when the pre-signup trial's recipe is
  * claimed, and never decremented when one is deleted. That is the whole
- * difference between "one recipe ever" and "one recipe at a time": counting
+ * difference between "three recipes ever" and "three at a time": counting
  * rows in `recipes` would hand a slot back on every delete, which turns the
  * free tier into an unlimited carousel.
  *
- * `recipe_allowance` starts at 1 and only ever goes up — a coupon adds to it.
+ * `recipe_allowance` starts at 3 (FREE_RECIPES in billing/entitlement.ts,
+ * which writes it explicitly; the default here only agrees) and only ever
+ * goes up — a coupon adds to it. It was 1 until Oct 1 2026.
  * There is exactly ONE allowance system in this codebase and this is it. The
  * `trials` table above is NOT a second one: it is cookie-keyed, boolean and
  * pre-account, it feeds into this counter through the claim, and it does not
@@ -648,7 +650,7 @@ export const accountAccess = pgTable("account_access", {
   userId: text("user_id")
     .primaryKey()
     .references(() => users.id, { onDelete: "cascade" }),
-  recipeAllowance: integer("recipe_allowance").notNull().default(1),
+  recipeAllowance: integer("recipe_allowance").notNull().default(3),
   recipesUsed: integer("recipes_used").notNull().default(0),
   enforceOverride: boolean("enforce_override"),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),

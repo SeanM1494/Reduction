@@ -414,7 +414,7 @@ export default function App() {
           savedAt: Date.now(),
         };
         setTrialEntry(entry);
-        // Every success spends it, cached or not — one free recipe means one.
+        // Every success spends it, cached or not — one free try means one.
         // See the gate in server/routes/recipes.ts and ROADMAP #3.
         setTrialSpent(true);
         setOpenId(entry.id);
@@ -664,8 +664,8 @@ export default function App() {
             {viewingTrial ? (
               <div className="rd-trial-bar" role="status">
                 <span>
-                  <strong>This is your free recipe.</strong> Create an account
-                  and it stays in your library.
+                  <strong>This is your free try.</strong> Create an account
+                  and it stays in your library, with two more free recipes.
                 </span>
                 <button className="rd-go" onClick={() => setShowSignup(true)}>
                   Save it

@@ -401,7 +401,7 @@ export default function LandingPage({
             {guide.complete
               ? "Now do it with a recipe you actually want to cook."
               : trialSpent
-                ? "You\u2019ve used your free recipe. An account keeps them all."
+                ? "You\u2019ve used your free try. An account keeps it and adds two more."
                 : "Paste any recipe link and get a diagram you can cook from \u2014 one free, no account."}
           </p>
           <form

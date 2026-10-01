@@ -118,7 +118,7 @@ export async function logAccess(event: {
 export function subscriptionRequired(res: Response, ent: Entitlement | null) {
   void countEvent("wall_hit.subscription_required");
   return res.status(402).json({
-    error: "You've used your free recipe. Subscribe to add more.",
+    error: "You've used your free recipes. Subscribe to add more.",
     code: "subscription_required",
     allowance: ent?.allowance ?? null,
     used: ent?.used ?? null,

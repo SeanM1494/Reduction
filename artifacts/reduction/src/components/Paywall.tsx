@@ -1,6 +1,6 @@
 /**
  * client/src/components/Paywall.tsx — what someone sees when they've used
- * their one free recipe.
+ * their three free recipes.
  *
  * THE DESIGN PROBLEM IS "LIMIT, NOT DEAD END". This screen replaces the Find
  * tab's controls entirely rather than appearing after a rejected action —
@@ -82,7 +82,7 @@ export default function Paywall({
       ? "Searching for a new recipe needs a subscription."
       : context === "extract"
         ? "Adding a new recipe needs a subscription."
-        : "You've used your free recipe.";
+        : "You've used your free recipes.";
 
   return (
     <div className="rd-paywall">

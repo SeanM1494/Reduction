@@ -1018,7 +1018,9 @@ question from "private", and not one the schema answers.
 
 ## The business model, because it decides several of these
 
-**One free recipe, then an account, then a monthly subscription.** The user
+**Three free recipes, then a monthly subscription** (one free try on the
+website before an account, which counts as one of the three; it was one
+recipe in all until Oct 1 2026 — see "Three free recipes" below). The user
 never sees or bears the API cost. It is margin.
 
 Three consequences that should be applied wherever they bite, rather than
@@ -2703,13 +2705,34 @@ at least 3 distinct accounts; the 👍 share used (and shown) only from 5
 ratings; excluded under 60% 👍 at 5+ ratings; at most 10 cards; the reel
 built once an hour per instance. Revisit when the counters show real use.
 
-**Open product question: a starter's save spends the free recipe.** Tapping
-a card is free (a signed-in cache hit spends nothing), but saving it is a
-save like any other and uses a free account's only recipe. Someone who
-saves our pick to see what happens then meets the wall on their own
-recipe. Not changed (decided Sep 30); the preview says "Saving this uses
-your free recipe" for accounts on the free allowance. Worth deciding
-before the wall goes on.
+**Decided Oct 1: a starter's save counts like any other save.** Tapping
+a card is free (a signed-in cache hit spends nothing); saving it uses one
+of the account's three free recipes, so saving our pick no longer leaves
+nothing for the person's own recipe. The preview says "Saving this uses
+one of your free recipes (N left)", or "your last free recipe", for
+accounts on the free allowance.
+
+## Three free recipes (Oct 1)
+
+**Status:** built; ships with the next Publish, then the phone's copy over
+the air (preview first). Decided by the owner on Oct 1: a new account gets
+**three** free recipes, up from one, and everything spends from the one
+count — a saved extraction (link, text or photo) and a saved reel starter
+alike. The website's signed-out try stays ONE recipe before an account and
+is one of the three once claimed (the claim spends a unit, as before).
+
+- `FREE_RECIPES = 3` in `billing/entitlement.ts`; `ensureAccess` and the
+  trial claim write it into a new `account_access` row, so the running
+  server decides the number with no DDL first. The column default is 3 too.
+- Existing accounts: hand-run, idempotent SQL in `docs/next-publish.md`
+  raises every allowance below 3 to 3 (an account a coupon already took
+  to 3 or more keeps what it has).
+- Copy: both paywalls ("free recipes"), the 402 bodies, the landing line
+  once the try is spent ("An account keeps it and adds two more"; about as long as
+  before, for the SE's fold), the website's trial bar, the
+  phone's Settings ("2 free recipes left") and the reel preview line;
+  terms.html "The free recipes and subscriptions".
+- The wall is still off (`PAYWALL_ENFORCED` unset); nothing here turns it on.
 
 ## An over-the-air update that did not show (Oct 1)
 

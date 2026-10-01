@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   CARD_METRICS,
-  FREE_RECIPE_LINE,
+  freeRecipeLine,
   TICKER,
   cardWidth,
   parseReel,
@@ -61,8 +61,10 @@ test('the reel hides with no cards, while the keyboard is up, and during an extr
   assert.equal(reelVisible(parseReel({ cards: [] }), { keyboardUp: false, busy: false }), false);
 });
 
-test('"Saving this uses your free recipe" only for an account with a free recipe to spend', () => {
-  assert.equal(FREE_RECIPE_LINE, 'Saving this uses your free recipe.');
+test('"Saving this uses …" only for an account with a free recipe to spend, naming how many', () => {
+  assert.equal(freeRecipeLine({ allowance: 3, used: 0 }), 'Saving this uses one of your free recipes (3 left).');
+  assert.equal(freeRecipeLine({ allowance: 3, used: 1 }), 'Saving this uses one of your free recipes (2 left).');
+  assert.equal(freeRecipeLine({ allowance: 3, used: 2 }), 'Saving this uses your last free recipe.');
   assert.equal(usesFreeRecipe({ subscribed: false, allowance: 1, used: 0 }), true);
   assert.equal(usesFreeRecipe({ subscribed: true, allowance: 1, used: 0 }), false);
   assert.equal(usesFreeRecipe({ subscribed: false, allowance: 1, used: 1 }), false);

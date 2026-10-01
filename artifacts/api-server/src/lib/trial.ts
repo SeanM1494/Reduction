@@ -26,7 +26,7 @@ import { getDb } from "../db";
 import { accountAccess, recipes, trials } from "@workspace/db";
 import { readCookie, serializeCookie } from "./cookies";
 import { planClaim } from "./claim";
-import { paywallEnforcedGlobally } from "./billing/entitlement";
+import { FREE_RECIPES, paywallEnforcedGlobally } from "./billing/entitlement";
 import { capturePagePhoto } from "./photos";
 
 export const TRIAL_COOKIE = "rd_trial";
@@ -181,7 +181,7 @@ async function spendAllowanceTx(
 ): Promise<{ spent: boolean; enforced: boolean }> {
   await tx
     .insert(accountAccess)
-    .values({ userId })
+    .values({ userId, recipeAllowance: FREE_RECIPES })
     .onConflictDoNothing({ target: accountAccess.userId });
 
   const [row] = await tx
@@ -287,8 +287,8 @@ export async function claimTrialRecipe(
      *
      * This is also the join between the two gates. A visitor who extracts one
      * recipe and then signs up ends with recipes_used = 1 against an
-     * allowance of 1: ONE recipe across the whole free experience, not one
-     * before signup and another after.
+     * allowance of FREE_RECIPES: the trial is one of the free recipes, not
+     * one more on top of them.
      *
      * Not enforced while the wall is off, but still SPENT — the counter has
      * to reflect reality before the flag flips, or turning it on gives

@@ -618,7 +618,7 @@ copy button, which is what actually makes a 36-character string usable. A
 user-chosen username is a separate feature — uniqueness, editability,
 collisions — and nothing needs one.
 
-## The paywall: one recipe, and the rule about payment providers
+## The paywall: three free recipes, and the rule about payment providers
 
 **ONLY `artifacts/api-server/src/lib/billing/stripe.ts` MAY IMPORT THE STRIPE SDK OR NAME A
 STRIPE-SHAPED FIELD, and only `artifacts/api-server/src/lib/billing/apple.ts` may import
@@ -772,9 +772,17 @@ stays there until the provider says the subscription ended.
 
 **`recipes_used` is monotonic and must stay that way.** It counts recipes ever
 added, and is never decremented on delete — that is the whole difference
-between "one recipe ever" and "one at a time". Counting rows in `recipes`
+between "three recipes ever" and "three at a time". Counting rows in `recipes`
 instead hands a slot back on every delete and turns the free tier into an
 unlimited carousel.
+
+**The free allowance is `FREE_RECIPES` (3, since Oct 1 2026) in
+`billing/entitlement.ts`, written into each new `account_access` row by the
+code rather than left to the column default**, so publishing a new number
+needs no DDL first. Every way a recipe arrives spends from the same count:
+an extraction from a link, text or photo, a reel starter, the website's
+signed-out try once claimed. Raising it for EXISTING accounts is hand-run
+SQL (`docs/next-publish.md` has the Oct 1 one).
 
 **There is exactly ONE allowance system**, `account_access`. The `trials`
 table is not a second one: it is cookie-keyed, boolean, pre-account, and it
@@ -784,8 +792,8 @@ has no table here at all. Those are different mechanics and forcing them
 together makes both worse.
 
 **The claim spends a unit, in the same transaction that moves the recipe.**
-That is what makes ONE recipe mean one across the whole free experience rather
-than one before signup and another after — and it is what closes the sign-out
+That is what makes the website's signed-out try one of the three rather than a
+fourth on top of them — and it is what closes the sign-out
 loophole, where a fresh cookie, a second extraction and a sign-in would
 otherwise hand an already-full account another recipe. Three tests fail if you
 remove it.
@@ -1409,7 +1417,7 @@ sometimes the intent.
 
 ## The URL cache: two keys, and one of them is an alias
 
-**This app is paid — one free recipe, then an account, then a subscription —
+**This app is paid — one free try, an account with three free recipes in all, then a subscription —
 and the user never bears the API cost.** That single fact decides more than it
 looks like it should, so it is worth carrying into any change here: a cache
 hit is margin, a cache miss is margin burnt on a page somebody already paid to

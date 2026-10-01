@@ -1,9 +1,10 @@
 # Next Publish — the reel's legal pages, purge and cap (Oct 1, evening)
 
 One pull and one Publish, from a fresh Replit shell, in order. Each block
-is one command; what it should print is under it. **No SQL this time:**
-nothing here changes the schema (`reel_photos` already exists and already
-has `width`/`height`).
+is one command; what it should print is under it. **One SQL step (7b),
+and it changes no schema:** it raises existing accounts to the new three
+free recipes. Nothing else touches the database (`reel_photos` already
+exists and already has `width`/`height`).
 
 **Until step 5's Publish is live and steps 6–7 show its commit, do NOT add
 a third pictured page to the reel** (no `reel.mjs warm --write` of a new
@@ -23,6 +24,7 @@ The pull brings, oldest first:
 | the docs commit that wrote this section | Nothing that runs | Nothing |
 | `727b3e7` Web: the landing demo starts with nothing checked | Website: the landing demo opens with nothing checked; the avocados make "halve and scoop" the one amber step | This Publish |
 | `df4a092` Web: the demo's coach line is a step instruction, like the phone's | Website: "Demo · Step 1 of 4" over a bold instruction in the landing demo; the two tips are gone | This Publish |
+| Billing: three free recipes, up from one | Server: a new account gets 3 free recipes (`FREE_RECIPES`), shared by every way in: link, text, photo, reel starter, the website's signed-out try once claimed; the 402 messages say "free recipes". Website: paywall, landing line after the try, trial bar, terms "The free recipes and subscriptions". Phone: paywall, Settings ("2 free recipes left"), the reel preview's line | This Publish, then step 7b's SQL for EXISTING accounts; the phone part rides the next over-the-air update (preview, then promote) |
 | `1e316d7` Contact address: admin@recipereduction.com everywhere | Website: privacy, terms (removal requests, copyright agent) and support mail to the new address. Phone: Send feedback addresses it too | This Publish; the phone part rides the next over-the-air update (preview, then promote) |
 | `e6d5e74` Phone: Recipe Box pages fit small phones and large text | Phone only: on a short page (320pt wide with two or more books, or large Dynamic Type) rows give way in order — short pill, one ingredient line, no serves line, no ingredients — and nothing overlaps; bigger phones at the default text size unchanged. ROADMAP "Recipe Box pages on small phones" | Nothing on the server. Rides the next over-the-air update (preview, then promote — "D" below). On preview: three or more books, then Settings › Accessibility › Display & Text Size › Larger Text turned up — no overlaps |
 
@@ -70,12 +72,32 @@ curl -s https://recipe-reduction.replit.app/api/health; echo
 The same commit and `"missing":[]`. A different commit here means this
 hostname still serves the old deployment — wait a minute and repeat.
 
+**7b.** Existing accounts get the three free recipes too (new accounts
+already do, from the code). Safe to run twice: it only raises an
+allowance below 3, so an account a coupon already took to 3 or more keeps
+what it has:
+```sh
+psql "$DATABASE_URL" <<'SQL'
+update account_access set recipe_allowance = 3, updated_at = now() where recipe_allowance < 3;
+alter table account_access alter column recipe_allowance set default 3;
+SQL
+```
+Prints `UPDATE n` (the number of accounts raised; `UPDATE 0` on a second
+run) and `ALTER TABLE`. Then:
+```sh
+psql "$DATABASE_URL" -c "select recipe_allowance, count(*) from account_access group by 1 order by 1"
+```
+No row with a `recipe_allowance` below 3.
+
 **8.** The new wording is live (each should print `1`):
 ```sh
 curl -s https://recipereduction.com/terms.html | grep -c "three business days"
 ```
 ```sh
 curl -s https://recipereduction.com/privacy.html | grep -c "Suggested recipes"
+```
+```sh
+curl -s https://recipereduction.com/terms.html | grep -c "three recipes free of charge"
 ```
 
 **8b.** The website's demo, by hand: open https://recipereduction.com

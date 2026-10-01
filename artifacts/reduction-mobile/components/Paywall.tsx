@@ -45,7 +45,7 @@ export function Paywall({ recipeTitle, onOpenRecipe, context = 'generic' }: Prop
       ? 'Searching for a new recipe needs a subscription.'
       : context === 'extract'
         ? 'Adding a new recipe needs a subscription.'
-        : "You've used your free recipe.";
+        : "You've used your free recipes.";
 
   return (
     <View style={styles.container} testID="paywall">

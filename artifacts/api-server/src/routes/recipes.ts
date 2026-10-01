@@ -351,7 +351,7 @@ async function requireExtractionAllowance(
     if (!spent) {
       void countEvent("wall_hit.trial_spent");
       return res.status(402).json({
-        error: "You have used your free recipe. Create an account to keep going.",
+        error: "You have used your free try. Create an account for two more free recipes.",
         code: "trial_spent",
       });
     }

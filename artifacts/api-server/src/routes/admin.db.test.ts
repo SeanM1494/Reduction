@@ -19,6 +19,7 @@ import { accountAccess, adminEvents, coupons, couponRedemptions, identities, use
 import { needsDatabase } from "../lib/testdb";
 import { adminRouter, resetAdminThrottle } from "./admin";
 import { normaliseCode } from "../lib/billing/coupons";
+import { FREE_RECIPES } from "../lib/billing/entitlement";
 
 const TABLES = ["users", "identities", "account_access", "admin_events", "coupons", "coupon_redemptions"];
 const SECRET = "test-admin-secret-0123456789";
@@ -653,7 +654,7 @@ test("end to end: operator mints, account redeems, allowance rises", async (t) =
     .select()
     .from(accountAccess)
     .where(eq(accountAccess.userId, userId));
-  assert.equal(access.recipeAllowance, 11, "1 free + the 10 the code granted");
+  assert.equal(access.recipeAllowance, FREE_RECIPES + 10, "the free recipes + the 10 the code granted");
   // And the operator can see the redemption in the listing.
   await withSecret(SECRET, async () => {
     const res = await fetch(`${await listen()}/api/admin/coupons`, {
