@@ -228,8 +228,14 @@ export const tickerLoops = (cards: number, width: number, viewport: number): boo
 
 /** One frame of drift. `period` is one set's width: at the end of the first
  *  set the second is in exactly the same place, so the offset wraps by one
- *  period and nothing on screen moves. Runs on the UI thread. */
-export function tickerStep(offset: number, dtMs: number, period: number, speed: number = TICKER.speed): number {
+ *  period and nothing on screen moves. Runs on the UI thread.
+ *
+ *  `speed` is REQUIRED, and must stay so: it was `speed = TICKER.speed`
+ *  until Oct 1, and a worklet's default is evaluated before its closure is
+ *  unpacked, so on the phone that default named a variable that did not
+ *  exist and closed the app the moment Find showed the reel
+ *  (workletRules.test.ts). */
+export function tickerStep(offset: number, dtMs: number, period: number, speed: number): number {
   'worklet';
   if (!(period > 0)) return offset;
   const dt = Math.min(Math.max(dtMs, 0), 100);

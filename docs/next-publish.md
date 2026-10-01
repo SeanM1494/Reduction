@@ -151,6 +151,46 @@ Each title with a `https://recipereduction.com/api/reel/photo/…?v=1` link, or
 `(no picture)`. Open the links in a browser signed in to recipereduction.com:
 each should be that recipe's own photo.
 
+## The rule: the server first, then the phone
+
+**Every over-the-air update waits for the server Publish it depends on, and
+for that Publish's health check.** Deployments › Publish, then both health
+checks (steps 6 and 7) showing the commit you pulled and `"missing":[]`,
+and only then `publish-update.mjs`. A phone update reaches every installed
+app within two launches; a server it expects but does not have is a broken
+app on every one of them. (The Find crash of Oct 1 was not this — see
+ROADMAP "Find closed the app" — but it is the order that keeps the next
+one from being.)
+
+## If an update breaks the phone: rolling back
+
+Read-only first, from `~/workspace/artifacts/reduction-mobile`:
+```sh
+npx -y eas-cli update:list --branch production --limit 5 --non-interactive
+```
+The newest group is the bad one; the one below it is the last that worked
+(on Oct 1 that is `15cc87cb-eb2c-4963-84cd-4f86e32da7e3`, "Starter reel on
+Add New…", published Sep 30 from `dc85229`).
+
+Either, ONLY with the owner's go-ahead:
+```sh
+npx -y eas-cli update:republish --group 15cc87cb-eb2c-4963-84cd-4f86e32da7e3 --message "Roll back to Sep 30 (Find crash)" --non-interactive
+```
+— publishes that group's exact bundle again as the newest update: phones go
+back to the Sep 30 app (losing whatever came after). Or:
+```sh
+npx -y eas-cli update:roll-back-to-embedded --branch production --runtime-version 1.1.0 --platform ios --message "Roll back to the build's own code" --non-interactive
+```
+— phones run the code built into their binary (build 7: Sep 29, older
+than the Sep 30 update — the guided demo, reel and Send feedback go too).
+
+Verify: `update:list` again shows the new group on top with that message;
+on the phone, open the app WITHOUT touching the broken screen, fully close
+it, open it again — the second launch runs the rollback. A bad update that
+crashes only on one screen does not trigger expo-updates' own automatic
+rollback (that covers a crash during launch), which is why the phone needs
+those two launches.
+
 ## The over-the-air update
 
 Why the last one did not show is not visible from the repo: every feature
@@ -235,3 +275,44 @@ the second runs it. Then:
 - A saved recipe's Diagram has no amber hint under it.
 - In dark mode (Settings › Appearance › Dark): the warm brown page, cells
   with visible edges, cream-but-darker Recipe Box pages.
+
+---
+
+## The Find crash fix (Oct 1) — the next update
+
+The update from step 15 closes the app when Find opens (ROADMAP "Find
+closed the app"). Until the fix is on the phone, **Settings › Accessibility
+› Motion › Reduce Motion ON** stops the ticker, and Find works.
+
+**1.**
+```sh
+cd ~/workspace
+```
+**2.**
+```sh
+git pull
+```
+If it stops with "divergent branches": `git pull --no-rebase --no-edit`.
+**3.**
+```sh
+git log --oneline -15 | grep "ticker can no longer close"
+```
+Must print the fix commit's line: `<hash> Phone: the reel's ticker can no
+longer close the app`.
+**4.** No server Publish is needed for this one — it is phone code only,
+and the server already serves what it reads. Check anyway (the rule above):
+```sh
+curl -s https://recipe-reduction.replit.app/api/health; echo
+```
+`"schema":{"ok":true,"missing":[]}`.
+**5.**
+```sh
+cd ~/workspace/artifacts/reduction-mobile
+```
+```sh
+node scripts/publish-update.mjs --message "Fix: Find no longer closes the app (reel ticker)"
+```
+Its `commit` line must match `git log --oneline -1`.
+**6.** On the phone, open the app WITHOUT tapping Find, fully close it, open
+it again; then Find › Add New: the reel shows and drifts, nothing closes.
+Then turn Reduce Motion back off if you turned it on, and check again.

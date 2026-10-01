@@ -2707,6 +2707,53 @@ the Recipe Box, Settings, the ⋮ dialog, the Servings sheet, the guided
 demo and the empty library before and after, no page-level sideways
 scroll on any.
 
+## Find closed the app: a worklet's default parameter (Oct 1)
+
+**Reported:** after the Oct 1 over-the-air update (the first to carry the
+reel's Recipe Box cards and ticker, `8de1ebc`), tapping Find closed the app.
+
+**Cause, from the shipped bytes.** The iOS bundle contains:
+`function tickerStep_reelViewTs1(offset,dtMs,period,speed=TICKER.speed){const{TICKER}=this.__closure;…`
+The worklets plugin unpacks the closure in the body; the default parameter
+is evaluated first. StarterReel's frame callback called `tickerStep` with
+three arguments, so on the UI thread `TICKER.speed` named a variable that
+does not exist — run alone with only its closure, that exact string throws
+`ReferenceError: TICKER is not defined` (Hermes: "Property 'TICKER' doesn't
+exist"), and an error on the UI thread closes a release build. It fires the
+first frame the ticker runs: the reel on screen with enough cards to loop,
+Reduce Motion and VoiceOver off — Find › Add New, and an empty library's
+reel the same way; light and dark alike; the server's old or new shape
+alike. An empty, missing or failing reel never starts the ticker.
+
+**Why nothing here saw it.** Chromium runs worklets as ordinary functions,
+where the module scope is present. The full matrix — iPhone 13, Pixel 5, SE;
+dark and light; today's shape, the pre-Sep-30 shape, empty, `null`, 404,
+500 and a dropped request; Find and the empty library — never crashed, and
+the ticker ran in every case with cards. The server was not involved:
+`parseReel` gives every field a default, and the Oct 1 `warm` output
+("picture: already stored") shows production already serves `f8da606`'s
+shape with `reel_photos` in place.
+
+**Fixed:** `tickerStep` takes `speed` as a required argument; the frame
+callback passes it, catches anything a frame throws and stops the ticker
+for good instead; StarterReel sits in its own error boundary that renders
+nothing (render errors only — it cannot see the UI thread);
+`lib/workletRules.test.ts` parses every source file and fails on any
+worklet with a default parameter (it named exactly this one before the
+fix); `lib/themeTokens.test.ts` holds light and dark to the same tokens;
+`reelView.test.ts` adds malformed, partial and old-shaped responses. The
+fixed bundle's `tickerStep` runs with an empty closure. CLAUDE.md carries
+the rule.
+
+**Proposed, not built: a server check in `publish-update.mjs`.** A file
+beside it naming the oldest server commit the phone code needs (today
+`f8da606`, for the reel cards' summary and pictures), and before uploading:
+GET `https://<server>/api/health`, read `commit`, and `git merge-base
+--is-ancestor <needed> <live>`; warn — not refuse — when the live server is
+older or unknown, and print both. A warning because the phone code is
+written to degrade on an older server, and because the deployment's
+`commit` is a short hash the workspace may not have fetched.
+
 ## Still open from earlier work
 
 - **allrecipes.com cannot be read by the server, by either fetch (Sep

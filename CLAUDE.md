@@ -909,7 +909,15 @@ accommodate afterwards.
   `loopOffset`, `carouselPlacement`) are called from worklets, so they
   carry the directive — it is an inert string under the test runner, so
   they stay pure and tested. Do NOT hop to JS for the commit decision: that
-  is the frame the feel is judged on. The book's horizontal pan fails on
+  is the frame the feel is judged on. **A worklet takes no default parameter
+  values** (`lib/workletRules.test.ts` fails on one): the plugin unpacks the
+  closure as the first line of the BODY, a default is evaluated before
+  that, so `speed = TICKER.speed` names a variable that does not exist on
+  the UI thread — and a UI-thread error closes a release build outright,
+  with no error screen. Chromium runs worklets as plain functions and
+  passes. That is how Find closed the app on Oct 1. An error boundary
+  cannot see the UI thread; a frame callback that must never take the app
+  down catches inside itself. The book's horizontal pan fails on
   vertical movement and the shelf's vertical pan fails on horizontal, so
   the first 8px decide which a drag is.
   `react-native-reanimated`, `react-native-gesture-handler` and

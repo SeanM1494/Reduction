@@ -137,10 +137,75 @@ test('the ticker: off under Reduce Motion or VoiceOver, off screen, and with too
 
 test('the ticker drifts at its speed, wraps by exactly one set, and tolerates a stalled frame', () => {
   assert.equal(TICKER.resumeAfterMs, 5000);
-  assert.ok(Math.abs(tickerStep(0, 50, 700) - TICKER.speed / 20) < 1e-9, 'speed is points a second');
-  assert.ok(Math.abs(tickerStep(699, 100, 700) - (699 + TICKER.speed / 10 - 700)) < 1e-9, 'past the first set, the second is in the same place');
-  assert.equal(tickerStep(1450, 16, 700), (1450 + (TICKER.speed * 16) / 1000) % 700, 'a hand-scroll into the second set wraps too');
-  assert.equal(tickerStep(10, 5000, 700), 10 + (TICKER.speed * 100) / 1000, 'a frame after a stall moves at most 100ms worth');
-  assert.equal(tickerStep(10, -5, 700), 10);
-  assert.equal(tickerStep(10, 16, 0), 10, 'no period, no drift');
+  assert.ok(Math.abs(tickerStep(0, 50, 700, TICKER.speed) - TICKER.speed / 20) < 1e-9, 'speed is points a second');
+  assert.ok(Math.abs(tickerStep(699, 100, 700, TICKER.speed) - (699 + TICKER.speed / 10 - 700)) < 1e-9, 'past the first set, the second is in the same place');
+  assert.equal(tickerStep(1450, 16, 700, TICKER.speed), (1450 + (TICKER.speed * 16) / 1000) % 700, 'a hand-scroll into the second set wraps too');
+  assert.equal(tickerStep(10, 5000, 700, TICKER.speed), 10 + (TICKER.speed * 100) / 1000, 'a frame after a stall moves at most 100ms worth');
+  assert.equal(tickerStep(10, -5, 700, TICKER.speed), 10);
+  assert.equal(tickerStep(10, 16, 0, TICKER.speed), 10, 'no period, no drift');
+});
+
+// ---- Oct 1: the reel must never take Find down, whatever the server sends.
+
+const OLD_SHAPE = {
+  heading: 'Try one of these',
+  cards: [
+    { url: 'https://a.example/x', title: 'Gumbo', site: 'a.example', totalMinutes: 90, mealType: 'dinner', usage: 'Cooked by 3 people', kind: 'data' },
+    { url: 'https://b.example/y', title: 'Pot Pies', site: 'b.example', totalMinutes: null, mealType: null, usage: null, kind: 'curated' },
+  ],
+};
+
+test('an older server (no summary, counts or picture) still gives whole cards with safe defaults', () => {
+  const r = parseReel(OLD_SHAPE);
+  assert.equal(r.cards.length, 2);
+  for (const c of r.cards) {
+    assert.equal(c.servings, null);
+    assert.equal(c.steps, null);
+    assert.deepEqual(c.ingredients, []);
+    assert.equal(c.moreIngredients, 0);
+    assert.equal(c.cookedBy, null);
+    assert.equal(c.likes, null);
+    assert.equal(c.photo, null);
+  }
+  assert.equal(cookedLine(r.cards[0]), 'Cooked by 3 people', 'the old joined line still shows');
+});
+
+test('malformed and partial responses never throw and never produce a half card', () => {
+  const bodies: unknown[] = [
+    undefined, null, 0, 'oops', [], {}, { cards: null }, { cards: 'x' }, { cards: {} }, { heading: 7, cards: [] },
+    { cards: [null, undefined, 0, 'card', [], {}, { url: 5, title: 'x' }, { url: 'u', title: '' }, { url: 'u', title: '   ' }, { url: 'u' }] },
+  ];
+  for (const b of bodies) {
+    const r = parseReel(b);
+    assert.ok(Array.isArray(r.cards) && r.cards.length === 0, `no cards from ${JSON.stringify(b)}`);
+    assert.equal(r.heading, null);
+  }
+  const wild = parseReel({
+    heading: 'Try one of these',
+    cards: [{
+      url: 'https://c.example/z', title: 'Wild', site: 42, totalMinutes: 'soon', mealType: 9, servings: -4, steps: 2.5,
+      ingredients: ['a', 3, null, '', '  ', 'b', 'c', 'd'], moreIngredients: NaN, usage: 12, cookedBy: '10', likes: Infinity,
+      photo: 'https://evil.example/p.jpg', kind: 'other',
+    }],
+  });
+  const c = wild.cards[0];
+  assert.deepEqual(
+    { site: c.site, totalMinutes: c.totalMinutes, mealType: c.mealType, servings: c.servings, steps: c.steps, ingredients: c.ingredients, more: c.moreIngredients, usage: c.usage, cookedBy: c.cookedBy, likes: c.likes, photo: c.photo, kind: c.kind },
+    { site: '', totalMinutes: null, mealType: null, servings: null, steps: null, ingredients: ['a', 'b', 'c'], more: 0, usage: null, cookedBy: null, likes: null, photo: null, kind: 'curated' }
+  );
+  // Every helper a card is drawn through accepts the defaulted card.
+  assert.equal(reelMeta(c), '');
+  assert.equal(likesBadge(c), null);
+  assert.equal(cookedLine(c), null);
+  assert.equal(usageSpoken(c), null);
+  assert.equal(reelA11yLabel(c), 'Wild');
+});
+
+test('a card size is finite for any room it is given, including none and nonsense', () => {
+  for (const room of [Number.POSITIVE_INFINITY, Number.NaN, -100, 0, 1e9]) {
+    for (const w of [0, 320, 430]) {
+      const s = reelCardSize(room, w, { time: true, usage: true });
+      for (const v of [s.width, s.height, s.photoHeight]) assert.ok(Number.isFinite(v) && v > 0, `${room}/${w}: ${JSON.stringify(s)}`);
+    }
+  }
 });

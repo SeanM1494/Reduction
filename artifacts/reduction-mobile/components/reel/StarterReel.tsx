@@ -66,11 +66,14 @@ import {
   type ReelResponse,
 } from '@/lib/reelView';
 import { PageFace } from '@/components/recipeBox/PageFace';
+import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { useReelPhoto } from './useReelPhoto';
 import { useColors, type Colors } from '@/hooks/useColors';
 import { fonts } from '@/constants/colors';
 
 const FETCH_EVERY_MS = 60 * 60 * 1000;
+/** A plain number for the frame callback to capture. */
+const TICKER_SPEED = TICKER.speed;
 const HEADING_GAP = 8;
 /** Kept clear between the cards and where the screen stops showing. */
 const CLEARANCE = 8;
@@ -121,14 +124,7 @@ function useA11ySettings(): { reduceMotion: boolean; screenReader: boolean } {
   return { reduceMotion, screenReader };
 }
 
-export function StarterReel({
-  busy,
-  onPick,
-  openingUrl,
-  viewportBottom = null,
-  active = true,
-  testID = 'starter-reel',
-}: {
+type StarterReelProps = {
   /** An extraction is running on this screen. */
   busy: boolean;
   onPick: (card: ReelCard) => void;
@@ -144,7 +140,43 @@ export function StarterReel({
   /** False while the pane holding it is hidden (another Find folder). */
   active?: boolean;
   testID?: string;
-}) {
+};
+
+const Nothing = () => null;
+let reportedFailure = false;
+
+/**
+ * The reel is decoration on two screens that must work without it (Find ›
+ * Add New and the empty library), so it can never take them down (Oct 1,
+ * after it closed the app on Find): a render error inside it is caught
+ * here and the reel is simply absent. This catches JavaScript errors in
+ * render; it CANNOT catch an error on the UI thread, which is why the
+ * ticker's frame callback carries its own try/catch below, and why
+ * workletRules.test.ts forbids what actually crashed.
+ */
+export function StarterReel(props: StarterReelProps) {
+  return (
+    <ErrorBoundary
+      FallbackComponent={Nothing}
+      onError={(e) => {
+        if (reportedFailure) return;
+        reportedFailure = true;
+        console.warn('[reel] hidden after an error:', e.message);
+      }}
+    >
+      <StarterReelBody {...props} />
+    </ErrorBoundary>
+  );
+}
+
+function StarterReelBody({
+  busy,
+  onPick,
+  openingUrl,
+  viewportBottom = null,
+  active = true,
+  testID = 'starter-reel',
+}: StarterReelProps) {
   const colors = useColors();
   const styles = makeStyles(colors);
   const [reel, setReel] = useState<ReelResponse>(() => (memo && Date.now() - memo.at < FETCH_EVERY_MS ? memo.reel : EMPTY_REEL));
@@ -214,15 +246,26 @@ export function StarterReel({
   const offset = useSharedValue(0);
   const period = useSharedValue(0);
   const drifting = useSharedValue(false);
+  // Set by the frame callback if a frame ever throws: the ticker stops for
+  // good and the reel stays, still, rather than the UI thread taking the
+  // app down. An error boundary cannot see the UI thread.
+  const broken = useSharedValue(false);
   const setPeriod = reel.cards.length * (size.width + CARD_METRICS.gap);
   useEffect(() => {
     period.value = setPeriod;
   }, [setPeriod, period]);
   const frame = useFrameCallback((info) => {
     'worklet';
-    const next = tickerStep(offset.value, info.timeSincePreviousFrame ?? 16, period.value);
-    offset.value = next;
-    scrollTo(scroller, next, 0, false);
+    if (broken.value) return;
+    try {
+      // Every argument passed: a worklet's default parameter is evaluated
+      // before its closure exists (workletRules.test.ts).
+      const next = tickerStep(offset.value, info.timeSincePreviousFrame ?? 16, period.value, TICKER_SPEED);
+      offset.value = next;
+      scrollTo(scroller, next, 0, false);
+    } catch (_e) {
+      broken.value = true;
+    }
   }, false);
   useEffect(() => {
     drifting.value = running;
