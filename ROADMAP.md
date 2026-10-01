@@ -2754,6 +2754,44 @@ older or unknown, and print both. A warning because the phone code is
 written to degrade on an older server, and because the deployment's
 `commit` is a short hash the workspace may not have fetched.
 
+## Testing updates before they reach other users (Oct 1, built)
+
+**Decided (owner, Oct 1): option A, the owner channel switch**, over a
+second TestFlight build on a preview channel (a native build each time,
+doubled for every future binary, TestFlight groups to manage) and a
+percentage rollout (cannot put an update on the owner's phone first; worth
+adding on top after launch). It needs no native change: build 7 carries
+expo-updates 57.0.23, whose `setUpdateRequestHeadersOverride` swaps the
+`expo-channel-name` header the build already sends.
+
+**Built:** the testing sheet's *Updates from: production / preview*
+(`components/settings/ChannelSwitch.tsx`, logic in `lib/updateChannel.ts`);
+Settings' version line gains " · preview" off production;
+`publish-update.mjs --promote <group>` (`update:republish
+--destination-channel production`), refusing a group not on preview or a
+commit not on main — Replit's empty "Published your App" commits on top of
+main are allowed and named. Tests: `updateChannel.test.ts` (every path,
+with the invariant that the phone is never on preview without a
+downloaded preview update), `publishGuards.test.ts`.
+
+**What was read in expo-updates' iOS source, not assumed:** the override
+lives in UserDefaults and survives restarts; `null` deletes it; it is
+accepted only for a header the build already carries; a CHECK stores
+nothing, only a fetch records the channel's branch (so preview can be
+probed and walked away from); with an override set the build-data wipe is
+skipped, and clearing it restores the original header, so no wipe either
+way. **The one way to strand the phone** — on preview with nothing to run,
+falling back to build 7's own code, which has no switch — is closed by
+clearing the override on every path that does not end in a downloaded
+update, and by never rolling preview back to embedded. A reinstall from
+TestFlight always returns a phone to production (UserDefaults go with the
+app).
+
+**Only the phone can prove it:** that iOS accepts the override at all
+(docs/next-publish.md "Prove the switch", step 1), the restart, the
+channel shown after it, and the way back. If the override is refused, the
+fallback is the second TestFlight build (option B).
+
 ## Still open from earlier work
 
 - **allrecipes.com cannot be read by the server, by either fetch (Sep

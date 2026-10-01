@@ -184,6 +184,17 @@ npx -y eas-cli update:roll-back-to-embedded --branch production --runtime-versio
 — phones run the code built into their binary (build 7: Sep 29, older
 than the Sep 30 update — the guided demo, reel and Send feedback go too).
 
+**On the preview channel** (from Oct 1, only the owner's phone listens):
+pull a bad preview update back by republishing a good group there —
+```sh
+npx -y eas-cli update:republish --group <a good group id> --destination-channel preview --message "Preview: back to <what>" --non-interactive
+```
+or simply tap **Back to production** in the testing sheet if Settings still
+opens. **Never `roll-back-to-embedded` on preview**: build 7's own code has
+no channel switch in it, so the phone would sit on preview with no way
+back but deleting the app and reinstalling it from TestFlight (which also
+works, always: it deletes the saved channel).
+
 Verify: `update:list` again shows the new group on top with that message;
 on the phone, open the app WITHOUT touching the broken screen, fully close
 it, open it again — the second launch runs the rollback. A bad update that
@@ -316,3 +327,143 @@ Its `commit` line must match `git log --oneline -1`.
 **6.** On the phone, open the app WITHOUT tapping Find, fully close it, open
 it again; then Find › Add New: the reel shows and drifts, nothing closes.
 Then turn Reduce Motion back off if you turned it on, and check again.
+
+---
+
+## The channel switch (Oct 1): ship it, set it up, then the new flow
+
+From here every update goes **preview → your phone → promote**. The commit
+that adds the switch is the LAST update published straight to production
+(it cannot be tested on preview: the switch is what it adds).
+
+### A. Ship the switch (once)
+
+**1.**
+```sh
+cd ~/workspace
+```
+**2.**
+```sh
+git pull
+```
+If it stops with "divergent branches": `git pull --no-rebase --no-edit`.
+**3.**
+```sh
+git log --oneline -15 | grep -i "owner channel switch"
+```
+Prints the commit: `<hash> Phone: owner channel switch (preview / production) and promote`.
+**4.** Health first (the rule above; nothing on the server changes here):
+```sh
+curl -s https://recipe-reduction.replit.app/api/health; echo
+```
+`"missing":[]`.
+**5.**
+```sh
+cd ~/workspace/artifacts/reduction-mobile
+```
+```sh
+node scripts/publish-update.mjs --channel production --message "Owner channel switch; promote flow"
+```
+**6.** On the phone: fully close and reopen the app, twice. Long-press
+Replay intro: under *This launch* there is now **Updates from:
+production** with a **Use preview** button.
+
+### B. One-time setup: the preview channel
+
+**1.**
+```sh
+cd ~/workspace/artifacts/reduction-mobile
+```
+**2.**
+```sh
+npx -y eas-cli channel:create preview
+```
+Prints that channel `preview` was created and pointed at a new branch
+`preview`. (If it says the channel already exists, go on.)
+**3.**
+```sh
+npx -y eas-cli channel:view preview --non-interactive
+```
+Must show `Branch preview` under the channel. If no branch is listed:
+```sh
+npx -y eas-cli channel:edit preview --branch preview
+```
+and run step 3 again.
+
+### C. Prove the switch before relying on it
+
+**1. Empty preview first.** Testing sheet › **Use preview**. Expect:
+"Preview has no update for this version yet. Staying on production." —
+and *Updates from* still says production, Settings has no "· preview".
+**2.** Put the same code on preview:
+```sh
+node scripts/publish-update.mjs --channel preview --message "Preview check"
+```
+It ends with an update **Group ID** and the promote hint.
+**3.** Testing sheet › **Use preview**. Expect: "Checking preview…", then the
+app restarts by itself. Then: Settings ends **"Version 1.1.0 (build 7) ·
+preview"**; *This launch* shows Channel `preview` and an update id that
+starts with the id the publish printed; *Updates from* says **preview —
+only this phone**.
+**4.** **Back to production**. Expect: a restart; *Updates from:
+production*; no "· preview". If the first launch after it shows an older
+app (no version line), fully close and reopen once: that is one launch of
+the build's own code while production's update downloads.
+**5.** Tell Claude what each step showed. If step 1 says "Could not switch
+(…)", the iOS override was refused: the switch is unusable on this build
+and nothing changed — the fallback is a second TestFlight build on the
+preview channel (ROADMAP "Testing updates before they reach other users").
+
+### D. From now on: every update
+
+**1.** `cd ~/workspace`, `git pull`, `git log --oneline -1` (note the hash).
+**2.**
+```sh
+cd ~/workspace/artifacts/reduction-mobile
+```
+```sh
+node scripts/publish-update.mjs --channel preview --message "What changed"
+```
+Its `commit` line must match the hash from step 1. Copy the **Group ID** it
+ends with.
+**3.** On the phone: already on preview → fully close and reopen, twice;
+on production → testing sheet › **Use preview**. Then the 5-minute check
+below.
+**4.** All good:
+```sh
+node scripts/publish-update.mjs --promote <the Group ID>
+```
+It prints the group, branch `preview`, the commit (with `[on-main]` or
+`[empty-on-main]`), the message and runtime, then copies the same bundle
+to production. It refuses a group that is not on preview, a commit that is
+not on main, and a commit this checkout does not have (run `git pull`).
+`--dry-run` shows what it would do.
+**5.** Not good: do NOT promote. Fix forward (a new preview publish), or
+pull the preview back (the rollback section above), or **Back to
+production** on the phone.
+
+### The 5-minute check on the phone (step D3)
+
+On preview, in this order — each line is what it should look like:
+
+1. **Settings, bottom:** "Version 1.1.0 (build 7) · preview". Testing
+   sheet: *This launch* — Update, not Embedded; Channel `preview`; Update
+   error `none`.
+2. **Find › Add New:** opens; the reel of cream recipe pages under the
+   photo buttons drifts slowly sideways; touching it stops it; it drifts
+   again about 5 s after.
+3. **Find › My Recipes and Browse:** both open; the tabs switch without a
+   flash.
+4. **Library:** the Recipe Box opens on a book; swipe a page, swipe to
+   another book; tap a page — the preview window opens.
+5. **One saved recipe:** opens on Diagram; tap a ready (red) step — it
+   turns green; Step-by-Step shows the next card; Clear progress empties
+   it; the title has its pencil.
+6. **The demo** (Settings › How it works): "Start the demo" card; one
+   step works.
+7. **Dark mode** (Settings › Appearance › Dark): warm brown page, cells
+   with visible edges, Recipe Box pages cream; back to your usual setting.
+8. **Fully close and reopen once more:** it opens normally (no crash on
+   launch).
+
+Anything closes the app or looks wrong: do not promote.

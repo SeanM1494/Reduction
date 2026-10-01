@@ -988,7 +988,16 @@ accommodate afterwards.
   commit as any native change** (a package with native code, a plugin, an
   Info.plist field): the runtime version follows it, and without the bump a
   bundle written for new native code is offered to binaries that lack it.
-  A pure JS change needs neither a build nor a bump.
+  A pure JS change needs neither a build nor a bump. **And an update goes
+  to PREVIEW first, then is promoted** (Oct 1, after Find closed the app):
+  `publish-update.mjs --channel preview`, the owner runs it on their own
+  TestFlight build through the testing sheet's "Updates from" switch
+  (`lib/updateChannel.ts`), then `--promote <group>` copies the same bytes
+  to production — refused unless the group is on preview and its commit
+  is on main. The switch must never leave a phone on a channel with no
+  way back: it clears the override on every path that does not end in a
+  downloaded preview update, and nothing may roll the preview branch back
+  to the embedded build, whose code has no switch.
 - **Nothing imports `react-native-webview` except
   `components/browser/PageView.tsx`, and nothing imports that file except
   `components/browser/loadPageView.ts`.** The package throws at IMPORT on

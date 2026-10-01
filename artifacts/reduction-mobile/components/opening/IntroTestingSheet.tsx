@@ -11,7 +11,9 @@
  *
  * Above all that, which code this launch is running (Oct 1): the
  * over-the-air update or the binary's own bundle, its channel and runtime,
- * the last check and any error — components/settings/UpdateStatus.tsx.
+ * the last check and any error — components/settings/UpdateStatus.tsx —
+ * and the switch between the production and preview update channels
+ * (components/settings/ChannelSwitch.tsx).
  */
 
 import React, { useEffect, useState } from 'react';
@@ -21,6 +23,7 @@ import { lastRunStats, readStamps, requestReplay, resetStamps, type ReplayKind }
 import { OPENING_ENABLED } from '@/lib/opening/config';
 import { useColors, type Colors } from '@/hooks/useColors';
 import { UpdateStatus } from '@/components/settings/UpdateStatus';
+import { ChannelSwitch } from '@/components/settings/ChannelSwitch';
 
 const ago = (ms: number) => {
   const m = Math.round(ms / 60000);
@@ -67,6 +70,7 @@ export function IntroTestingSheet({ open, onClose }: { open: boolean; onClose: (
     >
       <Text style={styles.heading}>This launch</Text>
       <UpdateStatus />
+      <ChannelSwitch />
       <Text style={styles.heading}>The intro</Text>
       <Text style={styles.text} testID="intro-testing-stored">
         {stored}

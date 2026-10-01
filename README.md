@@ -285,7 +285,15 @@ bundle that crashes on launch is rolled back to the previous one by
 cd artifacts/reduction-mobile
 node scripts/publish-update.mjs --message "What changed"            # production
 node scripts/publish-update.mjs --message "What changed" --dry-run  # show, don't send
+node scripts/publish-update.mjs --channel preview --message "What changed"  # the owner's phone only
+node scripts/publish-update.mjs --promote <group id>                 # that same bundle, to production
 ```
+
+**Since Oct 1 the order is preview, then promote**: the owner's phone
+switches to the preview channel from the testing sheet (*Updates from*),
+runs the update there, and `--promote` copies the exact bundle to
+production. The steps, the 5-minute check and the rollbacks for each
+channel are in `docs/next-publish.md`.
 
 `eas update` bakes in the SHELL's `EXPO_PUBLIC_DOMAIN`, not the build
 profile's; in the Replit workspace that is the dev server or nothing, and

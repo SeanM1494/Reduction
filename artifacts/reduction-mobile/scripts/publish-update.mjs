@@ -7,6 +7,16 @@
  *   node scripts/publish-update.mjs --message "Fix the servings label"
  *   node scripts/publish-update.mjs --channel preview --message "..."
  *   node scripts/publish-update.mjs --message "..." --dry-run
+ *   node scripts/publish-update.mjs --promote <group id> [--dry-run]
+ *
+ * THE FLOW (Oct 1): publish to PREVIEW, run it on the owner's phone (the
+ * testing sheet's "Updates from: preview"), then PROMOTE that exact bundle
+ * to production with --promote. Promoting is `eas update:republish --group
+ * <id> --destination-channel production` — the same bytes, not a rebuild —
+ * and it is refused unless every update in the group is on branch preview
+ * and its commit is on main (or only Replit's empty "Published your App"
+ * commits sit on top of main). scripts/publishGuards.mjs holds the checks,
+ * tested in lib/publishGuards.test.ts.
  *
  * WHY THIS EXISTS. `eas build` takes EXPO_PUBLIC_DOMAIN from the build
  * profile in eas.json; `eas update` does NOT — it bakes in whatever the
@@ -32,6 +42,7 @@ import { readFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { classifyCommit, parseUpdateView, promoteProblems, promotedMessage } from "./publishGuards.mjs";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const args = process.argv.slice(2);
@@ -48,6 +59,52 @@ const fail = (why) => {
   console.error(`publish-update: ${why}`);
   process.exit(1);
 };
+
+// ---- --promote: preview's tested bundle, copied to production. ----
+const promote = flag("promote");
+if (promote !== null) {
+  if (!promote || promote.startsWith("--")) fail("--promote needs the preview update's Group ID (the publish to preview printed it).");
+  const gitAnswer = (a) => {
+    const r = spawnSync("git", a, { cwd: root, encoding: "utf8" });
+    return { ok: r.status === 0, out: r.stdout || "" };
+  };
+  if (!gitAnswer(["fetch", "--quiet", "origin", "main"]).ok) fail("git fetch origin main failed, so whether the update's commit is on main is unknown. Try again.");
+  const view = spawnSync("npx", ["-y", "eas-cli@latest", "update:view", promote, "--json"], { cwd: root, encoding: "utf8" });
+  const updates = parseUpdateView(`${view.stdout || ""}`);
+  if (!updates) {
+    console.error((view.stderr || view.stdout || "").trim().split("\n").slice(-3).join("\n"));
+    fail(`could not read update group ${promote} (is it the Group ID, and is eas-cli signed in as seans-apps?).`);
+  }
+  const first = updates[0] ?? {};
+  const commitHash = first.gitCommitHash ?? null;
+  const info = commitHash ? classifyCommit(commitHash, gitAnswer) : null;
+  const subject = commitHash ? gitAnswer(["log", "-1", "--format=%s", commitHash]).out.trim() : "";
+  console.log(`publish-update: promote ${promote} to production`);
+  console.log(`  group        ${promote}`);
+  console.log(`  branch       ${[...new Set(updates.map((u) => u.branch))].join(", ")}`);
+  console.log(`  commit       ${commitHash ? commitHash.slice(0, 7) : "(none recorded)"}  ${subject}${info ? `  [${info.status}]` : ""}`);
+  console.log(`  message      ${first.message ?? ""}`);
+  console.log(`  runtime      ${[...new Set(updates.map((u) => u.runtimeVersion))].join(", ")}   platforms ${updates.map((u) => u.platform).join(", ")}`);
+  console.log(`  published    ${first.createdAt ?? "?"}`);
+  const problems = promoteProblems(updates, info);
+  if (problems.length) {
+    for (const p of problems) console.error(`publish-update: ${p}`);
+    fail("refusing to promote.");
+  }
+  if (info?.status === "empty-on-main")
+    console.log(`  note         ${info.empty.length} Replit commit(s) on top of main, changing no files: the code is main's ${info.base.slice(0, 7)}.`);
+  const promotedMsg = message ?? promotedMessage(first.message);
+  const republish = ["-y", "eas-cli@latest", "update:republish", "--group", promote, "--destination-channel", "production", "--message", promotedMsg, "--non-interactive"];
+  console.log(`  production   ${promotedMsg}`);
+  if (dryRun) {
+    console.log(`  would run    npx ${republish.join(" ")}`);
+    process.exit(0);
+  }
+  const done = spawnSync("npx", republish, { cwd: root, stdio: "inherit" });
+  if (done.status === 0)
+    console.log('\npublish-update: promoted. Other phones get it within two launches. To pull it back: docs/next-publish.md, "If an update breaks the phone".');
+  process.exit(done.status ?? 1);
+}
 
 if (!message) fail('say what the update is: --message "…" (it is what the EAS dashboard lists).');
 
@@ -118,4 +175,10 @@ const result = spawnSync("npx", command, {
   stdio: "inherit",
   env: { ...process.env, EXPO_PUBLIC_DOMAIN: domain },
 });
+if (result.status === 0 && channel === "preview")
+  console.log(
+    "\npublish-update: on preview. On the phone: testing sheet › Use preview (or, already on preview, fully close and reopen twice), run the 5-minute check in docs/next-publish.md, then:\n  node scripts/publish-update.mjs --promote <the Group ID above>"
+  );
+if (result.status === 0 && channel === "production")
+  console.log("\npublish-update: published straight to production. The flow is preview first, then --promote (docs/next-publish.md).");
 process.exit(result.status ?? 1);

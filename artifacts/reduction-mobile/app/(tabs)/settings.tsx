@@ -35,9 +35,14 @@ import { IntroTestingSheet } from '@/components/opening/IntroTestingSheet';
 import { cardShadow, fonts } from '@/constants/colors';
 import Constants from 'expo-constants';
 import { versionLine } from '@/lib/updateStatus';
+import { channelSuffix } from '@/lib/updateChannel';
+import { loadUpdates, updatesUsable } from '@/components/settings/loadUpdates';
 
-// Fixed for the life of the process, so read once rather than in render.
-const version = versionLine(Constants.expoConfig?.version, Constants.nativeBuildVersion);
+// Fixed for the life of the process (a channel switch restarts the app), so
+// read once rather than in render. " · preview" only off production.
+const updatesModule = loadUpdates();
+const versionBase = versionLine(Constants.expoConfig?.version, Constants.nativeBuildVersion);
+const version = versionBase ? versionBase + (updatesUsable(updatesModule) ? channelSuffix(updatesModule.channel) : '') : null;
 
 export default function SettingsScreen() {
   const colors = useColors();

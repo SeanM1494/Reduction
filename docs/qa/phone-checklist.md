@@ -424,6 +424,12 @@ one phone; the whole pass takes about ten minutes plus the timer.
   deployment (not the dev server). Only ever publish with
   `node scripts/publish-update.mjs`. (RM "Over-the-air updates"; C OTA)
 - [ ] **Settings ends with "Version 1.1.0 (build N)"** for everyone.
+- [ ] **Owner: Updates from: production / preview** (testing sheet). With
+  preview empty: "Preview has no update for this version yet. Staying on
+  production." With an update on preview: a restart, then "· preview"
+  after the version line and Channel `preview` under *This launch*; Back
+  to production restarts onto production. (docs/next-publish.md "Prove the
+  switch")
 - [ ] **Owner: long-press Replay intro › This launch.** *Expect:* Running
   `Update xxxxxxxx` whose 8 characters start the id `eas update:list`
   printed for the publish, Channel `production`, Runtime version `1.1.0`,
