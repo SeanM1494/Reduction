@@ -2380,13 +2380,30 @@ run from the clean start.
   first; at a slow 2.5 words a second and 1.5s per tap, 31.1s and 53.5s.
   Watching it is 29.0s. No request reached the server during either.
 
-**Gap, logged, not fixed: the website's landing demo still starts with the
-avocados checked.** It keeps its own fixture (`artifacts/reduction/src/
+**Gap, closed Oct 1 (see "Website demo parity" below): the website's landing
+demo still started with the avocados checked.** It keeps its own fixture (`artifacts/reduction/src/
 data/demo.ts`, `DEMO_PRECHECKED = ["avocados"]`); the phone's
 `data/demoRecipe.ts` is a port, not a shared file, so this change does
 nothing there. Making it match is a one-line change to that constant plus
 re-checking the web coach's lines against it (its opening line is
 "Guacamole, as a diagram. Tap any ingredient to check it off.").
+
+## Website demo parity (Oct 1)
+
+The website's landing demo (`artifacts/reduction/src/components/
+DemoCoach.tsx`, `LandingPage.tsx`, `data/demo.ts`) brought in line with
+the phone's "Demo polish", without changing the site's design: same card,
+same Diagram / Step-by-Step switch, same Watch it and Reset, same legend.
+Web only; no server, schema, dependency or phone change.
+
+**1. It starts with nothing checked.** `DEMO_PRECHECKED` is now `[]`, and
+Reset and Watch it replay from it as before. Measured in Chromium (iPhone
+13): on opening nothing is amber; tapping the ripe avocados makes "halve
+and scoop" the one amber step. The opening line names the avocados
+("Guacamole, as a diagram. Tap the ripe avocados to check them off.") and
+the collapsed invitation's sub-line says "Tap the avocados. The next step
+lights up." — "Tap an ingredient" was no longer true, since no other
+single ingredient readies anything. Watch it now checks the avocados first.
 
 ## Renaming a recipe: where it is, and a better way in (Sep 29, built)
 

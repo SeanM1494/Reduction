@@ -310,7 +310,7 @@ export default function LandingPage({
           </button>
           {!demoOpen ? (
             <p className="rd-invite-sub">
-              Tap an ingredient. The next step lights up.
+              Tap the avocados. The next step lights up.
             </p>
           ) : null}
 

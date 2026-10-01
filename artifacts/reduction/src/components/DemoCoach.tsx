@@ -134,7 +134,7 @@ const STAGE_TEXT: Record<CoachStage, string> = {
   // below the diagram — so it has to say what the thing IS before it says
   // what to do with it. An instruction alone ("Tap any ingredient…") assumes
   // a context the phone layout no longer provides above it.
-  empty: "Guacamole, as a diagram. Tap any ingredient to check it off.",
+  empty: "Guacamole, as a diagram. Tap the ripe avocados to check them off.",
   firstIngredient:
     "Each box to the right lights up as soon as everything feeding into it is checked.",
   stepReady: "That step turned amber because everything it needs is now done.",

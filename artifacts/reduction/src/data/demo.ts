@@ -62,6 +62,8 @@ export const DEMO_RECIPE: Recipe = {
   ],
 };
 
-/** Pre-checked so the demo never opens flat — one step (d1) is already
- *  amber before any interaction, so the mechanic reads immediately. */
-export const DEMO_PRECHECKED = ["avocados"];
+/** Nothing is checked at the start, like a real recipe (Oct 1, matching the
+ *  phone's demo). Checking the ripe avocados alone is what makes "halve and
+ *  scoop" the one amber step; no other single ingredient readies anything.
+ *  Kept as a constant because Reset and "Watch it" replay from it. */
+export const DEMO_PRECHECKED: string[] = [];
