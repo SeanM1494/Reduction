@@ -76,8 +76,7 @@ export function DemoScreen({ onSignIn }: { onSignIn?: () => void }) {
   const graph = useMemo(() => demoGraph(DEMO_RECIPE, DEMO_PRECHECKED), []);
   const cardOrder = useMemo(() => cardSequence(DEMO_RECIPE).map((c) => c.stepId), []);
 
-  // Pre-checked so the demo never opens flat — one step visibly ready
-  // before any interaction, as on the web landing page.
+  // Nothing checked, like a real recipe (data/demoRecipe.ts).
   const [state, setStateRaw] = useState<DemoState>({ done: DEMO_PRECHECKED, mode: 'diagram' });
   const [timer, setTimer] = useState<StepTimer | null>(null);
   const [servings, setServings] = useState<number | null>(null);

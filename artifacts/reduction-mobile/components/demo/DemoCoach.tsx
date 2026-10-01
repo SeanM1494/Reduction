@@ -15,7 +15,6 @@
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { AccessibilityInfo, StyleSheet, Text, View } from 'react-native';
-import type { Section } from '@/shared/layout';
 import { useColors, type Colors } from '@/hooks/useColors';
 import { fonts } from '@/constants/colors';
 import { doneBackground } from '@/components/diagram/DiagramView';
@@ -37,25 +36,8 @@ const DEMO_NARRATION: Record<string, string> = {
   d5: 'Then a ten-minute rest, while the flavors came together.',
 };
 
-// ---------------------------------------------------------------- order ----
-
-/** Autoplay order: a post-order walk from the root, so every input is
- *  emitted before the step that consumes it. Anything already checked at
- *  the start is dropped — it is the baseline the player replays from. */
-export function watchOrder(section: Section, prechecked: string[]): string[] {
-  const inputs = new Map<string, string[]>();
-  for (const n of section.nodes) inputs.set(n.id, n.inputs || []);
-  const start = new Set(prechecked);
-  const out: string[] = [];
-  const seen = new Set<string>();
-  (function walk(id: string) {
-    if (seen.has(id)) return;
-    seen.add(id);
-    (inputs.get(id) || []).forEach(walk);
-    if (!start.has(id)) out.push(id);
-  })(section.root);
-  return out;
-}
+// The autoplay order lives with the guide (lib/demoGuide.ts), pure and tested.
+export { watchOrder } from '@/lib/demoGuide';
 
 // ---------------------------------------------------------------- watch ----
 

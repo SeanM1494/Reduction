@@ -2191,9 +2191,10 @@ test away from being checked against the word budget):
 
 1. Read — "Read left to right: ingredients feed steps, and steps feed
    later steps." · Next
-2. Do — "Tap an ingredient to check it off." (lime is ringed)
-3. Do — "Amber means ready: everything it needs is done. Tap an amber
-   step." (halve and scoop)
+2. Do — "Tap the ripe avocados to check them off." (the avocados are
+   ringed; Oct 1, from a clean start — it was "Tap an ingredient", lime)
+3. Do — "Amber means ready. Tap halve and scoop." (Oct 1; it was "Amber
+   means ready: everything it needs is done. Tap an amber step.")
 4. Do — "Tap the last step. It checks off everything before it." (rest
    10 min, in the finish strip under the table; the page scrolls to it)
 5. Do — "Checks cleared. Switch to Step-by-Step, then tap Next Step."
@@ -2252,6 +2253,49 @@ components/DemoCoach.tsx` on the landing page) still teaches with the
 coach line and tips. Porting the guide means the web Diagram, StepsMode and
 finish strip taking the same `spotlight` and scrolling their own targets;
 `lib/demoGuide.ts` is pure and would move to `lib/recipe-model` for both.
+
+## Demo polish (Oct 1)
+
+Four items, phone only, one commit each.
+
+**1. The demo starts with nothing checked** (owner's call: "like a real
+recipe"). `DEMO_PRECHECKED` is now empty, and every way in or back to the
+start — Start, Replay, Back to step 1, Back out of the guide, Watch
+instead, and all three entry points (the signed-out landing, Settings ›
+How it works, the empty library's "See how it works") — begins from it,
+because they all reset to that one constant. Re-derived from the graph:
+on a clean start NOTHING is amber; checking the ripe avocados alone makes
+"halve and scoop" the one amber step (no other single ingredient readies
+anything; `demoGuide.test.ts` checks each). So step 2 rings the avocados
+and step 3 rings halve and scoop, both by name. The guide finds them from
+the graph (`starter`: the first step fed by ingredients alone, with the
+fewest), not from hard-coded ids, and a test checks the words name them.
+Steps 4 to 6 are unchanged.
+
+- Step 2 advances only on the avocados (another ingredient is kept and
+  nudged, the avocados still ringed); tapping halve and scoop itself
+  checks the avocados WITH the step, which is not what was asked, so it
+  is put back. Step 3 advances only on halve and scoop, even when combine
+  is amber too (all four vegetables checked).
+- A step makes true what it needs: step 3 entered without the avocados
+  checks them (keeping any other ingredients); step 2 entered with them
+  takes them back and every step.
+- Tests: the wrong taps from a clean start (another ingredient first, a
+  step that is not ready, halve and scoop on step 2, the last step early),
+  Back from every step to that step's starting state (steps 1 and 2 clean,
+  step 3 the avocados alone), and, over every state four taps reach, every
+  do-step has a target AND Show me completes it.
+- **"Amber"** is the word the guide and the web use for the ready state;
+  the ready fill is the terracotta warm tint (red in the 5-minute check's
+  wording). Left as it is; the owner may prefer "red".
+
+**Gap, logged, not fixed: the website's landing demo still starts with the
+avocados checked.** It keeps its own fixture (`artifacts/reduction/src/
+data/demo.ts`, `DEMO_PRECHECKED = ["avocados"]`); the phone's
+`data/demoRecipe.ts` is a port, not a shared file, so this change does
+nothing there. Making it match is a one-line change to that constant plus
+re-checking the web coach's lines against it (its opening line is
+"Guacamole, as a diagram. Tap any ingredient to check it off.").
 
 ## Renaming a recipe: where it is, and a better way in (Sep 29, built)
 

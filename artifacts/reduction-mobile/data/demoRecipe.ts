@@ -64,6 +64,9 @@ export const DEMO_RECIPE: Recipe = {
   ],
 };
 
-/** Pre-checked so the demo never opens flat — one step (d1) is already
- *  amber before any interaction, so the mechanic reads immediately. */
-export const DEMO_PRECHECKED = ["avocados"];
+/** What the demo starts with checked: nothing, like a real recipe (Oct 1).
+ *  It used to be the avocados, so "halve and scoop" was amber before any
+ *  tap; the guide now has the avocados checked as its first thing to do.
+ *  The website's landing demo keeps its own copy (artifacts/reduction/src/
+ *  data/demo.ts) and still starts with them checked — ROADMAP. */
+export const DEMO_PRECHECKED: string[] = [];

@@ -1,9 +1,10 @@
 /**
  * lib/demoGuide.ts — the guided demo, one instruction at a time. PURE.
  *
- * The demo is the guacamole recipe (data/demoRecipe.ts) with the avocados
- * already checked, so "halve and scoop" is ready (amber) before anyone
- * touches anything. The guide walks six steps over the REAL demo: each
+ * The demo is the guacamole recipe (data/demoRecipe.ts), starting like a
+ * real recipe with nothing checked (Oct 1; it used to open with the
+ * avocados checked). Checking the avocados is what makes "halve and scoop"
+ * the one ready (amber) step. The guide walks six steps over the REAL demo: each
  * do-step advances when the demo's own state changes the way it asked,
  * never on a click it faked, and a change it did not ask for is a nudge,
  * never a block. Everything here is a function of that state, so the
@@ -17,7 +18,7 @@
  * stays put in its pinned first column.
  */
 
-import type { Recipe } from '@/shared/layout';
+import type { Recipe, Section } from '@/shared/layout';
 import { toggleDone } from './doneClosure';
 
 export type DemoMode = 'diagram' | 'steps';
@@ -38,8 +39,8 @@ export interface GuideStep {
 
 export const GUIDE_STEPS: readonly GuideStep[] = [
   { id: 'read', kind: 'read', text: 'Read left to right: ingredients feed steps, and steps feed later steps.' },
-  { id: 'ingredient', kind: 'do', text: 'Tap an ingredient to check it off.' },
-  { id: 'ready', kind: 'do', text: 'Amber means ready: everything it needs is done. Tap an amber step.' },
+  { id: 'ingredient', kind: 'do', text: 'Tap the ripe avocados to check them off.' },
+  { id: 'ready', kind: 'do', text: 'Amber means ready. Tap halve and scoop.' },
   { id: 'last', kind: 'do', text: 'Tap the last step. It checks off everything before it.' },
   { id: 'cook', kind: 'do', text: 'Checks cleared. Switch to Step-by-Step, then tap Next Step.' },
   { id: 'finish', kind: 'finish', text: "That's it. Add your own recipe." },
@@ -56,18 +57,29 @@ export interface DemoGraph {
   inputsOf: Map<string, string[]>;
   root: string;
   prechecked: string[];
+  /** The step the guide makes ready first: the first step fed by
+   *  ingredients alone, with the fewest of them ("halve and scoop", fed by
+   *  the avocados). Steps 2 and 3 name it and its ingredients. */
+  starter: string;
+  starterInputs: string[];
 }
 
 export function demoGraph(recipe: Recipe, prechecked: string[]): DemoGraph {
   const section = recipe.sections[0];
   const inputsOf = new Map<string, string[]>();
   for (const n of section.nodes) inputsOf.set(n.id, n.inputs ?? []);
+  const ingredients = section.ingredients.map((i) => i.id);
+  const isIngredient = new Set(ingredients);
+  const fedByIngredients = section.nodes.filter((n) => (n.inputs ?? []).length > 0 && (n.inputs ?? []).every((i) => isIngredient.has(i)));
+  const starter = fedByIngredients.reduce((a, b) => ((b.inputs ?? []).length < (a.inputs ?? []).length ? b : a), fedByIngredients[0]);
   return {
-    ingredients: section.ingredients.map((i) => i.id),
+    ingredients,
     ops: section.nodes.map((n) => n.id),
     inputsOf,
     root: section.root ?? section.nodes[section.nodes.length - 1].id,
     prechecked,
+    starter: starter.id,
+    starterInputs: [...(starter.inputs ?? [])],
   };
 }
 
@@ -81,22 +93,29 @@ export function readyOps(g: DemoGraph, done: Set<string>): string[] {
 
 /** The state a step starts from when it is reached going FORWARD. A step
  *  that needs something to be true makes it true, visibly and in words:
- *  "Tap an ingredient" needs one left unchecked, "Tap an amber step" needs
- *  an amber step, "the last step" needs it not done yet, and Step-by-Step
- *  needs a step left to do after "the last step" has checked everything. */
+ *  "Tap the ripe avocados" needs them unchecked, "Tap halve and scoop"
+ *  needs it amber (its avocados in, itself not done), "the last step"
+ *  needs it not done yet, and Step-by-Step starts from nothing checked
+ *  after "the last step" has checked everything. */
 export function enterState(id: StepId, s: DemoState, g: DemoGraph): DemoState {
   const fresh: DemoState = { done: [...g.prechecked], mode: 'diagram' };
   if (id === 'read' || id === 'cook') return fresh;
   const done = new Set(s.done);
-  if (id === 'ingredient') return g.ingredients.every((i) => done.has(i)) ? fresh : { ...s, mode: 'diagram' };
-  if (id === 'ready' && readyOps(g, done).length === 0) {
-    // Keep the ingredients they checked; drop the steps, which is what
-    // left nothing amber (with the avocados in, halve and scoop is).
-    const ops = new Set(g.ops);
-    const kept = Array.from(new Set([...g.prechecked, ...s.done.filter((x) => !ops.has(x))]));
-    return readyOps(g, new Set(kept)).length ? { done: kept, mode: 'diagram' } : fresh;
+  const ops = new Set(g.ops);
+  if (id === 'ingredient') {
+    if (!g.starterInputs.every((i) => done.has(i))) return { ...s, mode: 'diagram' };
+    // Keep the other ingredients they checked; take back the avocados and
+    // every step (each one is downstream of something being unchecked).
+    const inputs = new Set(g.starterInputs);
+    return { done: s.done.filter((x) => !ops.has(x) && !inputs.has(x)), mode: 'diagram' };
   }
-  if (id === 'ready') return { ...s, mode: 'diagram' };
+  if (id === 'ready') {
+    if (readyOps(g, done).includes(g.starter)) return { ...s, mode: 'diagram' };
+    // Keep the ingredients they checked, add the avocados, drop the steps:
+    // halve and scoop is then amber, as the instruction says.
+    const kept = Array.from(new Set([...s.done.filter((x) => !ops.has(x)), ...g.starterInputs]));
+    return { done: kept, mode: 'diagram' };
+  }
   if (id === 'last') return done.has(g.root) ? fresh : { ...s, mode: 'diagram' };
   return s;
 }
@@ -113,14 +132,12 @@ export function stranded(id: StepId, s: DemoState, g: DemoGraph): boolean {
 export function targetsFor(id: StepId, s: DemoState, g: DemoGraph): string[] {
   const done = new Set(s.done);
   switch (id) {
-    case 'ingredient': {
-      // Suggest one — the first unchecked ingredient that feeds a step with
-      // other inputs already done reads as progress (lime, for the mash).
-      const open = g.ingredients.filter((i) => !done.has(i));
-      return open.length ? [open[0]] : [];
-    }
+    case 'ingredient':
+      // The avocados, by name in the instruction.
+      return g.starterInputs.filter((i) => !done.has(i));
     case 'ready':
-      return readyOps(g, done);
+      // Halve and scoop, by name — even when another step is amber too.
+      return readyOps(g, done).includes(g.starter) ? [g.starter] : [];
     case 'last':
       return done.has(g.root) ? [] : [g.root];
     case 'cook':
@@ -153,11 +170,12 @@ export function advances(id: StepId, prev: DemoState, next: DemoState, g: DemoGr
   const ops = new Set(g.ops);
   switch (id) {
     case 'ingredient':
-      return plus.length > 0 && plus.every((x) => !ops.has(x));
+      // The avocados checked by this tap, and no step with them.
+      return plus.some((x) => g.starterInputs.includes(x)) && plus.every((x) => !ops.has(x)) && g.starterInputs.every((i) => next.done.includes(i));
     case 'ready': {
-      const wasReady = new Set(readyOps(g, new Set(prev.done)));
+      // Halve and scoop, alone, while it was amber.
       const newOps = plus.filter((x) => ops.has(x));
-      return newOps.length > 0 && newOps.every((x) => wasReady.has(x));
+      return newOps.length === 1 && newOps[0] === g.starter && readyOps(g, new Set(prev.done)).includes(g.starter);
     }
     case 'last':
       return next.done.includes(g.root);
@@ -233,4 +251,22 @@ export function back(run: GuideRun): { run: GuideRun; state: DemoState } | null 
   if (run.index === 0) return null;
   const index = run.index - 1;
   return { run: { index, snapshots: run.snapshots.slice(0, index + 1) }, state: run.snapshots[index] };
+}
+
+/** Autoplay order: a post-order walk from the root, so every input is
+ *  emitted before the step that consumes it. Anything already checked at
+ *  the start is dropped — it is the baseline the player replays from. */
+export function watchOrder(section: Section, prechecked: string[]): string[] {
+  const inputs = new Map<string, string[]>();
+  for (const n of section.nodes) inputs.set(n.id, n.inputs || []);
+  const start = new Set(prechecked);
+  const out: string[] = [];
+  const seen = new Set<string>();
+  (function walk(id: string) {
+    if (seen.has(id)) return;
+    seen.add(id);
+    (inputs.get(id) || []).forEach(walk);
+    if (!start.has(id)) out.push(id);
+  })(section.root);
+  return out;
 }
