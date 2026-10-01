@@ -78,7 +78,6 @@ const HEADING_GAP = 8;
 /** Kept clear between the cards and where the screen stops showing. */
 const CLEARANCE = 8;
 const USAGE_INK = '#8a4b2a';
-const SITE_INK = '#8a7a66';
 
 // Per app session: one fetch an hour, one "shown" count.
 let memo: { at: number; reel: ReelResponse } | null = null;
@@ -461,6 +460,8 @@ function makeStyles(colors: Colors) {
       shadowOffset: { width: 0, height: 1 },
     },
     badgeText: { fontSize: 12, lineHeight: 15, fontWeight: '600', color: '#2a2118' },
-    site: { fontSize: 11, lineHeight: 15, color: SITE_INK },
+    // The page's muted grey (the time, the serves line): a theme token, darker
+    // on the dark paper (Oct 1).
+    site: { fontSize: 11, lineHeight: 15, color: colors.paperMuted },
   });
 }

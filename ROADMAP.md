@@ -2707,6 +2707,59 @@ the Recipe Box, Settings, the ⋮ dialog, the Servings sheet, the guided
 demo and the empty library before and after, no page-level sideways
 scroll on any.
 
+## Dark mode: the paper's grey text (Oct 1)
+
+**The owner's call:** small grey text on the Recipe Box pages and the
+reel's cards must be at least 4.5:1 in dark mode, where the paper is the
+darker `#ebdfc6`; light mode stays exactly as it is. The page's greys were
+literals in `PageFace.tsx`/`BookPage.tsx`/`StarterReel.tsx`; they are now
+tokens, `paperMuted` (the time, "Serves N · N steps", the reel's site),
+`paperFaint` ("+N more", the page number, the blank page) and `paperPill`
+(the "Not cooked yet" pill's background). Light values ARE the old
+literals; `lib/themeTokens.test.ts` pins both rules. The preview sheet does
+not draw the paper (it is a theme sheet) and is unchanged.
+
+| on dark paper | before | after |
+|---|---|---|
+| time, serves, reel site (`paperMuted`) | `#8a7a66` 3.15:1 | `#706150` 4.52:1 |
+| "+N more", page number, blank page (`paperFaint`) | `#a8977f` 2.15:1 | `#706150` 4.52:1 |
+| "Not cooked yet" on its pill (`#ece3d0`) | 3.26:1 | 4.68:1 |
+| ingredient line `#5c4d3c`, title `#2a2118`, reel "Cooked by" `#8a4b2a` | 6.16, 11.96, 5.10 | unchanged |
+
+Sampled from rendered pixels in Chromium (iPhone 13, Pixel 5, SE profiles);
+light screenshots before and after are pixel-identical.
+
+- **The lightest passing grey, so at the floor the two greys meet.** Dark
+  mode now has one paper grey; the muted/faint step survives in light only.
+  Keeping a step would mean darkening `paperMuted` below the floor's
+  lightest (about 5:1 for a visible difference), which brings the time line
+  close to the ingredient line's ink.
+- **The fold.** On a right-hand page the first letter or two sit on the
+  shading toward the spine (`paperSpine #e4d5b7`), about 4.1-4.3:1 there.
+  Clearing 4.5:1 on the spine colour too needs `#695b4b` (5.0:1 on the
+  paper). Not done: the owner asked for 4.5:1 on the paper.
+- **Not changed, reported: the "Cooked N× · date" pill** (the book's colour
+  on a 12% tint of it) is below 4.5:1 in dark for 10 of 12 book colours —
+  Honey 3.07, Fern 3.08, Terracotta 3.53, Teal 3.11, Leaf 3.06, Berry 3.89,
+  Slate 3.69, Cocoa 4.53, Raspberry 4.22, Plum 4.68, Caramel 3.81, Olive
+  3.70 — and in light for 7 (Honey 3.69, Fern 3.70, Terracotta 4.29, Teal
+  3.75, Leaf 3.72, Slate 4.45, Olive 4.46). Dropping the tint alone gains
+  0.4-0.7; passing needs a darker ink per colour (up to 22% toward black
+  for Honey, Fern, Teal, Leaf), which is a decision about the book colours,
+  not a token. **The rating badge** is an emoji on a near-white disc; it has
+  no text colour to measure (the reel's like count on it is about 14:1).
+- **Light mode, for the owner to decide:** the same greys measure 3.85:1
+  (`#8a7a66`) and 2.63:1 (`#a8977f`) on `#fbf6ea`, and the pill 3.26:1.
+  4.5:1 would take `#7e6f5d` for both greys (lightness 52 → 48 for the
+  muted, a small step; 63 → 48 for the faint, a quarter darker, so the two
+  would meet as they now do in dark) and `#726352` for the pill's text.
+
+**Found while measuring, not changed:** on an iPhone SE profile a book page
+is too short for its lines — the right page's time line is clipped to a
+sliver and the cooked pill overlaps the ingredient line and the page
+number, in both themes, before and after this change (`pageLayout`'s
+budget). Worth confirming on a real small phone before fixing.
+
 ## Find closed the app: a worklet's default parameter (Oct 1)
 
 **Reported:** after the Oct 1 over-the-air update (the first to carry the

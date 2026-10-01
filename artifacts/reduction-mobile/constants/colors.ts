@@ -74,6 +74,13 @@ const colors = {
     // StarterReel): paper in both themes, toned down a step in dark.
     paper: '#fbf6ea',
     paperSpine: '#f4ecdb',
+    // The paper's two greys and the "Not cooked yet" pill (PageFace,
+    // BookPage, StarterReel), literals there until Oct 1: the time, serves
+    // and steps, the site; and the "+N more", the page number, the blank
+    // page. Light is exactly the old literals (themeTokens.test.ts).
+    paperMuted: '#8a7a66',
+    paperFaint: '#a8977f',
+    paperPill: '#ece3d0',
     // The toast's dark pill (Toast.tsx), white text on it in both themes.
     toastBg: '#2a2118',
   },
@@ -136,6 +143,13 @@ const colors = {
     paper: '#ebdfc6',
     // The same step toward the spine as light's (#fbf6ea -> #f4ecdb).
     paperSpine: '#e4d5b7',
+    // The lightest grey that keeps small text at 4.5:1 on the darker paper
+    // (4.53:1; the light greys measured 3.15:1 and 2.15:1 here, Oct 1).
+    // At that floor the two greys meet: dark mode has one paper grey.
+    // The pill keeps light's tint, a step above the paper; 4.69:1 on it.
+    paperMuted: '#706150',
+    paperFaint: '#706150',
+    paperPill: '#ece3d0',
     // The pinned column's colour: the old #2a2118 all but vanished on the
     // new page (1.1:1); this is a step above it (1.6:1) with white text 10:1.
     toastBg: '#463930',

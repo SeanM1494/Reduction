@@ -16,11 +16,13 @@ import { Image, StyleSheet, Text, View, type ImageSourcePropType } from 'react-n
 import type { MealType } from '@workspace/recipe-model';
 import { MealTypeArt } from '@/components/library/MealTypeArt';
 import { fonts } from '@/constants/colors';
+import { useColors } from '@/hooks/useColors';
 
+// The same in both themes, 6:1 or better on either paper. The two greys are
+// theme tokens (`paperMuted`, `paperFaint`): on the darker paper they had
+// to darken to keep 4.5:1 (Oct 1).
 export const INK = '#2a2118';
 export const INK_SOFT = '#5c4d3c';
-export const MUTED = '#8a7a66';
-export const FAINT = '#a8977f';
 export const RULE = '#dccfb4';
 
 export const FACE_PAD_TOP = 12;
@@ -72,6 +74,8 @@ export function PageFace({
   maxFontSizeMultiplier,
   testID,
 }: PageFaceProps) {
+  const colors = useColors();
+  const muted = { color: colors.paperMuted };
   const serves = servings ? `Serves ${servings} · ` : '';
   const scale = maxFontSizeMultiplier === undefined ? {} : { maxFontSizeMultiplier };
   return (
@@ -89,12 +93,12 @@ export function PageFace({
         {title}
       </Text>
       {time ? (
-        <Text style={faceStyles.time} numberOfLines={1} testID="book-page-time" {...scale}>
+        <Text style={[faceStyles.time, muted]} numberOfLines={1} testID="book-page-time" {...scale}>
           {time}
         </Text>
       ) : null}
       {showServes ? (
-        <Text style={faceStyles.serves} numberOfLines={1} {...scale}>
+        <Text style={[faceStyles.serves, muted]} numberOfLines={1} {...scale}>
           {serves}
           {steps} {steps === 1 ? 'step' : 'steps'}
         </Text>
@@ -102,7 +106,7 @@ export function PageFace({
       {ingredientLines > 0 && ingredients.names.length ? (
         <Text style={faceStyles.ingredients} numberOfLines={ingredientLines} {...scale}>
           {ingredients.names.join(', ')}
-          {ingredients.more > 0 ? <Text style={faceStyles.more}> +{ingredients.more} more</Text> : null}
+          {ingredients.more > 0 ? <Text style={{ color: colors.paperFaint }}> +{ingredients.more} more</Text> : null}
         </Text>
       ) : null}
       {footer}
@@ -115,7 +119,7 @@ export const faceStyles = StyleSheet.create({
   content: { flex: 1, paddingTop: FACE_PAD_TOP, paddingHorizontal: FACE_PAD_X },
   photo: { borderRadius: 6, overflow: 'hidden' },
   title: { marginTop: 8, fontFamily: fonts.heading, fontSize: 14.5, lineHeight: 18, color: INK },
-  time: { marginTop: 5, fontFamily: fonts.mono, fontSize: 11, lineHeight: 14, color: MUTED },
+  time: { marginTop: 5, fontFamily: fonts.mono, fontSize: 11, lineHeight: 14 },
   serves: {
     marginTop: 7,
     paddingTop: 6,
@@ -125,12 +129,9 @@ export const faceStyles = StyleSheet.create({
     fontFamily: fonts.mono,
     fontSize: 10.5,
     lineHeight: 14,
-    color: MUTED,
   },
   ingredients: { marginTop: 3, fontSize: 11.5, lineHeight: 15.5, color: INK_SOFT },
-  more: { color: FAINT },
   // The footer pill: the book's "Cooked 3× · Sep 11", the reel's use.
   pill: { marginTop: 'auto', alignSelf: 'flex-start', maxWidth: '100%', borderRadius: 99, paddingVertical: 3, paddingHorizontal: 8 },
-  pillNever: { backgroundColor: '#ece3d0' },
   pillText: { fontSize: 10.5, lineHeight: 13, fontWeight: '600' },
 });

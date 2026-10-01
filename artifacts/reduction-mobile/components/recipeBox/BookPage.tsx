@@ -12,8 +12,9 @@
  *
  * Cream paper in both themes: a book is a physical object. In dark mode the
  * paper is a step darker (`paper`, Cocoa, Oct 1) so it does not glare off
- * the page; its inks are the same. The paper darkens a little toward the
- * spine on each side (`paperSpine`).
+ * the page; its inks are the same except the greys (`paperMuted`,
+ * `paperFaint`), darkened there to keep 4.5:1. The paper darkens a little
+ * toward the spine on each side (`paperSpine`).
  */
 
 import React, { memo } from 'react';
@@ -24,7 +25,7 @@ import { useRecipePhoto } from '@/lib/recipePhoto';
 import { cookedLabel, keyIngredients, pageLayout, RATING_EMOJI, stepCount, timeLine, type Book } from '@/lib/recipeBox';
 import type { Entry } from '@/lib/api';
 import { useColors } from '@/hooks/useColors';
-import { FACE_PAD_TOP, FAINT, MUTED, PageFace, faceStyles } from './PageFace';
+import { FACE_PAD_TOP, PageFace, faceStyles } from './PageFace';
 
 export type PageContent = { kind: 'recipe'; entry: Entry; number: number } | { kind: 'blank' } | { kind: 'empty' };
 
@@ -58,8 +59,8 @@ export const BookPage = memo(function BookPage({ content, side, book, width, hei
         <RecipeFace entry={content.entry} number={content.number} side={side} book={book} width={width} height={height} />
       ) : content.kind === 'blank' ? (
         <View style={styles.blank} testID="book-blank-page">
-          <Text style={styles.blankPlus}>+</Text>
-          <Text style={styles.blankText}>Room for one more</Text>
+          <Text style={[styles.blankPlus, { color: colors.paperFaint }]}>+</Text>
+          <Text style={[styles.blankText, { color: colors.paperFaint }]}>Room for one more</Text>
         </View>
       ) : null}
     </View>
@@ -68,6 +69,7 @@ export const BookPage = memo(function BookPage({ content, side, book, width, hei
 
 function RecipeFace({ entry, number, side, book, width, height }: { entry: Entry; number: number; side: 'left' | 'right'; book: Book; width: number; height: number }) {
   const recipe = entry.recipe;
+  const colors = useColors();
   const photo = useRecipePhoto(entry);
   const time = timeLine(recipe);
   const layout = pageLayout(width, time !== null);
@@ -97,15 +99,15 @@ function RecipeFace({ entry, number, side, book, width, height }: { entry: Entry
       paddingBottom={PAD_BOTTOM}
       footer={
         <View
-          style={[faceStyles.pill, cooked ? { backgroundColor: `${book.color}1f` } : faceStyles.pillNever]}
+          style={[faceStyles.pill, cooked ? { backgroundColor: `${book.color}1f` } : { backgroundColor: colors.paperPill }]}
           testID="book-page-cooked"
         >
-          <Text style={[faceStyles.pillText, { color: cooked ? book.color : MUTED }]} numberOfLines={1}>
+          <Text style={[faceStyles.pillText, { color: cooked ? book.color : colors.paperMuted }]} numberOfLines={1}>
             {cooked ?? 'Not cooked yet'}
           </Text>
         </View>
       }
-      corner={<Text style={[styles.number, side === 'left' ? { left: 11 } : { right: 11 }]}>{number}</Text>}
+      corner={<Text style={[styles.number, { color: colors.paperFaint }, side === 'left' ? { left: 11 } : { right: 11 }]}>{number}</Text>}
     />
   );
 }
@@ -132,7 +134,6 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: 6,
     fontSize: 10,
-    color: FAINT,
     fontFamily: Platform.select({ ios: 'Georgia', default: 'serif' }),
   },
   blank: {
@@ -147,6 +148,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 6,
   },
-  blankPlus: { fontSize: 26, lineHeight: 28, color: FAINT },
-  blankText: { fontSize: 12, color: FAINT },
+  blankPlus: { fontSize: 26, lineHeight: 28 },
+  blankText: { fontSize: 12 },
 });
