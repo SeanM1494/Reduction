@@ -551,7 +551,9 @@ verification, or a decision.
   Connect). Two things the pages say that the brief simplified, kept
   because the documents would otherwise be false: the website bills
   through Stripe, and extraction sends the recipe (or photo) to Anthropic.
-  DECIDED Sep 21: the contact on both pages is `sean@recruitthebench.com`;
+  DECIDED Sep 21: the contact on both pages is `admin@recipereduction.com`
+  (was `sean@recruitthebench.com` until Oct 1, when the domain mailbox
+  replaced it everywhere; an address change, so the effective dates stayed);
   no legal entity and no governing law are named — the operator is an
   individual for now, and the Terms say "where Recipe Reduction is
   established". **Revisit on incorporation**: the entity's name replaces
@@ -2500,7 +2502,7 @@ are the phone's to confirm.
 ### 1. Send feedback — built (phone, over the air)
 
 Settings › Send feedback (under Replay intro) opens an email to the legal
-pages' contact, `sean@recruitthebench.com`, subject "Reduction feedback",
+pages' contact, `admin@recipereduction.com`, subject "Reduction feedback",
 with three blank lines for the message and then: app version and build,
 runtime version, the over-the-air update id (or "none (built-in)"), the iOS
 version and the device MODEL. Never the account id, an email address or the

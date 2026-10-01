@@ -78,7 +78,7 @@ one phone; the whole pass takes about ten minutes plus the timer.
   a price, in Settings and on the sign-in screen. *Expect:* the static
   pages (/terms.html, /privacy.html), NOT the recipe web app.
 - [ ] **16. Send feedback.** Settings › "Send feedback". *Expect:* Mail
-  opens to sean@recruitthebench.com, subject "Reduction feedback", with
+  opens to admin@recipereduction.com, subject "Reduction feedback", with
   the app version, runtime, update id, iOS version and model under blank
   lines. No account id, no email, no device name.
 - [ ] **17. Account deletion** on a throwaway account that holds a sandbox

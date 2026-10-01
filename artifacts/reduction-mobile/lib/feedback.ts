@@ -11,7 +11,7 @@
  * add their account id themselves; Settings shows it with a Copy button.
  */
 
-export const FEEDBACK_EMAIL = 'sean@recruitthebench.com';
+export const FEEDBACK_EMAIL = 'admin@recipereduction.com';
 export const FEEDBACK_SUBJECT = 'Reduction feedback';
 
 export interface FeedbackInfo {
