@@ -2234,10 +2234,10 @@ on." Idle card: "New here? Learn to read a recipe in six short steps."
   breathes, opacity only; static under Reduce Motion), and the target
   scrolls itself into view. See CLAUDE.md, "The demo teaches through a
   wrapper" — the renderers take a `spotlight` of ids and nothing else.
-- **The card holds its size**: two lines reserved for the instruction and a
-  line for the nudge whether or not it shows, so nothing moves under a
-  finger. 17pt, Dynamic Type to 1.4x; every button 44pt. 177pt tall with
-  the three buttons; on an SE the diagram keeps 391pt above it.
+- **The card holds its size**: a line for the nudge whether or not it
+  shows, and (since Oct 1, "Demo polish" item 3) an instruction box as tall
+  as the longest instruction, so nothing moves under a finger. Every
+  button 44pt.
 - **The old Reset button is gone**: Replay on the last step and Back cover
   it, and every reachable state is one Back or Replay from the start.
 
@@ -2328,6 +2328,30 @@ wait, point, tap, advance — and `DemoScreen` only runs them on timers.
   advance, and the card says "Each step plays, then waits for Next."
   (`useA11yFlags`). RN-web's `isScreenReaderEnabled` answers TRUE in every
   browser, so the web does not ask (it made Chromium wait for Next).
+
+**3. The instruction is set like a Step-by-Step heading.** The heading
+face, bold, 22pt (the card heading is 26pt; 22 is what keeps the longest
+instruction to three lines on an SE), Dynamic Type to 1.5x, under a green
+"Demo" label (the cool "done" tint) and "Step 2 of 6". The instruction's box
+is as tall as the longest of the six would be at this width and text size,
+measured from an unseen copy of each, so the card is one height on every
+step and a new step never moves a button.
+
+| measured (Chromium) | card before | card after | diagram room before | after |
+|---|---|---|---|---|
+| iPhone SE, landing | 177pt | 212pt | 245pt | 210pt |
+| iPhone SE, Settings › How it works | 177pt | 212pt | 229pt | 194pt |
+| iPhone 13, landing | 177pt | 212pt | 341pt | 306pt |
+| Pixel 5, landing | 177pt | 185pt | 404pt | 396pt |
+
+"Diagram room" is the recipe scroller between the mode tabs and the card.
+Lines per step on an SE: 3, 2, 2, 2, 3, 2. No sideways scroll on any
+profile, light or dark; every button 44pt. **Nothing was removed:** the line
+"Guacamole, as a diagram. Tap any ingredient to check it off." is the
+website's (`artifacts/reduction/src/components/DemoCoach.tsx`) and was
+never on the phone. The legend under the diagram (not yet / do this now /
+done) stays: it is the only place the green "done" state is named. The
+pre-start line goes with item 4.
 
 **Gap, logged, not fixed: the website's landing demo still starts with the
 avocados checked.** It keeps its own fixture (`artifacts/reduction/src/

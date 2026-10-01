@@ -3,14 +3,20 @@
  * under the recipe. Presentational: DemoScreen owns the guide (lib/
  * demoGuide.ts) and hands this what to say and what each button does.
  *
- * Its size is held still on purpose. The instruction reserves two lines and
- * the nudge reserves its own line whether or not it is showing, so a nudge
- * appearing, or Show me arriving, never moves a button under a finger
- * (CLAUDE.md, "Nothing may resize under a fingertip"). The instruction is
- * 17pt and follows Dynamic Type to 1.4x, where it can still fit an SE.
+ * The instruction is the thing to read, so it is set like a Step-by-Step
+ * card's heading (Oct 1): the heading face, bold, 22pt — the size that
+ * fits an SE — following Dynamic Type to 1.5x, under a green "Demo" label
+ * and "Step 2 of 6".
+ *
+ * Its size is held still on purpose. The instruction's box is as tall as
+ * the LONGEST instruction would be at this width and text size (measured
+ * from an unseen copy of each), and the nudge reserves its own line
+ * whether or not it is showing, so a new step, a nudge or Show me arriving
+ * never moves a button under a finger (CLAUDE.md, "Nothing may resize
+ * under a fingertip").
  */
 
-import React, { useEffect } from 'react';
+import React, { useEffect, useState, type ReactNode } from 'react';
 import { AccessibilityInfo, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useColors, type Colors } from '@/hooks/useColors';
 import { fonts } from '@/constants/colors';
@@ -70,7 +76,7 @@ export function GuideCard(props: GuideCardProps) {
   if (props.phase === 'idle') {
     return (
       <View style={styles.card} testID="guide-card">
-        <Text style={styles.text} maxFontSizeMultiplier={1.4} testID="guide-text">
+        <Text style={styles.idleText} maxFontSizeMultiplier={1.4} testID="guide-text">
           {IDLE_TEXT}
         </Text>
         <View style={styles.row}>
@@ -87,25 +93,14 @@ export function GuideCard(props: GuideCardProps) {
     const step = GUIDE_STEPS[props.index];
     return (
       <View style={styles.card} testID="guide-card">
-        <View style={styles.top}>
-          <Text style={styles.counter} maxFontSizeMultiplier={1.4} testID="guide-counter">
-            Watching · {counter(props.index)}
-          </Text>
+        <Header index={props.index} styles={styles}>
           <Pressable accessibilityRole="button" onPress={props.onTry} style={styles.link} testID="guide-try">
-            <Text style={styles.linkText} maxFontSizeMultiplier={1.4}>
+            <Text style={styles.linkText} maxFontSizeMultiplier={1.3}>
               Try it yourself
             </Text>
           </Pressable>
-        </View>
-        <Text
-          style={styles.text}
-          maxFontSizeMultiplier={1.4}
-          accessibilityLiveRegion="polite"
-          accessibilityRole="header"
-          testID="guide-text"
-        >
-          {step.text}
-        </Text>
+        </Header>
+        <Instruction text={step.text} styles={styles} />
         <View style={styles.nudgeSlot}>
           {props.screenReader ? (
             <Text style={styles.hint} maxFontSizeMultiplier={1.2}>
@@ -131,10 +126,7 @@ export function GuideCard(props: GuideCardProps) {
   const finish = step.kind === 'finish';
   return (
     <View style={styles.card} testID="guide-card">
-      <View style={styles.top}>
-        <Text style={styles.counter} maxFontSizeMultiplier={1.4} testID="guide-counter">
-          {counter(props.index)}
-        </Text>
+      <Header index={props.index} styles={styles}>
         {finish ? null : (
           <Pressable
             accessibilityRole="button"
@@ -142,21 +134,13 @@ export function GuideCard(props: GuideCardProps) {
             style={styles.link}
             testID="guide-watch"
           >
-            <Text style={styles.linkText} maxFontSizeMultiplier={1.4}>
+            <Text style={styles.linkText} maxFontSizeMultiplier={1.3}>
               Watch instead
             </Text>
           </Pressable>
         )}
-      </View>
-      <Text
-        style={styles.text}
-        maxFontSizeMultiplier={1.4}
-        accessibilityLiveRegion="polite"
-        accessibilityRole="header"
-        testID="guide-text"
-      >
-        {step.text}
-      </Text>
+      </Header>
+      <Instruction text={step.text} styles={styles} />
       <View style={styles.nudgeSlot}>
         {props.nudge ? (
           <Text style={styles.nudge} maxFontSizeMultiplier={1.2} testID="guide-nudge">
@@ -194,6 +178,53 @@ export function GuideCard(props: GuideCardProps) {
 }
 
 type Styles = ReturnType<typeof makeStyles>;
+
+/** The green "Demo" label and "Step 2 of 6", with a link on the right. */
+function Header({ index, styles, children }: { index: number; styles: Styles; children?: ReactNode }) {
+  return (
+    <View style={styles.top}>
+      <View style={styles.badges}>
+        <View style={styles.demo}>
+          <Text style={styles.demoText} maxFontSizeMultiplier={1.5}>
+            Demo
+          </Text>
+        </View>
+        <Text style={styles.counter} maxFontSizeMultiplier={1.5} testID="guide-counter">
+          Step {counter(index)}
+        </Text>
+      </View>
+      {children}
+    </View>
+  );
+}
+
+/** The instruction, in a box as tall as the longest one at this width and
+ *  text size, so the card never changes height from one step to the next. */
+function Instruction({ text, styles }: { text: string; styles: Styles }) {
+  const [tallest, setTallest] = useState(0);
+  return (
+    <View style={{ minHeight: tallest }}>
+      <View style={styles.measure} pointerEvents="none" accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+        {GUIDE_STEPS.map((s) => (
+          <Text
+            key={s.id}
+            style={[styles.text, styles.measureText]}
+            maxFontSizeMultiplier={1.5}
+            onLayout={(e) => {
+              const h = Math.ceil(e.nativeEvent.layout.height);
+              setTallest((t) => (h > t ? h : t));
+            }}
+          >
+            {s.text}
+          </Text>
+        ))}
+      </View>
+      <Text style={styles.text} maxFontSizeMultiplier={1.5} accessibilityLiveRegion="polite" accessibilityRole="header" testID="guide-text">
+        {text}
+      </Text>
+    </View>
+  );
+}
 
 function Primary({ label, onPress, testID, styles }: { label: string; onPress: () => void; testID: string; styles: Styles }) {
   return (
@@ -236,10 +267,20 @@ function makeStyles(colors: Colors) {
       paddingBottom: 12,
     },
     top: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', minHeight: 44, marginTop: -6 },
-    counter: { fontFamily: fonts.mono, fontSize: 13, letterSpacing: 0.4, color: colors.mutedForeground },
+    badges: { flexDirection: 'row', alignItems: 'center', gap: 8, flexShrink: 1 },
+    // Green: the cool "done" tint, the app's word for "all good here".
+    demo: { borderRadius: 99, borderWidth: 1, borderColor: colors.coolLine, backgroundColor: colors.coolBg, paddingVertical: 2, paddingHorizontal: 9 },
+    demoText: { fontFamily: fonts.headingBold, fontSize: 13, lineHeight: 17, letterSpacing: 0.3, color: colors.coolInk },
+    counter: { fontFamily: fonts.headingMedium, fontSize: 14, color: colors.mutedForeground, flexShrink: 1 },
     link: { minHeight: 44, justifyContent: 'center', paddingLeft: 12 },
     linkText: { fontFamily: fonts.headingMedium, fontSize: 15, color: colors.foreground, textDecorationLine: 'underline' },
-    text: { fontFamily: fonts.headingMedium, fontSize: 17, lineHeight: 23, minHeight: 46, color: colors.foreground },
+    // Like a Step-by-Step card's heading (StepsMode's `label`, 26pt), at
+    // the size that fits an SE in three lines.
+    text: { fontFamily: fonts.headingBold, fontSize: 22, lineHeight: 27, letterSpacing: -0.3, color: colors.foreground },
+    measure: { position: 'absolute', top: 0, left: 0, right: 0, opacity: 0 },
+    measureText: { position: 'absolute', top: 0, left: 0, right: 0 },
+    // The line before the guide starts, at its old size.
+    idleText: { fontFamily: fonts.headingMedium, fontSize: 17, lineHeight: 23, minHeight: 46, color: colors.foreground },
     nudgeSlot: { minHeight: 22, justifyContent: 'center' },
     nudge: { fontSize: 14, lineHeight: 19, color: colors.warmInk },
     hint: { fontSize: 14, lineHeight: 19, color: colors.mutedForeground },
