@@ -3046,6 +3046,12 @@ never use a site's picture in App Store screenshots or marketing. The
 risk reasoning is in the project notes (`notes/reel-photos.md`); it is not
 legal advice, and a lawyer's read was suggested. The history follows.
 
+**The legal wording (approved by the owner, Oct 1).** terms.html's
+removal promise is "We aim to act within three business days: we stop
+suggesting it and delete our stored copy of the picture." — the deletion
+is `hide --purge`, so a removal request is ALWAYS answered with
+`--purge`, never a plain hide. Both pages are dated October 1, 2026.
+
 **`hide --purge` (decided by the owner, Oct 1; built).** Plain `hide` is
 unchanged: the card goes, the stored picture stays (`a7958af` briefly
 made every hide purge; the owner wants the two apart). `hide <url>
