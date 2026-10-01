@@ -11,8 +11,12 @@
  *       data-backed or curated, usage line) and why other pages were left
  *       out, as counts. No accounts, no emails.
  *
- *   node scripts/reel.mjs warm urls.txt
- *       Report only (the default). One URL per line; # comments and blank
+ *   node scripts/reel.mjs warm [list]
+ *       Report only (the default). The list defaults to ~/workspace/reel-urls.txt
+ *       — the repo root on Replit. Keep lists THERE: Replit clears the home
+ *       folder (/home/runner) between sessions and keeps only ~/workspace,
+ *       which is how ~/reel-urls.txt vanished on Oct 1. reel-*.txt at the
+ *       repo root is gitignored (working data). One URL per line; # comments and blank
  *       lines ignored. Each URL: cached already ($0), would extract, or not
  *       public; and for a cached page, what it predates (step order,
  *       picture, original wording).
@@ -20,12 +24,12 @@
  *       With --write, each curated page's card picture is stored too (the
  *       page's own image, fetched by the server; no model call).
  *
- *   node scripts/reel.mjs warm urls.txt --write
+ *   node scripts/reel.mjs warm [list] --write
  *       Extracts each URL that is NOT cached, once, and adds every clean
  *       page to the curated list with a pinned copy. Cached pages are
  *       curated as they are — never re-read.
  *
- *   node scripts/reel.mjs warm urls.txt --write --refresh <url> [--refresh <url> ...]
+ *   node scripts/reel.mjs warm [list] --write --refresh <url> [--refresh <url> ...]
  *       Also re-reads the named cached pages (about 6-7 cents each). Only
  *       the URLs named after --refresh are re-read.
  *
@@ -36,7 +40,34 @@
  * environment — both are in the Replit workspace's secrets.
  */
 
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
+import { basename, dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+
+// The repo root — ~/workspace on Replit, the one folder Replit keeps.
+const REPO = join(dirname(fileURLToPath(import.meta.url)), "..");
+const DEFAULT_LIST = join(REPO, "reel-urls.txt");
+const shown = (p) => (p.startsWith(REPO + "/") ? `~/workspace/${p.slice(REPO.length + 1)}` : p);
+
+/** One URL per line; # comments and blank lines ignored. A missing file is
+ *  a clear refusal naming the path tried and where lists belong. */
+function readList(path) {
+  if (!existsSync(path)) {
+    console.error(`reel: no URL list at ${shown(path)}.`);
+    console.error("  Keep lists in ~/workspace: Replit clears your home folder (/home/runner) between sessions and keeps only ~/workspace.");
+    console.error(`  Create it, one URL per line (# starts a comment):`);
+    // Suggest a place that survives: inside ~/workspace, under the same name.
+    const keep = path.startsWith(REPO + "/") ? path : join(REPO, basename(path));
+    console.error(`    cat > ${shown(keep)} <<'EOF'`);
+    console.error("    https://example.com/a-recipe");
+    console.error("    EOF");
+    process.exit(1);
+  }
+  return readFileSync(path, "utf8")
+    .split("\n")
+    .map((l) => l.trim())
+    .filter((l) => l && !l.startsWith("#"));
+}
 
 const base = (process.env.PUBLIC_BASE_URL || "").replace(/\/+$/, "");
 const secret = process.env.ADMIN_SECRET || "";
@@ -96,22 +127,17 @@ if (cmd === "preview") {
   if (preview.restored) console.log(`Restored ${preview.restored} curated page(s) to the cache from their pinned copies.`);
   console.log(`Owner list: ${entries.filter((e) => e.status === "curated").length} curated, ${entries.filter((e) => e.status === "hidden").length} hidden.`);
 } else if (cmd === "warm") {
-  const file = rest[0];
-  if (!file) {
-    console.error("reel: warm needs a file of URLs.");
-    process.exit(1);
-  }
+  // The list is the first argument that is neither a flag nor a flag's value.
+  const positional = rest.filter((a, i) => !a.startsWith("--") && rest[i - 1] !== "--refresh");
+  const file = positional[0] ? resolve(positional[0]) : DEFAULT_LIST;
   const write = rest.includes("--write");
   const refresh = new Set(rest.flatMap((a, i) => (a === "--refresh" ? [rest[i + 1]] : [])).filter(Boolean));
   if (refresh.size && !write) {
     console.error("reel: --refresh re-reads pages, so it needs --write too.");
     process.exit(1);
   }
-  const urls = readFileSync(file, "utf8")
-    .split("\n")
-    .map((l) => l.trim())
-    .filter((l) => l && !l.startsWith("#"));
-  console.log(`${write ? "WRITING" : "Report only"} — ${urls.length} URL(s) against ${base}\n`);
+  const urls = readList(file);
+  console.log(`${write ? "WRITING" : "Report only"} — ${urls.length} URL(s) from ${shown(file)} against ${base}\n`);
   let spent = 0;
   const flagged = [];
   for (const url of urls) {
@@ -136,7 +162,8 @@ if (cmd === "preview") {
   const unrefreshed = flagged.filter((u) => !refresh.has(u));
   if (unrefreshed.length) {
     console.log(`\n${unrefreshed.length} cached page(s) predate a feature. To re-read one (about 6-7 cents each):`);
-    for (const u of unrefreshed) console.log(`  node scripts/reel.mjs warm ${file} --write --refresh ${u}`);
+    const listArg = file === DEFAULT_LIST ? "" : ` ${shown(file)}`;
+    for (const u of unrefreshed) console.log(`  node scripts/reel.mjs warm${listArg} --write --refresh ${u}`);
   }
 } else if (cmd === "hide" || cmd === "unhide") {
   const url = rest[0];
@@ -147,6 +174,6 @@ if (cmd === "preview") {
   const r = cmd === "hide" ? await call("PUT", "/reel", { url, status: "hidden" }) : await call("DELETE", `/reel?url=${encodeURIComponent(url)}`);
   console.log(JSON.stringify(r));
 } else {
-  console.error("usage: node scripts/reel.mjs preview | warm <file> [--write] [--refresh <url>]... | hide <url> | unhide <url>");
+  console.error("usage: node scripts/reel.mjs preview | warm [list, default ~/workspace/reel-urls.txt] [--write] [--refresh <url>]... | hide <url> | unhide <url>");
   process.exit(1);
 }

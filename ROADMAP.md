@@ -2818,6 +2818,15 @@ server because the phone already hides on an empty list (tested since Sep
 30), so the minimum changes with a Publish and no app update, and an old
 binary obeys it too. Below it the preview lists the cards waiting.
 
+## Working lists live in ~/workspace (Oct 1)
+
+Replit clears `/home/runner` between sessions and keeps only `~/workspace`;
+`~/reel-urls.txt` vanished that way. **Decided:** `scripts/reel.mjs warm`
+defaults to `~/workspace/reel-urls.txt` (the repo root), a missing list is
+a refusal that names the path tried and says where lists belong, and
+`reel-*.txt` at the repo root is gitignored. Any future owner-side working
+file goes in `~/workspace` and in `.gitignore` the same way.
+
 ## Still open from earlier work
 
 - **allrecipes.com cannot be read by the server, by either fetch (Sep

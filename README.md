@@ -815,9 +815,12 @@ calls the admin routes on the deployment (PUBLIC_BASE_URL, ADMIN_SECRET):
   data-backed or curated, counts of what was left out and why, the pages
   left out for want of a stored picture by name, and any cards waiting for
   the minimum.
-- `node scripts/reel.mjs warm urls.txt` — report only: cached ($0), would
+- `node scripts/reel.mjs warm [list]` — report only: cached ($0), would
   extract, or not public; for a cached page, what it predates (step order,
-  picture, original wording).
+  picture, original wording). The list defaults to
+  `~/workspace/reel-urls.txt`, one URL per line — in `~/workspace` because
+  Replit clears the home folder between sessions and keeps only that
+  folder. `reel-*.txt` at the repo root is gitignored: working data.
 - `... --write` — extracts what is not cached (once, logged as `warmup` in
   the cost report) and curates every clean page with a pinned copy and its
   card picture.

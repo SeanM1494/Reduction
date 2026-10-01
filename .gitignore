@@ -70,3 +70,6 @@ Thumbs.db
 
 # The extraction comparison's output (src/eval): recipe data from real pages, per run.
 eval-out/
+
+# working data: the reel's URL lists (scripts/reel.mjs), kept in ~/workspace
+/reel-*.txt

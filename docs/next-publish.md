@@ -136,9 +136,12 @@ Each must print `0`.
 Google (and Apple, if it is on). It returns to the app, signed in, with the
 library there.
 
-**11.** Store the reel's pictures (no model calls — $0):
+**11.** Store the reel's pictures (no model calls — $0). The list lives at
+`~/workspace/reel-urls.txt` (Replit clears the home folder between
+sessions, so `~/reel-urls.txt` does not survive; the script now defaults to
+the workspace copy and says so if it is missing):
 ```sh
-node scripts/reel.mjs warm ~/reel-urls.txt --write
+node scripts/reel.mjs warm --write
 ```
 Each page prints `cached $0.000` and a `picture:` line: `stored`, `could
 not be fetched` or `the page names none`.
