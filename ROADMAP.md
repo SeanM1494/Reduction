@@ -2842,6 +2842,34 @@ host, so a cached tree's own `image` key (always written by our fetch,
 never by the fallback) decides first, and the site's last fresh read
 decides for a tree without one. Spend and estimates are printed apart.
 
+## Other sites' pictures shown to everyone (Oct 1, PROPOSED, not built)
+
+The reel stores a page's own picture on our server and shows it, with the
+site's name, to every signed-in user, including people who never saved
+that recipe. **Neither legal page says so today.** `privacy.html` covers
+a page's picture only as part of YOUR library ("fetch a copy when you save
+the recipe … part of your library"); `terms.html` says recipes from other
+sites "remain the property of their authors" and are extracted "for your
+personal, non-commercial use". Neither mentions a shared reel or a removal
+route. Wording is proposed to the owner and waits on approval; no legal
+page changes until then (and the owner may want a lawyer to read it).
+
+Found while checking: **`hide` takes a card out of the reel but does not
+delete the stored picture.** The reel stops offering it at once on the
+instance that served the command, within an hour on every other instance
+(`REEL_CACHE_MS`), and a phone that already fetched the reel can show it
+for up to an hour more (`FETCH_EVERY_MS`) — so "within two hours,
+everywhere". The bytes stay in `reel_photos` and remain readable by any
+signed-in user holding the photo URL. A removal request that promises "we
+deleted our copy" needs a purge (a `hide --purge` that also deletes the
+`reel_photos` row) — proposed, not built.
+
+**Proposed cap: 20 curated entries** (twice `REEL.maxCards`, so hides and
+pages that lose their picture have backups). Today there is no cap: every
+curated entry is loaded on every build, oldest first by `updated_at`, and
+the reel shows at most ten cards, data-backed first, so curated pages past
+the tenth slot are loaded and never shown.
+
 ## Still open from earlier work
 
 - **allrecipes.com cannot be read by the server, by either fetch (Sep
