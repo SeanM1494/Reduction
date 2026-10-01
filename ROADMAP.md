@@ -3112,6 +3112,23 @@ server because the phone already hides on an empty list (tested since Sep
 30), so the minimum changes with a Publish and no app update, and an old
 binary obeys it too. Below it the preview lists the cards waiting.
 
+## Replacing the curated pages with no picture (Oct 1, owner steps written)
+
+Two curated pages, the focaccia and the garlic knots, have no stored
+picture and never will (their sites refuse our server; the fallback that
+read them records none), so since the picture rule they hold two of the
+20 curated slots and show nowhere. No code is needed: the tools above
+already do it. `docs/next-publish.md` steps 10–19 hide both, take them
+out of `reel-urls.txt`, and add up to eight candidates from sites that
+publish a schema.org recipe with an image (RecipeTin Eats, Tastes Better
+From Scratch, Once Upon a Chef, JoyFoodSunshine, Cookie and Kate),
+reported free with `--candidates` first so a site that refuses us is
+dropped before anything is spent. **Chosen in a container that cannot
+reach those sites**: whether our server can read each one is only known
+from that report. **Held behind the reel Publish** (step 9 there), since a
+third pictured page switches the reel on for everyone. Two candidates per
+site at most, so one site's removal request takes out few cards.
+
 ## Working lists live in ~/workspace (Oct 1)
 
 Replit clears `/home/runner` between sessions and keeps only `~/workspace`;

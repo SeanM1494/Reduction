@@ -29,6 +29,7 @@ The pull brings, oldest first:
 | Billing: three free recipes, up from one | Server: a new account gets 3 free recipes (`FREE_RECIPES`), shared by every way in: link, text, photo, reel starter, the website's signed-out try once claimed; the 402 messages say "free recipes". Website: paywall, landing line after the try, trial bar, terms "The free recipes and subscriptions". Phone: paywall, Settings ("2 free recipes left"), the reel preview's line | This Publish, then step 7b's SQL for EXISTING accounts; the phone part rides the next over-the-air update (preview, then promote) |
 | `1e316d7` Contact address: admin@recipereduction.com everywhere | Website: privacy, terms (removal requests, copyright agent) and support mail to the new address. Phone: Send feedback addresses it too | This Publish; the phone part rides the next over-the-air update (preview, then promote) |
 | `e6d5e74` Phone: Recipe Box pages fit small phones and large text | Phone only: on a short page (320pt wide with two or more books, or large Dynamic Type) rows give way in order — short pill, one ingredient line, no serves line, no ingredients — and nothing overlaps; bigger phones at the default text size unchanged. ROADMAP "Recipe Box pages on small phones" | Nothing on the server. Rides the next over-the-air update (preview, then promote — "D" below). On preview: three or more books, then Settings › Accessibility › Display & Text Size › Larger Text turned up — no overlaps |
+| the docs commit that added steps 10–19 | Nothing that runs: owner steps that replace the reel's two pages with no picture (focaccia, garlic knots) with pictured ones | Steps 10–19, only after step 9 |
 
 | `632f3bc` Crash reports: the phone and the website report their own errors | Server: `POST /api/crash` (scrubbed, anonymous reports, signed in or not, 10 an hour per client, 5,000 a day in all, kept 90 days) and `GET /api/admin/crashes`; `/api/health` checks `crash_reports`. Website: the root error boundary is mounted and reports, with a styled "Something went wrong" and a Reload button; privacy "Technical records" gains the crash-report sentence. Phone: the root error boundary, uncaught JS errors (a fatal one is sent at the next launch) and emergency launches are reported. README "Crash reports" | Step 1b's SQL **before** the pull; this Publish; the phone part rides the next over-the-air update (preview, then promote). Owner: App Store Connect › App Privacy gains Diagnostics › Crash Data — not linked to the user, not used for tracking, App Functionality |
 
@@ -158,6 +159,97 @@ The last line reads `Owner list: N of 20 curated, M hidden.` If N is above
 Only now may a third pictured page be added. To answer a removal request
 from here on: `node scripts/reel.mjs hide <url> --purge` (never a plain
 `hide`: the terms promise our copy is deleted).
+
+### After step 9: swap the two pages with no picture for pictured ones
+
+The focaccia and garlic-knots pages are on the curated list but can never
+show (neither has a stored picture: their sites refuse our server, and
+the fallback that read them never records one), so they hold two of the 20 slots for nothing. These steps take
+them off and add pictured pages in their place. **Only after step 9**: the
+first new picture can switch the reel on for everyone. About 50 cents in
+model calls for the eight candidates below; every other step is free.
+
+**10.** From the workspace (a new shell starts elsewhere):
+```sh
+cd ~/workspace
+```
+
+**11.** The pages that cannot show:
+```sh
+node scripts/reel.mjs preview
+```
+Under "No stored picture" it names the focaccia and the garlic knots
+(nothing else should be there). Note the `N` in the last line, `Owner
+list: N of 20 curated`.
+
+**12.** Find their lines in your list:
+```sh
+grep -n -i -E "focaccia|knot" reel-urls.txt
+```
+Two lines, each a URL. Run step 13 once for each of those two URLs.
+
+**13.** Take one off the reel for good (no picture is stored, so there is
+nothing to purge):
+```sh
+node scripts/reel.mjs hide PASTE-THE-URL-HERE
+```
+One line of JSON with `"ok":true` and `"status":"hidden"`.
+
+**14.** Delete those two lines from the list file (it removes only lines
+naming focaccia or knots, the two step 12 showed):
+```sh
+sed -i -E '/focaccia|knot/Id' reel-urls.txt
+```
+Prints nothing. Running step 12 again prints nothing.
+
+**15.** The replacement candidates, in a file of their own (`reel-*.txt`
+is gitignored, so this stays out of the repo):
+```sh
+cat > reel-replacements.txt <<'EOF'
+https://www.recipetineats.com/easy-yeast-bread-recipe-no-knead/
+https://tastesbetterfromscratch.com/no-knead-bread/
+https://www.onceuponachef.com/recipes/white-chicken-chili.html
+https://www.recipetineats.com/roast-chicken/
+https://joyfoodsunshine.com/best-pancake-recipe/
+https://tastesbetterfromscratch.com/our-favorite-banana-bread/
+https://cookieandkate.com/amazing-chocolate-chip-cookies/
+https://www.onceuponachef.com/recipes/banana-pancakes.html
+EOF
+```
+Prints nothing.
+
+**16.** The free report (reads nothing, spends nothing):
+```sh
+node scripts/reel.mjs warm --candidates reel-replacements.txt
+```
+One line per URL: `cached` or `would_extract` with an estimate. Any URL
+with a ⚠ "read through the fallback" note is a site that refuses our
+server: delete that line from `reel-replacements.txt` (it could never get
+a picture). If `N − 2 + the lines left` is over 20, delete lines from the
+bottom until it is not.
+
+**17.** Add what is left to your list:
+```sh
+cat reel-replacements.txt >> reel-urls.txt
+```
+Prints nothing.
+
+**18.** Extract the new pages once and store every curated page's picture:
+```sh
+node scripts/reel.mjs warm --write
+```
+The new URLs say `extracted` and, under each, `picture: stored`. Any that
+says `picture: the page names none` or `could not be fetched` instead:
+`node scripts/reel.mjs hide <that url>` and delete its line from
+`reel-urls.txt`.
+
+**19.** The reel now:
+```sh
+node scripts/reel.mjs preview
+```
+At least three cards, none marked `no picture`, and nothing under "No
+stored picture". The cards on the phone follow within the hour (the
+server's reel cache), or after the app is fully closed and reopened.
 
 The phone's half of `a7958af` (the site link) goes out over the air
 AFTER step 7, the usual way: "D. From now on: every update" below.
