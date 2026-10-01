@@ -1,4 +1,4 @@
-# Next Publish — saved Sep 30, updated Oct 1
+# Next Publish — saved Sep 30, updated Oct 1 (twice)
 
 One pull and one Publish for everything pending, from a fresh Replit shell,
 in order. Each block is one command; what it should print is under it.
@@ -13,7 +13,15 @@ first:
 | `5f881f3` Server: retire the IP diagnostic's tests | Nothing that runs: tests, one comment, ROADMAP | Nothing |
 | `f2df1cb` Docs: the pending Publish's steps | Nothing that runs: the first version of this file | Nothing |
 | `4ccd674` Publishing: stop building the static Expo Go bundle | The Publish no longer builds or serves the Expo Go page and bundle at `/reduction-mobile/` (the step that timed out on Sep 30). Nothing else changes; the Run button is untouched | Nothing |
+| `9bb34d5` Docs: one pull and one Publish | Nothing that runs: the second version of this file | Nothing |
+| `84aa85d` Phone: say which code is running, and publish only a current checkout | `scripts/publish-update.mjs` refuses a checkout behind `origin/main` or with uncommitted changes, prints commit/channel/runtime/server, adds the short hash to the message. Settings ends with "Version 1.1.0 (build N)"; the owner's testing sheet opens with *This launch* | The over-the-air update (steps 13–16) |
+| `f489ecb` Remove the amber hint under a saved recipe's diagram | The phone's hint (over the air) AND the website's (this Publish) | The Publish (step 5) for the website; the update for the phone |
+| `9c56ecb` Phone: dark mode is Cocoa | The phone's new dark palette | The over-the-air update |
 | the docs commit that updated this file | Nothing that runs: this file | Nothing |
+
+No commit in this list changes native code, so none needs a new build or
+an `expo.version` bump. The one native thing still waiting is the dark
+splash colour (ROADMAP "Dark mode: Cocoa"), for the next build.
 
 **Revert of the Expo Go change, if it is ever wanted back:**
 `git revert --no-edit 4ccd674` — then Publish. (Tell Claude, so GitHub gets
@@ -82,11 +90,12 @@ Prints a fast-forward; among the files,
 `artifacts/reduction-mobile/.replit-artifact/artifact.toml` and
 `artifacts/api-server/src/lib/reelPhotos.ts`.
 ```sh
-git log --oneline -7
+git log --oneline -11
 ```
-Must list `4ccd674`, `f2df1cb`, `5f881f3`, `8de1ebc` and `f8da606`; the top
-line is the docs commit that updated this file. Note the top line's short
-hash: steps 6 and 7 must show it.
+Must list `9c56ecb`, `f489ecb`, `84aa85d`, `9bb34d5`, `4ccd674`, `f2df1cb`,
+`5f881f3`, `8de1ebc` and `f8da606`; the top line is the docs commit that
+updated this file. Note the top line's short hash: steps 6, 7 and 15 must
+show it.
 
 **5.** Deployments → **Publish**. In the build log there should be **no**
 `@workspace/reduction-mobile` build step and no `Starting Metro` or `Metro
@@ -109,7 +118,9 @@ The same commit and `"missing":[]`.
 
 **8.** The website: open https://recipereduction.com — it loads; then
 https://recipereduction.com/privacy, https://recipereduction.com/terms and
-https://recipereduction.com/support.html each open their page.
+https://recipereduction.com/support.html each open their page. Open a saved
+recipe in Diagram view: there is no "Amber means you can do it now…" line
+under the diagram any more (edit mode still shows its own line).
 
 **9.** The Expo Go page is gone (whatever status code the site's catch-all
 answers with, its text must not be there):
@@ -140,19 +151,81 @@ Each title with a `https://recipereduction.com/api/reel/photo/…?v=1` link, or
 `(no picture)`. Open the links in a browser signed in to recipereduction.com:
 each should be that recipe's own photo.
 
-**13.** The over-the-air update (the new reel cards and the ticker) — which
-also proves updates still work without the Expo Go build:
+## The over-the-air update
+
+Why the last one did not show is not visible from the repo: every feature
+is on `main` and a bundle built from `main` contains them all (ROADMAP "An
+over-the-air update that did not show"). Steps 13–14 read what was
+published and what is installed; paste their output to Claude. They change
+nothing.
+
+**13.** Go to the app's folder:
 ```sh
 cd ~/workspace/artifacts/reduction-mobile
 ```
 ```sh
 npx -y eas-cli whoami
 ```
-Must print `seans-apps`; if not, `npx -y eas-cli login --no-browser` first.
+Must print `seans-apps`; if not, run `npx -y eas-cli login --no-browser`
+first.
+
+**14.** Read-only, four commands — paste all four outputs back:
 ```sh
-node scripts/publish-update.mjs --message "Reel cards as Recipe Box pages with pictures; ticker"
+npx -y eas-cli update:list --branch production --limit 10 --non-interactive
 ```
-Prints `server       recipe-reduction.replit.app` and `reaches      builds of
-version 1.1.0`, then EAS's output ending in an update group ID. Close the
-TestFlight app completely and reopen it, twice: Find › Add New shows the
-new cards under the photo buttons, drifting sideways.
+Each update's message, runtime version, platform, created time, group id
+and git commit. *Look for:* the Oct 1 update's commit — it should be
+`b2cb5cb` or later; runtime `1.1.0`; platform `ios`.
+```sh
+npx -y eas-cli channel:view production --non-interactive
+```
+Which branch the `production` channel serves. *Expect:* branch
+`production`.
+```sh
+npx -y eas-cli build:list --platform ios --limit 5 --non-interactive
+```
+Each build's version, build number, runtime version, channel, profile and
+commit. *Look for:* the build on your phone (TestFlight shows its build
+number) — it must say version `1.1.0`, runtime `1.1.0`, channel
+`production`. A `1.0.0` build never receives a `1.1.0` update.
+```sh
+npx -y eas-cli env:list --environment production --non-interactive
+```
+Whether EAS holds an `EXPO_PUBLIC_DOMAIN` for production (the script sets
+one itself; a different stored value is worth knowing about).
+
+**15.** Publish. The script now runs `git fetch` first and REFUSES if this
+checkout is behind GitHub or has uncommitted changes:
+```sh
+node scripts/publish-update.mjs --message "Version line and update status, amber hint removed, Cocoa dark mode"
+```
+Prints, before uploading:
+```
+  commit       <the hash from step 4>  Docs: …
+  channel      production
+  runtime      1.1.0 (reaches only builds of version 1.1.0: …)
+  server       recipe-reduction.replit.app
+  message      Version line and update status, amber hint removed, Cocoa dark mode (<hash>)
+```
+then EAS's output ending in an update group ID. The commit must be the
+hash from step 4. If it refuses with "behind origin/main", run `cd
+~/workspace`, `git pull`, then `cd ~/workspace/artifacts/reduction-mobile`
+and step 15 again. If it refuses over uncommitted changes, run `git status
+--short` and send Claude the output — do not reach for `--force`.
+
+**16.** On the phone: **fully close the app (swipe it away in the app
+switcher) and reopen it, TWICE.** The first launch downloads the update;
+the second runs it. Then:
+- Settings, at the very bottom: **"Version 1.1.0 (build N)"** — N is the
+  TestFlight build number. If that line is missing, the update is not
+  running yet: close and reopen once more.
+- Long-press **Replay intro** (owner only) › *This launch*: Running
+  `Update xxxxxxxx` (the first 8 characters of the group or update id from
+  step 15), Channel `production`, Runtime version `1.1.0`, Published
+  today's time in UTC, Update error `none`. `Embedded bundle` means the
+  update has not run; `Waiting` means one more close and reopen.
+- The guided demo (Settings › How it works) starts with "Start the demo";
+  a recipe's title has the rename pencil; Find › Add New shows the reel.
+- A saved recipe's Diagram has no amber hint under it.
+- In dark mode (Settings › Appearance › Dark): the warm brown page, cells
+  with visible edges, cream-but-darker Recipe Box pages.
