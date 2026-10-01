@@ -1434,29 +1434,28 @@ input, select, textarea { font-size: 16px; }
 .rd-seg:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
 .rd-demo-actions { display: flex; gap: 8px; }
 
-/* The coach line. One sentence, swapped by key so each new stage fades in
-   rather than the text changing under the reader. */
-.rd-coach { margin: 0 2px 8px; min-height: 20px; }
+/* The instruction: the Step-by-Step card's eyebrow and heading face, so
+   the demo's guide reads like the cards it teaches. One cell of a grid
+   holds every line it can show (CoachLine), unseen, so the box is as tall
+   as the longest and a new step never moves the diagram. The visible line
+   is swapped by key so each one fades in. */
+.rd-coach { margin: 0 2px 12px; }
+.rd-coach-eyebrow {
+  margin: 0 0 4px; font-size: 12.5px; font-weight: 600; color: var(--muted);
+}
+.rd-coach-demo { color: var(--cool-ink); }
+.rd-coach-box { display: grid; }
+.rd-coach-box > * { grid-area: 1 / 1; }
+.rd-coach-live { margin: 0; }
 .rd-coach-text {
-  display: inline-block; font-size: 13.5px; color: var(--ink);
+  display: block; margin: 0; color: var(--ink);
+  font-family: "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
+  font-weight: 700; font-size: 21px; line-height: 1.22; letter-spacing: -.015em;
   animation: rd-coach-in .45s cubic-bezier(.2,.7,.3,1) both;
 }
+.rd-coach-sizer { visibility: hidden; animation: none; }
 @keyframes rd-coach-in {
   from { opacity: 0; transform: translateY(-3px); }
-  to { opacity: 1; transform: none; }
-}
-
-/* Reserved height, so a tip arriving never pushes the diagram down. */
-.rd-tip-slot { min-height: 34px; margin: 0 2px 6px; }
-.rd-tip {
-  margin: 0; font-size: 12.5px; line-height: 1.45;
-  color: var(--warm-ink); background: var(--warm-bg);
-  border: 1px solid var(--oven-line); border-left-width: 3px;
-  border-radius: 9px; padding: 7px 11px;
-  animation: rd-tip-in .3s ease both;
-}
-@keyframes rd-tip-in {
-  from { opacity: 0; transform: translateX(-4px); }
   to { opacity: 1; transform: none; }
 }
 
@@ -1503,7 +1502,7 @@ input, select, textarea { font-size: 16px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .rd-coach-text, .rd-tip { animation: none; }
+  .rd-coach-text { animation: none; }
   .rd-demo-panel, .rd-invite-arrow { transition: none; }
   /* Nothing spins or pulses while a recipe is being read. The message
      changing carries the whole signal, which is why the sequence was written
@@ -1513,31 +1512,11 @@ input, select, textarea { font-size: 16px; }
 }
 
 @media (max-width: 520px) {
-  /* The whole diagram has to clear the fold on arrival, which on a 390x844
-     phone leaves about 74px to find above it. Three things give it up, in
-     order of what a first-time visitor loses least by:
-       - the tip slot stops reserving space while empty (40px). A tip then
-         nudges the diagram down when it appears, but that is mid-interaction
-         and never on arrival, which is the view that has to be right.
-       - the controls stay on one row rather than stacking (38px) — the
-         pre-coaching rule below stacked them for a badge that is now gone.
-       - the hero tightens up (26px).
-     The legend keeps its place: it sits under the diagram and is already
-     below the fold, which is the intended order of sacrifice. */
-  /* Measured: in flow, a two-line tip pushed the diagram down 57px and back
-     up again on dismissal — a jump under the reader's finger, and enough to
-     drop the last row below the fold while it was up. So on a phone the tip
-     floats over the top of the diagram instead of displacing it. It is
-     pointer-events: none, so a tap meant for a cell underneath still lands on
-     that cell; dismissal is the next interaction either way. Desktop keeps
-     the in-flow reserved slot, where there is room and nothing shifts. */
-  .rd-tip-slot { min-height: 0; margin-bottom: 4px; position: relative; }
-  .rd-tip-slot:empty { margin-bottom: 0; }
-  .rd-tip-slot .rd-tip {
-    position: absolute; top: 0; left: 0; right: 0; z-index: 5;
-    pointer-events: none;
-    box-shadow: 0 6px 16px rgba(var(--shadow-rgb), .17);
-  }
+  /* The controls stay on one row rather than stacking — the pre-coaching
+     rule above stacked them for a badge that is now gone — and the hero
+     tightens up. (The tips that used to float over the diagram here were
+     retired Oct 1: the instruction now says what they said.) */
+  .rd-coach-text { font-size: 19px; }
   .rd-landing-demo-head {
     flex-direction: row; align-items: center; flex-wrap: wrap; gap: 8px;
     margin-bottom: 10px;

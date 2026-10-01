@@ -33,12 +33,12 @@ import { DEMO_RECIPE, DEMO_PRECHECKED } from "../data/demo";
 import ExtractionProgress from "./ExtractionProgress";
 import {
   buildDemoGraph,
-  useCoachStage,
-  useCoachTips,
+  guideTexts,
+  useGuideLine,
   useWatchPlayer,
   CoachLine,
-  CoachTip,
   CoachLegend,
+  NARRATION_TEXTS,
   DemoTag,
 } from "./DemoCoach";
 
@@ -118,7 +118,7 @@ export default function LandingPage({
     [inputs]
   );
 
-  const graph = useMemo(() => buildDemoGraph(section, DEMO_PRECHECKED), [section]);
+  const graph = useMemo(() => buildDemoGraph(section), [section]);
 
   /**
    * Autoplay order: a post-order walk from the root, so every input is
@@ -145,12 +145,9 @@ export default function LandingPage({
     DEMO_PRECHECKED,
     setDone
   );
-  const { stage, text: coachText } = useCoachStage(graph, done, DEMO_PRECHECKED, mode);
-  // Both tips describe the grid — amber cells, stepping rightwards — so they
-  // are held (not spent) while card mode is up, and while autoplay is driving.
-  const { text: tipText, resetTips } = useCoachTips(graph, done, {
-    suspended: playing || mode !== "diagram",
-  });
+  const guide = useGuideLine(graph, done, mode);
+  // Every line the coach box can show, so it is sized to the longest.
+  const coachSizers = useMemo(() => [...guideTexts(graph), ...NARRATION_TEXTS], [graph]);
 
   const toggle = useCallback(
     (id: string) => {
@@ -181,10 +178,9 @@ export default function LandingPage({
 
   const reset = useCallback(() => {
     stop();
-    resetTips();
     setTimer(null);
     setDone(new Set(DEMO_PRECHECKED));
-  }, [stop, resetTips]);
+  }, [stop]);
 
   const pickMode = useCallback(
     (m: DemoMode) => {
@@ -359,8 +355,11 @@ export default function LandingPage({
 
                 {/* The narration stands in for the coach line while it is
                     running, never alongside it. */}
-                <CoachLine text={narration ?? coachText} />
-                <CoachTip text={tipText} />
+                <CoachLine
+                  label={playing ? "Watching" : guide.label}
+                  text={narration ?? guide.text}
+                  sizers={coachSizers}
+                />
 
                 {mode === "diagram" ? (
                   <>
@@ -399,7 +398,7 @@ export default function LandingPage({
 
         <div className="rd-landing-cta">
           <p className="rd-landing-cta-line">
-            {stage === "complete"
+            {guide.complete
               ? "Now do it with a recipe you actually want to cook."
               : trialSpent
                 ? "You\u2019ve used your free recipe. An account keeps them all."

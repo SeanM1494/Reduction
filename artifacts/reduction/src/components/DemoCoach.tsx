@@ -5,11 +5,18 @@
  * works, through interaction alone: no modal, no overlay tour, nothing to
  * dismiss before the diagram is usable.
  *
- * Four parts, all driven by the same `done` set the diagram is driven by:
- *   useCoachStage   one sentence that reacts to where the visitor actually is
- *   useCoachTips    two contextual tips, once each, never two at once
+ * Three parts, all driven by the same `done` set the diagram is driven by:
+ *   useGuideLine    the instruction for where the visitor actually is, set
+ *                   like a Step-by-Step heading under "Demo · Step 2 of 4"
  *   CoachLegend     the three cell states, as real cells
  *   useWatchPlayer  the autoplay sequence behind "Watch it"
+ *
+ * The instruction follows the phone's guided demo (Oct 1, ROADMAP "Website
+ * demo parity"): nothing checked at the start, the avocados, then halve and
+ * scoop as the one amber step, then the last step. Unlike the phone's it is
+ * DERIVED from `done` every render, never stored, so a tap it did not ask
+ * for simply leaves the same instruction up, and Reset and Watch it land on
+ * the right one for free.
  *
  * This layer wraps Diagram — it never reaches into it. No querySelector on
  * Diagram's class names, no anchoring to a specific cell, no imports from
@@ -19,8 +26,7 @@
  * On "amber": Diagram marks every unchecked ingredient `is-ready` too, but
  * every style rule for that class is scoped to .rd-op / .rd-fin, so only
  * steps ever actually render amber — ingredients keep --ing-bg. The legend
- * below therefore shows step cells, and the tips only fire on operations,
- * which is what a visitor sees turn amber.
+ * below therefore shows step cells.
  */
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -69,215 +75,105 @@ function prefersReducedMotion(): boolean {
 
 /**
  * The bits of the section's shape the coaching needs, none of which require
- * layout.ts: which ids are operations, what each consumes, and which single
- * step is the one both branches converge into.
+ * layout.ts: which ids are operations, what each consumes, the last step,
+ * and the step the guide makes ready first.
  */
 export interface DemoGraph {
   opIds: string[];
-  ingredientIds: string[];
   inputsOf: Map<string, string[]>;
-  /** The first step fed by two or more *steps* — "fold together" in the
-   *  guacamole demo. Null for a recipe that never branches. */
-  joinId: string | null;
-  /** Ops that are already ready before anyone touches anything, so the amber
-   *  tip never fires for a state the visitor did not cause. */
-  initiallyReadyOps: Set<string>;
-  allIds: string[];
+  root: string;
+  /** The first step fed by ingredients alone, with the fewest of them —
+   *  "halve and scoop", fed by the avocados. Found from the graph the same
+   *  way the phone's guide finds it, so the words cannot name a step that
+   *  is not the one turning amber. */
+  starter: string;
+  starterLabel: string;
+  starterInputs: string[];
+  /** The starter's ingredients by name, as the instruction says them. */
+  starterInputNames: string;
 }
 
-export function buildDemoGraph(section: Section, prechecked: string[]): DemoGraph {
+export function buildDemoGraph(section: Section): DemoGraph {
   const opIds = section.nodes.map((n) => n.id);
-  const ingredientIds = section.ingredients.map((i) => i.id);
-  const isOp = new Set(opIds);
   const inputsOf = new Map<string, string[]>();
   for (const n of section.nodes) inputsOf.set(n.id, n.inputs || []);
 
-  const joinId =
-    section.nodes.find((n) => (n.inputs || []).filter((i) => isOp.has(i)).length >= 2)
-      ?.id ?? null;
-
-  const start = new Set(prechecked);
-  const initiallyReadyOps = new Set(
-    opIds.filter((id) => (inputsOf.get(id) || []).every((i) => start.has(i)))
+  const ingredientName = new Map(section.ingredients.map((i) => [i.id, i.name]));
+  const fedByIngredients = section.nodes.filter(
+    (n) => (n.inputs || []).length > 0 && (n.inputs || []).every((i) => ingredientName.has(i))
   );
+  const starter = fedByIngredients.reduce(
+    (a, b) => ((b.inputs || []).length < (a.inputs || []).length ? b : a),
+    fedByIngredients[0]
+  );
+  const starterInputs = [...(starter.inputs || [])];
 
   return {
     opIds,
-    ingredientIds,
     inputsOf,
-    joinId,
-    initiallyReadyOps,
-    allIds: [...ingredientIds, ...opIds],
+    root: section.root ?? opIds[opIds.length - 1],
+    starter: starter.id,
+    starterLabel: starter.label,
+    starterInputs,
+    starterInputNames: starterInputs.map((i) => ingredientName.get(i)).join(" and "),
   };
 }
 
-/** Ops whose every input is checked off — the amber ones. */
-function readyOps(graph: DemoGraph, done: Set<string>): Set<string> {
-  return new Set(
-    graph.opIds.filter(
-      (id) => !done.has(id) && (graph.inputsOf.get(id) || []).every((i) => done.has(i))
-    )
-  );
+// ---------------------------------------------------------------- guide ----
+
+export interface GuideLine {
+  /** "Step 2 of 4", or "Step-by-Step" in card mode. Shown after "Demo ·". */
+  label: string;
+  text: string;
+  /** The last step is checked, so the whole recipe is. */
+  complete: boolean;
 }
 
-// ---------------------------------------------------------------- stage ----
+/** The diagram's four steps. The phone's guide has six: its "read" step
+ *  needs a Next button and its Step-by-Step step clears the checks first,
+ *  and this page has neither; card mode gets its own line instead. */
+const GUIDE_TOTAL = 4;
 
-export type CoachStage =
-  | "empty"
-  | "firstIngredient"
-  | "stepReady"
-  | "converging"
-  | "complete";
+const FINISH_TEXT = "That's it. Add your own recipe.";
+const STEPS_TEXT = "Tap Next Step to check off each card in cooking order.";
 
-const STAGE_TEXT: Record<CoachStage, string> = {
-  // On a phone this is the first sentence anyone reads — the hero now sits
-  // below the diagram — so it has to say what the thing IS before it says
-  // what to do with it. An instruction alone ("Tap any ingredient…") assumes
-  // a context the phone layout no longer provides above it.
-  empty: "Guacamole, as a diagram. Tap the ripe avocados to check them off.",
-  firstIngredient:
-    "Each box to the right lights up as soon as everything feeding into it is checked.",
-  stepReady: "That step turned amber because everything it needs is now done.",
-  converging: "Both branches are finished, so folding them together is all that's left.",
-  complete: "That's the whole recipe — no scrolling back up a wall of paragraphs.",
-};
+/** Every instruction this graph can show, for sizing the box to the
+ *  longest so a new step never moves the diagram under a finger. */
+export function guideTexts(g: DemoGraph): string[] {
+  return [
+    `Tap the ${g.starterInputNames} to check them off.`,
+    `Amber means ready. Tap ${g.starterLabel}.`,
+    "Tap the last step. It checks off everything before it.",
+    FINISH_TEXT,
+    STEPS_TEXT,
+  ];
+}
 
-/**
- * Card mode has no grid, no columns and nothing amber, so the three stages
- * that describe those get a second phrasing. The rest say the same thing in
- * either view and are not repeated here.
- */
-const STEPS_STAGE_TEXT: Partial<Record<CoachStage, string>> = {
-  empty: "Guacamole, step by step. Check one off to bring up the next.",
-  firstIngredient: "A card only comes up once everything it needs is checked off.",
-  stepReady: "That step unlocked because everything it needs is now done.",
-};
-
-/**
- * Where the visitor is, derived fresh from `done` every render — never
- * stored, so Reset and Watch both land on the right sentence for free.
- */
-export function useCoachStage(
-  graph: DemoGraph,
+export function guideLine(
+  g: DemoGraph,
   done: Set<string>,
-  prechecked: string[],
   view: "diagram" | "steps"
-): { stage: CoachStage; text: string } {
-  return useMemo(() => {
-    const stage: CoachStage = (() => {
-      if (graph.allIds.every((id) => done.has(id))) return "complete";
-
-      if (graph.joinId) {
-        const feeders = (graph.inputsOf.get(graph.joinId) || []).filter((i) =>
-          graph.opIds.includes(i)
-        );
-        if (feeders.length >= 2 && feeders.every((f) => done.has(f))) return "converging";
-      }
-
-      // Any op that became ready beyond the ones ready at mount means the
-      // visitor has unlocked something themselves.
-      const ready = readyOps(graph, done);
-      for (const id of ready) {
-        if (!graph.initiallyReadyOps.has(id)) return "stepReady";
-      }
-      if (graph.opIds.some((id) => done.has(id))) return "stepReady";
-
-      const start = new Set(prechecked);
-      if (graph.ingredientIds.some((id) => done.has(id) && !start.has(id))) {
-        return "firstIngredient";
-      }
-      return "empty";
-    })();
-
-    const text =
-      (view === "steps" ? STEPS_STAGE_TEXT[stage] : undefined) ?? STAGE_TEXT[stage];
-    return { stage, text };
-  }, [graph, done, prechecked, view]);
+): GuideLine {
+  const texts = guideTexts(g);
+  const at = (n: number): GuideLine => ({
+    label: `Step ${n} of ${GUIDE_TOTAL}`,
+    text: texts[n - 1],
+    complete: n === GUIDE_TOTAL,
+  });
+  if (done.has(g.root)) return at(4);
+  if (view === "steps") return { label: "Step-by-Step", text: STEPS_TEXT, complete: false };
+  if (done.has(g.starter)) return at(3);
+  if (g.starterInputs.every((i) => done.has(i))) return at(2);
+  return at(1);
 }
 
-// ----------------------------------------------------------------- tips ----
-
-export type TipId = "amber" | "jump";
-
-const TIP_TEXT: Record<TipId, string> = {
-  amber: "Amber means you can do this now — everything it depends on is already checked.",
-  jump: "You can skip ahead: click any step further right and everything it needs gets checked along with it.",
-};
-
-/**
- * Two tips, one at a time, once each, each dismissed by the next interaction.
- *
- * The whole lifecycle is driven by watching `done` change rather than by
- * callbacks from the click handlers, so autoplay, Reset and ordinary clicks
- * all flow through one path. `shown` is a ref, not state: re-showing a tip is
- * never correct, so it must not participate in re-rendering.
- *
- * Not aria-live. The coach line is the polite region; a tip appearing at the
- * same moment the line changes would queue two announcements for one action.
- */
-export function useCoachTips(
+/** Where the visitor is, derived fresh from `done` every render. */
+export function useGuideLine(
   graph: DemoGraph,
   done: Set<string>,
-  opts: { suspended: boolean }
-): { tip: TipId | null; text: string | null; resetTips: () => void } {
-  const [tip, setTip] = useState<TipId | null>(null);
-  const shown = useRef<Set<TipId>>(new Set());
-  const prevReady = useRef<Set<string> | null>(null);
-  const suspended = opts.suspended;
-
-  useEffect(() => {
-    const ready = readyOps(graph, done);
-
-    // First run establishes the baseline without firing: whatever is amber at
-    // mount is the starting position, not something the visitor unlocked.
-    if (prevReady.current === null) {
-      prevReady.current = ready;
-      return;
-    }
-    const previous = prevReady.current;
-    prevReady.current = ready;
-
-    if (suspended) return;
-
-    // An active tip is dismissed by this change, whatever it was. The next
-    // change is the earliest anything new can appear.
-    if (tip !== null) {
-      setTip(null);
-      return;
-    }
-
-    const newlyReady = [...ready].filter(
-      (id) => !previous.has(id) && !graph.initiallyReadyOps.has(id)
-    );
-
-    if (!shown.current.has("amber") && newlyReady.length > 0) {
-      shown.current.add("amber");
-      setTip("amber");
-      return;
-    }
-
-    // Only worth suggesting once a jump is actually available: a step that
-    // isn't done and isn't reachable yet is exactly what "skip ahead" means.
-    const jumpTarget = graph.opIds.some(
-      (id) => !done.has(id) && !ready.has(id)
-    );
-    if (shown.current.has("amber") && !shown.current.has("jump") && jumpTarget) {
-      shown.current.add("jump");
-      setTip("jump");
-    }
-    // `tip` is read to decide dismissal, but re-running on its own change
-    // would dismiss a tip the instant it appeared — this must only run when
-    // `done` moves.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [done, graph, suspended]);
-
-  const resetTips = useCallback(() => {
-    shown.current = new Set();
-    prevReady.current = null;
-    setTip(null);
-  }, []);
-
-  return { tip, text: tip ? TIP_TEXT[tip] : null, resetTips };
+  view: "diagram" | "steps"
+): GuideLine {
+  return useMemo(() => guideLine(graph, done, view), [graph, done, view]);
 }
 
 // ---------------------------------------------------------------- watch ----
@@ -360,21 +256,48 @@ export function useWatchPlayer(
 // --------------------------------------------------------------- pieces ----
 
 /**
- * The coach line, which during "Watch it" is handed over to the narration
- * instead — one line, never both. Keyed by the sentence itself so React
- * swaps the node and the fade runs on every change, whether that is a new
- * stage or the next line of the story. This is the app's only polite live
- * region on this page.
+ * The instruction, under "Demo · Step 2 of 4", set in the Step-by-Step
+ * card's heading face. During "Watch it" the narration takes its place and
+ * the label says so — one line, never both.
+ *
+ * The box is a one-cell grid holding every line it can show, unseen, with
+ * the current one on top: it is always as tall as the longest at this width,
+ * so a new step never moves the diagram under a finger, and no JavaScript
+ * measures anything. The visible line is keyed by its text so the fade runs
+ * on every change. This is the app's only polite live region on this page.
  */
-export function CoachLine({ text }: { text: string }) {
+export function CoachLine({
+  label,
+  text,
+  sizers,
+}: {
+  label: string;
+  text: string;
+  sizers: string[];
+}) {
   return (
-    <p className="rd-coach" aria-live="polite">
-      <span key={text} className="rd-coach-text">
-        {text}
-      </span>
-    </p>
+    <div className="rd-coach">
+      <p className="rd-coach-eyebrow">
+        <span className="rd-coach-demo">Demo</span> &middot; {label}
+      </p>
+      <div className="rd-coach-box">
+        {sizers.map((t) => (
+          <p key={`sizer:${t}`} className="rd-coach-text rd-coach-sizer" aria-hidden="true">
+            {t}
+          </p>
+        ))}
+        <p className="rd-coach-live" aria-live="polite">
+          <span key={text} className="rd-coach-text">
+            {text}
+          </span>
+        </p>
+      </div>
+    </div>
   );
 }
+
+/** The narration sentences, for sizing the coach box (see CoachLine). */
+export const NARRATION_TEXTS: string[] = Object.values(DEMO_NARRATION);
 
 /**
  * Says "this is a sample" without saying it twice. Absolutely positioned onto
@@ -384,17 +307,6 @@ export function CoachLine({ text }: { text: string }) {
  */
 export function DemoTag() {
   return <span className="rd-demo-tag">Demo</span>;
-}
-
-/** A tip, or the empty slot it occupies. Silent to screen readers — see
- *  useCoachTips. The slot is always rendered so a tip appearing never
- *  reflows the diagram below it. */
-export function CoachTip({ text }: { text: string | null }) {
-  return (
-    <div className="rd-tip-slot" aria-hidden="true">
-      {text ? <p className="rd-tip">{text}</p> : null}
-    </div>
-  );
 }
 
 /**

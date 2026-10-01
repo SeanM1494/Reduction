@@ -2405,6 +2405,51 @@ the collapsed invitation's sub-line says "Tap the avocados. The next step
 lights up." — "Tap an ingredient" was no longer true, since no other
 single ingredient readies anything. Watch it now checks the avocados first.
 
+**2. The coach line is a step instruction, set like a Step-by-Step
+heading.** Under "Demo · Step 2 of 4" (the Step-by-Step card's eyebrow,
+"Demo" in the green "done" tint, as on the phone), in the card heading's
+face, bold, 21px (19px on phones). The steps use the phone guide's words
+and find their targets from the graph the same way (`starter`: the first
+step fed by ingredients alone, with the fewest):
+
+1. "Tap the ripe avocados to check them off."
+2. "Amber means ready. Tap halve and scoop."
+3. "Tap the last step. It checks off everything before it."
+4. "That's it. Add your own recipe." (the call to action sits right below)
+
+In Step-by-Step: "Demo · Step-by-Step", "Tap Next Step to check off each
+card in cooking order." During Watch it: "Demo · Watching" over the
+narration, which is unchanged.
+
+- **Four steps, not six, and derived rather than stepped.** The phone's
+  "read" step needs a Next button and its Step-by-Step step clears the
+  checks first; this page has neither, so they are left out rather than
+  adding controls. The step is a pure function of `done` and the view
+  (`guideLine` in DemoCoach.tsx), never stored: a tap it did not ask for
+  (another ingredient, combine) leaves the same instruction up, which is
+  the nudge; a jump ahead (fold together) lands on the step it reached.
+  No ring, no dimming, no Show me — porting those needs the web Diagram to
+  take the phone's `spotlight`, which is the gap logged under "The guided
+  demo" and still open.
+- **The two tips are retired** ("Amber means you can do this now…" and
+  "You can skip ahead…"): steps 2 and 3 now say both, and showing them
+  together said everything twice. Their CSS and hook went with them.
+- **The box never changes height.** It is a one-cell CSS grid holding every
+  line it can show (the four steps, the card line, the six narration
+  sentences) unseen, with the current one on top, so it is as tall as the
+  longest at that width and no JavaScript measures anything.
+- **Measured in Chromium** (light and dark, iPhone 13, Pixel 5, iPhone SE,
+  1280px desktop), walking open → onion → avocados → halve and scoop →
+  rest 10 min → Reset → Step-by-Step → Watch it: the box held one height
+  on every sample (65px on the iPhone 13 and Pixel 5, 89px on the SE, 45px
+  on desktop); after the avocados "halve and scoop" was the only amber
+  step; no sideways scroll and no viewport change on any sample. The cost
+  is height in the EXPANDED demo only: the diagram starts 37px lower on
+  the iPhone 13 and Pixel 5 (365 → 402) and 61px lower on the SE (468 →
+  529). The collapsed page is untouched (ends at 477 / 477 / 544, as in
+  CLAUDE.md's table). WebKit and the deployed site were not checked: no
+  WebKit here, and the proxy refuses the site.
+
 ## Renaming a recipe: where it is, and a better way in (Sep 29, built)
 
 **All three ways in work** (checked on main in Chromium at iPhone 13,
