@@ -147,6 +147,9 @@ export function cookedLabel(cooked: number[] | null | undefined, short = false):
   return short ? `${list.length}× · ${last}` : `Cooked ${list.length}× · ${last}`;
 }
 
+/** The grey pill of a page never cooked; short where "3× · Sep 11" is. */
+export const notCookedLabel = (short: boolean): string => (short ? 'Not cooked' : 'Not cooked yet');
+
 /** "last Sep 11" for the preview line. */
 export const lastCookedDate = (cooked: number[] | null | undefined): string | null => {
   const list = (cooked ?? []).filter((t) => typeof t === 'number' && Number.isFinite(t));
@@ -154,17 +157,171 @@ export const lastCookedDate = (cooked: number[] | null | undefined): string | nu
 };
 
 /**
- * Below this page width (an iPhone SE's is 141px) the tuned page does not
- * fit: measured on the prototype, 19 of 31 pages put the cooked pill on the
- * page number. There, ingredients get one line and the pill the short label
- * — unless the recipe has no stated time, whose hidden line gives the
- * ingredients their second line back (0 collisions either way, measured).
+ * Below this page width (an iPhone SE's one book is 141px) the pill takes
+ * its short label: measured on the prototype, the long one put the pill on
+ * the page number on 19 of 31 pages there. It grows with the text size.
  */
 export const NARROW_PAGE_PX = 160;
 
-export function pageLayout(pageWidth: number, hasTime: boolean): { narrow: boolean; ingredientLines: 1 | 2; shortPill: boolean } {
-  const narrow = pageWidth < NARROW_PAGE_PX;
-  return { narrow, ingredientLines: narrow && hasTime ? 1 : 2, shortPill: narrow };
+/**
+ * A page's heights, from PageFace.tsx and BookPage.tsx: each row is a fixed
+ * part (margins, padding, a rule) and a part that grows with Dynamic Type
+ * (the line height — iOS scales `lineHeight` with the font). Change a style
+ * there and change it here; the fit is only as true as these numbers.
+ */
+export const PAGE_METRICS = {
+  padTop: 12,
+  /** The bottom padding the photo's share is taken from, at text size 1. */
+  padBottom: 20,
+  /** The page number: 6 from the bottom, a ~12px line, 2 clear of the pill. */
+  numberFixed: 8,
+  numberLine: 12,
+  photoShare: 0.34,
+  /** The least the picture may shrink to under large text before the text
+   *  itself is capped. Room for the rating badge with a margin. */
+  minPhoto: 36,
+  titleFixed: 8,
+  titleLine: 18,
+  titleLines: 2,
+  timeFixed: 5,
+  timeLine: 14,
+  servesFixed: 7 + 6 + 1,
+  servesLine: 14,
+  ingredientFixed: 3,
+  ingredientLine: 15.5,
+  /** The least gap kept above the pill, which is pinned to the bottom. */
+  pillGap: 4,
+  pillFixed: 6,
+  pillLine: 13,
+  /** A wide estimate of Space Grotesk SemiBold's average advance at the
+   *  title's 14.5px (0.62em), for keeping its longest word on one line. */
+  titleCharPx: 9,
+  /** The pill's label (system SemiBold, 10.5px): a wide 0.6em a character,
+   *  3px for a space or "·", inside its 8px side padding. */
+  pillCharPx: 6.3,
+  pillNarrowPx: 3,
+  pillPadX: 8,
+  /** Space Mono's advance (0.6125em) at the time line's 11px. The longest
+   *  time there is, "23 hr 59 min", is 80.9px; the smallest page has 81. */
+  timeCharPx: 6.74,
+  padX: 11,
+} as const;
+
+/** The pill label's width at text size 1, by PAGE_METRICS. */
+export const pillWidth = (label: string): number =>
+  [...label].reduce((w, c) => w + (c === ' ' || c === '·' ? PAGE_METRICS.pillNarrowPx : PAGE_METRICS.pillCharPx), 0);
+
+export interface PageText {
+  title: string;
+  time: string | null;
+  /** The cooked pill's two labels: "Cooked 2× · Sep 5" and "2× · Sep 5",
+   *  or "Not cooked yet" and "Not cooked". */
+  pill: { long: string; short: string };
+}
+
+export interface PageFit {
+  /** The pill's label: the long one wherever it fits. */
+  pill: string;
+  /** Its own cap, so the label is never cut by large text. */
+  pillMaxFontScale: number | null;
+  showServes: boolean;
+  ingredientLines: 0 | 1 | 2;
+  photoHeight: number;
+  paddingBottom: number;
+  /** A cap on Dynamic Type for the page's text, or null for none: set only
+   *  when even the barest page would not fit at the person's text size. */
+  maxFontScale: number | null;
+  /** The time line's own cap, so its text is never cut by large text. */
+  timeMaxFontScale: number | null;
+  /** The title's own cap, so its longest word is never broken mid-word by
+   *  large text (a word longer than the line at size 1 still is). */
+  titleMaxFontScale: number | null;
+}
+
+const floor2 = (x: number): number => Math.floor(x * 100) / 100;
+/** A cap worth passing: only above the default size (iOS honours none
+ *  below 1), and only where it is lower than the text would be. */
+const capBelow = (cap: number, k: number): number | null => (k > 1 && cap < k ? Math.max(1, cap) : null);
+
+/**
+ * What a book page shows, so that nothing on it is clipped or overlaps at
+ * any page size the carousel can produce (`carouselGeometry`) and any text
+ * size. Sizes are counted at their worst — a two-line title, two full
+ * ingredient lines — so a page never depends on a guess about how a string
+ * wraps.
+ *
+ * The order things give way, when the page is short (decided Oct 1):
+ *  1. the pill's short label (by width: where the long one would be cut);
+ *  2. ingredients to one line;
+ *  3. the "Serves 4 · 8 steps" line goes;
+ *  4. the ingredients line goes;
+ *  5. under large text only: the picture shrinks, down to `minPhoto`;
+ *  6. and then the text stops growing (`maxFontScale`).
+ * The title, the time, the cooked pill and the page number never go, and
+ * under large text the time and the title's longest word stop growing at
+ * the page's width rather than being cut mid-word. On
+ * every page the prototype was tuned for (a book 296px and wider, at the
+ * default text size) step 1 at most applies, so those pages are unchanged.
+ */
+export function pageFit(width: number, height: number, text: PageText, fontScale: number): PageFit {
+  const m = PAGE_METRICS;
+  const { title, time, pill } = text;
+  const s = Number.isFinite(fontScale) && fontScale > 0 ? fontScale : 1;
+  const basePhoto = Math.round((height - m.padTop - m.padBottom) * m.photoShare);
+  const padBottom = (k: number) => Math.max(m.padBottom, Math.ceil(m.numberFixed + m.numberLine * k));
+  // Everything but the picture and the optional rows, at text size k.
+  const fixedRows = (k: number) =>
+    m.padTop +
+    m.titleFixed + m.titleLines * m.titleLine * k +
+    (time ? m.timeFixed + m.timeLine * k : 0) +
+    m.pillGap + m.pillFixed + m.pillLine * k +
+    padBottom(k);
+  const serves = (k: number) => m.servesFixed + m.servesLine * k;
+  const ingredients = (n: number, k: number) => (n ? m.ingredientFixed + n * m.ingredientLine * k : 0);
+  // Widths: the largest text size at which a string still fits the line.
+  const contentW = width - 2 * m.padX;
+  const fitsAt = (chars: number, charPx: number, room: number) => floor2(room / (Math.max(1, chars) * charPx));
+  const timeCap = time ? fitsAt(time.length, m.timeCharPx, contentW) : Infinity;
+  const longestWord = Math.max(...String(title ?? '').split(/\s+/).map((w) => w.length));
+  const titleCap = fitsAt(longestWord, m.titleCharPx, contentW);
+  const pillRoom = contentW - 2 * m.pillPadX;
+  const pillCap = (label: string) => floor2(pillRoom / pillWidth(label));
+  const textCaps = (k: number) => {
+    const roomy = width >= NARROW_PAGE_PX * Math.max(1, k) && pillCap(pill.long) >= Math.max(1, k);
+    const label = roomy ? pill.long : pill.short;
+    return {
+      pill: label,
+      pillMaxFontScale: capBelow(pillCap(label), k),
+      timeMaxFontScale: capBelow(timeCap, k),
+      titleMaxFontScale: capBelow(titleCap, k),
+    };
+  };
+
+  const ladder: Array<[boolean, 0 | 1 | 2]> = [[true, 2], [true, 1], [false, 1], [false, 0]];
+  for (const [showServes, lines] of ladder) {
+    if (fixedRows(s) + basePhoto + (showServes ? serves(s) : 0) + ingredients(lines, s) <= height) {
+      return { ...textCaps(s), showServes, ingredientLines: lines, photoHeight: basePhoto, paddingBottom: padBottom(s), maxFontScale: null };
+    }
+  }
+  const room = Math.floor(height - fixedRows(s));
+  if (room >= m.minPhoto) {
+    return { ...textCaps(s), showServes: false, ingredientLines: 0, photoHeight: room, paddingBottom: padBottom(s), maxFontScale: null };
+  }
+  // The text itself is capped: the largest k at which the bare page fits.
+  // Every row is linear in k, so solve it (padBottom is linear once the
+  // number outgrows the default padding, which it has by k > 1).
+  const fixedPart = m.padTop + m.titleFixed + (time ? m.timeFixed : 0) + m.pillGap + m.pillFixed + m.numberFixed + m.minPhoto;
+  const perK = m.titleLines * m.titleLine + (time ? m.timeLine : 0) + m.pillLine + m.numberLine;
+  // (One pixel held back for the page number's padding, which rounds up.)
+  const cap = Math.max(1, floor2((height - fixedPart - 1) / perK));
+  return {
+    ...textCaps(cap),
+    showServes: false,
+    ingredientLines: 0,
+    photoHeight: Math.max(m.minPhoto, Math.floor(height - fixedRows(cap))),
+    paddingBottom: padBottom(cap),
+    maxFontScale: cap,
+  };
 }
 
 // ---------------------------------------------------------------------------

@@ -2957,7 +2957,7 @@ light screenshots before and after are pixel-identical.
 is too short for its lines — the right page's time line is clipped to a
 sliver and the cooked pill overlaps the ingredient line and the page
 number, in both themes, before and after this change (`pageLayout`'s
-budget). Worth confirming on a real small phone before fixing.
+budget). Worth confirming on a real small phone before fixing. **Fixed Oct 1:** "Recipe Box pages on small phones" below.
 
 ## Find closed the app: a worklet's default parameter (Oct 1)
 
@@ -3187,6 +3187,69 @@ cost test orders by `cached`. No retry, no skip, no schema or dependency
 change. After the fix: 40 of 40 runs of the same stress passed. The rule
 for any database test: **count only what you wrote**, because another
 suite is writing to the same table while you look.
+
+## Recipe Box pages on small phones (Oct 1, built)
+
+**Reported:** on the iPhone SE profile a book page is too short for its
+lines: the time line cut to a sliver, the cooked pill over the ingredient
+line and the page number, in both themes.
+
+**What it actually was.** Not the SE's width as such: the old rule
+(`pageLayout`) knew only the page's WIDTH and had two settings, tuned for
+the SE's one-book page (141×237). With two or more books the carousel
+narrows the book so the neighbours can peek (`carouselGeometry`, down to
+`minBookPx` 220), and at 320×568 that page is **103×176**. React Native
+then squeezed the flow rows to make room for the pinned pill: time 4px
+tall, serves 10px, ingredients 4px (measured). At 375×667 in Chromium the
+page is 166×277 and fits, at the default text size. At ANY phone size the
+page also broke under large Dynamic Type: from about AX2 (1.94×) on an
+iPhone 13 the pill and the page number overlap the ingredient line.
+
+**Decided (owner's brief, Oct 1): a priority order, never an overlap.**
+`pageFit` (lib/recipeBox.ts, pure) counts the page's rows at their worst
+(two title lines, two ingredient lines) from the face's own metrics
+(`PAGE_METRICS`), scaled by the person's text size, and gives way in this
+order:
+
+1. the pill's short label ("2× · Sep 5", "Not cooked") — by width, below
+   160px or where the long label would be cut;
+2. ingredients to one line;
+3. the "Serves 4 · 8 steps" line goes;
+4. the ingredients line goes;
+5. large text only: the picture shrinks, down to 36px;
+6. then the page's text stops growing (`maxFontSizeMultiplier`).
+
+The title, the time, the pill and the page number never go. Under large
+text the time, the pill and the title's longest word also stop growing at
+the page's width rather than being cut mid-word; the time and the pill
+carry `adjustsFontSizeToFit` (minimum 0.85) as the native safety net if
+the system font is wider than the model. The rating badge caps at 1.35×
+so it stays inside the smallest picture.
+
+**Unchanged where it fit.** At the default text size every page 160px and
+wider shows everything as before; Chromium screenshots of the SE
+(375×667), iPhone 13 and Pixel 5, light and dark, are pixel-identical
+before and after. The SE's one-book page (141×237) is identical except
+that "Not cooked yet" now reads "Not cooked", like its short "2× · Sep 5".
+The 103×176 page now shows the picture, title, time, pill and number.
+
+**Tests:** `recipeBox.test.ts` — unchanged at the tuned sizes; the order
+rows return in on a growing page; and over every book the carousel can
+draw (220–380px) × every iOS text size (xSmall to AX5) × times up to
+"23 hr 59 min": nothing taller than the page, the serves line never
+outlives the ingredients, the text capped only after every row that can
+go has gone, and the time, the pill and "Overnight" never wider than the
+line.
+
+**Only a real small phone can check:** Dynamic Type itself (Chromium was
+given the text size by patching the export's `fontScale` and scaling each
+text's font and line height by its cap — an emulation, not iOS); SF Pro's
+real widths for the pill (the model assumes 0.6em, and the shrink-to-fit
+is untested off a device); Space Grotesk and Space Mono as iOS draws them;
+the native tab layout's stage height (Chromium only reaches the classic
+one, so the book's size on an iOS 26 SE is not measured); and Display
+Zoom, which makes an SE 2nd/3rd gen 320pt wide — the 103×176 case above.
+WebKit is not installed here.
 
 ## Still open from earlier work
 

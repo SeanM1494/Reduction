@@ -22,7 +22,10 @@ import {
   flipSettleMs,
   keyIngredients,
   pageA11yLabel,
-  pageLayout,
+  pageFit,
+  pillWidth,
+  notCookedLabel,
+  PAGE_METRICS,
   pagesLabel,
   shelf,
   spreadCount,
@@ -153,12 +156,123 @@ test('cooked pill: count and last date, short on a narrow page, null when never'
   assert.equal(cookedLabel([sep11], true), '1× · Sep 11');
   assert.equal(cookedLabel([]), null);
   assert.equal(cookedLabel(null), null);
+  assert.equal(notCookedLabel(false), 'Not cooked yet');
+  assert.equal(notCookedLabel(true), 'Not cooked');
 });
 
-test('narrow pages: one ingredient line and the short pill — unless there is no time line to pay for it', () => {
-  assert.deepEqual(pageLayout(176, true), { narrow: false, ingredientLines: 2, shortPill: false }, 'iPhone 13');
-  assert.deepEqual(pageLayout(141, true), { narrow: true, ingredientLines: 1, shortPill: true }, 'iPhone SE');
-  assert.deepEqual(pageLayout(141, false), { narrow: true, ingredientLines: 2, shortPill: true }, 'SE, no stated time');
+/** The page's height as the face will draw it, rebuilt from the fit and the
+ *  face's own metrics (the worst case: a two-line title, full lines). */
+function drawnHeight(fit: ReturnType<typeof pageFit>, time: string | null, fontScale: number): number {
+  const m = PAGE_METRICS;
+  const k = Math.min(fontScale, fit.maxFontScale ?? Infinity);
+  return (
+    m.padTop +
+    fit.photoHeight +
+    m.titleFixed + 2 * m.titleLine * k +
+    (time ? m.timeFixed + m.timeLine * k : 0) +
+    (fit.showServes ? m.servesFixed + m.servesLine * k : 0) +
+    (fit.ingredientLines ? m.ingredientFixed + fit.ingredientLines * m.ingredientLine * k : 0) +
+    m.pillGap + m.pillFixed + m.pillLine * k +
+    fit.paddingBottom
+  );
+}
+
+// Every book the carousel can draw (CAROUSEL.minBookPx to maxBookPx).
+const PAGES = Array.from({ length: CAROUSEL.maxBookPx - CAROUSEL.minBookPx + 1 }, (_, i) => {
+  const g = bookGeometry(CAROUSEL.minBookPx + i);
+  return { w: g.pageW, h: g.pageH };
+});
+// iOS text sizes: xSmall, Large (default), xxxLarge, and the five accessibility sizes.
+const TEXT_SIZES = [0.82, 1, 1.12, 1.235, 1.647, 1.941, 2.353, 2.765, 3.118];
+const TIMES = [null, '5 min', '35 min', '3 hr 30 min', '23 hr 59 min'];
+const TITLE = 'Overnight Cinnamon Rolls with Brown Butter Cream Cheese Frosting';
+const COOKED = { long: 'Cooked 12× · Sep 25', short: '12× · Sep 25' };
+const NOT_COOKED = { long: 'Not cooked yet', short: 'Not cooked' };
+const text = (title: string, time: string | null, pill = COOKED) => ({ title, time, pill });
+
+test('page fit: the pages the prototype was tuned for are unchanged at the default text size', () => {
+  // 296 is an iPhone SE's one book; 334 and up is every phone 375pt and
+  // wider. Between the two a page now keeps a second ingredient line where
+  // the old width rule took it and the height has room for it.
+  for (const bookW of [296, 334, 340, 352, 366, 369, 380]) {
+    const { pageW, pageH } = bookGeometry(bookW);
+    for (const time of TIMES) {
+      const fit = pageFit(pageW, pageH, text('Sticky Sesame Chicken', time, { long: 'Cooked 2× · Sep 5', short: '2× · Sep 5' }), 1);
+      // What the old width rule said: short pill and one ingredient line
+      // below 160px, unless there was no time line.
+      const narrow = pageW < 160;
+      assert.equal(fit.pill, narrow ? '2× · Sep 5' : 'Cooked 2× · Sep 5', `${pageW} pill`);
+      assert.equal(pageFit(pageW, pageH, text('Toast', time, NOT_COOKED), 1).pill, narrow ? 'Not cooked' : 'Not cooked yet', `${pageW} not cooked`);
+      assert.equal(fit.ingredientLines, narrow && time ? 1 : 2, `${pageW}x${pageH} ${time}`);
+      assert.equal(fit.showServes, true);
+      assert.equal(fit.photoHeight, Math.round((pageH - 32) * 0.34));
+      assert.equal(fit.paddingBottom, 20);
+      assert.equal(fit.maxFontScale, null);
+      assert.equal(fit.timeMaxFontScale, null);
+      assert.equal(fit.titleMaxFontScale, null);
+      assert.equal(fit.pillMaxFontScale, null);
+    }
+  }
+});
+
+test('page fit: on the smallest book (a 320pt phone with several books) rows give way in order', () => {
+  const { pageW, pageH } = bookGeometry(CAROUSEL.minBookPx); // 103 x 176
+  const withTime = pageFit(pageW, pageH, text('Buttermilk Pancakes', '35 min'), 1);
+  assert.equal(withTime.pill, '12× · Sep 25');
+  assert.deepEqual([withTime.showServes, withTime.ingredientLines], [false, 0], 'title, time, pill and number only');
+  const noTime = pageFit(pageW, pageH, text('Buttermilk Pancakes', null), 1);
+  assert.deepEqual([noTime.showServes, noTime.ingredientLines], [false, 1], 'the missing time line buys back an ingredient line');
+  // A step taller and the serves line comes back before a second ingredient line.
+  const seen: string[] = [];
+  for (let h = 150; h <= 320; h++) {
+    const f = pageFit(140, h, text('Buttermilk Pancakes', '35 min'), 1);
+    const key = `${f.showServes}/${f.ingredientLines}`;
+    if (seen[seen.length - 1] !== key) seen.push(key);
+  }
+  assert.deepEqual(seen, ['false/0', 'false/1', 'true/1', 'true/2'], 'the order rows return in, which is the order they go in reversed');
+});
+
+test('page fit: nothing overflows the page, on every book size and every iOS text size', () => {
+  for (const { w, h } of PAGES) {
+    for (const s of TEXT_SIZES) {
+      for (const time of TIMES) {
+        const fit = pageFit(w, h, text(TITLE, time), s);
+        const label = `${w}x${h} @${s} ${time}`;
+        assert.ok(drawnHeight(fit, time, s) <= h + 1e-9, `${label}: ${drawnHeight(fit, time, s)} > ${h}`);
+        assert.ok(fit.photoHeight >= PAGE_METRICS.minPhoto, `${label}: photo ${fit.photoHeight}`);
+        assert.ok(fit.maxFontScale === null || fit.maxFontScale >= 1, label);
+        // Rows go in order: the serves line never outlives the ingredients.
+        if (fit.showServes) assert.ok(fit.ingredientLines >= 1, label);
+        // The text is capped only once every row that can go has gone.
+        if (fit.maxFontScale !== null) assert.deepEqual([fit.showServes, fit.ingredientLines], [false, 0], label);
+        // The time line is never cut: its text fits the page's width.
+        if (time) {
+          // A cap below 1 is not a cap iOS honours; the text is then at 1.
+          const k = Math.min(s, Math.max(1, Math.min(fit.maxFontScale ?? Infinity, fit.timeMaxFontScale ?? Infinity)));
+          assert.ok(time.length * PAGE_METRICS.timeCharPx * k <= w - 22 + 1e-9, `${label}: time too wide at ${k}`);
+        }
+        // The title's longest word ("Overnight") stays whole under large text.
+        const kt = Math.min(s, Math.max(1, Math.min(fit.maxFontScale ?? Infinity, fit.titleMaxFontScale ?? Infinity)));
+        if (kt > 1) assert.ok('Overnight'.length * PAGE_METRICS.titleCharPx * kt <= w - 22 + 1e-9, `${label}: title word too wide at ${kt}`);
+        // The pill's label is never cut: the long one where it fits, else
+        // the short one, which fits every page at the default size.
+        const kp = Math.min(s, Math.max(1, Math.min(fit.maxFontScale ?? Infinity, fit.pillMaxFontScale ?? Infinity)));
+        assert.ok(pillWidth(fit.pill) * kp <= w - 22 - 16 + 1e-9, `${label}: pill "${fit.pill}" too wide at ${kp}`);
+      }
+    }
+  }
+});
+
+test('page fit: larger text never shows MORE rows on the same page', () => {
+  for (const { w, h } of PAGES) {
+    let before = Infinity;
+    for (const s of TEXT_SIZES) {
+      const f = pageFit(w, h, text('Buttermilk Pancakes', '35 min'), s);
+      const rows = (f.showServes ? 10 : 0) + f.ingredientLines;
+      assert.ok(rows <= before, `${w}x${h} @${s}`);
+      before = rows;
+    }
+  }
 });
 
 test('the page as VoiceOver reads it', () => {

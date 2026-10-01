@@ -52,6 +52,10 @@ export interface PageFaceProps {
   paddingBottom: number;
   /** Caps Dynamic Type on a face whose height is fixed by its caller. */
   maxFontSizeMultiplier?: number;
+  /** The time line's own cap, lower when its text would outgrow the width. */
+  timeMaxFontSizeMultiplier?: number;
+  /** The title's own cap, lower when large text would break its longest word. */
+  titleMaxFontSizeMultiplier?: number;
   testID?: string;
 }
 
@@ -72,12 +76,16 @@ export function PageFace({
   corner,
   paddingBottom,
   maxFontSizeMultiplier,
+  timeMaxFontSizeMultiplier,
+  titleMaxFontSizeMultiplier,
   testID,
 }: PageFaceProps) {
   const colors = useColors();
   const muted = { color: colors.paperMuted };
   const serves = servings ? `Serves ${servings} · ` : '';
   const scale = maxFontSizeMultiplier === undefined ? {} : { maxFontSizeMultiplier };
+  const timeScale = timeMaxFontSizeMultiplier === undefined ? scale : { maxFontSizeMultiplier: timeMaxFontSizeMultiplier };
+  const titleScale = titleMaxFontSizeMultiplier === undefined ? scale : { maxFontSizeMultiplier: titleMaxFontSizeMultiplier };
   return (
     <View style={[faceStyles.content, { paddingBottom }]} testID={testID}>
       <View style={[faceStyles.photo, { height: photoHeight }]}>
@@ -89,11 +97,14 @@ export function PageFace({
         {badge}
         {photoOverlay}
       </View>
-      <Text style={faceStyles.title} numberOfLines={2} {...scale}>
+      <Text style={faceStyles.title} numberOfLines={2} {...titleScale}>
         {title}
       </Text>
       {time ? (
-        <Text style={[faceStyles.time, muted]} numberOfLines={1} testID="book-page-time" {...scale}>
+        // The time is never cut (lib/recipeBox.ts pageFit sizes it to the
+        // width); shrinking a hair is the native safety net if a font's
+        // advance ever differs from the model's.
+        <Text style={[faceStyles.time, muted]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.85} testID="book-page-time" {...timeScale}>
           {time}
         </Text>
       ) : null}

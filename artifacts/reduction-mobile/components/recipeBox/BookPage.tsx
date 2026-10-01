@@ -18,14 +18,14 @@
  */
 
 import React, { memo } from 'react';
-import { Platform, StyleSheet, Text, View } from 'react-native';
+import { Platform, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { sanitizeMealTypes } from '@/shared/mealTypes';
 import { useRecipePhoto } from '@/lib/recipePhoto';
-import { cookedLabel, keyIngredients, pageLayout, RATING_EMOJI, stepCount, timeLine, type Book } from '@/lib/recipeBox';
+import { cookedLabel, keyIngredients, notCookedLabel, pageFit, RATING_EMOJI, stepCount, timeLine, type Book } from '@/lib/recipeBox';
 import type { Entry } from '@/lib/api';
 import { useColors } from '@/hooks/useColors';
-import { FACE_PAD_TOP, PageFace, faceStyles } from './PageFace';
+import { PageFace, faceStyles } from './PageFace';
 
 export type PageContent = { kind: 'recipe'; entry: Entry; number: number } | { kind: 'blank' } | { kind: 'empty' };
 
@@ -72,21 +72,27 @@ function RecipeFace({ entry, number, side, book, width, height }: { entry: Entry
   const colors = useColors();
   const photo = useRecipePhoto(entry);
   const time = timeLine(recipe);
-  const layout = pageLayout(width, time !== null);
-  const cooked = cookedLabel(entry.cooked, layout.shortPill);
+  // What fits is decided by the page's size AND the person's text size
+  // (lib/recipeBox.ts pageFit, under test): rows give way in a fixed order
+  // rather than overlapping, and Dynamic Type is capped only past that.
+  const { fontScale } = useWindowDimensions();
+  const cooked = cookedLabel(entry.cooked);
+  const pill = cooked
+    ? { long: cooked, short: cookedLabel(entry.cooked, true) ?? cooked }
+    : { long: notCookedLabel(false), short: notCookedLabel(true) };
+  const fit = pageFit(width, height, { title: recipe.title, time, pill }, fontScale);
+  const cap = fit.maxFontScale ?? undefined;
   const rating = entry.rating;
-  // The prototype's photo is 34% of the page's content box.
-  const photoH = Math.round((height - FACE_PAD_TOP - PAD_BOTTOM) * 0.34);
   return (
     <PageFace
       testID={`book-page-${entry.id}`}
       photo={photo}
       mealType={sanitizeMealTypes(recipe.mealTypes)[0] ?? null}
-      photoHeight={photoH}
+      photoHeight={fit.photoHeight}
       badge={
         rating === 1 || rating === 0 || rating === -1 ? (
           <View style={styles.badge} testID="book-page-rating">
-            <Text style={styles.badgeText}>{RATING_EMOJI[String(rating)]}</Text>
+            <Text style={styles.badgeText} maxFontSizeMultiplier={BADGE_MAX_SCALE}>{RATING_EMOJI[String(rating)]}</Text>
           </View>
         ) : null
       }
@@ -94,25 +100,43 @@ function RecipeFace({ entry, number, side, book, width, height }: { entry: Entry
       time={time}
       servings={recipe.servings || null}
       steps={stepCount(recipe)}
+      showServes={fit.showServes}
       ingredients={keyIngredients(recipe)}
-      ingredientLines={layout.ingredientLines}
-      paddingBottom={PAD_BOTTOM}
+      ingredientLines={fit.ingredientLines}
+      paddingBottom={fit.paddingBottom}
+      maxFontSizeMultiplier={cap}
+      timeMaxFontSizeMultiplier={fit.timeMaxFontScale ?? undefined}
+      titleMaxFontSizeMultiplier={fit.titleMaxFontScale ?? undefined}
       footer={
         <View
           style={[faceStyles.pill, cooked ? { backgroundColor: `${book.color}1f` } : { backgroundColor: colors.paperPill }]}
           testID="book-page-cooked"
         >
-          <Text style={[faceStyles.pillText, { color: cooked ? book.color : colors.paperMuted }]} numberOfLines={1}>
-            {cooked ?? 'Not cooked yet'}
+          <Text
+            style={[faceStyles.pillText, { color: cooked ? book.color : colors.paperMuted }]}
+            numberOfLines={1}
+            // Sized to fit by pageFit; shrinking a hair is the native safety
+            // net if the system font is wider than the model.
+            adjustsFontSizeToFit
+            minimumFontScale={0.85}
+            maxFontSizeMultiplier={fit.pillMaxFontScale ?? cap}
+          >
+            {fit.pill}
           </Text>
         </View>
       }
-      corner={<Text style={[styles.number, { color: colors.paperFaint }, side === 'left' ? { left: 11 } : { right: 11 }]}>{number}</Text>}
+      corner={
+        <Text style={[styles.number, { color: colors.paperFaint }, side === 'left' ? { left: 11 } : { right: 11 }]} maxFontSizeMultiplier={cap}>
+          {number}
+        </Text>
+      }
     />
   );
 }
 
-const PAD_BOTTOM = 20;
+/** The rating emoji sits on the picture, which can shrink to
+ *  PAGE_METRICS.minPhoto (36): 6 + 6 + 16 × 1.35 ≈ 34, inside it. */
+const BADGE_MAX_SCALE = 1.35;
 
 const styles = StyleSheet.create({
   page: { overflow: 'hidden' },
