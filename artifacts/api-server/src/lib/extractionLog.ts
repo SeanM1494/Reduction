@@ -132,14 +132,21 @@ export function hostOf(rawUrl: string): string | null {
 }
 
 /**
- * Records one event. Never throws, never awaited by a request path.
+ * Records one event. Never throws, never rejects, never awaited by a request
+ * path.
  *
  * Deliberately not awaited at the call site: the response has already been
  * sent by the time this runs, so a slow insert cannot add latency to an
  * extraction that was already the slow part of someone's day.
+ *
+ * The promise is returned for the TEST, which has to know when the write has
+ * landed. It used to sleep a fixed 300ms and hope, and on a busy machine the
+ * insert can take longer than that; awaiting the write itself is the only
+ * wait that cannot be too short. It resolves on success and on a swallowed
+ * failure alike, so awaiting it can never fail a request either.
  */
-export function recordExtraction(event: ExtractionEvent): void {
-  void (async () => {
+export function recordExtraction(event: ExtractionEvent): Promise<void> {
+  return (async () => {
     try {
       const db = getDb();
       const how = await writeEvent(

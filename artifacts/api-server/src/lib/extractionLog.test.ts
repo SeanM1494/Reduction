@@ -38,7 +38,7 @@ test("recordExtraction writes one row and never throws", async (t) => {
   const db = getDb();
   const host = `logtest-${Date.now()}.invalid`;
 
-  recordExtraction({
+  await recordExtraction({
     source: "url",
     cached: false,
     via: "claude",
@@ -48,10 +48,6 @@ test("recordExtraction writes one row and never throws", async (t) => {
     ok: true,
     ms: 1234,
   });
-
-  // Fire-and-forget by design, so the request path never waits on it — which
-  // is exactly why the test has to.
-  await new Promise((r) => setTimeout(r, 300));
 
   const rows = await db
     .select()
@@ -73,8 +69,7 @@ test("a cache hit records no via, which is what makes the fraction correct", asy
   const db = getDb();
   const host = `logtest-cached-${Date.now()}.invalid`;
 
-  recordExtraction({ source: "url", cached: true, host, ok: true, ms: 8 });
-  await new Promise((r) => setTimeout(r, 300));
+  await recordExtraction({ source: "url", cached: true, host, ok: true, ms: 8 });
 
   const [row] = await db
     .select()
@@ -98,7 +93,7 @@ test("a cache hit records no via, which is what makes the fraction correct", asy
 test("a failing write is swallowed, not thrown, and leaves nothing behind", async (t) => {
   if (!(await needsDatabase(t, "extraction_events"))) return;
   const db = getDb();
-  const before = await db.select({ n: sql<number>`count(*)::int` }).from(extractionEvents);
+  const host = `logtest-fail-${Date.now()}.invalid`;
 
   // The realistic version of this is the migration not having been run yet:
   // the insert fails and the extraction it was describing must still have
@@ -110,13 +105,23 @@ test("a failing write is swallowed, not thrown, and leaves nothing behind", asyn
   // limit, so the insert SUCCEEDED — the test asserted nothing and left a
   // 100KB row behind on every run. Hence `host` being capped in
   // extractionLog.ts, and hence this test counting rows.
-  assert.doesNotThrow(() =>
-    recordExtraction({ source: "url", cached: false, ok: null as never })
-  );
-  await new Promise((r) => setTimeout(r, 400));
+  //
+  // It counts ITS OWN rows, by a host nobody else writes. It used to count
+  // the whole table before and after, and node --test runs the other suites
+  // in parallel processes against the same database — costs.db.test.ts
+  // inserts a batch of extraction_events in that window, and the count came
+  // back 375 against 21 (Oct 1, 2 runs in 15 beside those suites).
+  let written!: Promise<void>;
+  assert.doesNotThrow(() => {
+    written = recordExtraction({ source: "url", cached: false, host, ok: null as never });
+  });
+  await written;
 
-  const after = await db.select({ n: sql<number>`count(*)::int` }).from(extractionEvents);
-  assert.equal(after[0].n, before[0].n);
+  const [{ n }] = await db
+    .select({ n: sql<number>`count(*)::int` })
+    .from(extractionEvents)
+    .where(sql`${extractionEvents.host} = ${host}`);
+  assert.equal(n, 0);
 });
 
 test("host is capped, so a hostile URL cannot write an unbounded row", async (t) => {
@@ -127,13 +132,12 @@ test("host is capped, so a hostile URL cannot write an unbounded row", async (t)
   // with the last one's row.
   const stamp = `t${Date.now()}`;
   const like = `${stamp}-%`;
-  recordExtraction({
+  await recordExtraction({
     source: "url",
     cached: false,
     ok: true,
     host: `${stamp}-${"a".repeat(400)}.invalid`,
   });
-  await new Promise((r) => setTimeout(r, 400));
 
   const rows = await db
     .select({ host: extractionEvents.host })
@@ -194,10 +198,13 @@ test("recordExtraction writes the account and the estimated cost", async (t) => 
   if (!(await needsDatabase(t, "extraction_events"))) return;
   const db = getDb();
   const host = `costtest-${Date.now()}.invalid`;
-  recordExtraction({ source: "url", cached: false, via: "self", host, ok: true, ms: 5, userId: "cost-user", usage: usage({ inputTokens: 5000, outputTokens: 1000 }) });
-  recordExtraction({ source: "url", cached: true, via: "self", host, ok: true, ms: 1, userId: "cost-user" });
-  await new Promise((r) => setTimeout(r, 300));
-  const rows = await db.select().from(extractionEvents).where(sql`${extractionEvents.host} = ${host}`).orderBy(extractionEvents.id);
+  // Both in flight at once, as two requests would be — so the ids may land in
+  // either order, and the rows are compared fresh-first rather than by id.
+  await Promise.all([
+    recordExtraction({ source: "url", cached: false, via: "self", host, ok: true, ms: 5, userId: "cost-user", usage: usage({ inputTokens: 5000, outputTokens: 1000 }) }),
+    recordExtraction({ source: "url", cached: true, via: "self", host, ok: true, ms: 1, userId: "cost-user" }),
+  ]);
+  const rows = await db.select().from(extractionEvents).where(sql`${extractionEvents.host} = ${host}`).orderBy(extractionEvents.cached);
   assert.equal(rows.length, 2);
   assert.deepEqual(rows.map((r) => [r.cached, r.userId, r.inputTokens, r.outputTokens, Number(r.estCostUsd)]), [
     [false, "cost-user", 5000, 1000, 0.02],

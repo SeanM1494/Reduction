@@ -3167,6 +3167,27 @@ dropped: a list that is past 20 when this ships keeps every entry, and
 only new curations wait until it is under 20. `reel.mjs preview` prints
 "N of 20 curated".
 
+## The extraction log test's flake (Oct 1, fixed)
+
+`extractionLog.test.ts` failed once in a full run. **Cause:** node --test
+runs every suite file in its own process at the same time, all against the
+one test database. The "failing write is swallowed" test counted the WHOLE
+`extraction_events` table before and after its write, and
+`costs.db.test.ts`, `account.db.test.ts` and `reel.db.test.ts` insert into
+that table in the same window. Reproduced beside those three suites: 2 runs
+in 15 failed, the count coming back 375 against 21. Two more guesses sat in
+the same file: every DB test slept a fixed 300 or 400ms for a
+fire-and-forget insert, and the cost test read its two concurrent inserts
+back by id, which either could win.
+
+**Decided:** `recordExtraction` returns its promise (it never rejects; the
+routes still do not await it), the tests await the write itself instead of
+sleeping, every test counts only rows under its own unique host, and the
+cost test orders by `cached`. No retry, no skip, no schema or dependency
+change. After the fix: 40 of 40 runs of the same stress passed. The rule
+for any database test: **count only what you wrote**, because another
+suite is writing to the same table while you look.
+
 ## Still open from earlier work
 
 - **allrecipes.com cannot be read by the server, by either fetch (Sep
