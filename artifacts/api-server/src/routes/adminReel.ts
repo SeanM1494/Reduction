@@ -8,7 +8,7 @@
  *                         (named), and cards withheld below the minimum
  *   PUT    /reel          { url, status: "curated" | "hidden", note? }
  *   DELETE /reel?url=     takes a URL off the list
- *   POST   /reel/warm     { url, write?, refresh?, note? } — one URL a call
+ *   POST   /reel/warm     { url, write?, refresh?, force?, note? } — one URL a call
  *
  * WARM REPORTS BY DEFAULT and changes nothing. With `write: true` it
  * extracts a URL that is not cached (once, through the same reading path
@@ -19,6 +19,14 @@
  * owner naming it. Every write is audited in admin_events (target "(reel)",
  * the URL in the note) and every model call is logged in extraction_events
  * as `warmup`, so it shows in the cost report.
+ *
+ * HOW A PAGE WAS READ (Oct 1, lib/readHistory.ts): every cached report says
+ * whether the page came through our own fetch or the fallback, which never
+ * records a picture — so a fallback page can never be in the reel. A named
+ * refresh of such a page is REFUSED (status "refused", nothing dropped, $0)
+ * unless the call also says `force: true`. An uncached page's report carries
+ * an estimated cost from recent reads, the fallback's when the site's last
+ * read went through it.
  */
 
 import type { Request, Response, Router } from "express";
@@ -37,6 +45,7 @@ import { recordExtraction, hostOf } from "../lib/extractionLog";
 import { estimateCostUsd } from "../lib/extractionCost";
 import { clientKey } from "../lib/clientAddress";
 import { pageImageOf, storeReelPhoto, type ReelPhotoOutcome } from "../lib/reelPhotos";
+import { lastHostRead, readPathNote, readPathOf, typicalReadCost } from "../lib/readHistory";
 import type { CallUsage } from "../lib/extractionConfig";
 
 const urlHash = (url: string) => crypto.createHash("sha256").update(`url:${url}`).digest("hex");
@@ -124,7 +133,7 @@ export function registerReelAdmin(router: Router, requireAdmin: (req: Request, r
 
   router.post("/reel/warm", async (req: Request, res: Response) => {
     if (!requireAdmin(req, res)) return;
-    const { url, write, refresh, note } = req.body ?? {};
+    const { url, write, refresh, force, note } = req.body ?? {};
     if (typeof url !== "string" || !urlKeyOf(url)) return res.status(400).json({ error: "Send a url." });
     const doWrite = write === true;
     const doRefresh = refresh === true;
@@ -137,6 +146,27 @@ export function registerReelAdmin(router: Router, requireAdmin: (req: Request, r
       const card = cardFrom(recipe as never, "curated", undefined);
       return card ? { title: card.title, site: card.site, totalMinutes: card.totalMinutes, mealType: card.mealType, clean: true } : { clean: false };
     };
+
+    // How this page (or, failing that, its site) was last read.
+    const hostLast = await lastHostRead(hostOf(url));
+    const readOf = (recipe: unknown) => {
+      const r = readPathOf(recipe, hostLast);
+      const n = readPathNote(r.path, r.basis);
+      return { path: r.path, basis: r.basis, note: n.note, refuseRefresh: n.refuseRefresh, lastSiteRead: hostLast?.at ?? null };
+    };
+
+    // A named refresh of a page read through the fallback buys nothing: the
+    // fallback never records a picture. Refused, out loud, unless forced.
+    if (row && doWrite && doRefresh && force !== true) {
+      const read = readOf(row.recipe);
+      if (read.refuseRefresh)
+        return report({
+          status: "refused",
+          estCostUsd: 0,
+          read,
+          reason: "This page was read through the fallback, which never records a picture, so a re-read cannot get it into the reel. Nothing was changed. Re-run with --force to re-read it anyway.",
+        });
+    }
 
     // Already cached, and not asked to refresh: free, and says what it predates.
     if (row && !(doWrite && doRefresh)) {
@@ -159,6 +189,7 @@ export function registerReelAdmin(router: Router, requireAdmin: (req: Request, r
       return report({
         status: "cached",
         estCostUsd: 0,
+        read: readOf(row.recipe),
         flags,
         needsRefresh: flags.length > 0,
         ...info,
@@ -166,7 +197,19 @@ export function registerReelAdmin(router: Router, requireAdmin: (req: Request, r
         ...(photo ? { photo } : {}),
       });
     }
-    if (!row && !doWrite) return report({ status: "would_extract", estCostUsd: null });
+    if (!row && !doWrite) {
+      // What reading it would likely cost, from recent reads: the fallback's
+      // figure when this site's last read went through it (and then, no
+      // picture to expect).
+      const read = readOf(null);
+      const estimate = await typicalReadCost(read.path === "fallback" ? "claude" : "self");
+      return report({
+        status: "would_extract",
+        estCostUsd: estimate,
+        estimateBasis: estimate === null ? "no reads on record yet" : read.path === "fallback" ? "recent fallback reads" : "recent reads by our own fetch",
+        read: read.path === "fallback" ? { ...read, note: "this site was last read through the fallback: expect no picture, so it cannot join the reel" } : read,
+      });
+    }
 
     // A model call: uncached with write, or a named refresh.
     const started = Date.now();
@@ -194,7 +237,8 @@ export function registerReelAdmin(router: Router, requireAdmin: (req: Request, r
         photo = await storeReelPhoto(urlKeyOf(url)!, pageImageOf(read.recipe));
         clearReelMemo();
       }
-      return report({ status, ms: Date.now() - started, estCostUsd: estimateCostUsd(usage), flags: [], ...info, curated, ...(photo ? { photo } : {}) });
+      const readNow = read.via === "claude" ? { path: "fallback", note: "read through the fallback: no picture can be stored" } : { path: "self", note: "read by our own fetch" };
+      return report({ status, ms: Date.now() - started, estCostUsd: estimateCostUsd(usage), flags: [], read: readNow, ...info, curated, ...(photo ? { photo } : {}) });
     } catch (e) {
       usage = usage ?? (e as { usage?: CallUsage }).usage;
       recordExtraction({ source: "warmup", cached: false, host: hostOf(url), ok: false, ms: Date.now() - started, usage: usage ?? null });

@@ -42,6 +42,9 @@ const SECRET = "test-admin-secret-reel-0123456789";
 const RUN = crypto.randomUUID().slice(0, 8);
 const HOST = `reeltest-${RUN}.example.com`;
 const page = (p: string) => `https://${HOST}/${p}`;
+// A second site, whose last read went through the fallback (Oct 1 warm tests).
+const FB_HOST = `reelfb-${RUN}.example.com`;
+const fbPage = (p: string) => `https://${FB_HOST}/${p}`;
 
 let server: Server | null = null;
 let base = "";
@@ -170,6 +173,10 @@ after(async () => {
   await db.execute(sql`delete from reel_photos where image_url like ${`%${HOST}%`}`).catch(() => {});
   for (const p of ["pictured", "own-photo", "nopic-data", "nopic-curated"]) await cacheDropUrl(page(p));
   setPagePhotoFetcherForTests(null);
+  for (const p of ["old", "new"]) await cacheDropUrl(fbPage(p));
+  await db.delete(extractionEvents).where(eq(extractionEvents.host, FB_HOST));
+  await db.execute(sql`delete from reel_entries where url like ${`%${FB_HOST}%`}`);
+  await db.delete(adminEvents).where(like(adminEvents.note, `%${FB_HOST}%`));
   server?.close();
 });
 
@@ -561,4 +568,56 @@ test("reel: below the minimum the reel is withheld whole — the phone gets an e
   }
   clearReelMemo();
   assert.ok((await reel(viewer)).body.cards.length > 0, "at the minimum or above, the reel is back");
+});
+
+test("reel warm: says how each page was read; a fallback page's refresh is refused unless forced; an uncached page gets an estimate", async (t) => {
+  if (!(await needsDatabase(t, ...TABLES, "extraction_events"))) return;
+  await seed();
+  const db = getDb();
+  // This site's last fresh read went through the fallback, at its usual price.
+  await db.insert(extractionEvents).values({
+    source: "warmup", cached: false, via: "claude", host: FB_HOST, ok: true, ms: 56000, inputTokens: 30000, outputTokens: 4000, estCostUsd: "0.119",
+  } as never);
+  // Its cached tree has no image key: the fallback never writes one.
+  const old = tree(fbPage("old"), "Fallback Focaccia") as Record<string, unknown>;
+  delete old.image;
+  await cacheSetUrl(fbPage("old"), old as never);
+
+  const report = await admin("POST", "/reel/warm", { url: fbPage("old") });
+  assert.equal(report.body.status, "cached");
+  assert.deepEqual([report.body.read.path, report.body.read.basis], ["fallback", "site"]);
+  assert.equal(report.body.read.note, "read through the fallback: no picture can be stored, skip");
+
+  let calls = 0;
+  setWarmReaderForTests((async (url: string) => {
+    calls++;
+    return { recipe: tree(url, "Fallback Focaccia, re-read"), attempts: 1, repaired: [], via: "claude", extraction: "text", original: null, usage: emptyUsage() };
+  }) as never);
+  try {
+    const refused = await admin("POST", "/reel/warm", { url: fbPage("old"), write: true, refresh: true });
+    assert.equal(refused.body.status, "refused", "never silently: a status and a reason");
+    assert.match(refused.body.reason, /fallback.*never records a picture.*--force/s);
+    assert.deepEqual([refused.body.estCostUsd, calls], [0, 0], "nothing read, nothing spent");
+    assert.equal((await cacheGetUrlRow(fbPage("old")))?.recipe.title, "Fallback Focaccia", "and nothing dropped");
+
+    const forced = await admin("POST", "/reel/warm", { url: fbPage("old"), write: true, refresh: true, force: true });
+    assert.deepEqual([forced.body.status, calls], ["refreshed", 1], "--force re-reads it anyway");
+    assert.equal(forced.body.read.path, "fallback", "and says the fresh read came through the fallback too");
+  } finally {
+    setWarmReaderForTests(null);
+  }
+
+  // A page our own fetch read says so from its tree alone.
+  const selfRead = await admin("POST", "/reel/warm", { url: page("loved") });
+  assert.deepEqual([selfRead.body.read.path, selfRead.body.read.basis], ["self", "tree"]);
+
+  // Uncached on the fallback site: an estimate from recent fallback reads,
+  // and a warning that no picture can be expected. Nothing is read.
+  const fresh = await admin("POST", "/reel/warm", { url: fbPage("new") });
+  assert.equal(fresh.body.status, "would_extract");
+  assert.equal(typeof fresh.body.estCostUsd, "number");
+  assert.ok(fresh.body.estCostUsd > 0);
+  assert.equal(fresh.body.estimateBasis, "recent fallback reads");
+  assert.match(fresh.body.read.note, /expect no picture/);
+  assert.equal(await cacheGetUrlRow(fbPage("new")), null);
 });

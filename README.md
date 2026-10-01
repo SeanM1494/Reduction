@@ -824,7 +824,21 @@ calls the admin routes on the deployment (PUBLIC_BASE_URL, ADMIN_SECRET):
 - `... --write` — extracts what is not cached (once, logged as `warmup` in
   the cost report) and curates every clean page with a pinned copy and its
   card picture.
-- `... --write --refresh <url>` — also re-reads that named cached page.
+- `... --write --refresh <url>` — also re-reads that named cached page,
+  EXCEPT one read through the fallback, which is refused (printed, nothing
+  changed, $0) unless `--force` is added: the fallback never records a
+  page's image, so a re-read cannot get it into the reel.
+- `... --candidates [file]` — also reports a second list (default
+  `~/workspace/reel-candidates.txt`), never read or curated: cached, or
+  would_extract with an estimated cost from recent reads, and a warning
+  when the site's last read went through the fallback.
+
+Every report line says how the page was last read (`lib/readHistory.ts`):
+a cached tree with an `image` key was read by our own fetch (the fallback
+never writes one); without it, the site's last fresh read in
+`extraction_events` decides — the log keeps hosts, not URLs, and it is the
+site that refuses us. "Spent this run" counts only real reads; estimates
+are totalled on their own line.
 - `node scripts/reel.mjs hide <url>` / `unhide <url>`.
 
 Every write is in `admin_events` (action `reel`, target `(reel)`, the URL

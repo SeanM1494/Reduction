@@ -280,15 +280,15 @@ them is the whole point:
 
 | result | meaning |
 |---|---|
-| ***n* pass, 169 skipped** | no `DATABASE_URL` at all. Fine on a machine with no Postgres. |
-| ***n*+169 pass, 0 skipped** | a local database with a current schema. This is the real gate — `pnpm run test:db` produces it. |
+| ***n* pass, 172 skipped** | no `DATABASE_URL` at all. Fine on a machine with no Postgres. |
+| ***n*+172 pass, 0 skipped** | a local database with a current schema. This is the real gate — `pnpm run test:db` produces it. |
 | **failures saying "Refusing to run database tests against …"** | `DATABASE_URL` in the shell points somewhere non-local — on Replit, that is production. Working as designed: use `pnpm run test:db`, which ignores the env var entirely. |
 | **failures naming a missing table** | a reachable local database whose schema is behind `lib/db/src/schema/schema.ts`. `test:db` re-pushes on every start, so this means a hand-run database — push it or use the script. |
 
 The total grows as suites are added — pin your expectation to the **skip
 count**, not the pass count (an earlier version of this table hard-coded
 23/39 and went stale within a week, so treat the number above as needing an
-edit whenever a database-backed suite is added). The 169 are nineteen suites:
+edit whenever a database-backed suite is added). The 172 are nineteen suites:
 `claim.db.test.ts` (the anonymous library), `trial.db.test.ts` (the free
 extraction), `cache.db.test.ts` (the URL alias and the cached flag),
 `extractionLog.test.ts` (the cost table), `push.db.test.ts` (timer
@@ -337,7 +337,10 @@ that a walled account gets no reel, a hidden page is never offered, a
 curated page's pinned copy refills a lost cache row with no model call, and
 a warm-up writes nothing unless told and re-reads only a named row —
 and that a card's picture is only ever the page's own image, stored by
-the server, never anybody's own photo. **The full suite — 634 tests at the
+the server, never anybody's own photo — and (Oct 1) that a page without a
+stored picture is never offered, that fewer than three cards means no
+reel, and that a page read through the fallback is never re-read unless
+forced. **The full suite — 634 tests at the
 time of writing — has been run against a real Postgres and passes 634/0.** The
 ones that are not api-server or model tests include the mobile library's
 filter and sort (`artifacts/reduction-mobile/lib/libraryView.test.ts`), the

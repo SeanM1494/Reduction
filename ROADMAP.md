@@ -2827,6 +2827,21 @@ a refusal that names the path tried and says where lists belong, and
 `reel-*.txt` at the repo root is gitignored. Any future owner-side working
 file goes in `~/workspace` and in `.gitignore` the same way.
 
+## The warm report says how each page was read (Oct 1)
+
+Two refreshes on Oct 1 cost about 20 cents for nothing: both sites refuse
+our server, the fallback read them, and the fallback never records a
+picture (`readRecipe.ts`). **Decided and built:** every warm report line
+says how the page was last read and flags the fallback ones ("read
+through the fallback: no picture can be stored, skip"), with a `hide`
+command for each at the end; `--refresh` of such a page is REFUSED out
+loud unless `--force`; `--candidates [file]` reports a second list with an
+estimated cost per uncached URL (from the last 50 successful reads by the
+same path) and never reads or spends. No schema change: the log keeps the
+host, so a cached tree's own `image` key (always written by our fetch,
+never by the fallback) decides first, and the site's last fresh read
+decides for a tree without one. Spend and estimates are printed apart.
+
 ## Still open from earlier work
 
 - **allrecipes.com cannot be read by the server, by either fetch (Sep
