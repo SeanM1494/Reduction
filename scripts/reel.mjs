@@ -41,7 +41,11 @@
  *       estimated cost, and whether its site was last read through the
  *       fallback. Every report line says how the page was last read.
  *
- *   node scripts/reel.mjs hide <url>      never offer this page, and delete its stored picture
+ *   node scripts/reel.mjs hide <url>      never offer this page (its stored picture is kept)
+ *   node scripts/reel.mjs hide <url> --purge
+ *       hide it AND delete our stored copy of its picture — the answer to a
+ *       site's removal request (terms.html). Audited; a hidden page is
+ *       never warmed again until unhidden.
  *   node scripts/reel.mjs unhide <url>    take it off the list
  *
  * Needs PUBLIC_BASE_URL (the deployment's address) and ADMIN_SECRET in the
@@ -217,14 +221,19 @@ if (cmd === "preview") {
     for (const u of skip) console.log(`  node scripts/reel.mjs hide ${u}`);
   }
 } else if (cmd === "hide" || cmd === "unhide") {
-  const url = rest[0];
+  const url = rest.find((a) => !a.startsWith("--"));
+  const purge = rest.includes("--purge");
   if (!url) {
     console.error(`reel: ${cmd} needs a URL.`);
     process.exit(1);
   }
-  const r = cmd === "hide" ? await call("PUT", "/reel", { url, status: "hidden" }) : await call("DELETE", `/reel?url=${encodeURIComponent(url)}`);
+  if (purge && cmd !== "hide") {
+    console.error("reel: --purge goes with hide.");
+    process.exit(1);
+  }
+  const r = cmd === "hide" ? await call("PUT", "/reel", { url, status: "hidden", ...(purge ? { purge: true } : {}) }) : await call("DELETE", `/reel?url=${encodeURIComponent(url)}`);
   console.log(JSON.stringify(r));
 } else {
-  console.error("usage: node scripts/reel.mjs preview | warm [list, default ~/workspace/reel-urls.txt] [--write] [--refresh <url>]... [--force] [--candidates [file]] | hide <url> | unhide <url>");
+  console.error("usage: node scripts/reel.mjs preview | warm [list, default ~/workspace/reel-urls.txt] [--write] [--refresh <url>]... [--force] [--candidates [file]] | hide <url> [--purge] | unhide <url>");
   process.exit(1);
 }

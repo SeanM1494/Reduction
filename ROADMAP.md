@@ -3036,8 +3036,8 @@ decides for a tree without one. Spend and estimates are printed apart.
 previews. Built: the card's site line opens the page (and is a VoiceOver
 action on the card); the stored copy is preview-sized, long edge 480
 (`REEL_PHOTO_LONG_EDGE`), with older 1024 copies shrunk in place from our
-own bytes; `hide` deletes the stored picture (the purge proposed below is
-simply what hide does now); `privacy.html` gains "Suggested recipes" and
+own bytes; `hide --purge` deletes the stored picture (below);
+`privacy.html` gains "Suggested recipes" and
 `terms.html` gains "Other sites' recipes and pictures" and "Copyright
 complaints". Not generated pictures: one labelled with a site's name would
 misrepresent that site's dish. Owner-side and not code: register a DMCA
@@ -3045,6 +3045,19 @@ agent with the US Copyright Office under the address the terms name, and
 never use a site's picture in App Store screenshots or marketing. The
 risk reasoning is in the project notes (`notes/reel-photos.md`); it is not
 legal advice, and a lawyer's read was suggested. The history follows.
+
+**`hide --purge` (decided by the owner, Oct 1; built).** Plain `hide` is
+unchanged: the card goes, the stored picture stays (`a7958af` briefly
+made every hide purge; the owner wants the two apart). `hide <url>
+--purge` (PUT /reel `{ status: "hidden", purge: true }`) also deletes the
+`reel_photos` row, so the photo route answers 404, and writes its own
+`admin_events` row (before `hidden`, after `purged`, the URL and whether a
+picture was there in the note). **A hidden page is never warmed:** `warm`
+— report, `--write` or a forced `--refresh` — is refused for it before
+anything is read, curated or stored, so a list still naming a page can
+neither unhide it nor bring its picture back; nor does a reel build's
+fill fetch it. `unhide` is the only way back, and an unhidden page's
+picture is fetched again by a later build or warm, as for any page.
 
 ### As proposed
 

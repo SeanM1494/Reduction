@@ -839,9 +839,14 @@ never writes one); without it, the site's last fresh read in
 `extraction_events` decides — the log keeps hosts, not URLs, and it is the
 site that refuses us. "Spent this run" counts only real reads; estimates
 are totalled on their own line.
-- `node scripts/reel.mjs hide <url>` / `unhide <url>`. Hiding also deletes
-  the page's stored picture (`reel_photos`), so a site's removal request
-  leaves no copy behind; unhidden, a later build fetches it again.
+- `node scripts/reel.mjs hide <url>` / `unhide <url>`. A hidden page is
+  never warmed: `warm` refuses it before reading, curating or storing
+  anything, until it is unhidden.
+- `node scripts/reel.mjs hide <url> --purge` — hide AND delete our stored
+  copy of the page's picture (`reel_photos`); the photo route then answers
+  404. This is the answer to a site's removal request (terms.html), and it
+  is audited on its own `admin_events` row (after = `purged`). Plain `hide`
+  keeps the picture.
 
 Every write is in `admin_events` (action `reel`, target `(reel)`, the URL
 in the note).

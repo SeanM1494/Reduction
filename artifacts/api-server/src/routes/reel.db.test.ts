@@ -34,7 +34,7 @@ import { Jimp } from "jimp";
 import { recipePhotos, reelPhotos } from "@workspace/db";
 import { setPagePhotoFetcherForTests } from "../lib/photos";
 import { resetReelPhotoFillForTests } from "../lib/reelPhotos";
-import { buildReel } from "../lib/reelStore";
+import { buildReel, loadEntries } from "../lib/reelStore";
 import { urlKeyOf } from "../lib/urlKey";
 
 const TABLES = ["users", "recipes", "extraction_cache", "account_access", "reel_entries", "admin_events"];
@@ -270,13 +270,11 @@ test("reel: a hidden page is never offered; curated pages fill after the data", 
   const hid = await admin("PUT", "/reel", { url: page("loved"), status: "hidden", note: "test" });
   assert.equal(hid.status, 200);
   assert.ok(!urls((await reel(viewer)).body).includes(page("loved")));
-  // Hiding answers a removal request, so our copy of the picture is gone too.
-  assert.equal(hid.body.pictureDeleted, true);
+  // A plain hide keeps the stored picture; only --purge deletes it.
+  assert.equal(hid.body.purged, undefined);
   const left = await getDb().select().from(reelPhotos).where(eq(reelPhotos.urlKey, urlKeyOf(page("loved"))!));
-  assert.equal(left.length, 0, "no stored picture outlives the hide");
+  assert.equal(left.length, 1, "plain hide leaves the picture where it was");
   assert.equal((await admin("DELETE", `/reel?url=${encodeURIComponent(page("loved"))}`)).body.removed, true);
-  // Unhidden, it returns once a picture is stored again (a build's fill).
-  await picture(page("loved"));
   assert.ok(urls((await reel(viewer)).body).includes(page("loved")), "unhidden, it is back");
 
   // Curate a cached page nobody has cooked: it appears after the data cards.
@@ -477,6 +475,71 @@ test("reel photos: the page's own picture, stored by the warm-up, served signed 
     assert.equal(fetched.length, fetchesSoFar, "a stored picture is not fetched again");
   } finally {
     setPagePhotoFetcherForTests(null);
+    resetReelPhotoFillForTests();
+  }
+});
+
+test("reel: hide --purge deletes our stored picture (404 after), is audited, and a hidden page is never warmed or re-fetched", async (t) => {
+  if (!(await needsDatabase(t, ...TABLES, "reel_photos"))) return;
+  await seed();
+  resetReelPhotoFillForTests();
+  let fetches = 0;
+  setPagePhotoFetcherForTests(async () => {
+    fetches++;
+    return { ok: true, status: 200, contentType: "image/png", bytes: await png(600, 400, 0x228833ff) };
+  });
+  let reads = 0;
+  setWarmReaderForTests(async () => {
+    reads++;
+    throw new Error("a hidden page must never be read");
+  });
+  const url = page("removal-request");
+  const key = urlKeyOf(url)!;
+  const imageUrl = `https://${HOST}/img/removal.jpg`;
+  try {
+    const viewer = await account();
+    await cacheSetUrl(url, { ...tree(url, "Removal Request Risotto"), image: imageUrl } as never);
+    assert.equal((await admin("POST", "/reel/warm", { url, write: true })).body.photo, "stored");
+    const photoPath = `/api/reel/photo/${key}?v=1`;
+    assert.equal((await photoGet(photoPath, viewer)).status, 200);
+    const fetchedBefore = fetches;
+
+    // Purge only rides a hide.
+    assert.equal((await admin("PUT", "/reel", { url, status: "curated", purge: true })).status, 400);
+
+    const purged = await admin("PUT", "/reel", { url, status: "hidden", purge: true });
+    assert.equal(purged.status, 200);
+    assert.deepEqual([purged.body.purged, purged.body.pictureDeleted], [true, true]);
+    assert.equal((await getDb().select().from(reelPhotos).where(eq(reelPhotos.urlKey, key))).length, 0, "the row is gone");
+    assert.equal((await photoGet(photoPath, viewer)).status, 404, "the photo route answers 404 after a purge");
+    assert.ok(!urls((await reel(viewer)).body).includes(url));
+
+    // Audited: the hide, and the purge on its own row.
+    const audited = await getDb().select().from(adminEvents).where(like(adminEvents.note, `${url}%`));
+    assert.ok(audited.some((a) => a.after === "hidden"));
+    assert.ok(audited.some((a) => a.before === "hidden" && a.after === "purged" && /stored picture deleted/.test(a.note ?? "")), "the purge has its own audit row");
+
+    // A list that still names it: refused, nothing read, curated or stored.
+    for (const body of [{ url, write: true }, { url, write: true, refresh: true, force: true }, { url }]) {
+      const w = await admin("POST", "/reel/warm", body);
+      assert.deepEqual([w.body.status, w.body.estCostUsd], ["refused", 0]);
+    }
+    assert.equal(reads, 0, "no model call for a hidden page");
+    assert.equal((await loadEntries()).find((e) => e.urlKey === key)?.status, "hidden", "a warm does not unhide");
+    assert.equal((await getDb().select().from(reelPhotos).where(eq(reelPhotos.urlKey, key))).length, 0, "and stores no picture");
+
+    // Nor does a reel build fetch it back.
+    await (await buildReel()).photoFill;
+    assert.equal(fetches, fetchedBefore, "a purged page's picture is never re-fetched");
+
+    // A second purge has nothing to delete and still says so, audited.
+    const again = await admin("PUT", "/reel", { url, status: "hidden", purge: true });
+    assert.equal(again.body.pictureDeleted, false);
+  } finally {
+    await admin("DELETE", `/reel?url=${encodeURIComponent(url)}`);
+    await getDb().delete(reelPhotos).where(eq(reelPhotos.urlKey, key));
+    setPagePhotoFetcherForTests(null);
+    setWarmReaderForTests(null);
     resetReelPhotoFillForTests();
   }
 });

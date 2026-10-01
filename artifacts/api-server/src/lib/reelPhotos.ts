@@ -20,8 +20,8 @@
  * and a preview keeps no more of their picture than the card needs —
  * REEL_PHOTO_LONG_EDGE, not the 1024 a recipe's own photo gets. Rows
  * stored larger before that are shrunk in place from the bytes we already
- * hold (no fetch). Hiding a page deletes its row (`purgeReelPhoto`), so a
- * removal request is answered by our copy being gone, not merely unshown. In-process memory remembers which
+ * hold (no fetch). `hide --purge` deletes a page's row (`purgeReelPhoto`), so
+ * a removal request is answered by our copy being gone, not merely unshown. In-process memory remembers which
  * pages this instance already tried, so a picture that cannot be fetched
  * is not fetched on every build; a miss there only means one more try.
  */
@@ -164,7 +164,7 @@ async function shrinkReelPhoto(urlKey: string): Promise<void> {
 }
 
 /**
- * Delete a page's stored picture: hiding a page is how a site's removal
+ * Delete a page's stored picture: `hide --purge` is how a site's removal
  * request is answered, and it must leave no copy behind. Returns whether a
  * row went; a missing table means there was nothing to delete.
  */

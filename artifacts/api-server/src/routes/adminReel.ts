@@ -6,8 +6,9 @@
  *                         reel as a stranger would get it now — the dry run,
  *                         with what was left out and why: no stored picture
  *                         (named), and cards withheld below the minimum
- *   PUT    /reel          { url, status: "curated" | "hidden", note? } — hiding
- *                         also deletes the page's stored picture
+ *   PUT    /reel          { url, status: "curated" | "hidden", note?, purge? } —
+ *                         `purge: true` (hidden only) also DELETES the page's
+ *                         stored picture; plain hide keeps it
  *   DELETE /reel?url=     takes a URL off the list
  *   POST   /reel/warm     { url, write?, refresh?, force?, note? } — one URL a call
  *
@@ -28,6 +29,13 @@
  * unless the call also says `force: true`. An uncached page's report carries
  * an estimated cost from recent reads, the fallback's when the site's last
  * read went through it.
+ *
+ * A HIDDEN PAGE IS NEVER WARMED (Oct 1): a warm on it is refused before
+ * anything is read, curated or stored, so neither a plain hide nor a purge
+ * can be undone by a list that still names the page. Taking it off the
+ * list (`unhide`) is the only way back. A purge is how a site's removal
+ * request is answered: the row in reel_photos goes, the photo route answers
+ * 404, and the purge has its own admin_events row (after = "purged").
  */
 
 import type { Request, Response, Router } from "express";
@@ -93,9 +101,10 @@ export function registerReelAdmin(router: Router, requireAdmin: (req: Request, r
 
   router.put("/reel", async (req: Request, res: Response) => {
     if (!requireAdmin(req, res)) return;
-    const { url, status, note } = req.body ?? {};
+    const { url, status, note, purge } = req.body ?? {};
     if (typeof url !== "string" || !urlKeyOf(url)) return res.status(400).json({ error: "Send a url." });
     if (status !== "curated" && status !== "hidden") return res.status(400).json({ error: 'status is "curated" or "hidden".' });
+    if (purge === true && status !== "hidden") return res.status(400).json({ error: "Only a hide can purge: send status \"hidden\" with purge." });
     if (status === "curated" && !surfaceableUrl(url))
       return res.status(422).json({ error: "Only a public-looking address can be curated (no query string, no documents or drives)." });
     try {
@@ -105,13 +114,17 @@ export function registerReelAdmin(router: Router, requireAdmin: (req: Request, r
       const row = status === "curated" ? await cacheGetUrlRow(url) : null;
       const pin = row && cardFrom(row.recipe, "curated", undefined) ? row.recipe : undefined;
       await upsertEntry(url, status as EntryStatus, typeof note === "string" ? note.slice(0, 300) : null, pin);
-      // Hiding is how a site's removal request is answered, so it deletes
-      // our stored copy of the page's picture too (terms.html promises it).
-      // Unhidden, the page waits for a build to fetch its picture again.
-      const purged = status === "hidden" ? await purgeReelPhoto(urlKeyOf(url)!) : false;
-      await audit(req, before, status, purged ? `${url} (picture deleted)` : url);
+      await audit(req, before, status, url);
+      // A purge answers a removal request (terms.html): our stored copy of
+      // the page's picture goes, and the purge is audited on its own row,
+      // whether or not a picture was there to delete.
+      let pictureDeleted: boolean | undefined;
+      if (purge === true) {
+        pictureDeleted = await purgeReelPhoto(urlKeyOf(url)!);
+        await audit(req, "hidden", "purged", `${url} (${pictureDeleted ? "stored picture deleted" : "no stored picture"})`);
+      }
       clearReelMemo();
-      return res.json({ ok: true, url, status, pinned: !!pin, cached: !!row, pictureDeleted: purged });
+      return res.json({ ok: true, url, status, pinned: !!pin, cached: !!row, ...(purge === true ? { purged: true, pictureDeleted } : {}) });
     } catch (e) {
       if (isMissingTable(e)) return schemaBehind(res);
       console.error("[admin:reel:put]", (e as Error).message);
@@ -144,8 +157,18 @@ export function registerReelAdmin(router: Router, requireAdmin: (req: Request, r
     const doRefresh = refresh === true;
     if (!surfaceableUrl(url)) return res.json({ url, status: "not_public", note: "A query string, a document or drive host, or an IP address keeps a page out of the reel." });
 
-    const row = await cacheGetUrlRow(url);
     const report = (extra: Record<string, unknown>) => res.json({ url, write: doWrite, ...extra });
+    // Hidden (and so purged) pages first: nothing below may read, curate or
+    // store a picture for one.
+    const listed = (await loadEntries()).find((e) => e.urlKey === urlKeyOf(url));
+    if (listed?.status === "hidden")
+      return report({
+        status: "refused",
+        estCostUsd: 0,
+        reason: "This page is hidden, so it is never warmed: nothing was read, curated or stored. Run `node scripts/reel.mjs unhide <url>` first if it should come back.",
+      });
+
+    const row = await cacheGetUrlRow(url);
 
     const describe = (recipe: unknown) => {
       const card = cardFrom(recipe as never, "curated", undefined);
