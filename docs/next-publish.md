@@ -169,13 +169,19 @@ npx -y eas-cli whoami
 Must print `seans-apps`; if not, run `npx -y eas-cli login --no-browser`
 first.
 
-**14.** Read-only, four commands — paste all four outputs back:
+**14.** Read-only, five commands — paste all the outputs back:
 ```sh
 npx -y eas-cli update:list --branch production --limit 10 --non-interactive
 ```
-Each update's message, runtime version, platform, created time, group id
-and git commit. *Look for:* the Oct 1 update's commit — it should be
-`b2cb5cb` or later; runtime `1.1.0`; platform `ios`.
+Each update's message, runtime version, platform, created time and group
+id (this list does NOT print the commit — the next command does). *Look
+for:* runtime `1.1.0`; platform `ios`.
+```sh
+npx -y eas-cli update:view <the newest Group ID from the list> --json
+```
+*Look for:* `"gitCommitHash"` — it must be `c1ce195` or later for the
+guided demo, rename, reel and Send feedback to be in it — and
+`"isGitWorkingTreeDirty"`.
 ```sh
 npx -y eas-cli channel:view production --non-interactive
 ```
@@ -189,7 +195,7 @@ commit. *Look for:* the build on your phone (TestFlight shows its build
 number) — it must say version `1.1.0`, runtime `1.1.0`, channel
 `production`. A `1.0.0` build never receives a `1.1.0` update.
 ```sh
-npx -y eas-cli env:list --environment production --non-interactive
+npx -y eas-cli env:list --environment production
 ```
 Whether EAS holds an `EXPO_PUBLIC_DOMAIN` for production (the script sets
 one itself; a different stored value is worth knowing about).
