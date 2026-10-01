@@ -2511,6 +2511,61 @@ recipe. Not changed (decided Sep 30); the preview says "Saving this uses
 your free recipe" for accounts on the free allowance. Worth deciding
 before the wall goes on.
 
+## An over-the-air update that did not show (Oct 1)
+
+**Reported:** an update published Oct 1 did not bring the guided demo
+(`61f2b3b`), the rename pencil (`d5cb816`), the starter reel (`c1ce195`),
+Send feedback (`72f575f`) or the Clear progress reset (`525da7d`) to the
+phone. **Established from the repo:** all five are on `main` and are
+ancestors of `b2cb5cb`, which the Replit workspace had pulled by Sep 30
+(the deployment's `/api/health` reported it). An iOS export of `main` built
+the way the script builds it (`expo export --platform ios`, the production
+domain) carries each: "Start the demo", "Send feedback", "Rename recipe",
+"Clear progress" and the `starter-reel` reel are all in the Hermes bundle
+(the reel's heading text is the server's, so it is not in the bundle). No
+package with native code has changed since 1.1.0 (`1f5a82f`, Sep 27), so a
+1.1.0 binary can run that bundle. **What the repo cannot show** is what was
+published and what is installed; the owner's `eas update:list`,
+`channel:view` and `build:list` output decides it (commands in
+`docs/next-publish.md`).
+
+Ranked for this setup:
+1. **Not cold-started twice.** `checkAutomatically: ON_LOAD` with
+   `fallbackToCacheTimeout: 0`: the first launch after a publish downloads,
+   the SECOND runs it, and leaving the app in the background is not a
+   launch.
+2. **The installed binary's runtime is not 1.1.0** (a TestFlight build
+   older than Sep 27 is 1.0.0, and builds before Sep 24 have no
+   expo-updates at all). An update reaches only its own runtime.
+3. **Channel or branch.** The build was made with a profile whose channel
+   is not `production`, or the `production` channel points at another
+   branch.
+4. **A stale checkout** published under a message describing newer work.
+   Less likely here (the workspace had pulled past all five), and now
+   refused by the script.
+5. **A check or download error, or an emergency launch** (expo-updates
+   fell back to the embedded bundle after a crash) — now shown on the phone.
+6. **The embedded bundle newer than the update.** Ruled out by the symptom:
+   the features are missing, so the phone runs something older than them.
+7. **Wrong platform.** The script publishes `--platform ios` only.
+
+**Decided and built (Oct 1, phone code, over the air):**
+- `scripts/publish-update.mjs` runs `git fetch` and REFUSES when the
+  checkout is behind `origin/main` or has uncommitted changes to tracked
+  files, unless `--force`; prints commit, channel, runtime version and
+  server before uploading; and appends the short commit hash to the
+  message (`+changes` when forced dirty).
+- Settings ends with "Version 1.1.0 (build N)" for everyone.
+- The owner's testing sheet opens with *This launch*: update id (8
+  characters) or "Embedded bundle", channel, runtime version, published or
+  built time in UTC, last check, "Waiting" when a downloaded update needs
+  one more cold start, any check or download error, and an emergency launch
+  with its reason. Only what `expo-updates` already reports
+  (`useUpdates()`), so no native change and no version bump.
+- Not done: a "check for update now" button, which would need
+  `Updates.checkForUpdateAsync`/`fetchUpdateAsync`/`reloadAsync` — allowed
+  by the binary, but a behaviour change nobody asked for.
+
 ## Still open from earlier work
 
 - **allrecipes.com cannot be read by the server, by either fetch (Sep

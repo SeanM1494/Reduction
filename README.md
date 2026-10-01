@@ -293,6 +293,23 @@ either would ship every installed app a bundle that cannot reach the real
 server. The script reads the domain from the channel's profile in
 `eas.json` and refuses without one.
 
+**It publishes the checkout it runs in, so it checks that checkout first**
+(Oct 1). It runs `git fetch` and refuses when the checkout is behind
+`origin/main` or has uncommitted changes to tracked files (`--force`
+publishes anyway, and the message then says `+changes`). Before uploading
+it prints the commit, the channel, the runtime version and the server, and
+it appends the short commit hash to the message — so `eas update:list`
+shows which commit each update is.
+
+**What a phone is running** is on the phone. Settings ends with "Version
+1.1.0 (build N)", the binary. The owner's testing sheet (long-press
+"Replay intro") starts with *This launch*: `Update 0e8a3c1e` or `Embedded
+bundle`, the channel, the runtime version, when that bundle was published
+(UTC, as `update:list` prints it), the last check, any check or download
+error, an emergency launch and its reason, and "Waiting" when a newer
+update is downloaded and needs one more cold start. All of it is what
+`expo-updates` reports (`useUpdates()`); nothing asks the network.
+
 **What cannot ship this way:** anything native — a package with native
 code, a config plugin, an `app.json` field that lands in Info.plist, a new
 permission. That needs `eas build`, and **`expo.version` bumped in the same

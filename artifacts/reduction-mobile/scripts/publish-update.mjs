@@ -42,6 +42,7 @@ const flag = (name) => {
 const channel = flag("channel") ?? "production";
 const message = flag("message");
 const dryRun = args.includes("--dry-run");
+const force = args.includes("--force");
 
 const fail = (why) => {
   console.error(`publish-update: ${why}`);
@@ -58,18 +59,54 @@ const domain = profileConfig.env?.EXPO_PUBLIC_DOMAIN;
 if (!domain)
   fail(`build profile "${profileName}" sets no EXPO_PUBLIC_DOMAIN, so an update could not know which server its builds talk to.`);
 
+// ---- Which code: the checkout must be origin/main's, and clean. ----
+const git = (...a) => spawnSync("git", a, { cwd: root, encoding: "utf8" });
+const gitOut = (...a) => {
+  const r = git(...a);
+  // trimEnd: porcelain status lines START with a meaningful space.
+  return r.status === 0 ? r.stdout.trimEnd() : null;
+};
+const problems = [];
+const fetched = git("fetch", "--quiet", "origin", "main");
+if (fetched.status !== 0) {
+  problems.push(`git fetch origin main failed, so whether this checkout is current is unknown:\n    ${(fetched.stderr || "").trim()}`);
+} else {
+  const behind = Number(gitOut("rev-list", "--count", "HEAD..origin/main") ?? "NaN");
+  if (!(behind === 0)) {
+    const latest = gitOut("log", "-1", "--format=%h %s", "origin/main");
+    problems.push(
+      `this checkout is ${Number.isNaN(behind) ? "an unknown number of" : behind} commit(s) behind origin/main (latest: ${latest}).\n    Pull first: cd ~/workspace && git pull`,
+    );
+  }
+  const ahead = Number(gitOut("rev-list", "--count", "origin/main..HEAD") ?? "0");
+  if (ahead > 0) console.log(`publish-update: note — ${ahead} local commit(s) not on origin/main are included.`);
+}
+const dirty = gitOut("status", "--porcelain", "--untracked-files=no");
+if (dirty === null) problems.push("git status failed, so whether the checkout has uncommitted changes is unknown.");
+else if (dirty) problems.push(`uncommitted changes to tracked files would be published:\n    ${dirty.split("\n").join("\n    ")}`);
+if (problems.length) {
+  for (const p of problems) console.error(`publish-update: ${p}`);
+  if (!force) fail("refusing to publish. Fix the above, or pass --force to publish this checkout as it is.");
+  console.error("publish-update: --force given, publishing anyway.");
+}
+const commit = gitOut("rev-parse", "--short=7", "HEAD") ?? "unknown";
+const subject = gitOut("log", "-1", "--format=%s") ?? "";
+const fullMessage = `${message} (${commit}${dirty ? "+changes" : ""})`;
+
 const app = JSON.parse(readFileSync(join(root, "app.json"), "utf8")).expo;
 console.log(`publish-update: channel ${channel} (profile "${profileName}")`);
+console.log(`  commit       ${commit}${dirty ? " plus uncommitted changes" : ""}  ${subject}`);
+console.log(`  channel      ${channel}`);
+console.log(`  runtime      ${app.version} (reaches only builds of version ${app.version}: runtimeVersion follows the app version)`);
 console.log(`  server       ${domain}`);
-console.log(`  reaches      builds of version ${app.version} (runtimeVersion follows the app version)`);
-console.log(`  message      ${message}`);
+console.log(`  message      ${fullMessage}`);
 
 // Newer eas-cli asks which EAS environment's hosted variables to load, and
 // the answer for a channel is the environment of the same name — so it is
 // passed rather than asked. (The server address never comes from there: it
 // is set explicitly above, from the build profile.)
 const EAS_ENVIRONMENTS = ["development", "preview", "production"];
-const command = ["-y", "eas-cli@latest", "update", "--channel", channel, "--platform", "ios", "--message", message];
+const command = ["-y", "eas-cli@latest", "update", "--channel", channel, "--platform", "ios", "--message", fullMessage];
 if (EAS_ENVIRONMENTS.includes(channel)) command.push("--environment", channel);
 if (dryRun) {
   console.log(`  would run    EXPO_PUBLIC_DOMAIN=${domain} npx ${command.join(" ")}`);

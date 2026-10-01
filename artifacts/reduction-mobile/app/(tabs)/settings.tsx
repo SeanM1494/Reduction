@@ -33,6 +33,11 @@ import { requestReplay } from '@/lib/opening/launch';
 import { isOwner } from '@/lib/opening/owner';
 import { IntroTestingSheet } from '@/components/opening/IntroTestingSheet';
 import { cardShadow, fonts } from '@/constants/colors';
+import Constants from 'expo-constants';
+import { versionLine } from '@/lib/updateStatus';
+
+// Fixed for the life of the process, so read once rather than in render.
+const version = versionLine(Constants.expoConfig?.version, Constants.nativeBuildVersion);
 
 export default function SettingsScreen() {
   const colors = useColors();
@@ -280,6 +285,15 @@ export default function SettingsScreen() {
       >
         <Text style={styles.deleteText}>Delete account</Text>
       </Pressable>
+
+      {/* The binary, for everyone: what a support email and the App Store
+          name (lib/updateStatus.ts). Which over-the-air update is running
+          is the owner's testing sheet's to say. */}
+      {version ? (
+        <Text style={styles.version} selectable testID="settings-version">
+          {version}
+        </Text>
+      ) : null}
     </ScrollView>
   );
 }
@@ -331,6 +345,7 @@ function makeStyles(colors: Colors) {
     navRowPressed: { borderColor: colors.borderStrong },
     navText: { flex: 1, gap: 4 },
     deleteRow: { minHeight: 44, alignItems: 'center', justifyContent: 'center', marginTop: 4 },
+    version: { color: colors.faint, fontSize: 13, textAlign: 'center', marginTop: 4 },
     deleteText: { color: colors.mutedForeground, fontSize: 14, textDecorationLine: 'underline' },
   });
 }

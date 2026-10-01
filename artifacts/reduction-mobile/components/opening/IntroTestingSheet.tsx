@@ -8,6 +8,10 @@
  * Play any version (no stamps), reset either stamp so the next cold start
  * plays by the real rules, see what is stored, and read the frame rate of
  * the last run — the 55fps kill criterion as a number on the phone.
+ *
+ * Above all that, which code this launch is running (Oct 1): the
+ * over-the-air update or the binary's own bundle, its channel and runtime,
+ * the last check and any error — components/settings/UpdateStatus.tsx.
  */
 
 import React, { useEffect, useState } from 'react';
@@ -16,6 +20,7 @@ import { Sheet, SheetButton } from '@/components/Sheet';
 import { lastRunStats, readStamps, requestReplay, resetStamps, type ReplayKind } from '@/lib/opening/launch';
 import { OPENING_ENABLED } from '@/lib/opening/config';
 import { useColors, type Colors } from '@/hooks/useColors';
+import { UpdateStatus } from '@/components/settings/UpdateStatus';
 
 const ago = (ms: number) => {
   const m = Math.round(ms / 60000);
@@ -60,6 +65,9 @@ export function IntroTestingSheet({ open, onClose }: { open: boolean; onClose: (
         setQueued(null);
       }}
     >
+      <Text style={styles.heading}>This launch</Text>
+      <UpdateStatus />
+      <Text style={styles.heading}>The intro</Text>
       <Text style={styles.text} testID="intro-testing-stored">
         {stored}
         {OPENING_ENABLED ? '' : '\nThe intro is switched OFF (OPENING_ENABLED).'}
@@ -93,6 +101,7 @@ export function IntroTestingSheet({ open, onClose }: { open: boolean; onClose: (
 
 function makeStyles(colors: Colors) {
   return StyleSheet.create({
+    heading: { fontSize: 13, fontWeight: '600', color: colors.mutedForeground, marginBottom: 6 },
     text: { fontSize: 15, lineHeight: 21, color: colors.foreground, marginBottom: 10 },
     buttons: { gap: 8, marginTop: 4 },
     hint: { fontSize: 13, lineHeight: 18, color: colors.mutedForeground, marginTop: 12 },
