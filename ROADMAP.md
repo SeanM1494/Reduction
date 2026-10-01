@@ -2563,6 +2563,18 @@ Ranked for this setup:
   one more cold start, any check or download error, and an emergency launch
   with its reason. Only what `expo-updates` already reports
   (`useUpdates()`), so no native change and no version bump.
+- **Resolved (Oct 1, from the owner's `eas` output):** the Sep 30 update
+  (group `15cc87cb`, runtime 1.1.0, iOS, channel and branch `production`)
+  was built from `dc85229`, a Replit "Published your App" commit that
+  exists only in the workspace and contains all five features. The phone
+  is on build 7 (1.1.0, production), whose embedded code predates them.
+  Send feedback was showing, so the update was running, and after a
+  further close and reopen the guided demo was too; the rename pencil had
+  been there all along. Cause: ranking item 1 (the update not yet
+  running), with nothing wrong in the repo or the publishing setup. The
+  workspace carries Replit's commits that GitHub does not, which is why the
+  guard allows a checkout AHEAD of `origin/main` (with a note) and refuses
+  only one that is behind.
 - Not done: a "check for update now" button, which would need
   `Updates.checkForUpdateAsync`/`fetchUpdateAsync`/`reloadAsync` — allowed
   by the binary, but a behaviour change nobody asked for.
