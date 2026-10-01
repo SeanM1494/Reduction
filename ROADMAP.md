@@ -2566,6 +2566,23 @@ Ranked for this setup:
   `Updates.checkForUpdateAsync`/`fetchUpdateAsync`/`reloadAsync` — allowed
   by the binary, but a behaviour change nobody asked for.
 
+## The amber hint under the diagram is gone (Oct 1)
+
+The owner's call: "Amber means you can do it now. Tap any step further
+right to jump ahead…" no longer sits under a saved recipe's diagram, on
+the phone (`RecipeScreen`) or the website (`RecipeView`, where it said
+"Click"). It was the same hint outside any demo in both places, so both
+went. What stayed: edit mode's own line on both clients (edit mode must
+never be quiet), the Original recipe card and the source link, the phone's
+guided demo (`demoGuide.ts` still teaches amber and jumping ahead; the
+phone demo passes its own footer, `CoachLegend`, which was never this
+hint), and the website's landing demo (`DemoCoach` tips). Nothing relied on
+it: no test or testID named it, VoiceOver now reads the finish strip, then
+Original recipe, then the source link, and the gap it leaves is the finish
+strip's own margin plus the card's 12pt. Measured in Chromium, the page is
+60pt shorter on a 390pt phone and 77pt on an SE. The phone change ships
+over the air; the website's ships with the next Publish.
+
 ## Still open from earlier work
 
 - **allrecipes.com cannot be read by the server, by either fetch (Sep
@@ -2679,7 +2696,7 @@ Ranked for this setup:
   which is the definition of ready. Nothing is misapplied. What the report
   is really about is the ready palette reading as an error on a phone: the
   terracotta/red pair is the product's signature ("Amber means you can do
-  it now" is the hint under every diagram), and colorblind mode already
+  it now" was the hint under every diagram until Oct 1), and colorblind mode already
   swaps it for orange. Options: keep it; soften the warm tokens on mobile
   only (`constants/colors.ts`, no logic); or make the hint copy say "red".
   Not changed, on purpose — it is a colour decision, not a bug.

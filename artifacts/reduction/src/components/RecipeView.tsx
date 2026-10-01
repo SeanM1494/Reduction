@@ -711,11 +711,9 @@ export default function RecipeView({
                 }
               />
             ))}
-            <p className="rd-hint">
-              {editing
-                ? "Changes save as you make them. Undo reverses the last one."
-                : "Amber means you can do it now. Click any step further right to jump ahead — everything it depends on gets marked done with it."}
-            </p>
+            {/* Edit mode only (Oct 1), as on the phone: the amber hint left
+                the saved recipe; the landing demo's coach still teaches it. */}
+            {editing ? <p className="rd-hint">Changes save as you make them. Undo reverses the last one.</p> : null}
           </div>
         )}
 

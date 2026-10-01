@@ -560,13 +560,16 @@ export function RecipeScreen({
               }
             />
           </RevealContext.Provider>
-          {overviewFooter ?? (
-            <Text style={styles.hint}>
-              {editing
-                ? 'Changes save as you make them. Press and hold an ingredient to move it to another step. Undo reverses the last one.'
-                : 'Amber means you can do it now. Tap any step further right to jump ahead — everything it depends on gets marked done with it.'}
-            </Text>
-          )}
+          {/* Edit mode only (Oct 1): the line explaining amber and jumping
+              ahead is gone from a saved recipe — the guided demo teaches
+              both — and edit mode keeps its line because it must never be
+              quiet (CLAUDE.md, the visual editor). */}
+          {overviewFooter ??
+            (editing ? (
+              <Text style={styles.hint}>
+                Changes save as you make them. Press and hold an ingredient to move it to another step. Undo reverses the last one.
+              </Text>
+            ) : null)}
           {/* The source's own wording, one tap from the diagram that is our
               reading of it. Below the diagram, not above: an SE has no room
               above it left to spend (CLAUDE.md, the recipe screen headroom). */}
