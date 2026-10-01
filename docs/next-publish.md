@@ -1,4 +1,96 @@
-# Next Publish — saved Sep 30, updated Oct 1 (twice)
+# Next Publish — the reel's legal pages, purge and cap (Oct 1, evening)
+
+One pull and one Publish, from a fresh Replit shell, in order. Each block
+is one command; what it should print is under it. **No SQL this time:**
+nothing here changes the schema (`reel_photos` already exists and already
+has `width`/`height`).
+
+**Until step 5's Publish is live and steps 6–7 show its commit, do NOT add
+a third pictured page to the reel** (no `reel.mjs warm --write` of a new
+URL). Three cards is the minimum, so a third picture would switch the reel
+ON for everyone while the live server still runs the old code: legal pages
+that do not mention it, no `hide --purge`, and 1024px copies.
+
+The workspace is at `2a4a641` ("Published your App", on top of `d1a87f0`).
+The pull brings, oldest first:
+
+| Commit | Ships | Needs |
+|---|---|---|
+| `a7958af` Reel: pictures as link previews, and the legal pages say so | Server: reel pictures stored at 480px (1024px copies shrunk in place by the next reel builds, no re-fetch). Website: privacy "Suggested recipes"; terms "Other sites' recipes and pictures" and "Copyright complaints"; both dated October 1. Phone: the card's site line opens the page | This Publish; the phone part rides the next over-the-air update (preview, then promote — "D" below) |
+| `df8dfeb` Reel: hide --purge deletes the stored picture; plain hide keeps it | Server + `scripts/reel.mjs`: `hide <url> --purge`; a hidden page is never warmed | This Publish |
+| `691cdb5` Terms: a removal request is acted on within three business days | Website: the terms' removal sentence | This Publish |
+| `9b8c5c7` Reel: the curated list holds at most 20 | Server + `scripts/reel.mjs`: the 21st curation is refused | This Publish |
+| the docs commit that wrote this section | Nothing that runs | Nothing |
+
+Another thread may push to `main` in between; its commits come with the
+pull and are fine. What matters is that the five above are listed.
+
+**1.**
+```sh
+cd ~/workspace
+```
+
+**2.**
+```sh
+git pull
+```
+A fast-forward; among the files, `artifacts/reduction/public/terms.html`
+and `artifacts/api-server/src/lib/reelPhotos.ts`.
+
+**3.**
+```sh
+git log --oneline -8
+```
+Must list `9b8c5c7`, `691cdb5`, `df8dfeb` and `a7958af` above `2a4a641`.
+Note the TOP line's short hash: steps 6 and 7 must show it.
+
+**4.** Nothing new to install, but the check is cheap:
+```sh
+node scripts/check-workspace-links.mjs
+```
+Prints nothing when every dependency is in place. If it names anything,
+run `pnpm install` and then this again.
+
+**5.** Deployments → **Publish**. Wait for it to finish.
+
+**6.** Health through the website's hostname:
+```sh
+curl -s https://recipereduction.com/api/health; echo
+```
+`"commit"` must be the hash from step 3, and `"schema":{"ok":true,"missing":[]}`.
+
+**7.** Health through the phone app's hostname (the app talks to this one):
+```sh
+curl -s https://recipe-reduction.replit.app/api/health; echo
+```
+The same commit and `"missing":[]`. A different commit here means this
+hostname still serves the old deployment — wait a minute and repeat.
+
+**8.** The new wording is live (each should print `1`):
+```sh
+curl -s https://recipereduction.com/terms.html | grep -c "three business days"
+```
+```sh
+curl -s https://recipereduction.com/privacy.html | grep -c "Suggested recipes"
+```
+
+**9.** The owner's list, with the cap:
+```sh
+node scripts/reel.mjs preview
+```
+The last line reads `Owner list: N of 20 curated, M hidden.` If N is above
+20, nothing was dropped — new curations are refused until it is under 20.
+
+Only now may a third pictured page be added. To answer a removal request
+from here on: `node scripts/reel.mjs hide <url> --purge` (never a plain
+`hide`: the terms promise our copy is deleted).
+
+The phone's half of `a7958af` (the site link) goes out over the air
+AFTER step 7, the usual way: "D. From now on: every update" below.
+
+---
+
+# Earlier: the Sep 30 / Oct 1 Publish (done)
 
 One pull and one Publish for everything pending, from a fresh Replit shell,
 in order. Each block is one command; what it should print is under it.
