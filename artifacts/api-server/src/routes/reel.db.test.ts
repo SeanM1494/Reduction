@@ -267,9 +267,16 @@ test("reel: a hidden page is never offered; curated pages fill after the data", 
   const viewer = await account();
   resetReelBrake();
   // Hide the loved page: gone, whatever its data.
-  assert.equal((await admin("PUT", "/reel", { url: page("loved"), status: "hidden", note: "test" })).status, 200);
+  const hid = await admin("PUT", "/reel", { url: page("loved"), status: "hidden", note: "test" });
+  assert.equal(hid.status, 200);
   assert.ok(!urls((await reel(viewer)).body).includes(page("loved")));
+  // Hiding answers a removal request, so our copy of the picture is gone too.
+  assert.equal(hid.body.pictureDeleted, true);
+  const left = await getDb().select().from(reelPhotos).where(eq(reelPhotos.urlKey, urlKeyOf(page("loved"))!));
+  assert.equal(left.length, 0, "no stored picture outlives the hide");
   assert.equal((await admin("DELETE", `/reel?url=${encodeURIComponent(page("loved"))}`)).body.removed, true);
+  // Unhidden, it returns once a picture is stored again (a build's fill).
+  await picture(page("loved"));
   assert.ok(urls((await reel(viewer)).body).includes(page("loved")), "unhidden, it is back");
 
   // Curate a cached page nobody has cooked: it appears after the data cards.
@@ -431,7 +438,7 @@ test("reel photos: the page's own picture, stored by the warm-up, served signed 
     assert.equal(got.type, "image/jpeg");
     assert.match(got.cache ?? "", /immutable/);
     const img = await Jimp.read(got.bytes);
-    assert.deepEqual([img.width, img.height], [1024, 576], "our copy, shrunk like every stored picture");
+    assert.deepEqual([img.width, img.height], [480, 270], "our copy, preview-sized (REEL_PHOTO_LONG_EDGE)");
     assert.equal((await photoGet(`/api/reel/photo/${"0".repeat(64)}?v=1`, viewer)).status, 404);
     assert.equal((await photoGet("/api/reel/photo/..%2Fsecrets", viewer)).status, 404);
 
@@ -464,11 +471,48 @@ test("reel photos: the page's own picture, stored by the warm-up, served signed 
     const ownPhoto = second.cards.find((c) => c.url === page("own-photo"))!.photo!;
     await second.photoFill;
     const bytes = (await photoGet(ownPhoto, viewer)).bytes;
-    assert.equal((await Jimp.read(bytes)).width, 1024, "the page's picture, not the saver's 40px photo");
+    assert.equal((await Jimp.read(bytes)).width, 480, "the page's picture, not the saver's 40px photo");
     const fetchesSoFar = fetched.length;
     await (await buildReel()).photoFill;
     assert.equal(fetched.length, fetchesSoFar, "a stored picture is not fetched again");
   } finally {
+    setPagePhotoFetcherForTests(null);
+    resetReelPhotoFillForTests();
+  }
+});
+
+test("reel photos: a copy stored at full size before Oct 1 is shrunk to a preview from our own bytes — no fetch", async (t) => {
+  if (!(await needsDatabase(t, ...TABLES, "reel_photos"))) return;
+  await seed();
+  resetReelPhotoFillForTests();
+  let fetches = 0;
+  setPagePhotoFetcherForTests(async () => {
+    fetches++;
+    return { ok: false, status: 500, contentType: null, bytes: Buffer.alloc(0) };
+  });
+  const url = page("oversized");
+  const key = urlKeyOf(url)!;
+  const imageUrl = `https://${HOST}/img/big.jpg`;
+  try {
+    await cacheSetUrl(url, { ...tree(url, "Oversized Onion Tart"), image: imageUrl } as never);
+    assert.equal((await admin("PUT", "/reel", { url, status: "curated" })).status, 200);
+    const big = await new Jimp({ width: 1024, height: 768, color: 0x996633ff }).getBuffer("image/jpeg");
+    await getDb()
+      .insert(reelPhotos)
+      .values({ urlKey: key, imageUrl, bytes: big, mediaType: "image/jpeg", width: 1024, height: 768 } as never)
+      .onConflictDoNothing();
+    await (await buildReel()).photoFill;
+    const [row] = await getDb().select().from(reelPhotos).where(eq(reelPhotos.urlKey, key));
+    assert.deepEqual([row.width, row.height, row.version], [480, 360, 2], "shrunk in place, new version");
+    const img = await Jimp.read(Buffer.from(row.bytes as never));
+    assert.deepEqual([img.width, img.height], [480, 360]);
+    assert.equal(fetches, 0, "from the bytes we hold, never re-fetched from the site");
+    await (await buildReel()).photoFill;
+    const [again] = await getDb().select().from(reelPhotos).where(eq(reelPhotos.urlKey, key));
+    assert.equal(again.version, 2, "a preview-sized copy is left alone");
+  } finally {
+    await admin("DELETE", `/reel?url=${encodeURIComponent(url)}`);
+    await getDb().delete(reelPhotos).where(eq(reelPhotos.urlKey, key));
     setPagePhotoFetcherForTests(null);
     resetReelPhotoFillForTests();
   }

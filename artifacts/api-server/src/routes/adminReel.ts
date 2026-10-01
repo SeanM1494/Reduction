@@ -6,7 +6,8 @@
  *                         reel as a stranger would get it now — the dry run,
  *                         with what was left out and why: no stored picture
  *                         (named), and cards withheld below the minimum
- *   PUT    /reel          { url, status: "curated" | "hidden", note? }
+ *   PUT    /reel          { url, status: "curated" | "hidden", note? } — hiding
+ *                         also deletes the page's stored picture
  *   DELETE /reel?url=     takes a URL off the list
  *   POST   /reel/warm     { url, write?, refresh?, force?, note? } — one URL a call
  *
@@ -44,7 +45,7 @@ import { extractionOriginal } from "../lib/original";
 import { recordExtraction, hostOf } from "../lib/extractionLog";
 import { estimateCostUsd } from "../lib/extractionCost";
 import { clientKey } from "../lib/clientAddress";
-import { pageImageOf, storeReelPhoto, type ReelPhotoOutcome } from "../lib/reelPhotos";
+import { pageImageOf, purgeReelPhoto, storeReelPhoto, type ReelPhotoOutcome } from "../lib/reelPhotos";
 import { lastHostRead, readPathNote, readPathOf, typicalReadCost } from "../lib/readHistory";
 import type { CallUsage } from "../lib/extractionConfig";
 
@@ -104,9 +105,13 @@ export function registerReelAdmin(router: Router, requireAdmin: (req: Request, r
       const row = status === "curated" ? await cacheGetUrlRow(url) : null;
       const pin = row && cardFrom(row.recipe, "curated", undefined) ? row.recipe : undefined;
       await upsertEntry(url, status as EntryStatus, typeof note === "string" ? note.slice(0, 300) : null, pin);
-      await audit(req, before, status, url);
+      // Hiding is how a site's removal request is answered, so it deletes
+      // our stored copy of the page's picture too (terms.html promises it).
+      // Unhidden, the page waits for a build to fetch its picture again.
+      const purged = status === "hidden" ? await purgeReelPhoto(urlKeyOf(url)!) : false;
+      await audit(req, before, status, purged ? `${url} (picture deleted)` : url);
       clearReelMemo();
-      return res.json({ ok: true, url, status, pinned: !!pin, cached: !!row });
+      return res.json({ ok: true, url, status, pinned: !!pin, cached: !!row, pictureDeleted: purged });
     } catch (e) {
       if (isMissingTable(e)) return schemaBehind(res);
       console.error("[admin:reel:put]", (e as Error).message);

@@ -54,14 +54,16 @@ export const UPLOAD_MEDIA_TYPES: ReadonlySet<string> = new Set([
   "image/tiff",
 ]);
 
-/** Decode, fit inside PHOTO_LONG_EDGE (never upscaled), re-encode as JPEG.
- *  Throws when the bytes are not an image jimp can read. */
+/** Decode, fit inside `longEdge` (PHOTO_LONG_EDGE unless a caller keeps a
+ *  smaller copy; never upscaled), re-encode as JPEG. Throws when the bytes
+ *  are not an image jimp can read. */
 export async function normalisePhoto(
-  bytes: Buffer
+  bytes: Buffer,
+  longEdge: number = PHOTO_LONG_EDGE
 ): Promise<{ bytes: Buffer; width: number; height: number; mediaType: "image/jpeg" }> {
   const img = await Jimp.read(bytes);
-  if (img.width > PHOTO_LONG_EDGE || img.height > PHOTO_LONG_EDGE) {
-    img.scaleToFit({ w: PHOTO_LONG_EDGE, h: PHOTO_LONG_EDGE });
+  if (img.width > longEdge || img.height > longEdge) {
+    img.scaleToFit({ w: longEdge, h: longEdge });
   }
   const out = await img.getBuffer("image/jpeg", { quality: PHOTO_JPEG_QUALITY });
   return { bytes: out, width: img.width, height: img.height, mediaType: "image/jpeg" };

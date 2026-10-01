@@ -79,6 +79,21 @@ export const reelA11yLabel = (c: ReelCard): string => {
   return [c.title, c.site || null, use].filter(Boolean).join(', ');
 };
 
+/** Where the card's site credit leads: the page itself, which the picture
+ *  and the recipe belong to (Oct 1: a card is a link preview, credited and
+ *  linked). Only a web address — anything else gets no link. */
+export function siteLink(c: ReelCard): string | null {
+  try {
+    const u = new URL(c.url);
+    return u.protocol === 'https:' || u.protocol === 'http:' ? u.toString() : null;
+  } catch {
+    return null;
+  }
+}
+
+/** The custom VoiceOver action that does the same. */
+export const openSiteActionLabel = (c: ReelCard): string => `Open ${c.site || 'the recipe’s page'}`;
+
 /** The small line under a card's title: the site, and a time only when the
  *  source stated one. */
 export function reelMeta(c: ReelCard): string {

@@ -839,7 +839,9 @@ never writes one); without it, the site's last fresh read in
 `extraction_events` decides — the log keeps hosts, not URLs, and it is the
 site that refuses us. "Spent this run" counts only real reads; estimates
 are totalled on their own line.
-- `node scripts/reel.mjs hide <url>` / `unhide <url>`.
+- `node scripts/reel.mjs hide <url>` / `unhide <url>`. Hiding also deletes
+  the page's stored picture (`reel_photos`), so a site's removal request
+  leaves no copy behind; unhidden, a later build fetches it again.
 
 Every write is in `admin_events` (action `reel`, target `(reel)`, the URL
 in the note).
@@ -854,7 +856,11 @@ app versions that read only that.
 
 **The picture is the page's own image, stored by this server, one per page**
 in `reel_photos` (`lib/reelPhotos.ts`) — fetched from the URL the page's
-extraction recorded and shrunk like every stored photo. NEVER an account's
+extraction recorded and kept PREVIEW-SIZED, long edge 480
+(`REEL_PHOTO_LONG_EDGE`, Oct 1): a card is a link preview of somebody
+else's page, credited and linked to it (the site line opens the page), and
+keeps no more of their picture than a card needs. Copies stored at 1024
+before that are shrunk in place by the next builds, from our own bytes. NEVER an account's
 `recipe_photos` row: a `user` photo is someone's own picture and nothing
 builds a card from that table. The warm-up stores a curated page's picture
 as it curates it (`picture: stored` in its report, no model call); a

@@ -41,7 +41,7 @@
  *       estimated cost, and whether its site was last read through the
  *       fallback. Every report line says how the page was last read.
  *
- *   node scripts/reel.mjs hide <url>      never offer this page
+ *   node scripts/reel.mjs hide <url>      never offer this page, and delete its stored picture
  *   node scripts/reel.mjs unhide <url>    take it off the list
  *
  * Needs PUBLIC_BASE_URL (the deployment's address) and ADMIN_SECRET in the

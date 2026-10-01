@@ -206,8 +206,9 @@ export async function buildReel(): Promise<ReelBuild> {
 
   // The pictures still missing are fetched for the builds that follow
   // (lib/reelPhotos.ts), those first; a stored one whose page now names a
-  // different image is refreshed after them.
-  const missingFirst = [...candidates].sort((a, b) => Number(!!stored.get(keyOf.get(a.url) ?? "")) - Number(!!stored.get(keyOf.get(b.url) ?? "")));
+  // different image is refreshed after them. Never for a hidden page: hiding
+  // deleted its picture, and a fill would quietly fetch it back.
+  const missingFirst = candidates.filter((c) => !hidden.has(normalizeUrl(c.url) ?? c.url)).sort((a, b) => Number(!!stored.get(keyOf.get(a.url) ?? "")) - Number(!!stored.get(keyOf.get(b.url) ?? "")));
   const photoFill = fillReelPhotos(
     missingFirst.flatMap((c) => {
       const urlKey = keyOf.get(c.url);

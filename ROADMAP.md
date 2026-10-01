@@ -3030,7 +3030,23 @@ host, so a cached tree's own `image` key (always written by our fetch,
 never by the fallback) decides first, and the site's last fresh read
 decides for a tree without one. Spend and estimates are printed apart.
 
-## Other sites' pictures shown to everyone (Oct 1, PROPOSED, not built)
+## Other sites' pictures shown to everyone (Oct 1, DECIDED and built)
+
+**Decided (owner, Oct 1):** keep the pages' own pictures, as link
+previews. Built: the card's site line opens the page (and is a VoiceOver
+action on the card); the stored copy is preview-sized, long edge 480
+(`REEL_PHOTO_LONG_EDGE`), with older 1024 copies shrunk in place from our
+own bytes; `hide` deletes the stored picture (the purge proposed below is
+simply what hide does now); `privacy.html` gains "Suggested recipes" and
+`terms.html` gains "Other sites' recipes and pictures" and "Copyright
+complaints". Not generated pictures: one labelled with a site's name would
+misrepresent that site's dish. Owner-side and not code: register a DMCA
+agent with the US Copyright Office under the address the terms name, and
+never use a site's picture in App Store screenshots or marketing. The
+risk reasoning is in the project notes (`notes/reel-photos.md`); it is not
+legal advice, and a lawyer's read was suggested. The history follows.
+
+### As proposed
 
 The reel stores a page's own picture on our server and shows it, with the
 site's name, to every signed-in user, including people who never saved

@@ -19,6 +19,8 @@ import {
   likesBadge,
   usageSpoken,
   usesFreeRecipe,
+  siteLink,
+  openSiteActionLabel,
 } from './reelView';
 
 const card = { url: 'https://a.example.com/r', title: 'Weeknight Chili', site: 'Example Recipes', totalMinutes: 45, mealType: 'dinner', usage: null, kind: 'curated' };
@@ -34,6 +36,15 @@ test('parseReel keeps the promised shape and drops anything else', () => {
 
 test('VoiceOver reads "Title, site" and the role adds "button"', () => {
   assert.equal(reelA11yLabel(parseReel({ cards: [card] }).cards[0]), 'Weeknight Chili, Example Recipes');
+});
+
+test('the site credit links to the page itself, and only to a web address', () => {
+  const [c] = parseReel({ cards: [card] }).cards;
+  assert.equal(siteLink(c), 'https://a.example.com/r');
+  assert.equal(siteLink({ ...c, url: 'javascript:alert(1)' }), null);
+  assert.equal(siteLink({ ...c, url: 'not a url' }), null);
+  assert.equal(openSiteActionLabel(c), 'Open Example Recipes');
+  assert.equal(openSiteActionLabel({ ...c, site: '' }), 'Open the recipe’s page');
 });
 
 test('a card shows its site and a time only when one was stated', () => {

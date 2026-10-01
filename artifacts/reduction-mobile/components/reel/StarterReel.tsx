@@ -10,6 +10,11 @@
  * meal-type art, the title, the stated time, serves and steps, the first
  * ingredients, then the use it has earned and the site it came from.
  *
+ * A card is a link preview of somebody else's page (Oct 1): the site line
+ * is a link to that page (Safari, as the recipe screen's "From … ↗"), and
+ * VoiceOver offers the same as a custom action on the card. A tap anywhere
+ * else on the card still opens the recipe.
+ *
  * The cards are as tall as the room left on screen, so the reel fits without
  * the page scrolling (`reelCardSize`, measured from where the reel sits and
  * where the screen stops showing; the parent says the second). Below the
@@ -35,6 +40,7 @@ import {
   AccessibilityInfo,
   ActivityIndicator,
   Keyboard,
+  Linking,
   Platform,
   Pressable,
   StyleSheet,
@@ -55,6 +61,8 @@ import {
   TICKER,
   reelA11yLabel,
   reelCardSize,
+  siteLink,
+  openSiteActionLabel,
   reelVisible,
   tickerLoops,
   tickerOn,
@@ -354,10 +362,19 @@ function StarterCard({
   const photo = useReelPhoto(card.photo);
   const cooked = cookedLine(card);
   const likes = likesBadge(card);
+  const link = siteLink(card);
+  const openSite = () => {
+    if (link) Linking.openURL(link).catch(() => {});
+  };
   return (
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={reelA11yLabel(card)}
+      accessibilityActions={link ? [{ name: 'activate' }, { name: 'openSite', label: openSiteActionLabel(card) }] : undefined}
+      onAccessibilityAction={(e) => {
+        if (e.nativeEvent.actionName === 'openSite') openSite();
+        else if (e.nativeEvent.actionName === 'activate' && !disabled) onPress();
+      }}
       accessibilityElementsHidden={copy}
       importantForAccessibility={copy ? 'no-hide-descendants' : 'auto'}
       aria-hidden={copy || undefined}
@@ -404,9 +421,25 @@ function StarterCard({
                 {cooked}
               </Text>
             ) : null}
-            <Text style={styles.site} numberOfLines={1} maxFontSizeMultiplier={1.2}>
-              {card.site}
-            </Text>
+            {link ? (
+              // The line stays 15pt so the card's measured rows hold; the
+              // slop (17 + 15 + 12) takes the target to 44pt over the line above it (part
+              // of the card, not a control) and the card's bottom padding.
+              <Pressable
+                onPress={openSite}
+                hitSlop={{ top: 17, bottom: CARD_METRICS.padBottom, left: 8, right: 8 }}
+                accessible={false}
+                testID="starter-card-site"
+              >
+                <Text style={styles.site} numberOfLines={1} maxFontSizeMultiplier={1.2}>
+                  {card.site} ↗
+                </Text>
+              </Pressable>
+            ) : (
+              <Text style={styles.site} numberOfLines={1} maxFontSizeMultiplier={1.2}>
+                {card.site}
+              </Text>
+            )}
           </View>
         }
       />
