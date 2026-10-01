@@ -20,6 +20,7 @@ import {
   MAX_PHOTO_UPLOAD_BYTES,
   UPLOAD_MEDIA_TYPES,
   capturePagePhoto,
+  pageImageOf,
   deleteRecipePhoto,
   photoMeta,
   photoMetaFor,
@@ -842,17 +843,25 @@ libraryRouter.delete("/:id/photo", async (req: Request, res: Response) => {
 /**
  * POST /api/library/:id/photo/from-source — fetch the page's picture now.
  * The self-healing half of the fire-and-forget capture at save: a card that
- * finds no photo but a recipe with an image URL calls this once. A user
- * photo already there is returned untouched. 404 with `no_source_image`
- * when the recipe has no URL to fetch — the card then stops asking.
+ * finds no photo but a recipe with an image URL — or, for a recipe saved
+ * before pictures existed, a source URL — calls this once. With no image
+ * URL the page itself is read for one (`pageImageOf`: a page fetch, never
+ * an extraction, never a free recipe). A user photo already there is
+ * returned untouched. 404 with `no_source_image` when the recipe has
+ * neither URL (a paste or a photo) — the card then stops asking.
  */
 libraryRouter.post("/:id/photo/from-source", async (req: Request, res: Response) => {
   try {
     const row = await ownRow(req, String(req.params.id));
     if (!row) return res.status(404).json({ error: "No such recipe." });
-    const imageUrl = (row.recipe as { image?: unknown }).image;
-    if (typeof imageUrl !== "string" || !imageUrl)
+    const { image, sourceUrl } = row.recipe as { image?: unknown; sourceUrl?: unknown };
+    const hasImage = typeof image === "string" && !!image;
+    if (!hasImage && (typeof sourceUrl !== "string" || !sourceUrl))
       return res.status(404).json({ error: "This recipe's page had no picture.", code: "no_source_image" });
+    const existing = await photoMeta(row.ownerKey, row.id);
+    if (existing?.source === "user") return res.json({ photo: existing });
+    const imageUrl = hasImage ? (image as string) : await pageImageOf(sourceUrl as string);
+    if (!imageUrl) return res.json({ photo: null });
     const photo = await capturePagePhoto(row.ownerKey, row.id, imageUrl);
     return res.json({ photo });
   } catch (e) {

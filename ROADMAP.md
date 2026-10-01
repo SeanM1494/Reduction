@@ -759,7 +759,11 @@ menu, meal-type fallback otherwise; nothing hotlinked, no backfill.
   Recipe Box: books" below lists what was removed). Its lessons live on in
   CLAUDE.md's gesture rules, now pointing at the books. Shelves were never
   built and are not queued: the books ARE one book per category.
-- **Photo backfill on a cache hit — a nice-to-have, not queued (Sep 22).**
+- **Photo backfill on a cache hit — DONE Oct 1, the cheap version.** The
+  card asks `/photo/from-source` when a recipe has a `sourceUrl` and no
+  `image`, and the server reads the page itself for its picture (README
+  "Recipe photos"). Below is why it was needed.
+- **(Sep 22.)**
   A tree that was cached BEFORE the extractor started recording
   `recipe.image` has no image URL and never will: `cacheGetUrl` returns
   the stored tree verbatim and nothing re-checks. So an old row extracted

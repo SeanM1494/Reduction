@@ -26,7 +26,7 @@ import { and, eq, inArray, sql } from "drizzle-orm";
 import { Jimp } from "jimp";
 import { getDb } from "../db";
 import { recipePhotos } from "@workspace/db";
-import { assertPublicUrl } from "./fetchSource";
+import { assertPublicUrl, fetchSource } from "./fetchSource";
 
 export const PHOTO_LONG_EDGE = 1024;
 export const PHOTO_JPEG_QUALITY = 80;
@@ -182,6 +182,40 @@ export function setPagePhotoFetcherForTests(f: Fetcher | null): void {
     throw new Error("setPagePhotoFetcherForTests is a test seam and must not be called in production.");
   }
   fetcher = f ?? realFetcher;
+}
+
+// ------------------------------------------- a recipe saved before photos ---
+
+/**
+ * The picture URL a recipe's own page carries NOW: its schema.org `image`,
+ * else its `og:image`, read from the HTML by fetchSource — one page fetch
+ * and no model call, so it costs no extraction and no free recipe. For a
+ * recipe that has a `sourceUrl` but no `recipe.image`: one saved before the
+ * extractor recorded pictures, or from a cache row written before then
+ * (ROADMAP "Photo backfill on a cache hit"). Null on any failure; the card
+ * keeps its meal-type art. The URL found is not written into the recipe:
+ * that would bump its version and hand every other device a 409 for a
+ * write nobody made, and the stored photo is all the card needs.
+ */
+type PageImageReader = (sourceUrl: string) => Promise<string | null>;
+const realPageImageReader: PageImageReader = async (sourceUrl) => (await fetchSource(sourceUrl)).image;
+let pageImageReader: PageImageReader = realPageImageReader;
+
+/** TEST SEAM: stands in for the recipe's page. */
+export function setPageImageReaderForTests(f: PageImageReader | null): void {
+  if (process.env.NODE_ENV === "production") {
+    throw new Error("setPageImageReaderForTests is a test seam and must not be called in production.");
+  }
+  pageImageReader = f ?? realPageImageReader;
+}
+
+export async function pageImageOf(sourceUrl: string): Promise<string | null> {
+  try {
+    return await pageImageReader(sourceUrl);
+  } catch (e) {
+    console.warn(`[photos] page not read for its picture: ${(e as Error).message}`);
+    return null;
+  }
 }
 
 /** Fetch the page's picture. Throws with a one-line reason on anything

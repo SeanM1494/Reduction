@@ -20,7 +20,7 @@ import { Jimp } from "jimp";
 import { getDb } from "../db";
 import { accountAccess, recipePhotos, recipes, users } from "@workspace/db";
 import { needsDatabase } from "../lib/testdb";
-import { PHOTO_LONG_EDGE, setPagePhotoFetcherForTests } from "../lib/photos";
+import { PHOTO_LONG_EDGE, setPageImageReaderForTests, setPagePhotoFetcherForTests } from "../lib/photos";
 import { libraryRouter } from "./library";
 
 const TABLES = ["users", "recipes", "recipe_photos", "account_access"];
@@ -64,6 +64,7 @@ after(async () => {
     }
   }
   setPagePhotoFetcherForTests(null);
+  setPageImageReaderForTests(null);
   server?.close();
 });
 
@@ -236,6 +237,52 @@ test("photo: on demand — from-source fetches once, refuses a recipe with no pi
   const got = await api("GET", `/api/library/${mine.id}/photo?v=2`, u);
   const d = await dims(got.body as Buffer);
   assert.deepEqual([d.width, d.height], [500, 500], "still the user's 500px square, not the page's 800x600");
+});
+
+test("photo: a recipe saved before pictures — from-source reads its page for one, spends nothing, and writes nothing to the recipe", async (t) => {
+  if (!(await needsDatabase(t, ...TABLES))) return;
+  const u = await makeUser();
+  const asked = stubSite({ "https://site.example/old.png": { bytes: await png(1200, 900) } });
+  const read: string[] = [];
+  setPageImageReaderForTests(async (url) => {
+    read.push(url);
+    if (url === "https://site.example/old-recipe") return "https://site.example/old.png";
+    if (url === "https://site.example/refuses") throw new Error("The page returned 403.");
+    return null;
+  });
+  t.after(() => setPageImageReaderForTests(null));
+
+  // A recipe with a page but no image URL: the page is read, its picture kept.
+  const old = await saveRecipe(u, { ...RECIPE, sourceUrl: "https://site.example/old-recipe" });
+  const [before] = await getDb().select({ version: recipes.version }).from(recipes).where(eq(recipes.id, old.id));
+  const [accessBefore] = await getDb().select().from(accountAccess).where(eq(accountAccess.userId, u));
+  const got = await api("POST", `/api/library/${old.id}/photo/from-source`, u);
+  assert.equal(got.status, 200);
+  assert.deepEqual(got.body.photo, { version: 1, source: "page" });
+  assert.deepEqual(read, ["https://site.example/old-recipe"]);
+  assert.deepEqual(asked, ["https://site.example/old.png"]);
+  const [after] = await getDb().select({ version: recipes.version, recipe: recipes.recipe }).from(recipes).where(eq(recipes.id, old.id));
+  assert.equal(after.version, before.version, "the recipe row is not written: no 409 for other devices");
+  assert.equal((after.recipe as { image?: unknown }).image, undefined);
+  const [accessAfter] = await getDb().select().from(accountAccess).where(eq(accountAccess.userId, u));
+  assert.deepEqual(accessAfter, accessBefore, "refreshing a picture spends no free recipe");
+
+  // A page with no picture, and a page that refuses: null, nothing stored.
+  for (const url of ["https://site.example/no-picture", "https://site.example/refuses"]) {
+    const r = await saveRecipe(u, { ...RECIPE, sourceUrl: url });
+    const res = await api("POST", `/api/library/${r.id}/photo/from-source`, u);
+    assert.equal(res.status, 200, url);
+    assert.equal(res.body.photo, null, url);
+    assert.equal((await photoRows(r.id)).length, 0, url);
+  }
+
+  // A user photo: the page is not even read.
+  const mine = await saveRecipe(u, { ...RECIPE, sourceUrl: "https://site.example/old-recipe" });
+  await api("PUT", `/api/library/${mine.id}/photo`, u, { data: b64(await png(300, 300)), mediaType: "image/png" });
+  const n = read.length;
+  const kept = await api("POST", `/api/library/${mine.id}/photo/from-source`, u);
+  assert.deepEqual(kept.body.photo, { version: 1, source: "user" });
+  assert.equal(read.length, n, "the page was not read");
 });
 
 // ------------------------------------------------------ ownership + lifetime ---

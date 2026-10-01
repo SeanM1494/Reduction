@@ -2,7 +2,7 @@
  * client/src/components/RecipePhoto.tsx — a recipe's picture, or the
  * meal-type art in its place. Used by the library card and the photo
  * sheet. The bytes come as a blob URL (lib/storage.ts photoBlobUrl), and a
- * recipe whose page had a picture but whose row has none yet asks the
+ * recipe whose page had (or may have) a picture but whose row has none yet asks the
  * server to fetch it, once per id per load; the answer goes back through
  * `onPhoto` so the library state carries it.
  */
@@ -31,8 +31,12 @@ export default function RecipePhoto({ entry, onPhoto, className = "", glyph = 36
     let live = true;
     if (!meta) {
       setSrc(null);
-      const imageUrl = (entry.recipe as { image?: unknown }).image;
-      if (typeof imageUrl === "string" && imageUrl && !healing.has(entry.id) && onPhoto) {
+      // An image URL the extractor recorded, or — for a recipe saved before
+      // pictures existed — the page's address for the server to read one
+      // from. A paste or a photo has neither.
+      const { image, sourceUrl } = entry.recipe as { image?: unknown; sourceUrl?: unknown };
+      const mayHave = (typeof image === "string" && !!image) || (typeof sourceUrl === "string" && !!sourceUrl);
+      if (mayHave && !healing.has(entry.id) && onPhoto) {
         healing.add(entry.id);
         fetchPhotoFromSource(entry.id)
           .then((r) => {

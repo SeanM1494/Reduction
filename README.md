@@ -455,8 +455,14 @@ with `{ data, mediaType }`, which a page fetch never overwrites.
 /api/library/:id/photo/from-source` fetches the page's picture on demand (the
 card calls it once when a recipe has an image URL but no photo). Everything
 stored is JPEG, long edge 1024, via `jimp` (pure JavaScript, no native
-build). Old recipes have no picture until re-extracted or given one; there
-is no backfill, on purpose.
+build). A recipe saved before pictures existed has a `sourceUrl` and no
+`image`; the card asks `from-source` for it too, and the server reads the
+page's schema.org `image` or `og:image` with `fetchSource` — one page
+fetch, no model call, no free recipe — and stores that picture. The URL
+it found is not written into the recipe (that would bump its version and
+409 every other device). A paste or a photo has neither URL and keeps the
+meal-type art. There is no bulk backfill: a picture fills in when its card
+is first shown.
 
 **Production DDL for the table** (schema changes are hand-run, never
 pushed — CLAUDE.md), before deploying anything that imports it:

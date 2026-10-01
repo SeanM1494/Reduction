@@ -16,8 +16,9 @@
  * lands after the cell moved on is dropped (lib/photoSource.ts, where both
  * rules live and are tested).
  *
- * The self-heal: a recipe with an image URL but no stored photo asks the
- * server to fetch it, once per id per launch (the capture at save is
+ * The self-heal: a recipe with an image URL (or, saved before pictures
+ * existed, only a source URL) but no stored photo asks the server to fetch
+ * it, once per id per launch (the capture at save is
  * fire-and-forget and an Autoscale instance can be recycled mid-fetch).
  * The answer lands in the library through `setPhoto`, so every card for
  * that recipe updates.
@@ -50,6 +51,14 @@ async function fetchBlob(id: string, meta: PhotoMeta): Promise<string | null> {
   }
 }
 
+/** Whether the server could find this recipe a page picture: an image URL
+ *  the extractor recorded, or the page's own address to read one from (a
+ *  recipe saved before pictures existed). A paste or a photo has neither. */
+function mayHavePagePhoto(recipe: unknown): boolean {
+  const { image, sourceUrl } = (recipe ?? {}) as { image?: unknown; sourceUrl?: unknown };
+  return (typeof image === 'string' && !!image) || (typeof sourceUrl === 'string' && !!sourceUrl);
+}
+
 /** The image source for an entry's photo, or null while there is none. */
 export function useRecipePhoto(entry: Pick<Entry, 'id' | 'photo' | 'recipe'>): PhotoImageSource | null {
   const { setPhoto } = useLibrary();
@@ -74,11 +83,11 @@ export function useRecipePhoto(entry: Pick<Entry, 'id' | 'photo' | 'recipe'>): P
   const [fetched, setFetched] = useState<{ key: string; source: PhotoImageSource } | null>(null);
 
   useEffect(() => {
-    // No picture: heal once if the page had one, and show the meal-type art
-    // meanwhile. Nothing to fetch and nothing to keep.
+    // No picture: heal once if the page had one — or, for a recipe saved
+    // before pictures existed, if it has a page to read one from — and show
+    // the meal-type art meanwhile. Nothing to fetch and nothing to keep.
     if (!meta || !key) {
-      const imageUrl = (entry.recipe as { image?: unknown }).image;
-      if (typeof imageUrl === 'string' && imageUrl && !healing.has(entry.id)) {
+      if (mayHavePagePhoto(entry.recipe) && !healing.has(entry.id)) {
         healing.add(entry.id);
         fetchPhotoFromSource(entry.id)
           .then((r) => {
