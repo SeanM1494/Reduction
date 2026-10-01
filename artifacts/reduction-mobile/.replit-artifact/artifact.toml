@@ -15,9 +15,11 @@ localPort = 20274
 [services.development]
 run = "pnpm --filter @workspace/reduction-mobile run dev"
 
-[services.production]
-build = [ "pnpm", "--filter", "@workspace/reduction-mobile", "run", "build" ]
-run = [ "pnpm", "--filter", "@workspace/reduction-mobile", "run", "serve" ]
+# No [services.production]: publishing does not build or serve the static
+# Expo Go bundle. Its Metro start has a 60s limit and failed a whole Publish
+# on Sep 30, and nothing depends on it: the site, the API and sign-in are
+# other artifacts, and phones use EAS builds and updates. Development (the
+# Run button) is the block above, unchanged. Revert this commit to restore.
 
 [services.env]
 PORT = "20274"
