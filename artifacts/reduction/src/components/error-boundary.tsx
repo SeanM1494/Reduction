@@ -15,6 +15,8 @@ interface ErrorBoundaryProps {
   FallbackComponent?: ComponentType<ErrorFallbackProps>;
   /** Changing this clears a caught error. Pass the route to recover on navigation. */
   resetKey?: unknown;
+  /** Called once per caught error, after it is logged (main.tsx reports it). */
+  onError?: (error: Error, componentStack: string) => void;
 }
 
 interface ErrorBoundaryState {
@@ -35,29 +37,26 @@ function toError(value: unknown): Error {
   }
 }
 
-function DefaultFallback({ error, resetError }: ErrorFallbackProps) {
+// Inline styles on the app's own tokens: the scaffold wrote this with
+// Tailwind classes, and index.css never imports Tailwind, so they styled
+// nothing. "Reload" rather than a reset, because the root boundary's
+// children are the whole app and re-rendering them usually throws again.
+function DefaultFallback({ error }: ErrorFallbackProps) {
   return (
-    <div className="min-h-screen w-full flex items-center justify-center bg-gray-50 p-6">
-      <div className="max-w-lg w-full text-center">
-        <h1 className="text-xl font-semibold text-gray-900">
-          Something went wrong
-        </h1>
-        <p className="mt-2 text-sm text-gray-600">
-          This part of the app hit an error. The rest of the app is still
-          running.
+    <div style={{ minHeight: "100svh", display: "flex", alignItems: "center", justifyContent: "center", background: "var(--page)", color: "var(--ink)", padding: 24 }}>
+      <div style={{ maxWidth: 420, width: "100%", textAlign: "center" }}>
+        <h1 style={{ fontSize: 22, margin: 0 }}>Something went wrong</h1>
+        <p style={{ marginTop: 8, color: "var(--muted)", fontSize: 16 }}>
+          The page hit an error. Your recipes are safe; reloading usually fixes it.
         </p>
         {/* Dev only: messages can carry API responses and other internals. */}
         {import.meta.env.DEV ? (
-          <pre className="mt-4 overflow-x-auto rounded bg-gray-100 p-3 text-left text-xs text-gray-800">
+          <pre style={{ marginTop: 16, overflowX: "auto", textAlign: "left", fontSize: 12, background: "var(--card)", padding: 12, borderRadius: 8 }}>
             {error.message || String(error)}
           </pre>
         ) : null}
-        <button
-          type="button"
-          onClick={resetError}
-          className="mt-4 rounded bg-gray-900 px-4 py-2 text-sm text-white hover:bg-gray-700"
-        >
-          Try again
+        <button type="button" className="rd-btn" style={{ marginTop: 16, minHeight: 44, fontSize: 16 }} onClick={() => window.location.reload()}>
+          Reload
         </button>
       </div>
     </div>
@@ -80,6 +79,7 @@ export class ErrorBoundary extends Component<
       toError(error),
       info.componentStack,
     );
+    this.props.onError?.(toError(error), info.componentStack ?? "");
   }
 
   componentDidUpdate(prevProps: ErrorBoundaryProps): void {

@@ -1,10 +1,12 @@
 # Next Publish — the reel's legal pages, purge and cap (Oct 1, evening)
 
 One pull and one Publish, from a fresh Replit shell, in order. Each block
-is one command; what it should print is under it. **One SQL step (7b),
-and it changes no schema:** it raises existing accounts to the new three
-free recipes. Nothing else touches the database (`reel_photos` already
-exists and already has `width`/`height`).
+is one command; what it should print is under it. **Two SQL steps.** 1b,
+BEFORE the pull, creates the `crash_reports` table (new code needs it
+before it runs, CLAUDE.md "A new column's DDL runs BEFORE the deploy").
+7b, after the Publish, raises existing accounts to the new three free
+recipes and changes no schema. Nothing else touches the database
+(`reel_photos` already exists and already has `width`/`height`).
 
 **Until step 5's Publish is live and steps 6–7 show its commit, do NOT add
 a third pictured page to the reel** (no `reel.mjs warm --write` of a new
@@ -28,6 +30,8 @@ The pull brings, oldest first:
 | `1e316d7` Contact address: admin@recipereduction.com everywhere | Website: privacy, terms (removal requests, copyright agent) and support mail to the new address. Phone: Send feedback addresses it too | This Publish; the phone part rides the next over-the-air update (preview, then promote) |
 | `e6d5e74` Phone: Recipe Box pages fit small phones and large text | Phone only: on a short page (320pt wide with two or more books, or large Dynamic Type) rows give way in order — short pill, one ingredient line, no serves line, no ingredients — and nothing overlaps; bigger phones at the default text size unchanged. ROADMAP "Recipe Box pages on small phones" | Nothing on the server. Rides the next over-the-air update (preview, then promote — "D" below). On preview: three or more books, then Settings › Accessibility › Display & Text Size › Larger Text turned up — no overlaps |
 
+| Crash reports | Server: `POST /api/crash` (scrubbed, anonymous reports, signed in or not, 10 an hour per client, 5,000 a day in all, kept 90 days) and `GET /api/admin/crashes`; `/api/health` checks `crash_reports`. Website: the root error boundary is mounted and reports, with a styled "Something went wrong" and a Reload button; privacy "Technical records" gains the crash-report sentence. Phone: the root error boundary, uncaught JS errors (a fatal one is sent at the next launch) and emergency launches are reported. README "Crash reports" | Step 1b's SQL **before** the pull; this Publish; the phone part rides the next over-the-air update (preview, then promote). Owner: App Store Connect › App Privacy gains Diagnostics › Crash Data — not linked to the user, not used for tracking, App Functionality |
+
 Another thread may push to `main` in between; its commits come with the
 pull and are fine. What matters is that the commits above are listed.
 
@@ -35,6 +39,33 @@ pull and are fine. What matters is that the commits above are listed.
 ```sh
 cd ~/workspace
 ```
+
+**1b.** The crash-report table, on production, BEFORE the pull (safe to
+run twice):
+```sh
+psql "$DATABASE_URL" <<'SQL'
+create table if not exists crash_reports (
+  id bigserial primary key,
+  at timestamptz not null default now(),
+  fingerprint text not null,
+  kind text not null,
+  platform text not null,
+  name text not null,
+  message text not null,
+  stack text not null,
+  route text,
+  app_version text,
+  runtime text,
+  update_id text,
+  channel text,
+  os_version text
+);
+create index if not exists crash_reports_at_idx on crash_reports (at);
+create index if not exists crash_reports_fingerprint_idx on crash_reports (fingerprint);
+SQL
+```
+Prints `CREATE TABLE` and two `CREATE INDEX` (or `NOTICE … already exists,
+skipping` on a second run).
 
 **2.**
 ```sh
@@ -99,6 +130,16 @@ curl -s https://recipereduction.com/privacy.html | grep -c "Suggested recipes"
 ```sh
 curl -s https://recipereduction.com/terms.html | grep -c "three recipes free of charge"
 ```
+```sh
+curl -s https://recipereduction.com/privacy.html | grep -c "short technical report"
+```
+
+**8a.** The crash reports can be read (empty is fine):
+```sh
+curl -s -H "x-admin-secret: $ADMIN_SECRET" "$PUBLIC_BASE_URL/api/admin/crashes?days=7"; echo
+```
+Prints `{"days":7,"total":0,"groups":[]}` or, if anything has broken since,
+the groups. A `schema_behind` answer means step 1b did not run.
 
 **8b.** The website's demo, by hand: open https://recipereduction.com
 signed out (a private window), tap "See guacamole as a reduction (demo)".

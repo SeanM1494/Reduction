@@ -268,6 +268,30 @@ export const reportCounter = (name: ReelCounter): void => {
   request('/api/counters', { method: 'POST', body: JSON.stringify({ name }) }).catch(() => {});
 };
 
+/**
+ * One crash report (lib/crashReporter.ts). Deliberately NOT `request()`: no
+ * bearer token, so a report cannot carry the account even in a header, and
+ * no ApiError — a reporter that fails says nothing and tries nothing again.
+ * Resolves to whether the server took it (a 4xx is "do not send again").
+ */
+export async function postCrashReport(report: unknown): Promise<boolean> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  try {
+    const res = await fetch(`${baseUrl()}/api/crash`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(report),
+      signal: controller.signal,
+    });
+    return res.status < 500;
+  } catch {
+    return false;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 export const fetchEntitlement = (): Promise<{ entitlement: Entitlement | null }> =>
   request('/api/billing/status');
 

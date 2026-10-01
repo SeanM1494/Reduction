@@ -30,6 +30,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { MODEL as EXTRACTION_MODEL } from "../lib/structureRecipe";
 import { windowReport } from "../lib/costReport";
 import { readCounters } from "../lib/counters";
+import { readCrashes } from "../lib/crashReports";
 import { clientKey, keyDigest } from "../lib/clientAddress";
 import { registerReelAdmin } from "./adminReel";
 import { isMissingColumn } from "../lib/extractionLog";
@@ -568,6 +569,27 @@ adminRouter.get("/counters", async (req: Request, res: Response) => {
       return res.status(503).json({ error: 'No counters table yet. Run the SQL in README "Usage counters".', code: "schema_behind" });
     console.error("[admin:counters]", (e as Error).message);
     return res.status(500).json({ error: "Could not read the counters." });
+  }
+});
+
+/**
+ * GET /api/admin/crashes?days=7 — crash reports from the phone and the
+ * website (lib/crashReports.ts), grouped by fingerprint, the most frequent
+ * first, each with the builds and updates it was seen on and its newest
+ * report whole. Nothing in a report names anyone, so there is nothing per
+ * person to show.
+ */
+adminRouter.get("/crashes", async (req: Request, res: Response) => {
+  if (!requireAdmin(req, res)) return;
+  const asked = Number(req.query.days ?? 7);
+  const days = Number.isFinite(asked) ? Math.min(90, Math.max(1, Math.floor(asked))) : 7;
+  try {
+    return res.json(await readCrashes(days));
+  } catch (e) {
+    if ((e as { cause?: { code?: string }; code?: string })?.cause?.code === "42P01" || (e as { code?: string })?.code === "42P01")
+      return res.status(503).json({ error: 'No crash_reports table yet. Run the SQL in README "Crash reports".', code: "schema_behind" });
+    console.error("[admin:crashes]", (e as Error).message);
+    return res.status(500).json({ error: "Could not read the crash reports." });
   }
 });
 

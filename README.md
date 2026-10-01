@@ -758,6 +758,69 @@ Without it nothing is counted (one `[counters]` warning per process) and
 nothing else changes; `/api/health` lists `daily_counters` and the admin
 read answers 503 `schema_behind`.
 
+### Crash reports
+
+The phone and the website report their own errors to `POST /api/crash`
+(`routes/crash.ts`, `lib/crashReports.ts`); the shape and the scrubbing are
+recipe-model `crashReport.ts`, run on the device AND on the server. A report
+is: kind (`render` — the "Something went wrong" screen; `fatal` / `error` —
+an uncaught JS error; `emergency_launch` — expo-updates fell back to the
+embedded bundle because a downloaded update crashed on launch), platform,
+the error's class, its message with anything quoted, URLs, emails, ids and
+long numbers taken out, up to 15 stack frames cut to file basenames, the
+route PATTERN, and app version, runtime, update id, channel and OS version.
+No account (the route never reads the session, and the phone sends no
+token), no device id, no address. privacy.html "Technical records" says so.
+
+Signed in or not. One client is braked at 10 an hour (`clientKey`, in
+memory), and the insert itself refuses past 5,000 rows a UTC day, so the
+table is bounded however many instances a script reaches. Rows older than
+90 days are pruned on the way in. A fatal error on the phone is stored on
+the device and sent at the next launch; each distinct crash is sent once
+per process and at most ten in all. Off in development (`__DEV__`, and the
+web's `import.meta.env.DEV`): the workspace's dev server writes to
+production.
+
+What it cannot see: a crash on the UI thread (a worklet) or in native code
+closes the app without passing through JS. Those are Apple's: Xcode →
+Window → Organizer → Crashes, and App Store Connect → TestFlight → Crashes
+(from App Store users only when they share analytics with developers).
+
+`GET /api/admin/crashes?days=7` (x-admin-secret) groups by fingerprint
+(kind, class and top five frames), the most frequent first, with the app
+versions and update ids each was seen on and the newest report whole:
+
+```sh
+curl -s -H "x-admin-secret: $ADMIN_SECRET" "$PUBLIC_BASE_URL/api/admin/crashes?days=7"
+```
+
+Hand-run DDL, safe to run twice:
+
+```sql
+create table if not exists crash_reports (
+  id bigserial primary key,
+  at timestamptz not null default now(),
+  fingerprint text not null,
+  kind text not null,
+  platform text not null,
+  name text not null,
+  message text not null,
+  stack text not null,
+  route text,
+  app_version text,
+  runtime text,
+  update_id text,
+  channel text,
+  os_version text
+);
+create index if not exists crash_reports_at_idx on crash_reports (at);
+create index if not exists crash_reports_fingerprint_idx on crash_reports (fingerprint);
+```
+
+Without it nothing is stored (one `[crash]` warning per process), the route
+still answers 204, `/api/health` lists `crash_reports`, and the admin read
+answers 503 `schema_behind`.
+
 ### Starter recipes reel
 
 A horizontal reel of recipes on Find › Add New and the empty library, for

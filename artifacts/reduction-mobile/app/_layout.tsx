@@ -21,18 +21,23 @@ import {
   useFonts,
 } from '@expo-google-fonts/space-grotesk';
 import { SpaceMono_400Regular, SpaceMono_700Bold } from '@expo-google-fonts/space-mono';
-import { Stack, router, usePathname } from 'expo-router';
+import { Stack, router, usePathname, useSegments } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { configureNotifications, onNotificationTap } from '@/lib/push';
 import { notificationTarget } from '@/lib/pushPolicy';
 import { setPurchaseHandler } from '@/lib/purchase';
 import { startStoreKitReconciler, storeKitHandler } from '@/lib/storeKit';
 import { OpeningHost } from '@/components/opening/OpeningHost';
+import { installCrashReporter, noteCrashRoute, reportRenderError } from '@/lib/crashReporter';
 import { bootLandingPending, markAppReady, noteAuthSettled, takeBootLanding } from '@/lib/opening/launch';
 
 // The splash stays up until the launch is decided: OpeningHost hides it,
 // either at once or on the opening sequence's first frame.
 SplashScreen.preventAutoHideAsync();
+
+// First, so a crash anywhere after this is reported (lib/crashReporter.ts),
+// and last launch's fatal error, if any, is sent.
+installCrashReporter();
 
 // How a timer notification presents while the app is open (lib/push.ts).
 configureNotifications();
@@ -47,6 +52,11 @@ function RootLayoutNav() {
   const { refresh } = useAuth();
   const { settled } = useLibrary();
   const pathname = usePathname();
+  // The route PATTERN for a crash report (`/recipe/[id]`), never the path,
+  // which carries a recipe's id.
+  const segments = useSegments();
+  const pattern = `/${segments.join('/')}`;
+  useEffect(() => noteCrashRoute(pattern), [pattern]);
   // A signed-in cold start lands on the Recipe Box (lib/opening/destination.ts).
   // This tree mounting is the Gate's answer "signed in"; the first answer
   // in the process is the one that counts (a sign-in later in the session
@@ -141,6 +151,10 @@ function Gate() {
     noteAuthSettled(false);
     markAppReady();
   }, [loading, token]);
+  // Signed out there is no navigator; these two are the screens.
+  useEffect(() => {
+    if (!loading && !token) noteCrashRoute(signingIn ? 'sign-in' : 'demo');
+  }, [loading, token, signingIn]);
 
   if (loading) return <Loading />;
   if (!token) {
@@ -200,7 +214,7 @@ export default function RootLayout() {
 
   return (
     <SafeAreaProvider>
-      <ErrorBoundary>
+      <ErrorBoundary onError={reportRenderError}>
         <QueryClientProvider client={queryClient}>
           <GestureHandlerRootView>
             <KeyboardProvider>

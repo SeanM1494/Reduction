@@ -860,6 +860,34 @@ export const dailyCounters = pgTable(
 );
 
 /**
+ * Crash reports from the phone and the website (Oct 1, lib/crashReports.ts).
+ * Scrubbed on the device AND here by recipe-model `crashReport.ts`, and
+ * NOTHING that identifies anyone: no user id, no device id, no address —
+ * privacy.html promises a report carries none. Pruned after 90 days.
+ * HAND-RUN DDL (README "Crash reports"); the writer fails open without it.
+ */
+export const crashReports = pgTable(
+  "crash_reports",
+  {
+    id: bigserial("id", { mode: "number" }).primaryKey(),
+    at: timestamp("at", { withTimezone: true }).notNull().defaultNow(),
+    fingerprint: text("fingerprint").notNull(),
+    kind: text("kind").notNull(),
+    platform: text("platform").notNull(),
+    name: text("name").notNull(),
+    message: text("message").notNull(),
+    stack: text("stack").notNull(),
+    route: text("route"),
+    appVersion: text("app_version"),
+    runtime: text("runtime"),
+    updateId: text("update_id"),
+    channel: text("channel"),
+    osVersion: text("os_version"),
+  },
+  (table) => [index("crash_reports_at_idx").on(table.at), index("crash_reports_fingerprint_idx").on(table.fingerprint)]
+);
+
+/**
  * The starter reel's owner list (Sep 30, lib/reelStore.ts): pages the owner
  * CURATED (offered when the data leaves room, with a pinned copy of the
  * tree so a failed re-read cannot take one away) or HIDDEN (never offered,

@@ -14,6 +14,7 @@ import { accountRouter } from "./account";
 import { booksRouter } from "./books";
 import { countersRouter } from "./counters";
 import { reelRouter } from "./reel";
+import { crashRouter } from "./crash";
 
 import { EXTRACTION_MAX_TOKENS, extractionEffort, extractionFallbackEffort, stepSourcesEnabled } from "../lib/extractionConfig";
 
@@ -49,6 +50,9 @@ router.use("/library", libraryRouter);
 router.use("/books", booksRouter);
 router.use("/counters", countersRouter);
 router.use("/reel", reelRouter);
+// Crash reports from the phone and the website, signed in or not. Scrubbed
+// and anonymous (lib/crashReports.ts); never reads the session.
+router.use("/crash", crashRouter);
 router.use("/trial", trialRouter);
 router.use("/push", pushRouter);
 // The dispatch trigger. See lib/timerDispatch.ts: the work is a plain

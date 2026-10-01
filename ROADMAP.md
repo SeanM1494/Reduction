@@ -2586,6 +2586,25 @@ on /api/health at a slow interval, because every ping wakes the Autoscale
 deployment. A Sentry-style SDK is costed in the report, not proposed. All
 waiting for approval, with a privacy sentence.
 
+**Crash reporting — decided and built (Oct 1).** Sean chose our own
+reporter over Apple-only and counts-only; no third-party SDK (the settled
+rule). The phone's root ErrorBoundary and React Native's global handler,
+and the website's boundary (now mounted, in `main.tsx`) and its window
+`error` event, send a scrubbed, anonymous report to `POST /api/crash`; a
+fatal error on the phone is stored and sent at the next launch, and an
+expo-updates emergency launch is reported as its own kind. Stored in
+`crash_reports` (hand-run DDL, README "Crash reports"), 90 days, capped per
+client and per day; read with `GET /api/admin/crashes`. privacy.html
+"Technical records" gained the sentence. **Apple's crash reports stay part
+of the answer**: a UI-thread (worklet) or native crash never passes
+through JS, so Xcode Organizer is the only place it shows. Owner to-dos:
+the App Store privacy label gains Diagnostics › Crash Data (not linked to
+the user, not tracking, App Functionality); the DDL before the Publish;
+the phone half rides an over-the-air update (preview, then promote; no
+native change, no `expo.version` bump). Not yet: unhandled promise
+rejections (noisy, rarely visible), and mapping a stack to source lines
+with the update's source maps — worth it once a real report arrives.
+
 ### The per-IP extraction limit was one bucket for everyone — fixed (Sep 30)
 
 Measured on the deployment: `req.ip` was `::ffff:127.0.0.1` for every

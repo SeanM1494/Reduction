@@ -40,6 +40,7 @@ export const REQUIRED_SCHEMA: readonly Required[] = [
   { table: "daily_counters", readme: 'README "Usage counters"' },
   { table: "reel_entries", readme: 'README "Starter recipes reel"' },
   { table: "reel_photos", readme: 'README "Starter recipes reel"' },
+  { table: "crash_reports", readme: 'README "Crash reports"' },
 ];
 
 export interface SchemaReport {

@@ -280,19 +280,19 @@ them is the whole point:
 
 | result | meaning |
 |---|---|
-| ***n* pass, 172 skipped** | no `DATABASE_URL` at all. Fine on a machine with no Postgres. |
-| ***n*+172 pass, 0 skipped** | a local database with a current schema. This is the real gate — `pnpm run test:db` produces it. |
+| ***n* pass, 181 skipped** | no `DATABASE_URL` at all. Fine on a machine with no Postgres. |
+| ***n*+181 pass, 0 skipped** | a local database with a current schema. This is the real gate — `pnpm run test:db` produces it. |
 | **failures saying "Refusing to run database tests against …"** | `DATABASE_URL` in the shell points somewhere non-local — on Replit, that is production. Working as designed: use `pnpm run test:db`, which ignores the env var entirely. |
 | **failures naming a missing table** | a reachable local database whose schema is behind `lib/db/src/schema/schema.ts`. `test:db` re-pushes on every start, so this means a hand-run database — push it or use the script. |
 
 The total grows as suites are added — pin your expectation to the **skip
 count**, not the pass count (an earlier version of this table hard-coded
 23/39 and went stale within a week, so treat the number above as needing an
-edit whenever a database-backed suite is added). The 172 are nineteen suites:
+edit whenever a database-backed suite is added). The 181 are twenty suites:
 `claim.db.test.ts` (the anonymous library), `trial.db.test.ts` (the free
 extraction), `cache.db.test.ts` (the URL alias and the cached flag),
 `extractionLog.test.ts` (the cost table), `push.db.test.ts` (timer
-notifications) `access.db.test.ts` (the paywall), `admin.db.test.ts` (the operator lookup), `billingApple.db.test.ts` (the App Store routes), `mobileHandoff.db.test.ts` (the mobile sign-in handoff), `account.db.test.ts` (account deletion), `photos.db.test.ts` (recipe pictures), `removed.db.test.ts` (taking a recipe out of the box) `searchLibrary.db.test.ts` (the cached half of a search and its counts) `originals.db.test.ts` (a recipe's original wording) `page.db.test.ts` (a page the phone's browser hands over) `books.db.test.ts` (recipe books), `costs.db.test.ts` (the admin cost report), `counters.db.test.ts` (the anonymous daily counts) and `reel.db.test.ts` (the starter reel). The first two are transactional guarantees — all-or-nothing
+notifications) `access.db.test.ts` (the paywall), `admin.db.test.ts` (the operator lookup), `billingApple.db.test.ts` (the App Store routes), `mobileHandoff.db.test.ts` (the mobile sign-in handoff), `account.db.test.ts` (account deletion), `photos.db.test.ts` (recipe pictures), `removed.db.test.ts` (taking a recipe out of the box) `searchLibrary.db.test.ts` (the cached half of a search and its counts) `originals.db.test.ts` (a recipe's original wording) `page.db.test.ts` (a page the phone's browser hands over) `books.db.test.ts` (recipe books), `costs.db.test.ts` (the admin cost report), `counters.db.test.ts` (the anonymous daily counts), `reel.db.test.ts` (the starter reel) and `crash.db.test.ts` (crash reports). The first two are transactional guarantees — all-or-nothing
 rollback, idempotent repeats, never taking another user's rows. The third is a
 promise about correctness: that a normalised URL never serves a different page.
 The fourth guards a denominator — a cache hit that recorded a `via` would
@@ -340,7 +340,10 @@ and that a card's picture is only ever the page's own image, stored by
 the server, never anybody's own photo — and (Oct 1) that a page without a
 stored picture is never offered, that fewer than three cards means no
 reel, and that a page read through the fallback is never re-read unless
-forced. **The full suite — 634 tests at the
+forced. The twentieth guards that a crash report names no one — no
+column for an account, a device or an address, nothing of the session
+stored even for a signed-in caller, only the scrubbed report — and that
+one client is braked and the daily cap holds in the insert itself. **The full suite — 634 tests at the
 time of writing — has been run against a real Postgres and passes 634/0.** The
 ones that are not api-server or model tests include the mobile library's
 filter and sort (`artifacts/reduction-mobile/lib/libraryView.test.ts`), the
