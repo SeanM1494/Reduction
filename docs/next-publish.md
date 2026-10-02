@@ -12,6 +12,7 @@ Publish.
 | Commit | Ships | Needs |
 |---|---|---|
 | `3909d43` Notes: a person's own notes on a recipe | Server: `recipes.notes` (`{ text }`) rides the library PATCH, both devices' edits kept on a merge; `/api/health` checks the column. Website: "Your notes" under a saved recipe, Edit/Save in place; privacy "Your recipes and cooking progress" and "Deleting your account" mention notes, dated October 2. Phone: ⋮ › Notes, the note under the diagram and above Step-by-Step's first card, a one-line strip at the top of the diagram where it costs no room, a margin line on the Recipe Box page, Recipe Box search matches notes. README "Recipe notes" | Step 2's SQL **before** the pull; this Publish; the phone part rides the next over-the-air update (preview, then promote — step 10 on) |
+| `5f0524a` Notes: a note on any step, on its card | Server: the same `recipes.notes` column also takes `steps` (a note per step id); a tree edit that deletes a step moves its note into the recipe's note. Website and phone: a note on each Step-by-Step card ("+ Add a note to this step", or the note with Edit), step notes listed under the recipe's note. No new SQL | This Publish (server FIRST: the old server refuses a step note with a 400); the phone part rides the same over-the-air update |
 | the docs commit that wrote this section | Nothing that runs | Nothing |
 | `34405fa` Privacy: say what push, search and the extraction log already collect | Website only: `privacy.html` says timer notifications store the device's model and app version (the browser's user agent on the web), that search words go to Anthropic without the account and results are kept up to 30 days, and that the extraction log records the website's name. Wording only, matching what the code already did | This Publish; nothing on the phone |
 | `65e0146` Icon: the plain pot with steam | Website: favicon, home-screen icon and nav mark become the new pot. Phone: the app icon and the sign-in mark, which are in the BINARY, so they reach phones only with the next native build (the launch build). The opening sequence is unchanged | This Publish for the website; the launch build for the phone. No `expo.version` bump (nothing a bundle calls) |
@@ -40,9 +41,9 @@ A fast-forward; among the files, `lib/recipe-model/src/notes.ts`.
 
 **4.**
 ```sh
-git log --oneline -3
+git log --oneline -15
 ```
-Must list `3909d43`. Note the TOP line's short hash: steps 7 and 8 must
+Must list `3909d43` and `5f0524a`. Note the TOP line's short hash: steps 7 and 8 must
 show it.
 
 **5.**
@@ -81,7 +82,7 @@ Prints `1`.
 cd ~/workspace/artifacts/reduction-mobile
 ```
 ```sh
-node scripts/publish-update.mjs --channel preview --message "Recipe notes"
+node scripts/publish-update.mjs --channel preview --message "Recipe notes and step notes"
 ```
 Its `commit` line must match the hash from step 4. Copy the **Group ID** it
 ends with.
@@ -92,7 +93,9 @@ open the recipe from step 9 — its note is under the diagram (pulled from
 the server, written on the website); ⋮ › **Notes**, add a line, **Done**;
 Step-by-Step shows the note above the first card; the Library page for
 that recipe ends its ingredients with a ✎ line; searching the Recipe Box
-for a word only in the note finds it.
+for a word only in the note finds it. Then a step note: Step-by-Step, on
+any card **+ Add a note to this step**, type a line, **Done** — the card
+shows it as "Your note", and it is listed under the recipe's note.
 
 **12.** All good:
 ```sh
