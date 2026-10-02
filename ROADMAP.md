@@ -12,7 +12,7 @@ what the retired "Where this has got to" appendix was.
 
 ## 1. User login with OAuth
 
-**Status: built, except Apple.**
+**Status: built, Apple included** (Sign in with Apple verified from a phone on Oct 1).
 
 - Schema and session plumbing — `users`, `identities`, `sessions`,
   `auth_states`, server-side sessions behind an httpOnly cookie (`aafc59a`).
@@ -28,9 +28,9 @@ what the retired "Where this has got to" appendix was.
 
 **Sign in with Apple is built** (`lib/apple.ts`, `routes/auth.ts`; README
 "Sign in with Apple"; CLAUDE.md "Sign in with Apple: four things that fail
-silently"). What remains is the phone: the token exchange with Apple has
-never run anywhere but a real sign-in, which Phase 4 ("Sign in with Apple
-must be live on the deployment — VERIFY") tracks. *(Corrected Sep 30: this
+silently"). The phone half is verified too: the owner signed in with Apple from
+the phone on Oct 1 (Phase 4, "Sign in with Apple must be live on the
+deployment"). *(Corrected Sep 30: this
 paragraph used to say Apple had not been started.)*
 
 **`owner_key` did not become `user_id`; it was added alongside.** The original
@@ -628,13 +628,14 @@ verification, or a decision.
   `[billing:apple:notifications]` lines. If none arrive after a sandbox
   purchase, the URL in App Store Connect is wrong.
 
-- **Sign in with Apple must be live on the deployment — VERIFY.**
+- **Sign in with Apple must be live on the deployment — VERIFIED Oct 1.**
   Guideline 4.8: offering Google sign-in requires an equivalent option,
   and Sign in with Apple is the one built (`lib/apple.ts`). The mobile
   screen shows "Coming soon" when `/api/auth/providers` reports it
   unconfigured. Read that route on the deployment; if `apple: false`, set
-  the four `APPLE_*` sign-in secrets there. The Apple exchange has never
-  run from a phone.
+  the four `APPLE_*` sign-in secrets there. The Apple exchange had never
+  run from a phone. **DONE Oct 1: the owner signed in with Apple from the
+  phone against the deployment.**
 - **PAYWALL_ENFORCED at launch — DECIDED Sep 21: ON, as the LAST step.**
   Not before every other item here is verified on the TestFlight build;
   shadow mode until then. The reviewer can reach the purchase either way,
@@ -660,7 +661,10 @@ verification, or a decision.
   one more" and back, search, the preview window into Cook and into the
   diagram, the rating prompt after a cook, remove from the box with its
   toast, Removed recipes and a restore, and the box style in Settings.
-- **App Store Connect — the metadata, none of it started.** Rename
+- **App Store Connect — the metadata.** *(Oct 1: the typo'd duplicate
+  record was removed and the live record renamed "Recipe Reduction", by
+  the owner; App Privacy has Crash Data entered, the other data types are
+  drafted in the project notes. The rest below is still to do.)* Rename
   "Reduction Mobile" to Recipe Reduction (rename the old record out of
   the way first, then remove it — it has no build, so it can go; the
   name is released on removal and anyone can take it, hence the order);
@@ -1773,8 +1777,7 @@ actually left, cheapest and most blocking first.
 7. **Cross-user search + cache reuse** (#2 and #3 together) — the same
    feature seen from two sides, and it needs the correction path from step 5
    to be safe.
-8. **Apple sign-in** (#1) — BUILT; verifying it from a phone is Phase 4's
-   "Sign in with Apple must be live on the deployment — VERIFY".
+8. **Apple sign-in** (#1) — BUILT, and verified from a phone on Oct 1.
 9. **Variations at the prompt level** (#5, cheap version).
 10. **Recipe builder** (#4) — mostly falls out of #6 once editing is complete.
 11. **Structural variation comparison** (#5, real version) — needs the corpus
@@ -2601,11 +2604,11 @@ expo-updates emergency launch is reported as its own kind. Stored in
 client and per day; read with `GET /api/admin/crashes`. privacy.html
 "Technical records" gained the sentence. **Apple's crash reports stay part
 of the answer**: a UI-thread (worklet) or native crash never passes
-through JS, so Xcode Organizer is the only place it shows. Owner to-dos:
-the App Store privacy label gains Diagnostics › Crash Data (not linked to
-the user, not tracking, App Functionality); the DDL before the Publish;
-the phone half rides an over-the-air update (preview, then promote; no
-native change, no `expo.version` bump). Not yet: unhandled promise
+through JS, so Xcode Organizer is the only place it shows. **Published Oct 1**, in owner order: the DDL
+before the Publish, the Publish, the phone half over the air (preview,
+then promote; no native change, no `expo.version` bump), and the App
+Store privacy label's Diagnostics › Crash Data (not linked to the user,
+not tracking, App Functionality). Not yet: unhandled promise
 rejections (noisy, rarely visible), and mapping a stack to source lines
 with the update's source maps — worth it once a real report arrives.
 
@@ -2737,8 +2740,9 @@ accounts on the free allowance.
 
 ## Three free recipes (Oct 1)
 
-**Status:** built; ships with the next Publish, then the phone's copy over
-the air (preview first). Decided by the owner on Oct 1: a new account gets
+**Status:** built and PUBLISHED Oct 1 (the Publish, the SQL raising
+existing accounts to three, and the phone's copy over the air, preview then
+promote). Decided by the owner on Oct 1: a new account gets
 **three** free recipes, up from one, and everything spends from the one
 count — a saved extraction (link, text or photo) and a saved reel starter
 alike. The website's signed-out try stays ONE recipe before an account and
@@ -2838,8 +2842,9 @@ hint), and the website's landing demo (`DemoCoach` tips). Nothing relied on
 it: no test or testID named it, VoiceOver now reads the finish strip, then
 Original recipe, then the source link, and the gap it leaves is the finish
 strip's own margin plus the card's 12pt. Measured in Chromium, the page is
-60pt shorter on a 390pt phone and 77pt on an SE. The phone change ships
-over the air; the website's ships with the next Publish.
+60pt shorter on a 390pt phone and 77pt on an SE. Both are
+live: the website's in the Oct 1 Publish, the phone's in that night's
+over-the-air update.
 
 ## Dark mode: Cocoa (Oct 1)
 
@@ -3129,8 +3134,10 @@ From Scratch, Once Upon a Chef, JoyFoodSunshine, Cookie and Kate),
 reported free with `--candidates` first so a site that refuses us is
 dropped before anything is spent. **Chosen in a container that cannot
 reach those sites**: whether our server can read each one is only known
-from that report. **Held behind the reel Publish** (step 9 there), since a
-third pictured page switches the reel on for everyone. Two candidates per
+from that report. It was held behind the reel Publish (step 9 there), since a third
+pictured page switches the reel on for everyone; that Publish went out
+Oct 1, so it is free to run. Whether the owner has run it is not recorded
+here. Two candidates per
 site at most, so one site's removal request takes out few cards.
 
 ## Working lists live in ~/workspace (Oct 1)

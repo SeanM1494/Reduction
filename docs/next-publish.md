@@ -264,6 +264,11 @@ from here on: `node scripts/reel.mjs hide <url> --purge` (never a plain
 
 ### After step 9: swap the two pages with no picture for pictured ones
 
+*(Oct 2: the Publish above is live, so these steps are free to run. Whether
+they have been run is not recorded; `node scripts/reel.mjs preview` prints a
+"No stored picture" list, and focaccia or garlic knots still on it means
+not yet.)*
+
 The focaccia and garlic-knots pages are on the curated list but can never
 show (neither has a stored picture: their sites refuse our server, and
 the fallback that read them never records one), so they hold two of the 20 slots for nothing. These steps take
