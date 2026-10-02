@@ -26,6 +26,7 @@ import { cookedLabel, keyIngredients, notCookedLabel, pageFit, RATING_EMOJI, ste
 import type { Entry } from '@/lib/api';
 import { useColors } from '@/hooks/useColors';
 import { PageFace, faceStyles } from './PageFace';
+import { notesPreview } from '@/shared/notes';
 
 export type PageContent = { kind: 'recipe'; entry: Entry; number: number } | { kind: 'blank' } | { kind: 'empty' };
 
@@ -103,6 +104,7 @@ function RecipeFace({ entry, number, side, book, width, height }: { entry: Entry
       showServes={fit.showServes}
       ingredients={keyIngredients(recipe)}
       ingredientLines={fit.ingredientLines}
+      note={notesPreview(entry.notes) || null}
       paddingBottom={fit.paddingBottom}
       maxFontSizeMultiplier={cap}
       timeMaxFontSizeMultiplier={fit.timeMaxFontScale ?? undefined}

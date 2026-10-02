@@ -32,6 +32,7 @@ import { validateRecipe, type Recipe } from "../shared/layout";
 import { pruneOrderPreference } from "../shared/sequence";
 import { sanitizeMealTypes } from "../shared/mealTypes";
 import { reconcileDone } from "../shared/progress";
+import { NOTE_STORED_MAX, isValidNotes } from "../shared/notes";
 import { userIdOf } from "../middleware/session";
 import { cancelTimer, scheduleTimer } from "../lib/timerDispatch";
 import { checkAccess, subscriptionRequired } from "../lib/billing/access";
@@ -193,6 +194,8 @@ function wireEntry(row: typeof recipes.$inferSelect, photo: PhotoMeta | null = n
      *  none and its meal type decides. The phone resolves it through the
      *  account's books (recipe-model resolveBookId); the website ignores it. */
     book,
+    /** The person's own notes, `{ text }` or null (recipe-model notes.ts). */
+    notes: row.notes ?? null,
     version: row.version ?? 1,
     savedAt: row.createdAt ? new Date(row.createdAt).getTime() : Date.now(),
   };
@@ -479,7 +482,7 @@ libraryRouter.post("/", async (req: Request, res: Response) => {
 
 libraryRouter.patch("/:id", async (req: Request, res: Response) => {
   const id = String(req.params.id);
-  const { recipe, done, servings, mode, timer, cooked, rating, order, removedAt, book, ifVersion } =
+  const { recipe, done, servings, mode, timer, cooked, rating, order, removedAt, book, notes, ifVersion } =
     req.body ?? {};
   if (book !== undefined && book !== null && !isValidBookId(book))
     return res.status(400).json({ error: "book must be a book id or null." });
@@ -493,6 +496,8 @@ libraryRouter.patch("/:id", async (req: Request, res: Response) => {
     return res.status(400).json({ error: "order must be {sections?, branches?} or null." });
   if (removedAt !== undefined && !isValidRemovedAt(removedAt))
     return res.status(400).json({ error: "removedAt must be a timestamp or null." });
+  if (notes !== undefined && !isValidNotes(notes))
+    return res.status(400).json({ error: `notes must be {text} of at most ${NOTE_STORED_MAX} characters, or null.` });
   const patch: Partial<typeof recipes.$inferInsert> = {
     updatedAt: new Date(),
     version: sql`${recipes.version} + 1` as unknown as number,
@@ -500,6 +505,7 @@ libraryRouter.patch("/:id", async (req: Request, res: Response) => {
   if (cooked !== undefined) patch.cooked = cooked;
   if (rating !== undefined) patch.rating = rating;
   if (order !== undefined) patch.cardOrder = order;
+  if (notes !== undefined) patch.notes = notes;
 
   /**
    * A replacement tree, from the JSON editor. Validated here and not merely

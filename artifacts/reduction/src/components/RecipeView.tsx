@@ -35,6 +35,7 @@ import { lastAcceptedEntry, onSyncFailure } from "../lib/storage";
 import { useIngredientDrag } from "../lib/useIngredientDrag";
 import { saveRecipeAsImage, slugForFile } from "../lib/exportImage";
 import RecipePhoto from "./RecipePhoto";
+import RecipeNotes from "./RecipeNotes";
 import { removePhoto, uploadPhoto } from "../lib/storage";
 import { resizePhoto } from "../lib/photoResize";
 
@@ -52,6 +53,9 @@ interface Props {
    * patched, so the edits are on the row the account receives.
    */
   canEdit?: boolean;
+  /** The person's own notes. Off for the signed-out try, whose row the
+   *  trial route patches and which has no notes column to speak of. */
+  notesEnabled?: boolean;
 }
 
 type Phase = "choose" | "diagram" | "steps" | "json";
@@ -85,6 +89,7 @@ export default function RecipeView({
   onUpdate,
   onDelete,
   canEdit = true,
+  notesEnabled = true,
 }: Props) {
   const { recipe } = entry;
   const [phase, setPhase] = useState<Phase>("choose");
@@ -907,6 +912,10 @@ export default function RecipeView({
             onApply={applyOp}
             onClose={() => setSheetFor(null)}
           />
+        ) : null}
+
+        {canEdit && notesEnabled && phase !== "json" && !editing ? (
+          <RecipeNotes notes={entry.notes ?? null} onSave={(notes) => onUpdate({ ...entry, notes })} />
         ) : null}
 
         {recipe.sourceUrl ? (

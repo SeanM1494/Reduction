@@ -334,6 +334,7 @@ export default function RecipeDetailScreen() {
         timer={entry.timer}
         cooked={entry.cooked ?? []}
         rating={entry.rating ?? null}
+        notes={entry.notes ?? null}
         mode={entry.mode}
         order={entry.order ?? null}
         onUpdate={write}
@@ -420,6 +421,7 @@ export default function RecipeDetailScreen() {
           {entry.cooked?.length ? (
             <MenuItem label="Rating" onPress={() => menuThen(() => askScreen('rating'))} colors={colors} testID="menu-rating" />
           ) : null}
+          <MenuItem label="Notes" onPress={() => menuThen(() => askScreen('notes'))} colors={colors} testID="menu-notes" />
           <MenuItem label="Meal types" onPress={() => menuThen(() => setMealSheetOpen(true))} colors={colors} testID="menu-meal-types" />
           <MenuItem label="Photo" onPress={() => menuThen(() => setPhotoSheetOpen(true))} colors={colors} testID="menu-photo" />
           <MenuItem label="Original recipe" onPress={() => menuThen(() => router.push(`/original/${entry.id}`))} colors={colors} testID="menu-original" />

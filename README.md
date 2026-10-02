@@ -674,6 +674,30 @@ README section holding its DDL, and the same line is logged at boot
 {"ok":true,"commit":"…","schema":{"ok":false,"missing":["recipes.removed_at (README \"The recipe box\")"]}}
 ```
 
+### Recipe notes
+
+The person's own notes on a recipe ("less salt, double the garlic"; user
+feedback, Oct 2) are `recipes.notes`, `{ text }` or null — entry-level like
+`rating`, never in the tree (`lib/recipe-model/src/notes.ts` says why). They
+ride the ordinary versioned library PATCH; two devices that both changed a
+note keep both (`mergeNotes`), and an app that predates notes never sends
+the field, so it cannot erase one. The box takes 2,000 characters and the
+server stores up to 4,000, so a merge of two full notes is never refused.
+The phone shows them in the diagram's top row where that costs the diagram
+nothing (`lib/notesStrip.ts`), under the diagram, above Step-by-Step's first
+card and as a margin line on the Recipe Box page; the website shows them
+under the recipe. The signed-out try has none. Hand-run DDL:
+
+```sql
+alter table recipes add column if not exists notes jsonb;
+```
+
+**Run it BEFORE the deploy that carries it, and before pulling that commit
+into the Replit workspace**, for the reason `removed_at` gives above: code
+that knows the column fails every recipes query against a database without
+it. Nullable with no default, so it is instant and harmless to the code
+already running. `/api/health` names it while it is missing.
+
 ### Extraction costs
 
 Every extraction attempt and cache hit is a row in `extraction_events`

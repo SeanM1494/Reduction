@@ -129,6 +129,18 @@ export const recipes = pgTable(
      * query against a database that does not have it.
      */
     removedAt: timestamp("removed_at", { withTimezone: true }),
+    /**
+     * The person's own notes on this recipe ("less salt, double the
+     * garlic"), as `{ text }` (recipe-model notes.ts), or null. Entry-level
+     * like `servings` and `rating` — what THIS person does with the recipe,
+     * never part of the tree. An object rather than a string so a note per
+     * step is a new key, not a migration. Rides the versioned PATCH; two
+     * devices that both changed it keep both (sync.ts).
+     *
+     * HAND-RUN DDL (README "Recipe notes"), BEFORE the deploy that carries
+     * it, for the same reason as `removed_at` just above.
+     */
+    notes: jsonb("notes").$type<{ text: string } | null>(),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),
   },

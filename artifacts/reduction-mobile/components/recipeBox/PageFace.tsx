@@ -45,6 +45,14 @@ export interface PageFaceProps {
   ingredients: { names: string[]; more: number };
   /** 0 drops the ingredients line. */
   ingredientLines: number;
+  /**
+   * The person's own note, one line (recipe-model notesPreview), like a
+   * pencil note in a cookbook's margin (Oct 2). It takes the LAST of the
+   * ingredient lines rather than adding one — the same height, so pageFit's
+   * arithmetic holds unchanged — and only when there are two or more: on a
+   * page with room for one, the ingredients keep it.
+   */
+  note?: string | null;
   /** Bottom-aligned by the caller's own `marginTop: 'auto'`. */
   footer: ReactNode;
   /** Absolutely placed, after everything (the book's page number). */
@@ -72,6 +80,7 @@ export function PageFace({
   showServes = true,
   ingredients,
   ingredientLines,
+  note = null,
   footer,
   corner,
   paddingBottom,
@@ -85,6 +94,7 @@ export function PageFace({
   const serves = servings ? `Serves ${servings} · ` : '';
   const scale = maxFontSizeMultiplier === undefined ? {} : { maxFontSizeMultiplier };
   const timeScale = timeMaxFontSizeMultiplier === undefined ? scale : { maxFontSizeMultiplier: timeMaxFontSizeMultiplier };
+  const noteLine = !!note && (ingredients.names.length ? ingredientLines >= 2 : ingredientLines >= 1);
   const titleScale = titleMaxFontSizeMultiplier === undefined ? scale : { maxFontSizeMultiplier: titleMaxFontSizeMultiplier };
   return (
     <View style={[faceStyles.content, { paddingBottom }]} testID={testID}>
@@ -115,9 +125,14 @@ export function PageFace({
         </Text>
       ) : null}
       {ingredientLines > 0 && ingredients.names.length ? (
-        <Text style={faceStyles.ingredients} numberOfLines={ingredientLines} {...scale}>
+        <Text style={faceStyles.ingredients} numberOfLines={noteLine ? ingredientLines - 1 : ingredientLines} {...scale}>
           {ingredients.names.join(', ')}
           {ingredients.more > 0 ? <Text style={{ color: colors.paperFaint }}> +{ingredients.more} more</Text> : null}
+        </Text>
+      ) : null}
+      {noteLine ? (
+        <Text style={[faceStyles.note, !ingredients.names.length && { marginTop: 3 }]} numberOfLines={1} testID="book-page-note" {...scale}>
+          ✎ {note}
         </Text>
       ) : null}
       {footer}
@@ -142,6 +157,8 @@ export const faceStyles = StyleSheet.create({
     lineHeight: 14,
   },
   ingredients: { marginTop: 3, fontSize: 11.5, lineHeight: 15.5, color: INK_SOFT },
+  // One of the ingredient lines, so the same size and line height.
+  note: { fontSize: 11.5, lineHeight: 15.5, fontStyle: 'italic', color: INK_SOFT },
   // The footer pill: the book's "Cooked 3× · Sep 11", the reel's use.
   pill: { marginTop: 'auto', alignSelf: 'flex-start', maxWidth: '100%', borderRadius: 99, paddingVertical: 3, paddingHorizontal: 8 },
   pillText: { fontSize: 10.5, lineHeight: 13, fontWeight: '600' },

@@ -14,8 +14,10 @@ import {
   MEAL_TYPES,
   primaryMealType,
   recipeTotalMinutes,
+  notesMatch,
   sanitizeMealTypes,
   type MealType,
+  type RecipeNotes,
 } from '@workspace/recipe-model';
 
 /** The slice of an Entry these helpers read — kept structural so the test
@@ -24,6 +26,8 @@ export interface LibraryItem {
   savedAt: number;
   cooked?: number[] | null;
   rating?: number | null;
+  /** The person's own notes; search reads them (recipe-model notes.ts). */
+  notes?: RecipeNotes | null;
   recipe: {
     title?: string;
     source?: string | null;
@@ -149,6 +153,7 @@ export function searchLibrary<T extends LibraryItem>(library: T[], query: string
     const r = e.recipe;
     if ((r.title ?? '').toLowerCase().includes(needle)) return true;
     if (r.source && r.source.toLowerCase().includes(needle)) return true;
+    if (notesMatch(e.notes, needle)) return true;
     return (r.sections ?? []).some((s) => (s.ingredients ?? []).some((i) => (i.name ?? '').toLowerCase().includes(needle)));
   });
 }

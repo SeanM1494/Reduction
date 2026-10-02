@@ -18,6 +18,7 @@
 import type { Recipe } from "../shared/layout";
 import type { OrderPreference } from "../shared/sequence";
 import { mergeEntry, type SyncableEntry } from "../shared/sync";
+import type { RecipeNotes } from "../shared/notes";
 
 /** Absolute end time (epoch ms), never a countdown — see StepsMode.tsx. */
 export interface StepTimer {
@@ -45,6 +46,9 @@ export interface Entry {
    *  leaves a choice. Entry-level twin of the editor's reorderInputs — same
    *  split as servings. Advisory; see OrderPreference in shared/sequence. */
   order?: OrderPreference | null;
+  /** The person's own notes, `{ text }` or null (recipe-model notes.ts).
+   *  Entry-level like rating; both devices' edits are kept on a merge. */
+  notes?: RecipeNotes | null;
   savedAt: number;
   /** The card's picture, as the server describes it. Server-owned: never
    *  in a PATCH (buildPatch ignores it), never merged, simply taken from the
@@ -313,6 +317,7 @@ function toEntry(row: any): Entry {
     cooked: Array.isArray(row.cooked) ? row.cooked : [],
     rating: typeof row.rating === "number" ? row.rating : null,
     order: row.order ?? null,
+    notes: row.notes ?? null,
     savedAt: row.savedAt ?? Date.now(),
     photo: row.photo ?? null,
   };
@@ -465,6 +470,7 @@ const toSyncable = (e: Entry): SyncableEntry => ({
   cooked: e.cooked ?? [],
   rating: e.rating ?? null,
   order: e.order ?? null,
+  notes: e.notes ?? null,
 });
 
 /** What actually goes on the wire for an update: only the fields that
@@ -483,6 +489,10 @@ function buildPatch(base: Entry | null, entry: Entry): Record<string, unknown> |
   if (changed("cooked")) body.cooked = entry.cooked ?? [];
   if (changed("rating")) body.rating = entry.rating ?? null;
   if (changed("order")) body.order = entry.order ?? null;
+  // Absent and null are the same "no note", and a write with no base sends
+  // one only when there is one.
+  const notesNow = entry.notes ?? null;
+  if (base ? JSON.stringify(base.notes ?? null) !== JSON.stringify(notesNow) : notesNow !== null) body.notes = notesNow;
   if (Object.keys(body).length === 0) return null;
   const v = versions.get(entry.id);
   if (v !== undefined) body.ifVersion = v;

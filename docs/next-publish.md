@@ -1,9 +1,11 @@
 # Next Publish — the reel's legal pages, purge and cap (Oct 1, evening)
 
 One pull and one Publish, from a fresh Replit shell, in order. Each block
-is one command; what it should print is under it. **Two SQL steps.** 1b,
-BEFORE the pull, creates the `crash_reports` table (new code needs it
-before it runs, CLAUDE.md "A new column's DDL runs BEFORE the deploy").
+is one command; what it should print is under it. **Three SQL steps.** 1b
+and 1c, BEFORE the pull, create the `crash_reports` table and the
+`recipes.notes` column (new code needs both before it runs, CLAUDE.md "A
+new column's DDL runs BEFORE the deploy" — without 1c every recipes query
+fails and the library shows empty).
 7b, after the Publish, raises existing accounts to the new three free
 recipes and changes no schema. Nothing else touches the database
 (`reel_photos` already exists and already has `width`/`height`).
@@ -33,6 +35,8 @@ The pull brings, oldest first:
 | the docs commit that added steps 10–19 | Nothing that runs: owner steps that replace the reel's two pages with no picture (focaccia, garlic knots) with pictured ones | Steps 10–19, only after step 9 |
 
 | `632f3bc` Crash reports: the phone and the website report their own errors | Server: `POST /api/crash` (scrubbed, anonymous reports, signed in or not, 10 an hour per client, 5,000 a day in all, kept 90 days) and `GET /api/admin/crashes`; `/api/health` checks `crash_reports`. Website: the root error boundary is mounted and reports, with a styled "Something went wrong" and a Reload button; privacy "Technical records" gains the crash-report sentence. Phone: the root error boundary, uncaught JS errors (a fatal one is sent at the next launch) and emergency launches are reported. README "Crash reports" | Step 1b's SQL **before** the pull; this Publish; the phone part rides the next over-the-air update (preview, then promote). Owner: App Store Connect › App Privacy gains Diagnostics › Crash Data — not linked to the user, not used for tracking, App Functionality |
+
+| Recipe notes: the person's own notes on a recipe | Server: `recipes.notes` (`{ text }`) rides the library PATCH, both devices' edits kept on a merge; `/api/health` checks the column. Website: "Your notes" under a saved recipe, Edit/Save in place; privacy "Your recipes and cooking progress" and "Deleting your account" mention notes, dated October 2. Phone: ⋮ › Notes, a note strip at the top of the diagram where it costs no room, the note under the diagram and above Step-by-Step's first card, a margin line on the Recipe Box page, and Recipe Box search matches notes. README "Recipe notes" | Step 1c's SQL **before** the pull; this Publish; the phone part rides the next over-the-air update (preview, then promote). On preview: ⋮ › Notes, type a line, Done — it shows under the diagram, and on a second device after a refresh |
 
 Another thread may push to `main` in between; its commits come with the
 pull and are fine. What matters is that the commits above are listed.
@@ -68,6 +72,14 @@ SQL
 ```
 Prints `CREATE TABLE` and two `CREATE INDEX` (or `NOTICE … already exists,
 skipping` on a second run).
+
+**1c.** The notes column, on production, BEFORE the pull (safe to run
+twice):
+```sh
+psql "$DATABASE_URL" -c "alter table recipes add column if not exists notes jsonb"
+```
+Prints `ALTER TABLE` (or `NOTICE … already exists, skipping` on a second
+run).
 
 **2.**
 ```sh

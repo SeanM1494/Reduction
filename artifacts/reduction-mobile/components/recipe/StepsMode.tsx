@@ -137,6 +137,10 @@ interface Props {
   onReorderOpened?: () => void;
   /** Above the card: the recipe's picture and Clear progress. */
   header?: React.ReactNode;
+  /** The person's own notes, above the FIRST card only: read before
+   *  anything goes in a pan, and out of the way once cooking is under way
+   *  (the footer still has them). */
+  leadNote?: React.ReactNode;
   /**
    * The source's method steps as text (`originalStepTexts`), so a card whose
    * step carries a source number (`src`, stepSource.ts) can show the
@@ -173,6 +177,7 @@ export function StepsMode({
   openReorder = false,
   onReorderOpened,
   header = null,
+  leadNote = null,
   sourceSteps = null,
   footer = null,
   resetSignal = 0,
@@ -359,6 +364,7 @@ export function StepsMode({
       testID="recipe-cook"
     >
       {header}
+      {card && cardIndex === 0 ? leadNote : null}
       {returnIndex != null && cardIndex !== returnIndex ? (
         <Pressable accessibilityRole="button" onPress={backToTimer} style={styles.returnBtn} testID="cook-return">
           <Text style={styles.returnText}>← Back to timer</Text>

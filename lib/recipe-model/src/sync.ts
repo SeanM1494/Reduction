@@ -33,6 +33,7 @@
 import type { Recipe } from "./layout";
 import { reconcileDone } from "./progress";
 import type { OrderPreference } from "./sequence";
+import { mergeNotes, type RecipeNotes } from "./notes";
 
 export interface SyncableEntry {
   recipe: Recipe;
@@ -51,6 +52,8 @@ export interface SyncableEntry {
   /** The book this recipe is in (books.ts), by id — or null when it has no
    *  placement and its meal type decides. Last change wins. */
   book?: string | null;
+  /** The person's own notes (notes.ts), or null. Both changed: both kept. */
+  notes?: RecipeNotes | null;
 }
 
 export interface MergeResult {
@@ -261,6 +264,12 @@ export function mergeEntry(
    * other, and a book since deleted sends it on (books.ts resolveBookId).
    */
   const book = pick("book", () => mine.book ?? null);
+  /**
+   * The person's notes. Unlike rating, losing one side here destroys
+   * something typed, so both changed means both kept (notes.ts mergeNotes)
+   * — visible in the note itself, which is why it needs no notice.
+   */
+  const notes = pick("notes", () => mergeNotes(mine.notes, theirs.notes));
 
   /**
    * Removal merges on whether the recipe is removed, NEVER on when. The
@@ -309,6 +318,7 @@ export function mergeEntry(
       order: order ?? null,
       removedAt,
       book: book ?? null,
+      notes: notes ?? null,
     },
     treeConflict,
   };

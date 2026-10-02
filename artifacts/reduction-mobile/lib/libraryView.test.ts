@@ -107,6 +107,15 @@ test("searchLibrary: title, source and ingredient names, case-insensitive; blank
   assert.deepEqual(titles("zzz"), []);
 });
 
+test("searchLibrary: the person's own notes are searched too", () => {
+  const lib = [
+    { savedAt: 2, notes: { text: "Double the garlic.\nUse thighs." }, recipe: { title: "Weeknight chicken", sections: [] } },
+    { savedAt: 1, notes: null, recipe: { title: "Toast", sections: [] } },
+  ];
+  assert.deepEqual(searchLibrary(lib, "THIGHS").map((e) => e.recipe.title), ["Weeknight chicken"]);
+  assert.deepEqual(searchLibrary(lib, "salt"), []);
+});
+
 test('inRecipeBox: removed entries are out; absent reads as in (caches and servers that predate it)', () => {
   assert.equal(inRecipeBox({ removedAt: null }), true);
   assert.equal(inRecipeBox({}), true, 'an entry from before the field existed is in the box');

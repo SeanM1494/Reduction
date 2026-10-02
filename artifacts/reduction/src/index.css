@@ -2266,3 +2266,17 @@ button.rd-section-head:focus-visible {
   user-select: all;
 }
 .rd-accountid-copy { flex: 0 0 auto; min-height: 44px; padding: 0 14px; font-size: 14px; }
+
+/* ---------- the person's own notes on a recipe (Oct 2) ---------- */
+.rd-notes {
+  margin: 14px 0 12px; padding: 12px 14px;
+  background: var(--card); border: 1px solid var(--line); border-radius: 14px;
+}
+.rd-notes-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.rd-notes-head { font-family: "Space Grotesk", system-ui, sans-serif; font-weight: 600; font-size: 15px; color: var(--ink); }
+.rd-notes-btn { min-height: 44px; min-width: 64px; }
+.rd-notes-text { margin: 6px 0 0; font-size: 15px; line-height: 1.45; color: var(--ink); white-space: pre-wrap; overflow-wrap: anywhere; }
+.rd-notes-empty { margin: 4px 0 0; font-size: 13px; color: var(--muted); }
+.rd-notes-input { display: block; margin-top: 8px; resize: vertical; line-height: 1.45; }
+.rd-notes-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px; margin-top: 10px; }
+.rd-notes-meta { flex: 1 1 140px; font-size: 12px; color: var(--faint); }

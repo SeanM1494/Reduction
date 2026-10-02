@@ -143,9 +143,10 @@ export const toSyncable = (e: SyncableEntry): SyncableEntry => ({
   order: e.order ?? null,
   removedAt: e.removedAt ?? null,
   book: e.book ?? null,
+  notes: e.notes ?? null,
 });
 
-const SYNCED_KEYS: Array<keyof SyncableEntry> = ['recipe', 'done', 'servings', 'mode', 'timer', 'cooked', 'rating', 'order', 'removedAt', 'book'];
+const SYNCED_KEYS: Array<keyof SyncableEntry> = ['recipe', 'done', 'servings', 'mode', 'timer', 'cooked', 'rating', 'order', 'removedAt', 'book', 'notes'];
 
 /** Did this field change? By value — except removal, which is compared on
  *  WHETHER it is removed. Its timestamp is this device's clock until the
@@ -165,7 +166,7 @@ export function buildPatch(base: SyncEntry | null, entry: SyncEntry): Record<str
     // removal nobody asked for: `removedAt: null` on a brand-new row says
     // nothing, and leaving it out keeps a create's body what it always was.
     if (!theirs) {
-      if ((k !== 'removedAt' || mine.removedAt != null) && (k !== 'book' || mine.book != null)) body[k] = mine[k];
+      if ((k !== 'removedAt' || mine.removedAt != null) && (k !== 'book' || mine.book != null) && (k !== 'notes' || mine.notes != null)) body[k] = mine[k];
     } else if (differs(k, mine, theirs)) body[k] = mine[k];
   }
   if (Object.keys(body).length === 0) return null;

@@ -30,6 +30,7 @@ import { AppState, type AppStateStatus } from 'react-native';
 import type { Recipe } from '@/shared/layout';
 import type { OrderPreference } from '@/shared/sequence';
 import type { OriginalRecipe } from '@/shared/original';
+import type { RecipeNotes } from '@/shared/notes';
 import {
   createEntry as apiCreateEntry,
   deleteEntry as apiDeleteEntry,
@@ -59,6 +60,8 @@ export type EntryPatch = Partial<{
   removedAt: number | null;
   /** Its book, by id (a move, from ⋮ → Move to another book). */
   book: string | null;
+  /** The person's own notes (recipe-model notes.ts), or null to clear. */
+  notes: RecipeNotes | null;
 }>;
 
 export interface LibraryNotice {

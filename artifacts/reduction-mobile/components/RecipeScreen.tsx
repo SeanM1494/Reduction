@@ -28,12 +28,15 @@
  */
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Linking, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { DiagramView } from '@/components/diagram/DiagramView';
 import { ServingsRow } from '@/components/recipe/ServingsRow';
 import { RecipePhotoThumb } from '@/components/recipe/RecipePhotoThumb';
 import { RatingControl } from '@/components/recipe/RatingControl';
+import { NotesSheet } from '@/components/recipe/NotesSheet';
+import { thumbSize } from '@/components/recipe/RecipePhotoThumb';
+import { noteStripFits } from '@/lib/notesStrip';
 import { asksForRating } from '@/lib/recipeBox';
 import { StepsMode } from '@/components/recipe/StepsMode';
 import { EditSheet, type EditTarget } from '@/components/edit/EditSheet';
@@ -46,6 +49,7 @@ import { countDone, reconcileDone } from '@/shared/progress';
 import type { OrderPreference } from '@/shared/sequence';
 import { countAll } from '@/shared/amounts';
 import { titleProblem } from '@/shared/title';
+import { notesPreview, notesText, type RecipeNotes } from '@/shared/notes';
 import { Feather } from '@expo/vector-icons';
 import { useColors, type Colors } from '@/hooks/useColors';
 import { fonts } from '@/constants/colors';
@@ -78,7 +82,7 @@ export function stampCooked(cooked: number[], prevDone: number, nextDone: number
 // ------------------------------------------------------------------ props --
 
 /** What the recipe route's ⋮ menu can ask this screen for. */
-export type RecipeRequest = { kind: 'edit' | 'reorder' | 'servings' | 'rating'; n: number };
+export type RecipeRequest = { kind: 'edit' | 'reorder' | 'servings' | 'rating' | 'notes'; n: number };
 
 interface RecipeScreenProps {
   recipe: Recipe;
@@ -87,6 +91,9 @@ interface RecipeScreenProps {
   timer: StepTimer | null;
   cooked: number[];
   rating: number | null;
+  /** The person's own notes (recipe-model notes.ts). Absent — a preview,
+   *  the demo — and the page has no notes at all. */
+  notes?: RecipeNotes | null;
   mode: 'diagram' | 'steps';
   /** Tonight's card-order preference (entry.order), advisory — see
    *  shared/sequence.ts. Honoured here; written by the Reorder view, which
@@ -179,6 +186,7 @@ export function RecipeScreen({
   timer,
   cooked,
   rating,
+  notes,
   mode,
   order = null,
   onUpdate: onUpdateProp,
@@ -254,6 +262,7 @@ export function RecipeScreen({
   const [servingsOpen, setServingsOpen] = useState(false);
   const [ratingOpen, setRatingOpen] = useState(false);
   const [openReorder, setOpenReorder] = useState(false);
+  const [notesOpen, setNotesOpen] = useState(false);
   useEffect(() => {
     if (!request?.n || !canEdit) return;
     if (request.kind === 'edit') {
@@ -266,6 +275,8 @@ export function RecipeScreen({
       setServingsOpen(true);
     } else if (request.kind === 'rating') {
       setRatingOpen(true);
+    } else if (request.kind === 'notes') {
+      setNotesOpen(true);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [request?.n]);
@@ -352,14 +363,71 @@ export function RecipeScreen({
       </Pressable>
     ) : null;
 
+  /**
+   * The person's own notes (Oct 2, user feedback item 1): a saved recipe
+   * only — a preview has no row to keep them on and the demo is not
+   * anybody's. Three places, none of them above the diagram unless it is
+   * free: a one-line strip at the top of the diagram view where it costs
+   * the diagram nothing (lib/notesStrip.ts), the whole note under the
+   * diagram, and the note leading Step-by-Step's first card.
+   */
+  const notesOn = notes !== undefined && canEdit && !isDraft;
+  const noteText = notesText(notes);
+  const { width: winW, height: winH } = useWindowDimensions();
+  const noteStrip =
+    notesOn && noteText && noteStripFits({ windowHeight: winH, photoSize: photoEntry?.photo ? thumbSize(winW) : null, scaled: !!scaledNote }) ? (
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={`Your notes: ${noteText}`}
+        accessibilityHint="Opens your notes to edit them."
+        onPress={() => setNotesOpen(true)}
+        style={({ pressed }) => [styles.noteStrip, pressed && styles.originalRowPressed]}
+        testID="recipe-note-strip"
+      >
+        <Feather name="edit-3" size={14} color={colors.mutedForeground} />
+        <Text style={styles.noteStripText} numberOfLines={1}>
+          {notesPreview(notes)}
+        </Text>
+      </Pressable>
+    ) : null;
+  const notesRow =
+    notesOn && !editing ? (
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={noteText ? `Your notes: ${noteText}. Edit` : 'Add a note to this recipe'}
+        onPress={() => setNotesOpen(true)}
+        style={({ pressed }) => [styles.originalRow, pressed && styles.originalRowPressed]}
+        testID="recipe-notes"
+      >
+        <View style={{ flex: 1 }}>
+          <Text style={styles.originalTitle}>{noteText ? 'Your notes' : 'Add a note'}</Text>
+          {noteText ? (
+            <Text style={styles.notesBody}>{noteText}</Text>
+          ) : (
+            <Text style={styles.originalSub}>Your own changes and reminders. Only you see them.</Text>
+          )}
+        </View>
+        {noteText ? <Text style={styles.notesEdit}>Edit</Text> : <Feather name="plus" size={20} color={colors.mutedForeground} />}
+      </Pressable>
+    ) : null;
+  const leadNote =
+    notesOn && noteText ? (
+      <View style={styles.leadNote} testID="cook-note">
+        <Text style={styles.leadNoteLabel}>Your notes</Text>
+        <Text style={styles.notesBody}>{noteText}</Text>
+      </View>
+    ) : null;
+
   /** The top of both views: the recipe's picture and Clear progress, and
-   *  nothing else (Sep 25). Saved recipes only — the demo has its own
-   *  Reset, and a preview has neither a picture nor progress. */
-  const sessionRow = canEdit ? (
+   *  nothing else (Sep 25) — plus, in the diagram view, the note strip
+   *  where it fits. Saved recipes only — the demo has its own Reset, and a
+   *  preview has neither a picture nor progress. */
+  const sessionRowFor = (strip: React.ReactNode) => canEdit ? (
     <View style={styles.sessionRow} testID="recipe-session">
       {photoEntry ? <RecipePhotoThumb entry={photoEntry} /> : null}
       <View style={styles.sessionMain}>
         <SheetButton label="Clear progress" onPress={() => setConfirmClear(true)} disabled={done.length === 0 && !timer} testID="recipe-clear" />
+        {strip}
         {scaledNote ? (
           <Pressable accessibilityRole="button" onPress={() => setServingsOpen(true)} style={styles.scaledNote} testID="recipe-scaled">
             <Text style={styles.scaledNoteText}>{scaledNote}</Text>
@@ -517,7 +585,7 @@ export function RecipeScreen({
           }}
           testID="recipe-overview"
         >
-          {!editing ? sessionRow : null}
+          {!editing ? sessionRowFor(noteStrip) : null}
           {/* The mode has to announce itself. Someone who wanders into edit
               mode and taps around must not be left wondering why nothing
               checks off — so the bar is persistent, not a toast. The
@@ -575,6 +643,7 @@ export function RecipeScreen({
           {/* The source's own wording, one tap from the diagram that is our
               reading of it. Below the diagram, not above: an SE has no room
               above it left to spend (CLAUDE.md, the recipe screen headroom). */}
+          {notesRow}
           {originalRow}
           {/* A 44px row rather than an inline link: the web's 12px anchor is
               a mouse target, and this one is tapped. */}
@@ -606,9 +675,17 @@ export function RecipeScreen({
           onSetOrder={(next) => onUpdate({ order: next })}
           openReorder={openReorder}
           onReorderOpened={() => setOpenReorder(false)}
-          header={sessionRow}
+          header={sessionRowFor(null)}
+          leadNote={leadNote}
           sourceSteps={sourceSteps}
-          footer={originalRow}
+          footer={
+            notesRow || originalRow ? (
+              <>
+                {notesRow}
+                {originalRow}
+              </>
+            ) : null
+          }
           resetSignal={clearCount}
           spotlightNext={!!spotlight?.targets.has('cook:next')}
           pointerNext={pointerFor(spotlight, 'cook:next')}
@@ -638,6 +715,11 @@ export function RecipeScreen({
           <RatingControl rating={rating} onChange={(r) => (onRate ? onRate(r) : onUpdate({ rating: r }))} />
         </View>
       </Sheet>
+
+      {/* ⋮ › Notes, the strip and the notes row. Saved on close. */}
+      {notesOn ? (
+        <NotesSheet open={notesOpen} notes={notes ?? null} onSave={(next) => onUpdate({ notes: next })} onClose={() => setNotesOpen(false)} />
+      ) : null}
 
       {/* A window, like the delete confirmation: it asks something. */}
       <Window open={confirmClear} onClose={() => setConfirmClear(false)} maxWidth={400} testID="clear-window">
@@ -836,6 +918,35 @@ function makeStyles(colors: Colors) {
     },
     originalRowPressed: { borderColor: colors.borderStrong, backgroundColor: colors.muted },
     originalTitle: { fontFamily: fonts.heading, fontSize: 15, color: colors.foreground },
+    // The person's own notes: body size, readable across a counter.
+    notesBody: { fontSize: 15, lineHeight: 21, color: colors.foreground, marginTop: 4 },
+    notesEdit: { fontFamily: fonts.heading, fontSize: 14, color: colors.warmLine, marginLeft: 8, alignSelf: 'flex-start', paddingTop: 2 },
+    // One line under Clear progress, the full width of the column; 44pt.
+    noteStrip: {
+      alignSelf: 'stretch',
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      minHeight: 44,
+      paddingHorizontal: 10,
+      borderRadius: colors.radiusButton,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.card,
+    },
+    noteStripText: { flex: 1, fontSize: 14, color: colors.foreground },
+    // Above Step-by-Step's first card: the note is read before anything
+    // goes in a pan.
+    leadNote: {
+      marginBottom: 12,
+      paddingVertical: 10,
+      paddingHorizontal: 14,
+      borderRadius: colors.radiusCard,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.card,
+    },
+    leadNoteLabel: { fontSize: 12.5, fontWeight: '600', color: colors.mutedForeground },
     originalSub: { fontSize: 13, color: colors.mutedForeground, marginTop: 2 },
     originalChevron: { fontSize: 22, color: colors.mutedForeground, marginLeft: 8 },
     sourceText: { fontSize: 12, color: colors.faint },

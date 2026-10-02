@@ -18,6 +18,7 @@ import type { Recipe } from '@/shared/layout';
 import type { OrderPreference } from '@/shared/sequence';
 import type { OriginalRecipe } from '@/shared/original';
 import type { BookDef } from '@/shared/books';
+import type { RecipeNotes } from '@/shared/notes';
 
 let authToken: string | null = null;
 
@@ -430,6 +431,10 @@ export interface Entry {
    *  decides (recipe-model books.ts resolveBookId). A versioned field like
    *  any other: moved through the sync engine, last change wins. */
   book?: string | null;
+  /** The person's own notes, `{ text }` or null/absent (recipe-model
+   *  notes.ts). A versioned field like rating; two devices that both
+   *  changed it keep both. */
+  notes?: RecipeNotes | null;
 }
 
 /** The photo's URL for an <Image>: private, so it needs the bearer token
@@ -526,6 +531,7 @@ export const patchEntry = (
     cooked: number[];
     rating: number | null;
     order: OrderPreference | null;
+    notes: RecipeNotes | null;
     ifVersion: number;
   }>
 ): Promise<{ entry: Entry }> =>

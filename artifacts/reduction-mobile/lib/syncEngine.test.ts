@@ -212,6 +212,26 @@ test('a tree edited on both devices keeps mine and says so', async () => {
   assert.equal(h.notices[0].kind, 'tree_conflict');
 });
 
+test('notes: a create without one sends none; a note is a field like any other; both devices\' notes are kept, quietly', async () => {
+  // A create with no note leaves the key out, so the body is what it was.
+  assert.equal('notes' in buildPatch(null, entry())!, false);
+  assert.deepEqual(buildPatch(null, entry({ notes: { text: 'Less salt' } }))!.notes, { text: 'Less salt' });
+  const base = entry({ version: 4 });
+  assert.deepEqual(buildPatch(base, { ...base, notes: { text: 'Less salt' } }), { notes: { text: 'Less salt' }, ifVersion: 4 });
+  // An entry from a server that predates notes (no key) is not a change.
+  const old = { ...base };
+  delete (old as { notes?: unknown }).notes;
+  assert.equal(buildPatch(old, { ...old, notes: null }), null);
+
+  const h = harness([entry({ notes: { text: 'Less salt.' } })]);
+  await h.engine.load();
+  h.external('r1', { notes: { text: 'Thighs, not breasts.' } });
+  h.engine.save(entry({ notes: { text: 'Double the garlic.' } }));
+  await h.engine.idle();
+  assert.deepEqual(h.rows.get('r1')!.notes, { text: 'Double the garlic.\n\nThighs, not breasts.' });
+  assert.equal(h.notices.length, 0, 'nothing was lost, so nothing to announce');
+});
+
 test('a refused write reports the last accepted state to roll back to', async () => {
   const h = harness([entry()]);
   await h.engine.load();
