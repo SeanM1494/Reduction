@@ -1,11 +1,16 @@
 /**
- * lib/opening/brandShapes.ts — brand/reduction-icon.svg as data.
+ * lib/opening/brandShapes.ts — brand/opening/opening-scene.svg as data.
+ *
+ * That file is the app icon as it was until Oct 2 2026, when the icon became
+ * the plain pot with steam (brand/reduction-icon.svg). The opening sequence
+ * still pours from this scene, so it keeps its own source rather than
+ * following the icon.
  *
  * The opening sequence has to move the shaker, the bottle and the pot's
  * parts separately, so it cannot be an image of the artwork the way the
  * sign-in mark is. These are the artwork's own elements and numbers, in the
- * file's order; `brandShapes.test.ts` parses brand/reduction-icon.svg and
- * fails on any difference, so a new master in brand/ fails here until this
+ * file's order; `brandShapes.test.ts` parses brand/opening/opening-scene.svg and
+ * fails on any difference, so an edit to that scene fails here until this
  * file follows it. Nothing here is drawn by eye.
  */
 

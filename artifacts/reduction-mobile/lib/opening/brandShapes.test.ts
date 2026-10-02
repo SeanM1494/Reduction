@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { BOTTLE, CREAM, DROPS, DROP_D, DROP_FILL, POT, SHAKER, STREAM } from './brandShapes';
 
 const ROOT = join(__dirname, '..', '..', '..', '..');
-const read = (f: string) => readFileSync(join(ROOT, 'brand', f), 'utf8');
+const read = (f: string) => readFileSync(join(ROOT, 'brand', 'opening', f), 'utf8');
 
 type Parsed = { tag: string; attrs: Record<string, string> };
 
@@ -67,16 +67,12 @@ function same(actual: Parsed[], want: Parsed[]) {
   });
 }
 
-test('brandShapes is brand/reduction-icon.svg, element for element', () => {
-  same(elements(read('reduction-icon.svg')), expected(true));
-});
-
-test('brandShapes is brand/reduction-mark.svg too (the icon without its background)', () => {
-  same(elements(read('reduction-mark.svg')), expected(false));
+test('brandShapes is brand/opening/opening-scene.svg, element for element', () => {
+  same(elements(read('opening-scene.svg')), expected(true));
 });
 
 test('the groups place the shaker, the bottle and the drops where brandShapes says', () => {
-  const svg = read('reduction-icon.svg');
+  const svg = read('opening-scene.svg');
   const g = (id: string) => svg.match(new RegExp(`<g id="${id}"([^>]*)>`))?.[1] ?? '';
   assert.match(g('spice-shaker'), new RegExp(`translate\\(${SHAKER.at.x} ${SHAKER.at.y}\\) rotate\\(${SHAKER.at.rotate}\\)`));
   assert.match(g('vinegar-bottle'), new RegExp(`translate\\(${BOTTLE.at.x} ${BOTTLE.at.y}\\) rotate\\(${BOTTLE.at.rotate}\\)`));

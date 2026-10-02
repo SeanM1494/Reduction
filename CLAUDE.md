@@ -1285,9 +1285,14 @@ transparent pixels are transparent black and a plain resize fringes every
 edge); `--check` says whether any output has drifted. Nothing redraws the
 artwork — the sign-in screen's `BrandLogo` is an image of it, not a port of
 its paths. The one port is the opening sequence, which has to move the
-parts: `lib/opening/brandShapes.ts` holds the icon's elements as data, and
-its test parses both brand SVGs and fails on any difference, so a new
-master fails there until the data follows it. The icon and splash are in the BINARY: a change to them needs a
+parts: `lib/opening/brandShapes.ts` holds that scene's elements as data,
+and its test parses `brand/opening/opening-scene.svg` and fails on any
+difference. **Since Oct 2 the icon and the opening scene are different
+artwork**: the icon became the plain pot with two curls of steam (Sean
+found the shaker, bottle and bars too busy at home-screen size), and the
+scene file is the previous icon, kept so the intro still pours spice and
+vinegar. Changing the icon no longer touches the intro; changing the intro
+is an edit to the scene file and the data together. The icon and splash are in the BINARY: a change to them needs a
 build, and no bundle depends on them, so it does not by itself need an
 `expo.version` bump. The splash is deliberately PLAIN (the opening sequence
 starts on empty cream): its image is a fully transparent PNG, because the

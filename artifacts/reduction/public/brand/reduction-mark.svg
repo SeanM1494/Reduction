@@ -1,55 +1,17 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
 <title>Reduction mark</title>
+<g id="steam" stroke="#e0a23a" stroke-width="44" stroke-linecap="round" fill="none">
+<path d="M430 390 c-36 -40 36 -64 0 -112 c-22 -30 -8 -52 0 -60"/>
+<path d="M594 390 c-36 -40 36 -64 0 -112 c-22 -30 -8 -52 0 -60"/>
+</g>
 <g id="pot">
-<rect x="214" y="650" width="60" height="46" rx="22" fill="#7a2a1e"/>
-<rect x="750" y="650" width="60" height="46" rx="22" fill="#7a2a1e"/>
-<path d="M270 620 H754 Q786 620 786 652 V818 Q786 908 696 908 H328 Q238 908 238 818 V652 Q238 620 270 620 Z" fill="#b23a2a"/>
-<ellipse cx="512" cy="622" rx="274" ry="40" fill="#8a2c20"/>
-<ellipse cx="512" cy="626" rx="240" ry="27" fill="#3f1712"/>
-<rect x="399" y="720" width="34" height="130" rx="17" fill="#f1dfc2"/>
-<rect x="463" y="752" width="34" height="98" rx="17" fill="#deae94"/>
-<rect x="527" y="782" width="34" height="68" rx="17" fill="#cd7f6a"/>
-<rect x="591" y="810" width="34" height="40" rx="17" fill="#bd5845"/>
-<ellipse cx="566" cy="628" rx="24" ry="7" fill="#e0a23a"/>
-<circle cx="456" cy="620" r="8" fill="#cf5a26"/>
-<circle cx="484" cy="632" r="6" fill="#6f8f55"/>
-<circle cx="430" cy="630" r="6" fill="#a9431b"/>
-</g>
-<g id="spice-stream">
-<circle cx="398" cy="370" r="10" fill="#cf5a26"/>
-<circle cx="412" cy="406" r="8" fill="#a9431b"/>
-<circle cx="420" cy="446" r="11" fill="#cf5a26"/>
-<circle cx="438" cy="484" r="8" fill="#cf5a26"/>
-<circle cx="450" cy="524" r="10" fill="#a9431b"/>
-<circle cx="468" cy="562" r="8" fill="#cf5a26"/>
-<circle cx="430" cy="426" r="6" fill="#6f8f55"/>
-<circle cx="456" cy="502" r="7" fill="#6f8f55"/>
-</g>
-<g id="vinegar-drops" fill="#e0a23a">
-<path transform="translate(594 386) scale(0.85)" d="M0 -26 C 12 -6 20 6 20 18 A20 20 0 1 1 -20 18 C -20 6 -12 -6 0 -26 Z"/>
-<path transform="translate(584 440) scale(0.95)" d="M0 -26 C 12 -6 20 6 20 18 A20 20 0 1 1 -20 18 C -20 6 -12 -6 0 -26 Z"/>
-<path transform="translate(575 494) scale(0.85)" d="M0 -26 C 12 -6 20 6 20 18 A20 20 0 1 1 -20 18 C -20 6 -12 -6 0 -26 Z"/>
-<path transform="translate(567 548) scale(0.72)" d="M0 -26 C 12 -6 20 6 20 18 A20 20 0 1 1 -20 18 C -20 6 -12 -6 0 -26 Z"/>
-</g>
-<g id="spice-shaker" transform="translate(290 262) rotate(132)">
-<clipPath id="jar-clip"><rect x="-64" y="-58" width="128" height="170" rx="28"/></clipPath>
-<rect x="-64" y="-58" width="128" height="170" rx="28" fill="#a9cbbd"/>
-<rect x="-64" y="-58" width="128" height="100" fill="#cf5a26" clip-path="url(#jar-clip)"/>
-<rect x="-46" y="-28" width="12" height="112" rx="6" fill="#ffffff" opacity="0.5"/>
-<rect x="-56" y="-112" width="112" height="58" rx="14" fill="#6b5e50"/>
-<rect x="-56" y="-66" width="112" height="12" fill="#54493d"/>
-<circle cx="-24" cy="-92" r="7" fill="#3f352b"/>
-<circle cx="0" cy="-92" r="7" fill="#3f352b"/>
-<circle cx="24" cy="-92" r="7" fill="#3f352b"/>
-</g>
-<g id="vinegar-bottle" transform="translate(735 250) rotate(-128)">
-<clipPath id="bottle-clip"><path d="M -20 -140 V -72 C -20 -50 -70 -46 -70 -6 V 118 Q -70 150 -38 150 H 38 Q 70 150 70 118 V -6 C 70 -46 20 -50 20 -72 V -140 Z"/></clipPath>
-<path d="M -20 -140 V -72 C -20 -50 -70 -46 -70 -6 V 118 Q -70 150 -38 150 H 38 Q 70 150 70 118 V -6 C 70 -46 20 -50 20 -72 V -140 Z" fill="#b9772e"/>
-<rect x="-70" y="-100" width="140" height="150" fill="#e0a23a" clip-path="url(#bottle-clip)"/>
-<rect x="-54" y="-20" width="10" height="64" rx="5" fill="#ffffff" opacity="0.35"/>
-<rect x="-46" y="40" width="92" height="66" rx="10" fill="#f6ecd6"/>
-<rect x="-28" y="58" width="56" height="9" rx="4.5" fill="#b23a2a"/>
-<rect x="-20" y="78" width="40" height="9" rx="4.5" fill="#b9772e"/>
-<rect x="-30" y="-160" width="60" height="22" rx="9" fill="#7a4a1c"/>
+<rect x="102" y="530" width="100" height="76" rx="34" fill="#7a2a1e"/>
+<rect x="822" y="530" width="100" height="76" rx="34" fill="#7a2a1e"/>
+<path d="M212 480 H812 Q852 480 852 520 V740 Q852 870 722 870 H302 Q172 870 172 740 V520 Q172 480 212 480 Z" fill="#b23a2a"/>
+<ellipse cx="512" cy="482" rx="340" ry="52" fill="#8a2c20"/>
+<ellipse cx="512" cy="488" rx="296" ry="34" fill="#3f1712"/>
+<ellipse cx="596" cy="490" rx="40" ry="11" fill="#e0a23a"/>
+<circle cx="432" cy="482" r="13" fill="#cf5a26"/>
+<circle cx="476" cy="498" r="10" fill="#6f8f55"/>
 </g>
 </svg>
