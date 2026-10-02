@@ -1,11 +1,110 @@
-# Next Publish — the reel's legal pages, purge and cap (Oct 1, evening)
+# Next Publish — recipe notes (Oct 2)
+
+One SQL line, one pull, one Publish, then the phone update. From a fresh
+Replit shell, in order; each block is one command and what it should print
+is under it. The SQL comes FIRST, before the pull: the new server reads a
+`recipes.notes` column, and against a database without it every recipes
+query fails and every library shows empty (CLAUDE.md "A new column's DDL
+runs BEFORE the deploy"). The workspace's own dev server uses production's
+database too, which is why it is before the pull and not only before the
+Publish.
+
+| Commit | Ships | Needs |
+|---|---|---|
+| `3909d43` Notes: a person's own notes on a recipe | Server: `recipes.notes` (`{ text }`) rides the library PATCH, both devices' edits kept on a merge; `/api/health` checks the column. Website: "Your notes" under a saved recipe, Edit/Save in place; privacy "Your recipes and cooking progress" and "Deleting your account" mention notes, dated October 2. Phone: ⋮ › Notes, the note under the diagram and above Step-by-Step's first card, a one-line strip at the top of the diagram where it costs no room, a margin line on the Recipe Box page, Recipe Box search matches notes. README "Recipe notes" | Step 2's SQL **before** the pull; this Publish; the phone part rides the next over-the-air update (preview, then promote — step 10 on) |
+| the docs commit that wrote this section | Nothing that runs | Nothing |
+
+No native change, so no new build and no `expo.version` bump.
+
+**1.**
+```sh
+cd ~/workspace
+```
+
+**2.** The notes column, on production, BEFORE the pull (safe to run
+twice):
+```sh
+psql "$DATABASE_URL" -c "alter table recipes add column if not exists notes jsonb"
+```
+Prints `ALTER TABLE` (or `NOTICE … already exists, skipping` on a second
+run).
+
+**3.**
+```sh
+git pull
+```
+A fast-forward; among the files, `lib/recipe-model/src/notes.ts`.
+
+**4.**
+```sh
+git log --oneline -3
+```
+Must list `3909d43`. Note the TOP line's short hash: steps 7 and 8 must
+show it.
+
+**5.**
+```sh
+node scripts/check-workspace-links.mjs
+```
+Prints nothing (no new packages). If it names anything, run `pnpm install`
+and then this again.
+
+**6.** Deployments → **Publish**. Wait for it to finish.
+
+**7.** Health through the website's hostname:
+```sh
+curl -s https://recipereduction.com/api/health; echo
+```
+`"commit"` must be the hash from step 4, and `"schema":{"ok":true,"missing":[]}`.
+If `missing` names `recipes.notes`, step 2 did not run against this
+database: run it now.
+
+**8.** Health through the phone app's hostname:
+```sh
+curl -s https://recipe-reduction.replit.app/api/health; echo
+```
+The same commit and `"missing":[]`.
+
+**9.** The website, by hand: open https://recipereduction.com, sign in,
+open a saved recipe. Under it: "Add a note" with an **Add** button. Add a
+line, **Save**; reload the page and it is still there. Then:
+```sh
+curl -s https://recipereduction.com/privacy.html | grep -c "notes you write"
+```
+Prints `1`.
+
+**10.** The phone update, to preview first:
+```sh
+cd ~/workspace/artifacts/reduction-mobile
+```
+```sh
+node scripts/publish-update.mjs --channel preview --message "Recipe notes"
+```
+Its `commit` line must match the hash from step 4. Copy the **Group ID** it
+ends with.
+
+**11.** On the phone (on preview: fully close and reopen, twice), the
+5-minute check further down ("The 5-minute check on the phone"), plus:
+open the recipe from step 9 — its note is under the diagram (pulled from
+the server, written on the website); ⋮ › **Notes**, add a line, **Done**;
+Step-by-Step shows the note above the first card; the Library page for
+that recipe ends its ingredients with a ✎ line; searching the Recipe Box
+for a word only in the note finds it.
+
+**12.** All good:
+```sh
+node scripts/publish-update.mjs --promote <the Group ID>
+```
+Not good: do NOT promote, and tell Claude what you saw.
+
+---
+
+# Earlier: the reel's legal pages, purge and cap (Oct 1, evening — published Oct 1)
 
 One pull and one Publish, from a fresh Replit shell, in order. Each block
-is one command; what it should print is under it. **Three SQL steps.** 1b
-and 1c, BEFORE the pull, create the `crash_reports` table and the
-`recipes.notes` column (new code needs both before it runs, CLAUDE.md "A
-new column's DDL runs BEFORE the deploy" — without 1c every recipes query
-fails and the library shows empty).
+is one command; what it should print is under it. **Two SQL steps.** 1b,
+BEFORE the pull, creates the `crash_reports` table (new code needs it
+before it runs, CLAUDE.md "A new column's DDL runs BEFORE the deploy").
 7b, after the Publish, raises existing accounts to the new three free
 recipes and changes no schema. Nothing else touches the database
 (`reel_photos` already exists and already has `width`/`height`).
@@ -35,8 +134,6 @@ The pull brings, oldest first:
 | the docs commit that added steps 10–19 | Nothing that runs: owner steps that replace the reel's two pages with no picture (focaccia, garlic knots) with pictured ones | Steps 10–19, only after step 9 |
 
 | `632f3bc` Crash reports: the phone and the website report their own errors | Server: `POST /api/crash` (scrubbed, anonymous reports, signed in or not, 10 an hour per client, 5,000 a day in all, kept 90 days) and `GET /api/admin/crashes`; `/api/health` checks `crash_reports`. Website: the root error boundary is mounted and reports, with a styled "Something went wrong" and a Reload button; privacy "Technical records" gains the crash-report sentence. Phone: the root error boundary, uncaught JS errors (a fatal one is sent at the next launch) and emergency launches are reported. README "Crash reports" | Step 1b's SQL **before** the pull; this Publish; the phone part rides the next over-the-air update (preview, then promote). Owner: App Store Connect › App Privacy gains Diagnostics › Crash Data — not linked to the user, not used for tracking, App Functionality |
-
-| Recipe notes: the person's own notes on a recipe | Server: `recipes.notes` (`{ text }`) rides the library PATCH, both devices' edits kept on a merge; `/api/health` checks the column. Website: "Your notes" under a saved recipe, Edit/Save in place; privacy "Your recipes and cooking progress" and "Deleting your account" mention notes, dated October 2. Phone: ⋮ › Notes, a note strip at the top of the diagram where it costs no room, the note under the diagram and above Step-by-Step's first card, a margin line on the Recipe Box page, and Recipe Box search matches notes. README "Recipe notes" | Step 1c's SQL **before** the pull; this Publish; the phone part rides the next over-the-air update (preview, then promote). On preview: ⋮ › Notes, type a line, Done — it shows under the diagram, and on a second device after a refresh |
 
 Another thread may push to `main` in between; its commits come with the
 pull and are fine. What matters is that the commits above are listed.
@@ -72,14 +169,6 @@ SQL
 ```
 Prints `CREATE TABLE` and two `CREATE INDEX` (or `NOTICE … already exists,
 skipping` on a second run).
-
-**1c.** The notes column, on production, BEFORE the pull (safe to run
-twice):
-```sh
-psql "$DATABASE_URL" -c "alter table recipes add column if not exists notes jsonb"
-```
-Prints `ALTER TABLE` (or `NOTICE … already exists, skipping` on a second
-run).
 
 **2.**
 ```sh
