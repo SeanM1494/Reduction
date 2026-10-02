@@ -14,8 +14,9 @@ Publish.
 | `3909d43` Notes: a person's own notes on a recipe | Server: `recipes.notes` (`{ text }`) rides the library PATCH, both devices' edits kept on a merge; `/api/health` checks the column. Website: "Your notes" under a saved recipe, Edit/Save in place; privacy "Your recipes and cooking progress" and "Deleting your account" mention notes, dated October 2. Phone: ⋮ › Notes, the note under the diagram and above Step-by-Step's first card, a one-line strip at the top of the diagram where it costs no room, a margin line on the Recipe Box page, Recipe Box search matches notes. README "Recipe notes" | Step 2's SQL **before** the pull; this Publish; the phone part rides the next over-the-air update (preview, then promote — step 10 on) |
 | the docs commit that wrote this section | Nothing that runs | Nothing |
 | `34405fa` Privacy: say what push, search and the extraction log already collect | Website only: `privacy.html` says timer notifications store the device's model and app version (the browser's user agent on the web), that search words go to Anthropic without the account and results are kept up to 30 days, and that the extraction log records the website's name. Wording only, matching what the code already did | This Publish; nothing on the phone |
+| `65e0146` Icon: the plain pot with steam | Website: favicon, home-screen icon and nav mark become the new pot. Phone: the app icon and the sign-in mark, which are in the BINARY, so they reach phones only with the next native build (the launch build). The opening sequence is unchanged | This Publish for the website; the launch build for the phone. No `expo.version` bump (nothing a bundle calls) |
 
-No native change, so no new build and no `expo.version` bump.
+The only native change is the icon, which waits for the launch build; nothing here needs an `expo.version` bump.
 
 **1.**
 ```sh
