@@ -15,6 +15,7 @@ Publish.
 | the docs commit that wrote this section | Nothing that runs | Nothing |
 | `34405fa` Privacy: say what push, search and the extraction log already collect | Website only: `privacy.html` says timer notifications store the device's model and app version (the browser's user agent on the web), that search words go to Anthropic without the account and results are kept up to 30 days, and that the extraction log records the website's name. Wording only, matching what the code already did | This Publish; nothing on the phone |
 | `65e0146` Icon: the plain pot with steam | Website: favicon, home-screen icon and nav mark become the new pot. Phone: the app icon and the sign-in mark, which are in the BINARY, so they reach phones only with the next native build (the launch build). The opening sequence is unchanged | This Publish for the website; the launch build for the phone. No `expo.version` bump (nothing a bundle calls) |
+| `0ccd59f` Opening sequence: the pot without its bars | Phone only: the intro's pot loses the four bars, matching the new icon; the pour is unchanged | The next over-the-air update (preview, then promote); nothing on the server |
 
 The only native change is the icon, which waits for the launch build; nothing here needs an `expo.version` bump.
 
