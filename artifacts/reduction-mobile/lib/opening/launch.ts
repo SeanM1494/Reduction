@@ -100,7 +100,7 @@ export interface LaunchInfo {
   /** 'normal' only when every check answered in time and none found a
    *  notification or a link; null when they did not answer in time. */
   source: LaunchSource | null;
-  /** The system is in dark mode, so the native splash was #131110. */
+  /** The system is in dark mode, so the native splash was #211a16. */
   darkStart: boolean;
 }
 

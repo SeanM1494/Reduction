@@ -46,7 +46,7 @@ const AnimatedG = Animated.createAnimatedComponent(G);
 const AnimatedCircle = Animated.createAnimatedComponent(Circle);
 
 const PARTICLES = makeParticles();
-const DARK = '#131110';
+const DARK = '#211a16';
 const EMPTY = 'M0 0';
 const d = (s: string) => {
   'worklet';
@@ -55,7 +55,7 @@ const d = (s: string) => {
 
 export interface Props {
   kind: ReplayKind;
-  /** The system is dark: open on the splash's #131110 and fade to cream. */
+  /** The system is dark: open on the splash's #211a16 and fade to cream. */
   darkStart: boolean;
   /** Set true by the parent when the app underneath can be revealed. */
   ready: SharedValue<boolean>;

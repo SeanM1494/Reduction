@@ -27,7 +27,7 @@ export const MAX_HOLD_S = 1.5;
 /** The skip: a tap anywhere fades the overlay to the app. */
 export const SKIP_FADE_S = 0.15;
 
-/** A dark-mode launch: the native splash is #131110, so the overlay opens
+/** A dark-mode launch: the native splash is #211a16 (Cocoa), so the overlay opens
  *  on that and fades to cream over this long before the pot appears. */
 export const DARK_TO_CREAM_S = 0.25;
 

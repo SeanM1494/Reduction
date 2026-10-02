@@ -2007,9 +2007,9 @@ website); this finishes it. Decided:
   launch, so matching the icon's colour makes that one continuous surface;
   the parchment of the first screen is a shade darker and follows a moment
   later. 240pt spans about half an SE's width (the drawing is ~70% of its
-  square) and was small at 200 on a 390pt phone. **Dark mode keeps
-  `#131110`**, the app's dark background until Cocoa (Oct 1; the page is
-  now `#211a16`, see "Dark mode: Cocoa"): the cream bars and the bottle's
+  square) and was small at 200 on a 390pt phone. **Dark mode is
+  `#211a16`**, the Cocoa page (Oct 2, decided for build 8; it was `#131110`,
+  the dark background before Cocoa, see "Dark mode: Cocoa"): the cream bars and the bottle's
   label sit on the red pot and the orange bottle, never on the background,
   so they stay visible and no dark variant of the artwork is needed.
 - **`expo.version` stays 1.1.0.** The rule bumps it for native code a
@@ -2923,7 +2923,7 @@ tones), the solid red delete buttons and the white text on book tabs, the
 scrims, the badge whites on the paper, Book.tsx's cover shading and rim,
 and the opening sequence (below).
 
-**The splash (not changed).** The native dark splash is `#131110` in the
+**The splash (changed for build 8, below).** The native dark splash was `#131110` in the
 binary; the page is now `#211a16`. On a dark launch WITHOUT the opening
 sequence — every launch but at most one a day — the splash hides straight
 onto the app: a step from near-black to a visibly warmer brown,
@@ -2938,10 +2938,12 @@ roughly the jump between the old page and the old cards. Options:
    300ms crossfade. Costs a third of a second on every launch.
 3. Leave it until the next build. Recommended: 3 now, 1 with the next
    build.
-**The opening's dark fade needs no change:** it starts on `#131110` to
-match the splash it covers, fades to cream, and its end reveals the app
-underneath — whatever the page colour is. Only option 1 would move its
-start colour.
+**DECIDED Oct 2 (Sean): option 1, in build 8.** `app.json`'s dark splash
+and the opening's `DARK` constant are both `#211a16`; `expo.version` stays
+1.1.0 on the icon-and-splash precedent. The one cost: build 7 still has the
+`#131110` splash, so on build 7 the opening's dark start (at most once a
+day) steps from near-black to Cocoa as the overlay takes over. Build 8
+removes it; only TestFlight phones run build 7.
 
 **The website** has its own dark theme (`index.css`, `[data-theme="dark"]`,
 still `#131110`/`#2a2622`), copied once and never shared with these
