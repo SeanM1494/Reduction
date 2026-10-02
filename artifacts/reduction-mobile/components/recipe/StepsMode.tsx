@@ -142,6 +142,12 @@ interface Props {
    *  (the footer still has them). */
   leadNote?: React.ReactNode;
   /**
+   * The person's note on each step (recipe-model notes.ts), on its card:
+   * shown under the instruction when there is one, and "Add a note" when
+   * not. Absent — the demo, a preview, the draft — and cards have neither.
+   */
+  stepNotes?: { textFor: (stepId: string) => string; onEdit: (stepId: string, label: string) => void } | null;
+  /**
    * The source's method steps as text (`originalStepTexts`), so a card whose
    * step carries a source number (`src`, stepSource.ts) can show the
    * recipe's own sentence under the terse label: the diagram says "beat
@@ -178,6 +184,7 @@ export function StepsMode({
   onReorderOpened,
   header = null,
   leadNote = null,
+  stepNotes = null,
   sourceSteps = null,
   footer = null,
   resetSignal = 0,
@@ -431,6 +438,23 @@ export function StepsMode({
           ) : (
             <Text style={styles.label}>{card.step.label}</Text>
           )}
+          {/* The person's own note on this step: their words before the
+              recipe's, since it is what they changed about it. */}
+          {stepNotes && stepNotes.textFor(card.stepId) ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={`Your note: ${stepNotes.textFor(card.stepId)}. Edit`}
+              onPress={() => stepNotes.onEdit(card.stepId, card.step.label)}
+              style={({ pressed }) => [styles.stepNote, pressed && styles.stepNotePressed]}
+              testID="cook-step-note"
+            >
+              <View style={styles.stepNoteHead}>
+                <Text style={styles.stepNoteLabel}>Your note</Text>
+                <Text style={styles.stepNoteEdit}>Edit</Text>
+              </View>
+              <Text style={styles.stepNoteText}>{stepNotes.textFor(card.stepId)}</Text>
+            </Pressable>
+          ) : null}
           {sourceText && clamped ? (
             <View style={styles.sourceBox} testID="cook-source">
               <Text style={styles.sourceLabel}>From the recipe</Text>
@@ -472,6 +496,18 @@ export function StepsMode({
                 </Pressable>
               ) : null}
             </View>
+          ) : null}
+
+          {stepNotes && !stepNotes.textFor(card.stepId) ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Add a note to this step"
+              onPress={() => stepNotes.onEdit(card.stepId, card.step.label)}
+              style={styles.addNote}
+              testID="cook-add-step-note"
+            >
+              <Text style={styles.addNoteText}>+ Add a note to this step</Text>
+            </Pressable>
           ) : null}
 
           <View style={styles.nav}>
@@ -543,6 +579,26 @@ function makeStyles(colors: Colors) {
       borderRadius: 8,
       gap: 4,
     },
+    // The person's own note on the step: warm, like everything else that is
+    // theirs, and the same body size as the recipe's words under it.
+    stepNote: {
+      marginTop: 4,
+      marginBottom: 12,
+      paddingVertical: 10,
+      paddingHorizontal: 12,
+      borderLeftWidth: 3,
+      borderLeftColor: colors.warmLine,
+      backgroundColor: colors.warmBg,
+      borderRadius: 8,
+      gap: 4,
+    },
+    stepNotePressed: { opacity: 0.8 },
+    stepNoteHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+    stepNoteLabel: { fontFamily: fonts.mono, fontSize: 11, letterSpacing: 0.44, color: colors.warmInk, textTransform: 'uppercase' },
+    stepNoteEdit: { fontSize: 14, fontWeight: '600', color: colors.warmInk },
+    stepNoteText: { fontSize: 17, lineHeight: 25, color: colors.foreground },
+    addNote: { alignSelf: 'flex-start', minHeight: 44, justifyContent: 'center', marginBottom: 4 },
+    addNoteText: { fontSize: 15, fontWeight: '600', color: colors.mutedForeground },
     sourceLabel: { fontFamily: fonts.mono, fontSize: 11, letterSpacing: 0.44, color: colors.faint, textTransform: 'uppercase' },
     sourceText: { fontSize: 17, lineHeight: 25, color: colors.foreground },
     sourceMore: { alignSelf: 'flex-start', minHeight: 44, justifyContent: 'center' },

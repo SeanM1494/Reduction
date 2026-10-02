@@ -1,13 +1,14 @@
 /**
- * The person's own notes on a recipe — "less salt, double the garlic" (user
- * feedback item 1, Oct 2). One free-text box in a Sheet, opened from ⋮ ›
- * Notes, from the strip at the top of the diagram, and from the notes row
- * under it.
+ * The person's own notes — on the recipe ("less salt, double the garlic",
+ * user feedback item 1, Oct 2) or on one step ("cast iron, 4 min a side",
+ * the same evening). One free-text box in a Sheet; the caller says which
+ * note it is and how to store it.
  *
  * Saved when the sheet closes, never per keystroke: every keystroke would be
  * a versioned PATCH, and a sheet is closed by Done, the scrim or the back
- * gesture alike, all of which come through `onClose`. The text goes through
- * `cleanNotes`, so a box emptied out clears the note rather than storing "".
+ * gesture alike, all of which come through `onClose`. The caller stores the
+ * text through `cleanNotes`/`withStepNote`, so a box emptied out clears the
+ * note rather than storing "", and the OTHER notes ride along untouched.
  * Entry-level, never the tree (recipe-model notes.ts says why).
  */
 
@@ -16,56 +17,73 @@ import { StyleSheet, Text, TextInput, View } from 'react-native';
 import { Sheet } from '@/components/Sheet';
 import { useColors, type Colors } from '@/hooks/useColors';
 import { fonts } from '@/constants/colors';
-import { NOTE_MAX, cleanNotes, notesText, type RecipeNotes } from '@/shared/notes';
+import { cleanNoteText } from '@/shared/notes';
 
 export function NotesSheet({
   open,
-  notes,
+  title,
+  context,
+  value,
+  maxLength,
+  placeholder,
+  accessibilityLabel,
   onSave,
   onClose,
 }: {
   open: boolean;
-  notes: RecipeNotes | null;
-  /** Called on close, only when the cleaned text differs from `notes`. */
-  onSave: (next: RecipeNotes | null) => void;
+  title: string;
+  /** A line above the box saying what the note is on, when the title
+   *  cannot (a step's label can be a sentence long). */
+  context?: string;
+  /** The stored note this box edits, or "". */
+  value: string;
+  maxLength: number;
+  placeholder: string;
+  accessibilityLabel: string;
+  /** Called on close, only when the cleaned text differs from `value`. */
+  onSave: (text: string) => void;
   onClose: () => void;
 }) {
   const colors = useColors();
   const styles = makeStyles(colors);
-  const [draft, setDraft] = useState(notesText(notes));
+  const [draft, setDraft] = useState(value);
   // Each opening starts from the stored note — another device may have
   // changed it since the last time this sheet was up.
   useEffect(() => {
-    if (open) setDraft(notesText(notes));
+    if (open) setDraft(value);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open]);
+  }, [open, title]);
 
   const close = () => {
-    const next = cleanNotes(draft);
-    if (notesText(next) !== notesText(notes)) onSave(next);
+    if (cleanNoteText(draft) !== cleanNoteText(value)) onSave(draft);
     onClose();
   };
 
   return (
-    <Sheet open={open} title="Notes" onClose={close} avoidKeyboard>
+    <Sheet open={open} title={title} onClose={close} avoidKeyboard>
+      {context ? (
+        <Text style={styles.context} numberOfLines={2}>
+          {context}
+        </Text>
+      ) : null}
       <TextInput
         style={styles.input}
         value={draft}
         onChangeText={setDraft}
         multiline
-        autoFocus={!notesText(notes)}
-        maxLength={NOTE_MAX}
-        placeholder="Your changes and reminders: less salt, a swap, how long it really took…"
+        autoFocus={!value}
+        maxLength={maxLength}
+        placeholder={placeholder}
         placeholderTextColor={colors.faint}
         textAlignVertical="top"
-        accessibilityLabel="Your notes on this recipe"
+        accessibilityLabel={accessibilityLabel}
         testID="notes-input"
       />
       <View style={styles.meta}>
         <Text style={styles.metaText}>Only you see your notes.</Text>
-        {draft.length > NOTE_MAX * 0.8 ? (
+        {draft.length > maxLength * 0.8 ? (
           <Text style={styles.metaText}>
-            {draft.length} / {NOTE_MAX}
+            {draft.length} / {maxLength}
           </Text>
         ) : null}
       </View>
@@ -89,6 +107,7 @@ function makeStyles(colors: Colors) {
       backgroundColor: colors.background,
       color: colors.foreground,
     },
+    context: { fontSize: 14, lineHeight: 19, color: colors.mutedForeground, marginBottom: 8 },
     meta: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 8, gap: 12 },
     metaText: { fontFamily: fonts.mono, fontSize: 11, color: colors.faint },
   });

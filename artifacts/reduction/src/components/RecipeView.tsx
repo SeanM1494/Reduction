@@ -586,6 +586,7 @@ export default function RecipeView({
               onToggle={toggle}
               onUpdate={onUpdate}
               canReorder={canEdit}
+              notesEnabled={canEdit && notesEnabled}
             />
           </div>
         ) : (
@@ -915,7 +916,7 @@ export default function RecipeView({
         ) : null}
 
         {canEdit && notesEnabled && phase !== "json" && !editing ? (
-          <RecipeNotes notes={entry.notes ?? null} onSave={(notes) => onUpdate({ ...entry, notes })} />
+          <RecipeNotes recipe={recipe} notes={entry.notes ?? null} onSave={(notes) => onUpdate({ ...entry, notes })} />
         ) : null}
 
         {recipe.sourceUrl ? (

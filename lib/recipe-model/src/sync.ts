@@ -267,9 +267,11 @@ export function mergeEntry(
   /**
    * The person's notes. Unlike rating, losing one side here destroys
    * something typed, so both changed means both kept (notes.ts mergeNotes)
-   * — visible in the note itself, which is why it needs no notice.
+   * — visible in the note itself, which is why it needs no notice. Each
+   * text (the recipe's, each step's) merges against the base on its own,
+   * so a step note added here and the recipe note edited there both stand.
    */
-  const notes = pick("notes", () => mergeNotes(mine.notes, theirs.notes));
+  const notes = pick("notes", () => mergeNotes(base ? base.notes ?? null : undefined, mine.notes, theirs.notes));
 
   /**
    * Removal merges on whether the recipe is removed, NEVER on when. The

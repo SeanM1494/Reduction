@@ -2280,3 +2280,14 @@ button.rd-section-head:focus-visible {
 .rd-notes-input { display: block; margin-top: 8px; resize: vertical; line-height: 1.45; }
 .rd-notes-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px; margin-top: 10px; }
 .rd-notes-meta { flex: 1 1 140px; font-size: 12px; color: var(--faint); }
+/* A step's note, on its card (Oct 2): warm, like everything that is theirs. */
+.rd-notes.rd-step-note { margin: 4px 0 12px; }
+.rd-notes.rd-step-note.has-note { border-left: 3px solid var(--warm-line, var(--line)); }
+.rd-notes-add {
+  display: block; min-height: 44px; margin: 0 0 4px; padding: 0;
+  background: none; border: 0; cursor: pointer;
+  font: inherit; font-size: 15px; font-weight: 600; color: var(--muted);
+}
+/* Steps view centres its column, which would shrink each note to its text:
+   every note takes the card column's width instead. */
+.rfx-content-center > .rd-notes { align-self: center; width: 100%; max-width: 640px; box-sizing: border-box; }

@@ -280,15 +280,15 @@ them is the whole point:
 
 | result | meaning |
 |---|---|
-| ***n* pass, 186 skipped** | no `DATABASE_URL` at all. Fine on a machine with no Postgres. |
-| ***n*+186 pass, 0 skipped** | a local database with a current schema. This is the real gate — `pnpm run test:db` produces it. |
+| ***n* pass, 188 skipped** | no `DATABASE_URL` at all. Fine on a machine with no Postgres. |
+| ***n*+188 pass, 0 skipped** | a local database with a current schema. This is the real gate — `pnpm run test:db` produces it. |
 | **failures saying "Refusing to run database tests against …"** | `DATABASE_URL` in the shell points somewhere non-local — on Replit, that is production. Working as designed: use `pnpm run test:db`, which ignores the env var entirely. |
 | **failures naming a missing table** | a reachable local database whose schema is behind `lib/db/src/schema/schema.ts`. `test:db` re-pushes on every start, so this means a hand-run database — push it or use the script. |
 
 The total grows as suites are added — pin your expectation to the **skip
 count**, not the pass count (an earlier version of this table hard-coded
 23/39 and went stale within a week, so treat the number above as needing an
-edit whenever a database-backed suite is added). The 186 are twenty-one suites:
+edit whenever a database-backed suite is added). The 188 are twenty-one suites:
 `claim.db.test.ts` (the anonymous library), `trial.db.test.ts` (the free
 extraction), `cache.db.test.ts` (the URL alias and the cached flag),
 `extractionLog.test.ts` (the cost table), `push.db.test.ts` (timer
@@ -346,8 +346,10 @@ stored even for a signed-in caller, only the scrubbed report — and that
 one client is braked and the daily cap holds in the insert itself. The
 twenty-first guards that a recipe's notes are the person's alone: a
 versioned write that nothing else overwrites, refused whole when it is
-not `{ text }` within the cap, and gone with the recipe. **The full suite — 869 tests at the
-time of writing (Oct 2) — has been run against a real Postgres and passes 869/0.** The
+not `{ text?, steps? }` within the caps, a step's note moved into the
+recipe's (never dropped) when an edit removes the step, and gone with the
+recipe. **The full suite — 872 tests at the
+time of writing (Oct 2) — has been run against a real Postgres and passes 872/0.** The
 ones that are not api-server or model tests include the mobile library's
 filter and sort (`artifacts/reduction-mobile/lib/libraryView.test.ts`), the
 recipe box's books and page arithmetic (`recipeBox.test.ts`), the

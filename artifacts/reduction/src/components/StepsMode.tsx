@@ -22,6 +22,8 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { type Ingredient, type Recipe, type Step } from "../shared/layout";
 import { cardSequence } from "../shared/sequence";
 import ReorderView from "./ReorderView";
+import { NoteBox } from "./RecipeNotes";
+import { STEP_NOTE_MAX, stepNote, withStepNote } from "../shared/notes";
 import { formatAmount, formatMinutes, stepMinutes } from "../shared/amounts";
 import { Amount } from "./Amount";
 import type { Entry, StepTimer } from "../lib/storage";
@@ -84,9 +86,21 @@ interface Props {
    *  synthetic and whose onUpdate keeps only the timer — a reorder there
    *  would look accepted and silently not stick. */
   canReorder?: boolean;
+  /** The person's note on each step, on its card (recipe-model notes.ts).
+   *  Off for the demo and the trial recipe, which keep no notes. */
+  notesEnabled?: boolean;
 }
 
-export default function StepsMode({ recipe, entry, done, scale, onToggle, onUpdate, canReorder = false }: Props) {
+export default function StepsMode({
+  recipe,
+  entry,
+  done,
+  scale,
+  onToggle,
+  onUpdate,
+  canReorder = false,
+  notesEnabled = false,
+}: Props) {
   const { cards, totalActions } = useMemo(() => {
     const cards: StepCard[] = [];
     let actionNumber = 0;
@@ -442,6 +456,19 @@ export default function StepsMode({ recipe, entry, done, scale, onToggle, onUpda
                   </button>
                 ) : null}
               </div>
+            ) : null}
+
+            {notesEnabled ? (
+              <NoteBox
+                key={card.stepId}
+                className="rd-step-note"
+                head="Your note"
+                label="Note on this step"
+                value={stepNote(entry.notes, card.stepId)}
+                maxLength={STEP_NOTE_MAX}
+                placeholder="For this step: which pan, how long it really took, what you'd change…"
+                onSave={(text) => onUpdate({ ...entry, notes: withStepNote(entry.notes, card.stepId, text) })}
+              />
             ) : null}
 
             <div className="rd-steps-nav">

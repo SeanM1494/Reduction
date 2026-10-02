@@ -32,7 +32,7 @@ import { validateRecipe, type Recipe } from "../shared/layout";
 import { pruneOrderPreference } from "../shared/sequence";
 import { sanitizeMealTypes } from "../shared/mealTypes";
 import { reconcileDone } from "../shared/progress";
-import { NOTE_STORED_MAX, isValidNotes } from "../shared/notes";
+import { NOTE_STORED_MAX, STEP_NOTE_STORED_MAX, isValidNotes, pruneNotes } from "../shared/notes";
 import { userIdOf } from "../middleware/session";
 import { cancelTimer, scheduleTimer } from "../lib/timerDispatch";
 import { checkAccess, subscriptionRequired } from "../lib/billing/access";
@@ -497,7 +497,9 @@ libraryRouter.patch("/:id", async (req: Request, res: Response) => {
   if (removedAt !== undefined && !isValidRemovedAt(removedAt))
     return res.status(400).json({ error: "removedAt must be a timestamp or null." });
   if (notes !== undefined && !isValidNotes(notes))
-    return res.status(400).json({ error: `notes must be {text} of at most ${NOTE_STORED_MAX} characters, or null.` });
+    return res.status(400).json({
+      error: `notes must be { text?, steps? } (text at most ${NOTE_STORED_MAX} characters, each step's at most ${STEP_NOTE_STORED_MAX}), or null.`,
+    });
   const patch: Partial<typeof recipes.$inferInsert> = {
     updatedAt: new Date(),
     version: sql`${recipes.version} + 1` as unknown as number,
@@ -606,6 +608,19 @@ libraryRouter.patch("/:id", async (req: Request, res: Response) => {
         const tree = (patch.recipe ?? current.recipe) as Recipe;
         const raw = patch.cardOrder !== undefined ? patch.cardOrder : current.cardOrder;
         patch.cardOrder = pruneOrderPreference(tree, raw ?? null);
+      }
+      /**
+       * Step notes follow the same reasoning, except that a note is typed
+       * words and is never dropped: one whose step this tree no longer has
+       * moves into the recipe's note under the step's old label
+       * (recipe-model notes.ts pruneNotes). Written only when something moved
+       * or the request carried notes, so a tree edit leaves the column alone.
+       */
+      if (patch.notes !== undefined || patch.recipe) {
+        const tree = (patch.recipe ?? current.recipe) as Recipe;
+        const raw = patch.notes !== undefined ? patch.notes : (current.notes ?? null);
+        const pruned = pruneNotes(raw, tree, current.recipe as Recipe);
+        if (pruned !== raw || patch.notes !== undefined) patch.notes = pruned;
       }
 
       const [updated] = await tx

@@ -49,7 +49,17 @@ import { countDone, reconcileDone } from '@/shared/progress';
 import type { OrderPreference } from '@/shared/sequence';
 import { countAll } from '@/shared/amounts';
 import { titleProblem } from '@/shared/title';
-import { notesPreview, notesText, type RecipeNotes } from '@/shared/notes';
+import {
+  NOTE_MAX,
+  STEP_NOTE_MAX,
+  cleanNotes,
+  notesPreview,
+  notesText,
+  stepNote,
+  stepNotesInOrder,
+  withStepNote,
+  type RecipeNotes,
+} from '@/shared/notes';
 import { Feather } from '@expo/vector-icons';
 import { useColors, type Colors } from '@/hooks/useColors';
 import { fonts } from '@/constants/colors';
@@ -263,6 +273,14 @@ export function RecipeScreen({
   const [ratingOpen, setRatingOpen] = useState(false);
   const [openReorder, setOpenReorder] = useState(false);
   const [notesOpen, setNotesOpen] = useState(false);
+  // The step whose note is open. Kept after the sheet closes (the flag is
+  // separate) so its title does not blank out while the sheet fades.
+  const [stepNoteFor, setStepNoteFor] = useState<{ stepId: string; label: string } | null>(null);
+  const [stepNoteOpen, setStepNoteOpen] = useState(false);
+  const openStepNote = (stepId: string, label: string) => {
+    setStepNoteFor({ stepId, label });
+    setStepNoteOpen(true);
+  };
   useEffect(() => {
     if (!request?.n || !canEdit) return;
     if (request.kind === 'edit') {
@@ -369,7 +387,9 @@ export function RecipeScreen({
    * anybody's. Three places, none of them above the diagram unless it is
    * free: a one-line strip at the top of the diagram view where it costs
    * the diagram nothing (lib/notesStrip.ts), the whole note under the
-   * diagram, and the note leading Step-by-Step's first card.
+   * diagram, and the note leading Step-by-Step's first card. A step's own
+   * note is on that step's card, where it is written, and listed under the
+   * diagram after the recipe's.
    */
   const notesOn = notes !== undefined && canEdit && !isDraft;
   const noteText = notesText(notes);
@@ -409,6 +429,32 @@ export function RecipeScreen({
         </View>
         {noteText ? <Text style={styles.notesEdit}>Edit</Text> : <Feather name="plus" size={20} color={colors.mutedForeground} />}
       </Pressable>
+    ) : null;
+  const stepNoteRows =
+    notesOn && !editing && notes
+      ? stepNotesInOrder(notes, recipe).map(({ stepId, label, text }) => (
+          <Pressable
+            key={stepId}
+            accessibilityRole="button"
+            accessibilityLabel={`Your note on ${label}: ${text}. Edit`}
+            onPress={() => openStepNote(stepId, label)}
+            style={({ pressed }) => [styles.originalRow, pressed && styles.originalRowPressed]}
+            testID="recipe-step-note"
+          >
+            <View style={{ flex: 1 }}>
+              <Text style={styles.originalSub}>On the step “{label}”</Text>
+              <Text style={styles.notesBody}>{text}</Text>
+            </View>
+            <Text style={styles.notesEdit}>Edit</Text>
+          </Pressable>
+        ))
+      : null;
+  const notesRows =
+    notesRow || stepNoteRows?.length ? (
+      <>
+        {notesRow}
+        {stepNoteRows}
+      </>
     ) : null;
   const leadNote =
     notesOn && noteText ? (
@@ -643,7 +689,7 @@ export function RecipeScreen({
           {/* The source's own wording, one tap from the diagram that is our
               reading of it. Below the diagram, not above: an SE has no room
               above it left to spend (CLAUDE.md, the recipe screen headroom). */}
-          {notesRow}
+          {notesRows}
           {originalRow}
           {/* A 44px row rather than an inline link: the web's 12px anchor is
               a mouse target, and this one is tapped. */}
@@ -677,11 +723,12 @@ export function RecipeScreen({
           onReorderOpened={() => setOpenReorder(false)}
           header={sessionRowFor(null)}
           leadNote={leadNote}
+          stepNotes={notesOn ? { textFor: (id) => stepNote(notes, id), onEdit: openStepNote } : null}
           sourceSteps={sourceSteps}
           footer={
-            notesRow || originalRow ? (
+            notesRows || originalRow ? (
               <>
-                {notesRow}
+                {notesRows}
                 {originalRow}
               </>
             ) : null
@@ -718,7 +765,30 @@ export function RecipeScreen({
 
       {/* ⋮ › Notes, the strip and the notes row. Saved on close. */}
       {notesOn ? (
-        <NotesSheet open={notesOpen} notes={notes ?? null} onSave={(next) => onUpdate({ notes: next })} onClose={() => setNotesOpen(false)} />
+        <NotesSheet
+          open={notesOpen}
+          title="Notes"
+          value={noteText}
+          maxLength={NOTE_MAX}
+          placeholder="Your changes and reminders: less salt, a swap, how long it really took…"
+          accessibilityLabel="Your notes on this recipe"
+          onSave={(text) => onUpdate({ notes: cleanNotes(text, notes) })}
+          onClose={() => setNotesOpen(false)}
+        />
+      ) : null}
+      {/* A step's own note, from its card or its row under the diagram. */}
+      {notesOn && stepNoteFor ? (
+        <NotesSheet
+          open={stepNoteOpen}
+          title="Step note"
+          context={`On “${stepNoteFor.label}”`}
+          value={stepNote(notes, stepNoteFor.stepId)}
+          maxLength={STEP_NOTE_MAX}
+          placeholder="For this step: which pan, how long it really took, what you'd change…"
+          accessibilityLabel={`Your note on the step ${stepNoteFor.label}`}
+          onSave={(text) => onUpdate({ notes: withStepNote(notes, stepNoteFor.stepId, text) })}
+          onClose={() => setStepNoteOpen(false)}
+        />
       ) : null}
 
       {/* A window, like the delete confirmation: it asks something. */}

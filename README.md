@@ -677,7 +677,8 @@ README section holding its DDL, and the same line is logged at boot
 ### Recipe notes
 
 The person's own notes on a recipe ("less salt, double the garlic"; user
-feedback, Oct 2) are `recipes.notes`, `{ text }` or null — entry-level like
+feedback, Oct 2) and on single steps ("cast iron, 8 min a side") are
+`recipes.notes`, `{ text?, steps?: { [stepId]: text } }` or null — entry-level like
 `rating`, never in the tree (`lib/recipe-model/src/notes.ts` says why). They
 ride the ordinary versioned library PATCH; two devices that both changed a
 note keep both (`mergeNotes`), and an app that predates notes never sends
@@ -686,7 +687,14 @@ server stores up to 4,000, so a merge of two full notes is never refused.
 The phone shows them in the diagram's top row where that costs the diagram
 nothing (`lib/notesStrip.ts`), under the diagram, above Step-by-Step's first
 card and as a margin line on the Recipe Box page; the website shows them
-under the recipe. The signed-out try has none. Hand-run DDL:
+under the recipe. A step's note is on that step's Step-by-Step card on both
+clients (written there, 280 characters) and listed under the recipe's note;
+each text merges on its own, so a step note added on one device and the
+recipe note edited on another both stand. An edit that deletes a step moves
+its note into the recipe's note under the step's old label — the server
+does it in the PATCH transaction (`pruneNotes`), so nothing typed is lost.
+The signed-out try has none. Hand-run DDL (step notes need none of their
+own; they are a key in the same column):
 
 ```sql
 alter table recipes add column if not exists notes jsonb;

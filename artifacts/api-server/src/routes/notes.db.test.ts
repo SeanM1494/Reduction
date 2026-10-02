@@ -3,8 +3,9 @@
  * against a real Postgres.
  *
  * What is under test: a note is a versioned PATCH like a rating; it comes
- * back on the list; clearing it is null; anything but `{ text }` within the
- * stored cap is refused with nothing written; an unrelated write (a rating,
+ * back on the list; clearing it is null; anything but `{ text?, steps? }`
+ * within the stored caps is refused with nothing written; a step's note
+ * whose step an edit removed moves into the recipe's note, never dropped; an unrelated write (a rating,
  * a new tree) leaves it alone; a stale write is a 409 carrying the current
  * note, which is what the client's merge keeps; it goes with the recipe;
  * and nobody else can read or write it.
@@ -23,7 +24,7 @@ import {
   timerNotifications,
   users,
 } from "@workspace/db";
-import { NOTE_STORED_MAX } from "../shared/notes";
+import { NOTE_STORED_MAX, STEP_NOTE_STORED_MAX } from "../shared/notes";
 import { needsDatabase } from "../lib/testdb";
 import { libraryRouter } from "./library";
 
@@ -101,8 +102,11 @@ const RECIPE = {
     {
       name: "Toast",
       ingredients: [{ id: "a", qty: 1, unit: null, name: "bread" }],
-      nodes: [{ id: "n1", label: "toast it", inputs: ["a"], minutes: 5 }],
-      root: "n1",
+      nodes: [
+        { id: "n1", label: "toast it", inputs: ["a"], minutes: 5 },
+        { id: "n2", label: "butter it", inputs: ["n1"] },
+      ],
+      root: "n2",
     },
   ],
 };
@@ -152,6 +156,10 @@ test("notes: anything but {text} within the cap is refused, and nothing is writt
     { text: 42 },
     { text: "ok", steps: {} },
     { text: "x".repeat(NOTE_STORED_MAX + 1) },
+    { steps: { n1: "" } },
+    { steps: { n1: "x".repeat(STEP_NOTE_STORED_MAX + 1) } },
+    { steps: ["n1"] },
+    { text: "ok", extra: 1 },
     [],
   ]) {
     const w = await api("PATCH", `/api/library/${r.id}`, u, { notes: bad, rating: 1 });
@@ -204,4 +212,44 @@ test("notes: nobody else can read or write them, and they go with the recipe", a
   assert.equal(d.status, 200);
   const rows = await getDb().select().from(recipes).where(eq(recipes.id, r.id));
   assert.equal(rows.length, 0, "the note was a column of the row, so it went with it");
+});
+
+test("notes: a step's note is stored by step id, beside the recipe's", async (t) => {
+  if (!(await needsDatabase(t, ...TABLES))) return;
+  const u = await makeUser();
+  const r = await saveRecipe(u);
+  const notes = { text: "Thighs.", steps: { n1: "Cast iron, 4 min a side." } };
+  const w = await api("PATCH", `/api/library/${r.id}`, u, { notes, ifVersion: r.version });
+  assert.equal(w.status, 200, JSON.stringify(w.body));
+  assert.deepEqual(w.body.entry.notes, notes);
+  assert.deepEqual(await notesOf(u, r.id), notes);
+  // Only step notes is a note too.
+  const s = await api("PATCH", `/api/library/${r.id}`, u, { notes: { steps: { n2: "Salted." } } });
+  assert.equal(s.status, 200);
+  assert.deepEqual(await notesOf(u, r.id), { steps: { n2: "Salted." } });
+});
+
+test("notes: an edit that removes a step moves its note into the recipe's, never drops it", async (t) => {
+  if (!(await needsDatabase(t, ...TABLES))) return;
+  const u = await makeUser();
+  const r = await saveRecipe(u);
+  await api("PATCH", `/api/library/${r.id}`, u, {
+    notes: { text: "Thighs.", steps: { n1: "Cast iron.", n2: "Salted butter." } },
+  });
+  // The editor deletes "butter it".
+  const tree = {
+    ...RECIPE,
+    sections: [{ ...RECIPE.sections[0], nodes: [RECIPE.sections[0].nodes[0]], root: "n1" }],
+  };
+  const e = await api("PATCH", `/api/library/${r.id}`, u, { recipe: tree });
+  assert.equal(e.status, 200, JSON.stringify(e.body));
+  const moved = { text: "Thighs.\nButter it: Salted butter.", steps: { n1: "Cast iron." } };
+  assert.deepEqual(e.body.entry.notes, moved);
+  assert.deepEqual(await notesOf(u, r.id), moved);
+
+  // A stale client writing a note on that gone step: kept, in the text,
+  // without a label because the stored tree no longer has one to give.
+  const late = await api("PATCH", `/api/library/${r.id}`, u, { notes: { ...moved, steps: { ...moved.steps, n2: "More." } } });
+  assert.equal(late.status, 200);
+  assert.deepEqual(late.body.entry.notes, { text: `${moved.text}\nA removed step: More.`, steps: { n1: "Cast iron." } });
 });
