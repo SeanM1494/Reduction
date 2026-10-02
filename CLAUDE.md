@@ -1290,8 +1290,8 @@ and its test parses `brand/opening/opening-scene.svg` and fails on any
 difference. **Since Oct 2 the icon and the opening scene are different
 artwork**: the icon became the plain pot with two curls of steam (Sean
 found the shaker, bottle and bars too busy at home-screen size), and the
-scene file is the previous icon, kept so the intro still pours spice and
-vinegar. Changing the icon no longer touches the intro; changing the intro
+scene file is the previous icon without its four bars (also Sean, Oct 2),
+kept so the intro still pours spice and vinegar. Changing the icon no longer touches the intro; changing the intro
 is an edit to the scene file and the data together. The icon and splash are in the BINARY: a change to them needs a
 build, and no bundle depends on them, so it does not by itself need an
 `expo.version` bump. The splash is deliberately PLAIN (the opening sequence

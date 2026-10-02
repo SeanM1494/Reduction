@@ -74,7 +74,7 @@ test('the wall foreshortens as the camera rises and never fades before it is fla
     const g = tiltGeo(tt);
     const depth = g.yb - g.A; // what shows of the wall below the rim
     assert.ok(depth <= lastDepth + 1e-9, `depth grows at ${tt}`);
-    assert.ok(g.hf <= lastHf + 1e-9, `bars grow at ${tt}`);
+    assert.ok(g.hf <= lastHf + 1e-9, `the wall grows at ${tt}`);
     lastDepth = depth;
     lastHf = g.hf;
   }
@@ -84,16 +84,6 @@ test('the wall foreshortens as the camera rises and never fades before it is fla
     const s = at(FULL, t);
     if (s.tilt <= 0.995) assert.equal(s.bodyOpacity, 1, `wall faded at t=${t.toFixed(2)}`);
   }
-});
-
-test('the bars squash with the wall', () => {
-  const rest = at(FULL, 1.0).bars[0];
-  const risen = at(FULL, 2.7).bars[0];
-  const height = (d: string) => {
-    const ys = sample(d.replace(/A[^A-Z]*?(?=[A-Z])/g, (m) => 'L' + m.split(/[ ,]+/).slice(-2).join(' ')).replace(/L/g, 'M')).map((p) => p[1]);
-    return Math.max(...ys) - Math.min(...ys);
-  };
-  assert.ok(height(risen) < height(rest));
 });
 
 test('Full at its key times', () => {

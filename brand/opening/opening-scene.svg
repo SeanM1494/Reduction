@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
-<title>Reduction opening scene (the pre-Oct 2 icon; the opening sequence animates these parts)</title>
+<title>Reduction opening scene (the pre-Oct 2 icon without its bars; the opening sequence animates these parts)</title>
 <rect id="bg" width="1024" height="1024" fill="#efe2c8"/>
 <g id="pot">
 <rect x="214" y="650" width="60" height="46" rx="22" fill="#7a2a1e"/>
@@ -7,10 +7,6 @@
 <path d="M270 620 H754 Q786 620 786 652 V818 Q786 908 696 908 H328 Q238 908 238 818 V652 Q238 620 270 620 Z" fill="#b23a2a"/>
 <ellipse cx="512" cy="622" rx="274" ry="40" fill="#8a2c20"/>
 <ellipse cx="512" cy="626" rx="240" ry="27" fill="#3f1712"/>
-<rect x="399" y="720" width="34" height="130" rx="17" fill="#f1dfc2"/>
-<rect x="463" y="752" width="34" height="98" rx="17" fill="#deae94"/>
-<rect x="527" y="782" width="34" height="68" rx="17" fill="#cd7f6a"/>
-<rect x="591" y="810" width="34" height="40" rx="17" fill="#bd5845"/>
 <ellipse cx="566" cy="628" rx="24" ry="7" fill="#e0a23a"/>
 <circle cx="456" cy="620" r="8" fill="#cf5a26"/>
 <circle cx="484" cy="632" r="6" fill="#6f8f55"/>

@@ -90,7 +90,6 @@ export interface Scene {
   handles: [string, string];
   body: string;
   bodyOpacity: number;
-  bars: [string, string, string, string];
   rim: string;
   inner: string;
   /** The liquid's outline, which clips the ripples and the bubbles. */
@@ -251,11 +250,6 @@ export function sceneAt(C: Timeline, x: number, st: Stage, P: Pour, B: Bubble[],
     roundRectPath(214, g.handleY, 60, 46, 22, 22, cam),
     roundRectPath(750, g.handleY, 60, 46, 22, 22, cam),
   ];
-  // The bars ride the wall: translate(0 A) scale(1 hf) translate(0 -662).
-  const bar = (bx: number, by: number, bh: number) =>
-    roundRectPath(bx, g.A + (by - 662) * g.hf, 34, bh * g.hf, 17, 17 * g.hf, cam);
-  const bars: [string, string, string, string] = [bar(399, 720, 130), bar(463, 752, 98), bar(527, 782, 68), bar(591, 810, 40)];
-
   // The pour.
   const spice: [string, string, string] = ['', '', ''];
   for (let i = 0; i < P.spice.length; i++) {
@@ -329,7 +323,6 @@ export function sceneAt(C: Timeline, x: number, st: Stage, P: Pour, B: Bubble[],
     handles,
     body: bodyPath(g, cam),
     bodyOpacity: tt > 0.995 ? 0 : 1,
-    bars,
     rim: ellipsePath(512, 622, 274, g.ryR, cam),
     inner: ellipsePath(512, 626, 240, g.ryI, cam),
     liquid: ellipsePath(512, 626, 240, g.ryI, cam),

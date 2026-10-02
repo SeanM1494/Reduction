@@ -35,12 +35,6 @@ export const POT = {
   },
   rim: { cx: 512, cy: 622, rx: 274, ry: 40, fill: '#8a2c20' },
   inner: { cx: 512, cy: 626, rx: 240, ry: 27, fill: '#3f1712' },
-  bars: [
-    { x: 399, y: 720, width: 34, height: 130, rx: 17, fill: '#f1dfc2' },
-    { x: 463, y: 752, width: 34, height: 98, rx: 17, fill: '#deae94' },
-    { x: 527, y: 782, width: 34, height: 68, rx: 17, fill: '#cd7f6a' },
-    { x: 591, y: 810, width: 34, height: 40, rx: 17, fill: '#bd5845' },
-  ],
   /** What already floats in the pot in the icon: the vinegar slick and
    *  three flecks of spice. The still (Reduce Motion) frame shows them; the
    *  animation starts with an empty pot and fills it. */

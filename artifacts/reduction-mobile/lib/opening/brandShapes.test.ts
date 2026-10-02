@@ -40,7 +40,6 @@ function expected(withBackground: boolean): Parsed[] {
   els.push({ tag: 'path', attrs: { d: POT.body.d, fill: POT.body.fill } });
   els.push({ tag: 'ellipse', attrs: s(POT.rim) });
   els.push({ tag: 'ellipse', attrs: s(POT.inner) });
-  for (const b of POT.bars) els.push({ tag: 'rect', attrs: s(b) });
   els.push({ tag: 'ellipse', attrs: s(POT.slick) });
   for (const f of POT.flecks) els.push({ tag: 'circle', attrs: s(f) });
   for (const c of STREAM) els.push({ tag: 'circle', attrs: s(c) });

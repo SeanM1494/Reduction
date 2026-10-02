@@ -200,10 +200,6 @@ function SceneSvg({ scene, width, height }: { scene: SharedValue<Scene>; width: 
   const handleL = useAnimatedProps(() => ({ d: d(scene.value.handles[0]) }));
   const handleR = useAnimatedProps(() => ({ d: d(scene.value.handles[1]) }));
   const body = useAnimatedProps(() => ({ d: scene.value.body, opacity: scene.value.bodyOpacity }));
-  const bar0 = useAnimatedProps(() => ({ d: d(scene.value.bars[0]) }));
-  const bar1 = useAnimatedProps(() => ({ d: d(scene.value.bars[1]) }));
-  const bar2 = useAnimatedProps(() => ({ d: d(scene.value.bars[2]) }));
-  const bar3 = useAnimatedProps(() => ({ d: d(scene.value.bars[3]) }));
   const rim = useAnimatedProps(() => ({ d: scene.value.rim }));
   const inner = useAnimatedProps(() => ({ d: scene.value.inner }));
   const sp0 = useAnimatedProps(() => ({ d: d(scene.value.spice[0]) }));
@@ -211,7 +207,6 @@ function SceneSvg({ scene, width, height }: { scene: SharedValue<Scene>; width: 
   const sp2 = useAnimatedProps(() => ({ d: d(scene.value.spice[2]) }));
   const drops = useAnimatedProps(() => ({ d: d(scene.value.drops) }));
   const ring = useAnimatedProps(() => ({ r: scene.value.ringR, opacity: scene.value.ringOpacity }));
-  const bars = [bar0, bar1, bar2, bar3];
   return (
     <Svg style={StyleSheet.absoluteFill} width={width} height={height} viewBox={VIEWBOX} preserveAspectRatio="xMidYMid slice">
       <Defs>
@@ -227,9 +222,6 @@ function SceneSvg({ scene, width, height }: { scene: SharedValue<Scene>; width: 
           <AnimatedPath animatedProps={handleL} fill={POT.handleFill} />
           <AnimatedPath animatedProps={handleR} fill={POT.handleFill} />
           <AnimatedPath animatedProps={body} fill={POT.body.fill} />
-          {POT.bars.map((b, i) => (
-            <AnimatedPath key={b.fill} animatedProps={bars[i]} fill={b.fill} />
-          ))}
           <AnimatedPath animatedProps={rim} fill={POT.rim.fill} />
           <AnimatedPath animatedProps={inner} fill={POT.inner.fill} />
           <G clipPath="url(#opening-liquid)">
@@ -355,9 +347,6 @@ function StillArtwork({ width, height }: { width: number; height: number }) {
       <Path d={POT.body.d} fill={POT.body.fill} />
       <Ellipse {...POT.rim} />
       <Ellipse {...POT.inner} />
-      {POT.bars.map((b) => (
-        <Rect key={b.fill} {...b} />
-      ))}
       <Ellipse {...POT.slick} />
       {POT.flecks.map((f, i) => (
         <Circle key={`f${i}`} {...f} />
