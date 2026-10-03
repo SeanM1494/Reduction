@@ -16,7 +16,7 @@
  */
 const fs = require('node:fs');
 const path = require('node:path');
-const { withXcodeProject } = require('@expo/config-plugins');
+const { withXcodeProject } = require('expo/config-plugins');
 
 module.exports = function withShareExtensionDisplayName(config, { target = 'ReductionShare', displayName = 'Reduction' } = {}) {
   return withXcodeProject(config, (cfg) => {
