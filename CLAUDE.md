@@ -348,8 +348,8 @@ twenty-first guards that a recipe's notes are the person's alone: a
 versioned write that nothing else overwrites, refused whole when it is
 not `{ text?, steps? }` within the caps, a step's note moved into the
 recipe's (never dropped) when an edit removes the step, and gone with the
-recipe. **The full suite — 872 tests at the
-time of writing (Oct 2) — has been run against a real Postgres and passes 872/0.** The
+recipe. **The full suite — 875 tests at the
+time of writing (Oct 3) — has been run against a real Postgres and passes 875/0.** The
 ones that are not api-server or model tests include the mobile library's
 filter and sort (`artifacts/reduction-mobile/lib/libraryView.test.ts`), the
 recipe box's books and page arithmetic (`recipeBox.test.ts`), the
