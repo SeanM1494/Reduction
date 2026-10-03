@@ -807,7 +807,7 @@ sees every other's spend), in front of every paid model call — a cache miss
 on `/extract`, `/reextract`, and the web half of `/search`:
 
 ```
-EXTRACTION_DAILY_BUDGET_USD=25     # everyone's estimated spend today (UTC); 503, search too
+EXTRACTION_DAILY_BUDGET_USD=100    # everyone's estimated spend today (UTC); 503, search too
 SIGNED_OUT_DAILY_EXTRACTIONS=150   # fresh extractions with no account, all together; 429
 ACCOUNT_DAILY_EXTRACTIONS=40       # fresh extractions by one account; 429
 ```

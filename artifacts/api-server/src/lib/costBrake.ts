@@ -43,7 +43,7 @@ export interface BrakeLimits {
 }
 
 export const DEFAULT_LIMITS: BrakeLimits = {
-  budgetUsd: 25,
+  budgetUsd: 100,
   signedOutPerDay: 150,
   accountPerDay: 40,
 };
