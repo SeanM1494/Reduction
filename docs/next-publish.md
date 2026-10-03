@@ -96,7 +96,7 @@ does not install). Then:
 
 **5a.**
 ```sh
-pnpm install
+pnpm install --frozen-lockfile
 ```
 Ends with `Done in …`.
 
