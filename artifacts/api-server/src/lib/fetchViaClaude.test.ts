@@ -162,6 +162,44 @@ test("a recipe that fails a rule is still repaired, and the rule is kept", async
   assert.match(bodies[1].messages.at(-1).content, /failed validation/);
 });
 
+test("the picture: kept only when the page the fetch returned carries that exact URL", async () => {
+  const { structureRecipeFromUrl, fetchedImage } = await import("./fetchViaClaude");
+  const PHOTO = "https://recipes.example/wp-content/uploads/toast.jpg";
+  const page = (data: string) => [
+    FETCHED[0],
+    { ...FETCHED[1], content: { ...(FETCHED[1] as any).content, content: { type: "document", source: { type: "text", media_type: "text/plain", data } } } },
+  ];
+
+  // On the page: kept, and it is not left in the tree.
+  script = [{ stop: "end_turn", content: [...page(`![Toast](${PHOTO})\nToast the bread.`), ...text(JSON.stringify({ ...TREE, image: PHOTO }))] }];
+  let out = await structureRecipeFromUrl(URL_);
+  assert.equal(out.recipe.image, PHOTO);
+  assert.match(bodies[0].messages[0].content, /"image"/, "the model is asked for it");
+
+  // Not on the page (written from memory, or guessed): dropped.
+  script = [{ stop: "end_turn", content: [...page("Toast the bread."), ...text(JSON.stringify({ ...TREE, image: PHOTO }))] }];
+  out = await structureRecipeFromUrl(URL_);
+  assert.equal(out.recipe.image, null);
+
+  // A page fetched before a pause still counts.
+  script = [
+    { stop: "pause_turn", content: page(`<img src="${PHOTO}">`) },
+    { stop: "end_turn", content: text(JSON.stringify({ ...TREE, image: PHOTO })) },
+  ];
+  out = await structureRecipeFromUrl(URL_);
+  assert.equal(out.recipe.image, PHOTO);
+
+  // None given: null, as before this existed.
+  script = [{ stop: "end_turn", content: [...page(PHOTO), ...text(JSON.stringify(TREE))] }];
+  out = await structureRecipeFromUrl(URL_);
+  assert.equal(out.recipe.image, null);
+
+  assert.equal(fetchedImage("/uploads/toast.jpg", ["x /uploads/toast.jpg x"], URL_), "https://recipes.example/uploads/toast.jpg", "relative, resolved against the page");
+  assert.equal(fetchedImage("javascript:alert(1)", ["javascript:alert(1)"], URL_), null, "only a web address");
+  assert.equal(fetchedImage(" ", [" "], URL_), null);
+  assert.equal(fetchedImage({ url: PHOTO }, [PHOTO], URL_), null, "a string or nothing");
+});
+
 test("EXTRACTION_FALLBACK_EFFORT: unset follows, 'default' is the model's own, a typo follows", () => {
   assert.equal(extractionFallbackEffort({}), undefined);
   assert.equal(extractionFallbackEffort({ EXTRACTION_FALLBACK_EFFORT: "default" }), null);
