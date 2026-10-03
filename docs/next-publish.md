@@ -1,4 +1,4 @@
-# Next Publish — recipe notes (Oct 2)
+# Next Publish — recipe notes (Oct 2) and the Apple sign-in revocation (Oct 3)
 
 One SQL line, one pull, one Publish, then the phone update. From a fresh
 Replit shell, in order; each block is one command and what it should print
@@ -17,6 +17,7 @@ Publish.
 | `34405fa` Privacy: say what push, search and the extraction log already collect | Website only: `privacy.html` says timer notifications store the device's model and app version (the browser's user agent on the web), that search words go to Anthropic without the account and results are kept up to 30 days, and that the extraction log records the website's name. Wording only, matching what the code already did | This Publish; nothing on the phone |
 | `65e0146` Icon: the plain pot with steam | Website: favicon, home-screen icon and nav mark become the new pot. Phone: the app icon and the sign-in mark, which are in the BINARY, so they reach phones only with the next native build (the launch build). The opening sequence is unchanged | This Publish for the website; the launch build for the phone. No `expo.version` bump (nothing a bundle calls) |
 | `d041448` Paywall: no in-app codes on iPhone, wall copy for three recipes, atomic metered save | Server: with the wall ON, saves racing for the last free recipe let exactly one through (wall off, as now, changes nothing). Phone: the "Have a code?" box is gone on iPhone (wall and Settings, guideline 3.1.1); the wall says "Your recipes are yours to keep" and its button opens the library. No new SQL | This Publish for the server; the phone part rides the next over-the-air update (preview, then promote) |
+| `ac19369` Account deletion: revoke the Sign in with Apple token | Server: the Apple callback keeps the refresh token Apple returns (new `apple_tokens` table), and deleting an account revokes it at Apple after the rows are gone; `/api/health` checks the table. Website and phone: when it could not be revoked (any account that signed in before this shipped), the "account deleted" message says to remove Reduction under Settings › Apple Account › Sign in with Apple. Privacy: "Your account" and "Deleting your account" say so, dated October 3. README "Sign in with Apple" | Step 2b's SQL **before** the pull; this Publish; the phone's wording rides the same over-the-air update. The revoke call has never run (Apple's hosts are blocked from Claude's container): the first real one is step 9b |
 | `a614705` Opening sequence: the pot without its bars | Phone only: the intro's pot loses the four bars, matching the new icon; the pour is unchanged | The next over-the-air update (preview, then promote); nothing on the server |
 | `13c7530` Usage: which view people cook in, and a report on coming back and cooking | Server: six more names the app may count (`recipe_opened`, `view_steps`, `ticked_*`, `finished_*`), and `GET /api/admin/usage` (README "Usage counters"). Website: the same counts from a saved recipe; `privacy.html` adds "To see, in totals, how the app is used", dated October 3. Phone: the same counts from a saved recipe | This Publish (server FIRST: the old server answers the new names 400, which the app ignores, so nothing breaks but nothing counts); the phone part rides the same over-the-air update. No SQL |
 
@@ -35,6 +36,22 @@ psql "$DATABASE_URL" -c "alter table recipes add column if not exists notes json
 Prints `ALTER TABLE` (or `NOTICE … already exists, skipping` on a second
 run).
 
+**2b.** The Apple token table, on production, BEFORE the pull (safe to run
+twice):
+```sh
+psql "$DATABASE_URL" <<'SQL'
+create table if not exists apple_tokens (
+  subject text primary key,
+  user_id text not null references users(id) on delete cascade,
+  refresh_token text not null,
+  updated_at timestamptz not null default now()
+);
+create index if not exists apple_tokens_user_idx on apple_tokens (user_id);
+SQL
+```
+Prints `CREATE TABLE` and `CREATE INDEX` (or `NOTICE … already exists,
+skipping` on a second run).
+
 **3.**
 ```sh
 git pull
@@ -45,7 +62,7 @@ A fast-forward; among the files, `lib/recipe-model/src/notes.ts`.
 ```sh
 git log --oneline -15
 ```
-Must list `3909d43` and `5f0524a`. Note the TOP line's short hash: steps 7 and 8 must
+Must list `3909d43`, `5f0524a`, `d041448`, `13c7530` and `ac19369`. Note the TOP line's short hash: steps 7 and 8 must
 show it.
 
 **5.**
@@ -63,7 +80,7 @@ curl -s https://recipereduction.com/api/health; echo
 ```
 `"commit"` must be the hash from step 4, and `"schema":{"ok":true,"missing":[]}`.
 If `missing` names `recipes.notes`, step 2 did not run against this
-database: run it now.
+database (`apple_tokens`: step 2b); run it now.
 
 **8.** Health through the phone app's hostname:
 ```sh
@@ -78,6 +95,16 @@ line, **Save**; reload the page and it is still there. Then:
 curl -s https://recipereduction.com/privacy.html | grep -c "notes you write"
 ```
 Prints `1`.
+
+**9b.** The Apple revocation, once, with a throwaway account (optional
+before launch, but it is the only real test the revoke call will get).
+On the phone: sign out, sign in with Apple (this stores a token), then
+Settings › **Delete account**. No "remove Reduction from … Sign in with
+Apple" line should appear. Then on the iPhone: Settings › your name ›
+Sign in with Apple — Reduction should no longer be listed. If the line
+does appear, Replit's deployment log has an `[account:delete]` line with
+Apple's reason; send it to Claude. Signing in with Apple again afterwards
+makes a new, empty account.
 
 **10.** The phone update, to preview first:
 ```sh
