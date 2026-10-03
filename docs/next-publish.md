@@ -14,7 +14,8 @@ the pull and not only before the Publish.
 cut build 7 off: it sets `expo.version` to 1.2.0, and the runtime version
 follows it, so from then on no update reaches a 1.1.0 binary. It is NOT on
 `main`, so `git pull` cannot bring it, and nothing in this list merges it.
-The cook-mode keep-awake (#11) and the cost brakes (#12) WERE merged on
+The cook-mode keep-awake (#11), the cost brakes (#12, ceiling raised to
+$100 in `06eff3b`) and the fallback-fetch photos (#14) WERE merged on
 Oct 3 and are in this Publish. On `main` itself: `expo.version` is still
 1.1.0; the one new phone package is `expo-keep-awake`, whose native half
 is one of `expo`'s own modules and already inside build 7 (`expo` 57
@@ -38,6 +39,7 @@ build 7. Step 9c checks the version again right before the phone update.
 | `0c343de` Server: daily brakes on paid model calls (PR #12) | Server only: three daily ceilings read from `extraction_events` (no new table): about $100 of estimated model spend a day for everyone (Sean, Oct 3; was $25 in the PR) (then extraction and search pause until midnight UTC, saved recipes unaffected), 150 fresh signed-out extractions a day in all, 40 fresh extractions a day per account. A cache hit never counts. Each is an env var (`EXTRACTION_DAILY_BUDGET_USD`, `SIGNED_OUT_DAILY_EXTRACTIONS`, `ACCOUNT_DAILY_EXTRACTIONS`; a number or `off`); unset means those defaults. Build 7 shows the refusal's own sentence, as it does any error. README "Daily cost brakes" | This Publish; no SQL; nothing on the phone. Owner, separately: a spend limit and alert in the Anthropic Console |
 | `13c7530` Usage: which view people cook in, and a report on coming back and cooking | Server: six more names the app may count (`recipe_opened`, `view_steps`, `ticked_*`, `finished_*`), and `GET /api/admin/usage` (README "Usage counters"). Website: the same counts from a saved recipe; `privacy.html` adds "To see, in totals, how the app is used", dated October 3. Phone: the same counts from a saved recipe | This Publish (server FIRST: the old server answers the new names 400, which the app ignores, so nothing breaks but nothing counts); the phone part rides the same over-the-air update. No SQL |
 | `3da8300` Cook mode keeps the screen on (PR #11) | Phone only: while the Step-by-Step (Cook) tab is showing, the screen does not dim or lock; released on leaving the tab, leaving the recipe or going to the background. Adds `expo-keep-awake` to the phone's `package.json` — its native half is one of `expo`'s own modules and already in build 7, so it is OTA-safe with no build and no `expo.version` bump | `pnpm install` on Replit (a new direct dependency, so step 5 will name it); the next over-the-air update (preview, then promote); nothing on the server |
+| `174455b` Photos: a picture for recipes read through the fallback fetch (PR #14) | Server only: a recipe from a site that refuses our fetch (read by Anthropic's web fetch instead) keeps the page's photo when the fetched page carries its URL; the page-photo fetch asks for JPEG/PNG first so a CDN does not answer with WebP. No SQL. Recipes already saved without a photo stay that way | This Publish, once merged. First real check: extract https://sallysbakingaddiction.com/apple-crisp/ after it ships, and look for `[extract] web_fetch read … kept no picture` in the deployment log if it still has none |
 
 The only native changes are the icon and the dark splash, which wait for the launch build; nothing here needs an `expo.version` bump.
 
@@ -81,7 +83,8 @@ A fast-forward; among the files, `lib/recipe-model/src/notes.ts`.
 git log --oneline -15
 ```
 Must list `3909d43`, `34405fa`, `65e0146`, `94ba91b`, `a614705`, `5f0524a`,
-`d041448`, `13c7530`, `ac19369`, `3da8300` and `0c343de`. Note the TOP line's short hash: steps 7,
+`d041448`, `13c7530`, `ac19369`, `3da8300`, `0c343de`, `06eff3b` and
+`174455b`. Note the TOP line's short hash: steps 7,
 8 and 10 must show it.
 
 **5.**

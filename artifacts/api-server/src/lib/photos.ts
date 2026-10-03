@@ -162,7 +162,10 @@ const realFetcher: Fetcher = async (url) => {
   const res = await fetch(url, {
     redirect: "follow",
     signal: AbortSignal.timeout(PAGE_IMAGE_TIMEOUT_MS),
-    headers: { Accept: "image/*", "User-Agent": "Mozilla/5.0 (compatible; RecipeReduction/1.0)" },
+    // JPEG and PNG first: a CDN that negotiates the format (Cloudflare
+    // Polish, Jetpack) answers a bare image/* with WebP or AVIF, and jimp
+    // decodes neither — the picture was fetched and then thrown away.
+    headers: { Accept: "image/jpeg,image/png;q=0.9,image/gif;q=0.8,image/*;q=0.5", "User-Agent": "Mozilla/5.0 (compatible; RecipeReduction/1.0)" },
   });
   const declared = Number(res.headers.get("content-length") ?? 0);
   if (declared > MAX_PAGE_IMAGE_BYTES) {
