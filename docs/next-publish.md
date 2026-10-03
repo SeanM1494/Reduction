@@ -80,7 +80,7 @@ A fast-forward; among the files, `lib/recipe-model/src/notes.ts`.
 
 **4.**
 ```sh
-git log --oneline -15
+git log --oneline -35
 ```
 Must list `3909d43`, `34405fa`, `65e0146`, `94ba91b`, `a614705`, `5f0524a`,
 `d041448`, `13c7530`, `ac19369`, `3da8300`, `0c343de`, `06eff3b` and
