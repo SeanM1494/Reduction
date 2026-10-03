@@ -196,6 +196,9 @@ export interface DeleteAccountResult {
   ok: true;
   cancelled: string[];
   manual: string[];
+  /** 'manual': the Sign in with Apple link could not be revoked, so the
+   *  person removes it themselves. Absent from a server older than Oct 3. */
+  appleSignIn?: 'revoked' | 'manual' | null;
 }
 
 /** Delete the signed-in account, its recipes and its subscription rows.

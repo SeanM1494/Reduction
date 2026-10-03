@@ -95,11 +95,12 @@ export default function SettingsScreen() {
           onPress: async () => {
             try {
               const result = await deleteAccount();
-              if (result.manual.length) {
-                Alert.alert(
-                  'Account deleted',
-                  'Remember to cancel the App Store subscription in Settings › Apple Account › Subscriptions.'
-                );
+              const remember = [
+                result.manual.length ? 'cancel the App Store subscription in Settings › Apple Account › Subscriptions' : null,
+                result.appleSignIn === 'manual' ? 'remove Reduction from Settings › Apple Account › Sign in with Apple' : null,
+              ].filter(Boolean);
+              if (remember.length) {
+                Alert.alert('Account deleted', `Remember to ${remember.join(', and ')}.`);
               }
             } catch (e) {
               // Nothing was deleted (routes/account.ts refuses before it

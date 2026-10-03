@@ -432,6 +432,41 @@ export const identities = pgTable(
 );
 
 /**
+ * The refresh token Apple hands back with every Sign in with Apple code
+ * exchange, kept for ONE purpose: revoking it when the account is deleted.
+ * Apple asks apps that offer Sign in with Apple to revoke the user's tokens
+ * through its REST API on account deletion (Apple, "Offering account
+ * deletion in your app"), and its revoke endpoint takes a refresh token or
+ * an access token — nothing else. Without a stored token the app cannot
+ * revoke, and the person is left to remove Reduction under Settings › Apple
+ * Account › Sign in with Apple themselves.
+ *
+ * Its own table, NOT a column on `identities`: drizzle's `select()` names
+ * every schema column, so a column there would fail every sign-in on a
+ * database where the hand-run DDL had not run yet. Every read and write of
+ * this table is guarded (lib/appleTokens.ts), so a missing table costs a
+ * revocation, never a sign-in or a deletion.
+ *
+ * Stored as-is, not hashed, because revoking needs the token itself. A
+ * leaked row is worth little: Apple accepts it only alongside a client
+ * secret signed with the .p8, which never touches the database. One row per
+ * Apple subject, overwritten on every sign-in, and gone with the user by
+ * the cascade.
+ */
+export const appleTokens = pgTable(
+  "apple_tokens",
+  {
+    subject: text("subject").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    refreshToken: text("refresh_token").notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [index("apple_tokens_user_idx").on(table.userId)]
+);
+
+/**
  * Server-side sessions, behind an httpOnly cookie.
  *
  * The row is keyed by the SHA-256 of the session token, never the token

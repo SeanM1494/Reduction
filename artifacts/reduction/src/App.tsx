@@ -559,8 +559,12 @@ export default function App() {
     try {
       const result = await deleteAccountOnServer();
       forgetSession();
-      if (result.manual.length) {
-        window.alert("Your account is deleted. Remember to cancel the App Store subscription on your iPhone under Settings › Apple Account › Subscriptions.");
+      const remember = [
+        result.manual.length ? "cancel the App Store subscription on your iPhone under Settings › Apple Account › Subscriptions" : null,
+        result.appleSignIn === "manual" ? "remove Reduction from Settings › Apple Account › Sign in with Apple on your iPhone" : null,
+      ].filter(Boolean);
+      if (remember.length) {
+        window.alert(`Your account is deleted. Remember to ${remember.join(", and ")}.`);
       }
     } catch (e) {
       window.alert((e as Error).message || "Could not delete your account. Try again in a moment.");

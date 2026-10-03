@@ -21,9 +21,11 @@ import {
   buildAuthUrl,
   clientSecret,
   describeKeyEnv,
+  exchangeCode,
   nonceForState,
   parseUserField,
   resetClientSecretCache,
+  revokeRefreshToken,
 } from "./apple";
 
 const { privateKey } = crypto.generateKeyPairSync("ec", { namedCurve: "P-256" });
@@ -378,4 +380,72 @@ test("config resolves for every recoverable paste, not just the pristine one", (
     process.env = saved;
     resetClientSecretCache();
   }
+});
+
+// --- The refresh token: kept from the exchange, revoked at deletion. Apple's
+// hosts are unreachable from here, so fetch is stubbed and what is proven is
+// the request we send and what we keep from the answer.
+
+async function withFetch<T>(
+  answer: (url: string, init: RequestInit) => Response,
+  run: (calls: { url: string; body: URLSearchParams }[]) => Promise<T>
+): Promise<T> {
+  const real = globalThis.fetch;
+  const calls: { url: string; body: URLSearchParams }[] = [];
+  globalThis.fetch = (async (url: string, init: RequestInit) => {
+    calls.push({ url: String(url), body: new URLSearchParams(String(init.body)) });
+    return answer(String(url), init);
+  }) as typeof fetch;
+  try {
+    return await run(calls);
+  } finally {
+    globalThis.fetch = real;
+  }
+}
+
+const unsignedJwt = (claims: object) =>
+  `${Buffer.from('{"alg":"none"}').toString("base64url")}.${Buffer.from(JSON.stringify(claims)).toString("base64url")}.x`;
+
+test("the exchange keeps Apple's refresh token, and null when there is none", async () => {
+  const claims = {
+    iss: "https://appleid.apple.com",
+    aud: CFG.clientId,
+    exp: Math.floor(Date.now() / 1000) + 600,
+    nonce: nonceForState("st"),
+    sub: "001234.abc",
+  };
+  for (const [refresh, expected] of [["rt-1", "rt-1"], [undefined, null], ["", null]] as const) {
+    const id = await withFetch(
+      () => Response.json({ id_token: unsignedJwt(claims), ...(refresh === undefined ? {} : { refresh_token: refresh }) }),
+      () => exchangeCode(CFG, { code: "c", state: "st" })
+    );
+    assert.equal(id.refreshToken, expected);
+    assert.equal(id.subject, "001234.abc");
+  }
+});
+
+test("revocation posts the refresh token to /auth/revoke as the Services ID, with a signed secret", async () => {
+  resetClientSecretCache();
+  await withFetch(
+    () => new Response("", { status: 200 }),
+    async (calls) => {
+      await revokeRefreshToken(CFG, "rt-xyz");
+      assert.equal(calls.length, 1);
+      assert.equal(calls[0].url, "https://appleid.apple.com/auth/revoke");
+      const b = calls[0].body;
+      assert.equal(b.get("client_id"), CFG.clientId);
+      assert.equal(b.get("token"), "rt-xyz");
+      assert.equal(b.get("token_type_hint"), "refresh_token");
+      assert.equal(b.get("client_secret"), clientSecret(CFG));
+    }
+  );
+});
+
+test("a refused revocation throws with Apple's reason, so the caller can report it", async () => {
+  await withFetch(
+    () => Response.json({ error: "invalid_client" }, { status: 400 }),
+    async () => {
+      await assert.rejects(revokeRefreshToken(CFG, "rt"), /invalid_client/);
+    }
+  );
 });

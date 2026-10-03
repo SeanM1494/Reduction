@@ -19,6 +19,11 @@
  *      `admin_events` is deliberately kept: it is the audit trail of a
  *      privileged write, names the account only by id, and CLAUDE.md is
  *      explicit that nothing prunes it.
+ *   3. Revoke the Sign in with Apple token (lib/appleTokens.ts), which Apple
+ *      asks of an app offering that sign-in. AFTER the rows are gone, and
+ *      never able to fail the deletion: what could not be revoked comes back
+ *      as `appleSignIn: "manual"`, and the client tells the person to remove
+ *      the app from Settings › Apple Account › Sign in with Apple.
  *
  * The session cookie is cleared on the way out; a phone drops its token on
  * the client's side. Nothing here is undoable, and nothing here asks twice
@@ -32,6 +37,7 @@ import { accessEvents, recipeBooks, recipeOriginals, recipePhotos, recipePlaceme
 import { userIdOf } from "../middleware/session";
 import { clearSessionCookie } from "./auth";
 import { cancelSubscriptionsFor } from "../lib/billing/cancel";
+import { applePlanFor, revokeApplePlan } from "../lib/appleTokens";
 
 export const accountRouter = Router();
 
@@ -49,6 +55,9 @@ accountRouter.delete("/", async (req: Request, res: Response) => {
       code: "cancel_failed",
     });
   }
+
+  // Read now: the cascade takes the tokens with the user row.
+  const applePlan = await applePlanFor(userId);
 
   try {
     await getDb().transaction(async (tx) => {
@@ -102,9 +111,11 @@ accountRouter.delete("/", async (req: Request, res: Response) => {
     return res.status(500).json({ error: "Could not delete your account. Try again in a moment." });
   }
 
+  const appleSignIn = await revokeApplePlan(userId, applePlan);
+
   console.log(
-    `[account:delete] ${userId} deleted; cancelled=[${summary.cancelled.join(",")}] manual=[${summary.manual.join(",")}]`
+    `[account:delete] ${userId} deleted; cancelled=[${summary.cancelled.join(",")}] manual=[${summary.manual.join(",")}] apple=${appleSignIn ?? "none"}`
   );
   clearSessionCookie(res);
-  return res.json({ ok: true, ...summary });
+  return res.json({ ok: true, ...summary, appleSignIn });
 });

@@ -33,6 +33,7 @@ import {
   parseUserField,
 } from "../lib/apple";
 import { userIdForIdentity } from "../lib/accounts";
+import { rememberAppleToken } from "../lib/appleTokens";
 import { claimAnonymousLibrary } from "../lib/claim";
 import { claimTrialRecipe, readTrialId } from "../lib/trial";
 import { BUILD_COMMIT } from "../lib/buildInfo";
@@ -553,6 +554,9 @@ authRouter.post(
         emailVerified: identity.emailVerified,
         displayName,
       });
+      // Kept only so deleting the account can revoke it; never fails the
+      // sign-in (lib/appleTokens.ts).
+      await rememberAppleToken(userId, identity.subject, identity.refreshToken);
 
       if (isMobile) {
         const handoffCode = await createMobileHandoff(userId);

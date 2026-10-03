@@ -26,6 +26,7 @@ import crypto from "node:crypto";
 
 const AUTH_ENDPOINT = "https://appleid.apple.com/auth/authorize";
 const TOKEN_ENDPOINT = "https://appleid.apple.com/auth/token";
+const REVOKE_ENDPOINT = "https://appleid.apple.com/auth/revoke";
 
 export const APPLE_CALLBACK_PATH = "/api/auth/apple/callback";
 
@@ -350,6 +351,9 @@ export interface AppleIdentity {
   /** Only ever non-null on the FIRST authorization. See the note at the top. */
   displayName: string | null;
   isPrivateRelay: boolean;
+  /** Kept only so account deletion can revoke it (schema `apple_tokens`).
+   *  Null if Apple's answer carried none, which it should not. */
+  refreshToken: string | null;
 }
 
 /**
@@ -441,7 +445,38 @@ export async function exchangeCode(
       claims.is_private_email === true ||
       claims.is_private_email === "true" ||
       (email?.endsWith("@privaterelay.appleid.com") ?? false),
+    refreshToken: typeof body.refresh_token === "string" && body.refresh_token ? body.refresh_token : null,
   };
+}
+
+/**
+ * Revokes a refresh token, which ends the app's Sign in with Apple link for
+ * that Apple ID — what Apple asks for when an account is deleted. Afterwards
+ * the app is gone from the person's Settings › Apple Account › Sign in with
+ * Apple, and a later sign-in is a FIRST authorization again (so Apple sends
+ * the name once more, to what will be a new account).
+ *
+ * Throws on anything but a 200. Apple answers 200 with an empty body for a
+ * token it has already revoked or never issued, so a repeat is harmless.
+ * The client_id must be the one the token was issued to — the Services ID,
+ * because that is what every exchange in this file uses.
+ */
+export async function revokeRefreshToken(cfg: AppleConfig, refreshToken: string): Promise<void> {
+  const res = await fetch(REVOKE_ENDPOINT, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      client_id: cfg.clientId,
+      client_secret: clientSecret(cfg),
+      token: refreshToken,
+      token_type_hint: "refresh_token",
+    }),
+    signal: AbortSignal.timeout(10_000),
+  });
+  if (!res.ok) {
+    const body = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+    throw new Error(`Apple refused the revocation: ${typeof body.error === "string" ? body.error : `HTTP ${res.status}`}`);
+  }
 }
 
 function decodeJwtPayload(token: string): Record<string, unknown> {

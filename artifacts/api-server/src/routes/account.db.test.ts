@@ -21,6 +21,7 @@ import {
   accessEvents,
   accountAccess,
   adminEvents,
+  appleTokens,
   identities,
   pushSubscriptions,
   recipePhotos,
@@ -35,6 +36,7 @@ import {
 } from "@workspace/db";
 import { needsDatabase } from "../lib/testdb";
 import { setStripeCancelForTests } from "../lib/billing/stripe";
+import { setAppleRevokeForTests } from "../lib/appleTokens";
 import { accountRouter } from "./account";
 
 const TABLES = [
@@ -118,6 +120,7 @@ after(async () => {
   for (const t of mintedTrials) await db.delete(trials).where(eq(trials.id, t));
   for (const a of mintedAdmin) await db.delete(adminEvents).where(eq(adminEvents.id, a));
   setStripeCancelForTests(null);
+  setAppleRevokeForTests(null);
   server?.close();
 });
 
@@ -161,7 +164,7 @@ test("account: a free account is deleted whole — every row it owns, the trial 
   assert.notDeepEqual(await footprint(id), GONE, "the fixture has a footprint to begin with");
   const r = await del(id);
   assert.equal(r.status, 200);
-  assert.deepEqual(r.body, { ok: true, cancelled: [], manual: [] });
+  assert.deepEqual(r.body, { ok: true, cancelled: [], manual: [], appleSignIn: null });
   assert.match(r.cookie ?? "", /rd_session=;|rd_session=.*Max-Age=0|Expires=/i, "the browser's cookie is cleared");
   assert.deepEqual(await footprint(id), GONE);
   const [trial] = await getDb().select().from(trials).where(eq(trials.id, trialId));
@@ -194,7 +197,7 @@ test("account: a Stripe subscription is cancelled at the provider FIRST, then th
   const { id } = await makeAccount({ sub: { provider: "stripe", status: "active", ref: "sub_live" } });
   const r = await del(id);
   assert.equal(r.status, 200);
-  assert.deepEqual(r.body, { ok: true, cancelled: ["stripe"], manual: [] });
+  assert.deepEqual(r.body, { ok: true, cancelled: ["stripe"], manual: [], appleSignIn: null });
   assert.deepEqual(calls, ["sub_live"]);
   assert.deepEqual(await footprint(id), GONE);
 });
@@ -220,7 +223,7 @@ test("account: an App Store subscription cannot be cancelled by a server — del
   const { id } = await makeAccount({ sub: { provider: "apple", status: "active", ref: "1000000123" } });
   const r = await del(id);
   assert.equal(r.status, 200);
-  assert.deepEqual(r.body, { ok: true, cancelled: [], manual: ["apple"] });
+  assert.deepEqual(r.body, { ok: true, cancelled: [], manual: ["apple"], appleSignIn: null });
   assert.deepEqual(await footprint(id), GONE);
 });
 
@@ -230,7 +233,7 @@ test("account: an expired subscription is history, not cancelled again", async (
   const { id } = await makeAccount({ sub: { provider: "stripe", status: "expired" } });
   const r = await del(id);
   assert.equal(r.status, 200);
-  assert.deepEqual(r.body, { ok: true, cancelled: [], manual: [] });
+  assert.deepEqual(r.body, { ok: true, cancelled: [], manual: [], appleSignIn: null });
   assert.deepEqual(await footprint(id), GONE);
 });
 
@@ -246,4 +249,69 @@ test("account: the admin audit trail outlives the account it names", async (t) =
   assert.equal((await del(id)).status, 200);
   const rows = await getDb().select().from(adminEvents).where(eq(adminEvents.id, auditId));
   assert.equal(rows.length, 1, "who was comped is still on record after the account is gone");
+});
+
+// --- Sign in with Apple: the token is revoked, after the rows, never at the
+// cost of the deletion. Apple's endpoint is behind setAppleRevokeForTests.
+
+/** An Apple identity on the account, with or without its kept token. */
+async function addAppleIdentity(id: string, token: string | null) {
+  const db = getDb();
+  await db.insert(identities).values({ provider: "apple", subject: `a-${id}`, userId: id, email: null });
+  if (token) await db.insert(appleTokens).values({ subject: `a-${id}`, userId: id, refreshToken: token });
+}
+
+test("account: a Sign in with Apple token is revoked AFTER the account is gone, and the client is told", async (t) => {
+  if (!(await needsDatabase(t, ...TABLES, "apple_tokens"))) return;
+  setStripeCancelForTests(async () => assert.fail("no subscription, nothing to cancel"));
+  const { id } = await makeAccount();
+  await addAppleIdentity(id, `rt-${id}`);
+  const revoked: string[] = [];
+  setAppleRevokeForTests(async (token) => {
+    revoked.push(token);
+    assert.equal((await footprint(id)).users, 0, "the rows are gone before Apple is asked");
+  });
+  const r = await del(id);
+  assert.equal(r.status, 200);
+  assert.deepEqual(r.body, { ok: true, cancelled: [], manual: [], appleSignIn: "revoked" });
+  assert.deepEqual(revoked, [`rt-${id}`]);
+  assert.deepEqual(await footprint(id), GONE);
+  const left = await getDb().select().from(appleTokens).where(eq(appleTokens.userId, id));
+  assert.equal(left.length, 0, "the kept token goes with the account");
+});
+
+test("account: an Apple refusal still deletes the account, reported as manual", async (t) => {
+  if (!(await needsDatabase(t, ...TABLES, "apple_tokens"))) return;
+  setStripeCancelForTests(async () => assert.fail("no subscription, nothing to cancel"));
+  const { id } = await makeAccount();
+  await addAppleIdentity(id, `rt-${id}`);
+  setAppleRevokeForTests(async () => {
+    throw new Error("invalid_client");
+  });
+  const r = await del(id);
+  assert.equal(r.status, 200);
+  assert.equal(r.body.appleSignIn, "manual");
+  assert.deepEqual(await footprint(id), GONE);
+});
+
+test("account: an Apple account from before tokens were kept is deleted, reported as manual, and nothing is sent", async (t) => {
+  if (!(await needsDatabase(t, ...TABLES, "apple_tokens"))) return;
+  setStripeCancelForTests(async () => assert.fail("no subscription, nothing to cancel"));
+  setAppleRevokeForTests(async () => assert.fail("there is no token to revoke"));
+  const { id } = await makeAccount();
+  await addAppleIdentity(id, null);
+  const r = await del(id);
+  assert.equal(r.status, 200);
+  assert.equal(r.body.appleSignIn, "manual");
+  assert.deepEqual(await footprint(id), GONE);
+});
+
+test("account: an account that never used Apple asks Apple nothing", async (t) => {
+  if (!(await needsDatabase(t, ...TABLES, "apple_tokens"))) return;
+  setStripeCancelForTests(async () => assert.fail("no subscription, nothing to cancel"));
+  setAppleRevokeForTests(async () => assert.fail("a Google-only account has nothing at Apple"));
+  const { id } = await makeAccount();
+  const r = await del(id);
+  assert.equal(r.status, 200);
+  assert.equal(r.body.appleSignIn, null);
 });

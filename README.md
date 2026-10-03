@@ -162,6 +162,35 @@ is a corrupted header (an editor turning the dashes into an em-dash), a
 missing BEGIN line, or a truncated body; each is flagged by name rather than
 reported as a generic parse failure.
 
+**Deleting an account revokes its Sign in with Apple token** (Apple asks
+this of every app offering that sign-in). The code exchange returns a
+refresh token, which the callback keeps in `apple_tokens` for that alone;
+`DELETE /api/account` reads it before the rows go and, after they are gone,
+posts it to `https://appleid.apple.com/auth/revoke`. The app then disappears
+from the person's Settings › Apple Account › Sign in with Apple. Neither step
+can fail a sign-in or a deletion (`lib/appleTokens.ts`): an account with no
+stored token — everyone who signed in before this shipped — or a refusal
+from Apple comes back as `appleSignIn: "manual"`, and both clients tell the
+person to remove the app there themselves. Hand-run DDL, safe to run twice:
+
+```sql
+create table if not exists apple_tokens (
+  subject text primary key,
+  user_id text not null references users(id) on delete cascade,
+  refresh_token text not null,
+  updated_at timestamptz not null default now()
+);
+create index if not exists apple_tokens_user_idx on apple_tokens (user_id);
+```
+
+Run it before the deploy. Unlike a new column it breaks nothing if it is
+late, because every read and write of the table is caught; what it costs
+is the tokens of everyone who signs in before it exists. `/api/health`
+names it while it is missing. The revoke call has never run from this
+container (`appleid.apple.com` is blocked); the first real one is a
+deletion of a Sign in with Apple account on a deployment, which should log
+`apple=revoked`.
+
 
 ### App Store subscriptions (IAP)
 

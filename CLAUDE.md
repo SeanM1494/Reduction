@@ -280,15 +280,15 @@ them is the whole point:
 
 | result | meaning |
 |---|---|
-| ***n* pass, 194 skipped** | no `DATABASE_URL` at all. Fine on a machine with no Postgres. |
-| ***n*+194 pass, 0 skipped** | a local database with a current schema. This is the real gate — `pnpm run test:db` produces it. |
+| ***n* pass, 198 skipped** | no `DATABASE_URL` at all. Fine on a machine with no Postgres. |
+| ***n*+198 pass, 0 skipped** | a local database with a current schema. This is the real gate — `pnpm run test:db` produces it. |
 | **failures saying "Refusing to run database tests against …"** | `DATABASE_URL` in the shell points somewhere non-local — on Replit, that is production. Working as designed: use `pnpm run test:db`, which ignores the env var entirely. |
 | **failures naming a missing table** | a reachable local database whose schema is behind `lib/db/src/schema/schema.ts`. `test:db` re-pushes on every start, so this means a hand-run database — push it or use the script. |
 
 The total grows as suites are added — pin your expectation to the **skip
 count**, not the pass count (an earlier version of this table hard-coded
 23/39 and went stale within a week, so treat the number above as needing an
-edit whenever a database-backed suite is added). The 194 are twenty-one suites:
+edit whenever a database-backed suite is added). The 198 are twenty-one suites:
 `claim.db.test.ts` (the anonymous library), `trial.db.test.ts` (the free
 extraction), `cache.db.test.ts` (the URL alias and the cached flag),
 `extractionLog.test.ts` (the cost table), `push.db.test.ts` (timer
@@ -304,7 +304,9 @@ other people's accounts, and the eighth guards the second provider's write path
 with Apple's signature stubbed at the adapter's seam, and the ninth guards the
 one-time code that a phone's sign-in rides on, which has to be redeemable by an
 instance that never minted it, the tenth guards the order of a deletion —
-billing stopped before any row goes, and nothing gone when it cannot be — and
+billing stopped before any row goes, and nothing gone when it cannot be,
+and the Sign in with Apple token revoked only after the rows are gone and
+never at the cost of the deletion — and
 the eleventh guards that a user's photo is never overwritten by a page's and
 that no photo outlives its recipe, which no foreign key promises, and the
 twelfth guards that removed is not deleted — out of the list, restorable,
@@ -350,8 +352,8 @@ twenty-first guards that a recipe's notes are the person's alone: a
 versioned write that nothing else overwrites, refused whole when it is
 not `{ text?, steps? }` within the caps, a step's note moved into the
 recipe's (never dropped) when an edit removes the step, and gone with the
-recipe. **The full suite — 884 tests at the
-time of writing (Oct 3) — has been run against a real Postgres and passes 884/0.** The
+recipe. **The full suite — 891 tests at the
+time of writing (Oct 3) — has been run against a real Postgres and passes 891/0.** The
 ones that are not api-server or model tests include the mobile library's
 filter and sort (`artifacts/reduction-mobile/lib/libraryView.test.ts`), the
 recipe box's books and page arithmetic (`recipeBox.test.ts`), the
