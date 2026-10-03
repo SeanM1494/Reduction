@@ -138,13 +138,8 @@ export function AddNewPane({
       </Text>
 
       {blocked ? (
-        // Their most recent recipe is the door out of the wall, as on the
-        // web (the library loads newest first).
-        <Paywall
-          context="extract"
-          recipeTitle={entries[0]?.recipe.title ?? null}
-          onOpenRecipe={entries[0] ? () => router.push(`/recipe/${entries[0].id}`) : undefined}
-        />
+        // Their library is the door out of the wall.
+        <Paywall context="extract" hasRecipes={entries.length > 0} onOpenRecipes={() => router.navigate('/library')} />
       ) : (
         <>
           <TextInput

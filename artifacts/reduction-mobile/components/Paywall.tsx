@@ -12,30 +12,35 @@
  * the shared entitlement check (auth-context.tsx); that is not a purchase
  * flow, just recognising an existing one.
  *
- * What it DOES offer is a code (components/CouponBox.tsx): "N recipes free"
- * is a grant, not a sale, and the wall is the moment someone holding one
- * wants it. Behind a "Have a code?" link, as on the web, so the wall does
- * not read as a form to everyone without one.
+ * It offers a code (components/CouponBox.tsx) only where `COUPONS_OFFERED`
+ * says so, which is never on an iPhone: a code of our own that unlocks
+ * recipes is what guideline 3.1.1 forbids ("own mechanisms to unlock content
+ * or functionality"), however free it is. Elsewhere it sits behind a "Have a
+ * code?" link, as on the web, so the wall does not read as a form.
+ *
+ * The door names no single recipe. With three free recipes, the newest one
+ * is not "the one they have", so the wall says all of theirs are kept and
+ * opens the library.
  */
 
 import React, { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { CouponBox } from '@/components/CouponBox';
+import { COUPONS_OFFERED, CouponBox } from '@/components/CouponBox';
 import { SubscribeBox } from '@/components/SubscribeBox';
 import { useColors, type Colors } from '@/hooks/useColors';
 import { cardShadow, fonts } from '@/constants/colors';
 
 interface Props {
-  /** The one recipe they already have, if they have one. */
-  recipeTitle?: string | null;
-  /** A real way out: opens that recipe. A wall with no door reads as
+  /** Whether they have any recipes to keep (a deleted one still counted). */
+  hasRecipes?: boolean;
+  /** A real way out: opens their library. A wall with no door reads as
    *  hostile; a wall with one reads as a limit (the web's rule 3). */
-  onOpenRecipe?: () => void;
+  onOpenRecipes?: () => void;
   /** Only changes the opening line, as on the web. */
   context?: 'search' | 'extract' | 'generic';
 }
 
-export function Paywall({ recipeTitle, onOpenRecipe, context = 'generic' }: Props) {
+export function Paywall({ hasRecipes = false, onOpenRecipes, context = 'generic' }: Props) {
   const colors = useColors();
   const styles = makeStyles(colors);
   const [showCode, setShowCode] = useState(false);
@@ -53,10 +58,10 @@ export function Paywall({ recipeTitle, onOpenRecipe, context = 'generic' }: Prop
         {lead}
       </Text>
 
-      {recipeTitle ? (
+      {hasRecipes ? (
         <Text style={styles.keep}>
-          <Text style={styles.keepStrong}>{recipeTitle}</Text> is yours to keep — cook it, scale
-          it, any time.
+          <Text style={styles.keepStrong}>Your recipes are yours to keep</Text> — cook them, scale
+          them, any time.
         </Text>
       ) : null}
 
@@ -67,7 +72,7 @@ export function Paywall({ recipeTitle, onOpenRecipe, context = 'generic' }: Prop
 
       <SubscribeBox center />
 
-      {showCode ? (
+      {!COUPONS_OFFERED ? null : showCode ? (
         <CouponBox onRedeemed={() => setShowCode(false)} />
       ) : (
         <Pressable
@@ -79,14 +84,14 @@ export function Paywall({ recipeTitle, onOpenRecipe, context = 'generic' }: Prop
           <Text style={styles.codeLinkText}>Have a code?</Text>
         </Pressable>
       )}
-      {onOpenRecipe && recipeTitle ? (
+      {onOpenRecipes && hasRecipes ? (
         <Pressable
           accessibilityRole="button"
-          onPress={onOpenRecipe}
+          onPress={onOpenRecipes}
           style={({ pressed }) => [styles.door, pressed && styles.doorPressed]}
           testID="paywall-open-recipe"
         >
-          <Text style={styles.doorText}>Open my recipe</Text>
+          <Text style={styles.doorText}>Open my recipes</Text>
         </Pressable>
       ) : null}
     </View>

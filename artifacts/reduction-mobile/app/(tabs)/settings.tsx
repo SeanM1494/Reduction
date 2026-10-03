@@ -21,7 +21,7 @@ import { BoxStyleCard } from '@/components/settings/BoxStyleCard';
 import { loadRemoved } from '@/lib/api';
 import { removedCountLabel } from '@/lib/recipeBox';
 import { Feather } from '@expo/vector-icons';
-import { CouponBox } from '@/components/CouponBox';
+import { COUPONS_OFFERED, CouponBox } from '@/components/CouponBox';
 import { TimersCard } from '@/components/settings/TimersCard';
 import { SubscribeBox } from '@/components/SubscribeBox';
 import { LegalLinks } from '@/components/LegalLinks';
@@ -177,10 +177,13 @@ export default function SettingsScreen() {
               <SubscribeBox />
             </View>
             {/* The second place a code can go (the first is the wall):
-                someone given one last week comes here looking for it. */}
-            <View style={styles.coupon}>
-              <CouponBox />
-            </View>
+                someone given one last week comes here looking for it.
+                Never on an iPhone (CouponBox.tsx says why). */}
+            {COUPONS_OFFERED ? (
+              <View style={styles.coupon}>
+                <CouponBox />
+              </View>
+            ) : null}
           </>
         )}
         {manageError ? <Text style={styles.error}>{manageError}</Text> : null}

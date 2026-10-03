@@ -179,9 +179,14 @@ export async function entitlementFor(userId: string): Promise<Entitlement> {
  * become a lifetime recipe count that means something different for paying
  * and non-paying accounts.
  */
-export async function spendRecipeAllowance(userId: string): Promise<boolean> {
+export async function spendRecipeAllowance(
+  userId: string,
+  /** A transaction to spend inside, so a refused spend rolls back the save
+   *  it was paying for (routes/library.ts). */
+  db: Pick<ReturnType<typeof getDb>, "update"> = getDb()
+): Promise<boolean> {
   await ensureAccess(userId);
-  const rows = await getDb()
+  const rows = await db
     .update(accountAccess)
     .set({ recipesUsed: sql`${accountAccess.recipesUsed} + 1`, updatedAt: new Date() })
     .where(

@@ -365,3 +365,49 @@ test("removing, restoring and deleting forever never refund the free recipe", as
   await api("DELETE", `/api/library/${id}`, u);
   assert.equal(await used(u), spent, "delete forever refunds nothing either");
 });
+
+// ------------------------------------------------------ the wall at a save ---
+
+async function accountAt(usedNow: number, enforce: boolean | null) {
+  const u = await makeUser();
+  await getDb()
+    .insert(accountAccess)
+    .values({ userId: u, recipeAllowance: 3, recipesUsed: usedNow, enforceOverride: enforce } as any);
+  return u;
+}
+
+const saveAll = (u: string, n: number) =>
+  Promise.all(
+    Array.from({ length: n }, () =>
+      api("POST", "/api/library", u, { id: `r-${crypto.randomUUID()}`, recipe: RECIPE, done: [], servings: null }),
+    ),
+  );
+
+test("wall on: saves racing for the last free recipe — exactly one lands, the rest are refused and leave no row", async (t) => {
+  if (!(await needsDatabase(t, ...TABLES))) return;
+  const u = await accountAt(2, true);
+  const results = await saveAll(u, 6);
+  const statuses = results.map((r) => r.status).sort();
+  assert.deepEqual(statuses, [201, 402, 402, 402, 402, 402], JSON.stringify(statuses));
+  for (const r of results.filter((x) => x.status === 402)) assert.equal(r.body.code, "subscription_required");
+  assert.equal(await used(u), 3);
+  assert.equal((await listIds(u)).length, 1);
+});
+
+test("wall on: a re-POST of a saved recipe is not charged again", async (t) => {
+  if (!(await needsDatabase(t, ...TABLES))) return;
+  const u = await accountAt(1, true);
+  const id = `r-${crypto.randomUUID()}`;
+  const body = { id, recipe: RECIPE, done: [], servings: null };
+  assert.equal((await api("POST", "/api/library", u, body)).status, 201);
+  assert.equal((await api("POST", "/api/library", u, body)).status, 201);
+  assert.equal(await used(u), 2);
+});
+
+test("wall off: racing saves all land and all count (shadow mode refuses nothing)", async (t) => {
+  if (!(await needsDatabase(t, ...TABLES))) return;
+  const u = await accountAt(2, false);
+  const results = await saveAll(u, 3);
+  assert.deepEqual(results.map((r) => r.status), [201, 201, 201]);
+  assert.equal(await used(u), 5);
+});

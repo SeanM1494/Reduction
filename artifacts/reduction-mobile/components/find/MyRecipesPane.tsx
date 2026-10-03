@@ -184,8 +184,8 @@ export function MyRecipesPane({
               {wallFor ? (
                 <Paywall
                   context="extract"
-                  recipeTitle={entries[0]?.recipe.title ?? null}
-                  onOpenRecipe={entries[0] ? () => router.push(`/recipe/${entries[0].id}`) : undefined}
+                  hasRecipes={entries.length > 0}
+                  onOpenRecipes={() => router.navigate('/library')}
                 />
               ) : null}
             </View>

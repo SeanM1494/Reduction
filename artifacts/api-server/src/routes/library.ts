@@ -36,7 +36,7 @@ import { NOTE_STORED_MAX, STEP_NOTE_STORED_MAX, isValidNotes, pruneNotes } from 
 import { userIdOf } from "../middleware/session";
 import { cancelTimer, scheduleTimer } from "../lib/timerDispatch";
 import { checkAccess, subscriptionRequired } from "../lib/billing/access";
-import { recordRecipeUsed } from "../lib/billing/entitlement";
+import { recordRecipeUsed, spendRecipeAllowance } from "../lib/billing/entitlement";
 import { sanitizeStepSources, setRecipeTotalMinutes, type OriginalRecipe } from "@workspace/recipe-model";
 import {
   copyExtractionOriginal,
@@ -52,6 +52,9 @@ import { cacheGetUrlRow } from "./recipes";
 import { deletePlacement, isValidBookId, placementKey, placementsFor, setPlacement } from "../lib/books";
 
 export const libraryRouter = Router();
+
+/** A metered save that found the allowance already spent; rolls its insert back. */
+class AllowanceRaceLost extends Error {}
 
 /**
  * Ownership comes in two kinds, and a request is always exactly one of them.
@@ -380,43 +383,62 @@ libraryRouter.post("/", async (req: Request, res: Response) => {
   if (timer !== undefined && !isValidTimer(timer))
     return res.status(400).json({ error: "timer must be {stepId, endsAt} or null." });
 
+  /**
+   * With the wall ON, the count is taken in the same transaction as the
+   * insert, conditionally: two saves landing at once with one free recipe
+   * left both pass the check above, and an unconditional increment after
+   * the insert let both through (Oct 3 paywall audit). The conditional
+   * UPDATE serialises them on the account_access row, and the loser's
+   * insert rolls back and is refused like any other walled save. With the
+   * wall off nothing is refused, so the count is recorded after, as before.
+   */
+  const ent = access.entitlement;
+  const metered = !!ent && ent.enforced && !ent.subscribed;
+  const meterUserId = userIdOf(req);
+
   try {
     const db = getDb();
-    const [row] = await db
-      .insert(recipes)
-      .values({
-        id,
-        ownerKey: ownerKeyOf(req),
-        // Created while signed in? Then it belongs to the account from the
-        // start and never needs merging.
-        userId: userIdOf(req),
-        recipe,
-        done: Array.isArray(done) ? done : [],
-        servings: servings ?? null,
-        mode: mode ?? "diagram",
-        timer: timer ?? null,
-      })
-      /**
-       * Upsert, not insert-or-409. A create whose RESPONSE was lost leaves
-       * the client re-POSTing while its local progress moves on; a do-nothing
-       * conflict would strand that progress behind a row it can never update
-       * through this path. The conflict target is the primary key
-       * (owner_key, id), so a retry can only ever land on the caller's own
-       * row — a different owner's identical id is a different key.
-       */
-      .onConflictDoUpdate({
-        target: [recipes.ownerKey, recipes.id],
-        set: {
+    const row = await db.transaction(async (tx) => {
+      const [created] = await tx
+        .insert(recipes)
+        .values({
+          id,
+          ownerKey: ownerKeyOf(req),
+          // Created while signed in? Then it belongs to the account from the
+          // start and never needs merging.
+          userId: userIdOf(req),
           recipe,
           done: Array.isArray(done) ? done : [],
           servings: servings ?? null,
           mode: mode ?? "diagram",
           timer: timer ?? null,
-          updatedAt: new Date(),
-          version: sql`${recipes.version} + 1`,
-        },
-      })
-      .returning();
+        })
+        /**
+         * Upsert, not insert-or-409. A create whose RESPONSE was lost leaves
+         * the client re-POSTing while its local progress moves on; a do-nothing
+         * conflict would strand that progress behind a row it can never update
+         * through this path. The conflict target is the primary key
+         * (owner_key, id), so a retry can only ever land on the caller's own
+         * row — a different owner's identical id is a different key.
+         */
+        .onConflictDoUpdate({
+          target: [recipes.ownerKey, recipes.id],
+          set: {
+            recipe,
+            done: Array.isArray(done) ? done : [],
+            servings: servings ?? null,
+            mode: mode ?? "diagram",
+            timer: timer ?? null,
+            updatedAt: new Date(),
+            version: sql`${recipes.version} + 1`,
+          },
+        })
+        .returning();
+      if (metered && meterUserId && created?.version === 1 && !(await spendRecipeAllowance(meterUserId, tx))) {
+        throw new AllowanceRaceLost();
+      }
+      return created;
+    });
 
     /**
      * Spend the allowance only for a row that did not already exist.
@@ -435,7 +457,7 @@ libraryRouter.post("/", async (req: Request, res: Response) => {
     if (row?.version === 1) {
       void countEvent("save");
       const userId = userIdOf(req);
-      if (userId) {
+      if (userId && !metered) {
         try {
           await recordRecipeUsed(userId);
         } catch (e) {
@@ -475,6 +497,7 @@ libraryRouter.post("/", async (req: Request, res: Response) => {
 
     return res.status(201).json({ entry: await wireOne(row) });
   } catch (e) {
+    if (e instanceof AllowanceRaceLost) return subscriptionRequired(res, ent);
     console.error("[library:create]", e);
     return res.status(500).json({ error: "Could not save that recipe." });
   }

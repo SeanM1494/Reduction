@@ -313,15 +313,11 @@ export function BrowsePane({
       <Window open={wallOpen} onClose={() => setWallOpen(false)} maxWidth={420} testID="browse-wall">
         <Paywall
           context="extract"
-          recipeTitle={entries[0]?.recipe.title ?? null}
-          onOpenRecipe={
-            entries[0]
-              ? () => {
-                  setWallOpen(false);
-                  router.push(`/recipe/${entries[0].id}`);
-                }
-              : undefined
-          }
+          hasRecipes={entries.length > 0}
+          onOpenRecipes={() => {
+            setWallOpen(false);
+            router.navigate('/library');
+          }}
         />
         <Pressable accessibilityRole="button" onPress={() => setWallOpen(false)} style={styles.wallClose} testID="browse-wall-close">
           <Text style={styles.wallCloseText}>Keep browsing</Text>

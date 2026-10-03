@@ -11,9 +11,13 @@
  * allowance the free tier runs on. A "free months" code is a billing
  * discount and lives with the payment provider, never here — see
  * api-server/src/lib/billing/coupons.ts for why one system for both makes
- * both worse. Redeeming one is not a purchase and steers nobody toward
- * buying anything, so it is fine on an App Store build (guideline 3.1.1
- * is about selling, and this sells nothing).
+ * both worse.
+ *
+ * NOT ON AN iPHONE. Guideline 3.1.1 forbids an app's "own mechanisms to
+ * unlock content or functionality, such as license keys", and a code that
+ * adds recipes is one, free or not (Oct 3 paywall audit). Both mount points
+ * check `COUPONS_OFFERED`. A code for App Store users is an Apple Offer
+ * Code, redeemed by the store, never this box.
  *
  * On success the account's entitlement is refreshed here rather than by
  * each mount point: an allowance is a fact about the account, and the wall
@@ -21,12 +25,15 @@
  */
 
 import React, { useState } from 'react';
-import { StyleSheet, Text, TextInput, View } from 'react-native';
+import { Platform, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SheetButton } from '@/components/Sheet';
 import { redeemCoupon } from '@/lib/api';
 import { useAuth } from '@/lib/auth-context';
 import { useColors, type Colors } from '@/hooks/useColors';
 import { fonts } from '@/constants/colors';
+
+/** Whether this host may offer the box at all; see the header. */
+export const COUPONS_OFFERED = Platform.OS !== 'ios';
 
 interface Props {
   onRedeemed?: (recipes: number) => void;
