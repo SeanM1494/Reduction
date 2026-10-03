@@ -2074,8 +2074,9 @@ seed, and a test runs the prototype's script and matches every one.
   version last started. A stored time in the future (the clock moved
   back) counts as elapsed. Never both in one launch; Full stamps the time.
 - **Skipped** after a notification tap, a link (the app's scheme with a
-  path; there are no universal links yet) or a share (no share extension
-  exists yet; the rule is in place for it), and when VoiceOver is running.
+  path; there are no universal links yet) or a share (the Share-sheet
+  extension, 1.2.0; `lib/sharedPage.ts` names its link), and when
+  VoiceOver is running.
 - **Reduce Motion** plays the still artwork for 0.5 s and a 0.4 s crossfade
   instead, and counts as the version it replaced.
 - **Nothing is decided in the background.** The decision waits until the
@@ -3354,6 +3355,25 @@ WebKit is not installed here.
   client that sends pages. **Phase 3 — BUILT Sep 28, over the air on
   the 1.1.0 binary, awaiting the phone** (commits 79de4af, 1cfa2f5,
   7e58794, 8b30b4f, 7c55bec; the section below has what was decided).
+  **The Share-sheet half — BUILT Oct 3 on a branch, for the launch build
+  (Sean picked expo-share-intent over our own plugin, and over a screen
+  inside the sheet, which needs sign-in and the network in the extension
+  and a 120 MB ceiling).** Safari › Share › Reduction opens Find › Add New
+  already reading the page: the extension's preprocessing script runs the
+  Browse tab's own capture (`SHARE_PREPROCESS_JS` in `lib/sharedPage.ts`,
+  carried verbatim in app.json and tested against it), so a blocked site
+  reads from a share exactly as from Browse. A link or text from any other
+  app reads as a paste. A share arriving signed out waits through sign-in
+  (memory only). Native: an App Group (`group.com.recipereduction.mobile`)
+  and an extension target (`com.recipereduction.mobile.share`), so
+  `expo.version` is 1.2.0 — which means **no over-the-air update published
+  after this merges reaches a 1.1.0 binary**: merge it only once build 7
+  has had its last update. The first EAS build with it creates the
+  extension's profile and the group, and may ask to sign in to Apple.
+  Android is off (`disableAndroid`). The extension is named "Reduction" in
+  the sheet by `plugins/withShareExtensionDisplayName.js`. Not shareable
+  yet: images (a photo of a recipe card from Photos) — the package can,
+  and Add New's photo path would read it; a follow-up.
 - **An ingredient with no amount: "to taste" / "as needed", or blank?
   (Sep 27).** The validator has always required qty or text on every
   ingredient, while the prompt said "no amount → qty null, text null", so

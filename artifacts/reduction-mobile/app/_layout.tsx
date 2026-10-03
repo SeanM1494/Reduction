@@ -30,6 +30,8 @@ import { startStoreKitReconciler, storeKitHandler } from '@/lib/storeKit';
 import { OpeningHost } from '@/components/opening/OpeningHost';
 import { installCrashReporter, noteCrashRoute, reportRenderError } from '@/lib/crashReporter';
 import { bootLandingPending, markAppReady, noteAuthSettled, takeBootLanding } from '@/lib/opening/launch';
+import { ShareReceiver } from '@/components/ShareReceiver';
+import { hasPendingShare, onShare } from '@/lib/sharedPage';
 
 // The splash stays up until the launch is decided: OpeningHost hides it,
 // either at once or on the opening sequence's first frame.
@@ -94,6 +96,12 @@ function RootLayoutNav() {
   // and recorded, and the entitlement refreshed. Signed-in tree only:
   // verifying needs the session.
   useEffect(() => startStoreKitReconciler(() => void refresh()), [refresh]);
+  // A recipe shared from another app (lib/sharedPage.ts) opens Find, where
+  // Add New reads it. Every offer navigates, not only an untaken one: a
+  // Find already mounted under the recipe screen takes the share first.
+  // One that waited through sign-in needs no move: this navigator opens on
+  // Find, and a share launch is never moved to the Recipe Box.
+  useEffect(() => onShare(() => router.navigate('/')), []);
   // A tapped timer notification opens its recipe. Registered here, inside
   // the signed-in tree, because a timer belongs to an account's recipe and
   // there is nothing to open before sign-in.
@@ -143,6 +151,16 @@ function Gate() {
   const { loading, token } = useAuth();
   const colors = useColors();
   const [signingIn, setSigningIn] = useState(false);
+  // A recipe shared while signed out waits in lib/sharedPage.ts; the
+  // sign-in screen comes forward and says so, and Find reads it after.
+  const [shareWaiting, setShareWaiting] = useState(hasPendingShare);
+  useEffect(() => {
+    return onShare(() => setShareWaiting(true));
+  }, []);
+  useEffect(() => {
+    if (token) setShareWaiting(false);
+    else if (!loading && shareWaiting) setSigningIn(true);
+  }, [loading, token, shareWaiting]);
   // Signed out: the first answer in this process (so a sign-in later in
   // the session lands nowhere new), and the demo is the destination,
   // ready as soon as it is here. Signed in is recorded by RootLayoutNav.
@@ -166,7 +184,12 @@ function Gate() {
         <View style={{ flex: 1, display: signingIn ? 'none' : 'flex' }}>
           <DemoScreen onSignIn={() => setSigningIn(true)} />
         </View>
-        {signingIn ? <SignInScreen onBack={() => setSigningIn(false)} /> : null}
+        {signingIn ? (
+          <SignInScreen
+            onBack={() => setSigningIn(false)}
+            note={shareWaiting ? 'Sign in and Reduction will read the recipe you shared.' : null}
+          />
+        ) : null}
       </>
     );
   }
@@ -223,6 +246,9 @@ export default function RootLayout() {
                 <AuthProvider>
                   <Gate />
                 </AuthProvider>
+                {/* Outside the gate: a share that arrives signed out waits
+                    through sign-in (components/ShareReceiver.tsx). */}
+                <ShareReceiver />
               </ThemeProvider>
               {/* Last, so it draws over everything; it is gone once it ends. */}
               <OpeningHost />

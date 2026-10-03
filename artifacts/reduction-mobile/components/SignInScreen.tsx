@@ -31,7 +31,12 @@ import { cardShadow, fonts } from '@/constants/colors';
 import { BrandLogo } from '@/components/BrandLogo';
 import { LegalLinks } from '@/components/LegalLinks';
 
-export function SignInScreen({ onBack }: { onBack: () => void }) {
+export function SignInScreen({ onBack, note = null }: {
+  onBack: () => void;
+  /** In place of the tagline, so it moves nothing: a recipe shared from
+   *  another app is waiting for this sign-in (lib/sharedPage.ts). */
+  note?: string | null;
+}) {
   const { signIn, signingIn, signInError, providers, reloadProviders } = useAuth();
   const colors = useColors();
   const styles = makeStyles(colors);
@@ -49,7 +54,9 @@ export function SignInScreen({ onBack }: { onBack: () => void }) {
         <View style={styles.brand}>
           <BrandLogo size={64} />
           <Text style={styles.wordmark}>Reduction</Text>
-          <Text style={styles.tagline}>Recipes, boiled down to what matters.</Text>
+          <Text style={styles.tagline} testID={note ? 'signin-share-note' : undefined}>
+            {note ?? 'Recipes, boiled down to what matters.'}
+          </Text>
         </View>
 
         <Pressable style={styles.demoInvite} onPress={onBack} accessibilityRole="button" testID="signin-back">
