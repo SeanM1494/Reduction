@@ -356,8 +356,8 @@ recipe. The twenty-second guards that the daily brakes on paid model
 calls read today's use from `extraction_events`, so a row written by
 another instance refuses here, and that a refusal makes no model call,
 writes no event row (it would count toward the brake that refused it) and
-gives a signed-out visitor the try back. **The full suite — 899 tests at the
-time of writing (Oct 3) — has been run against a real Postgres and passes 899/0.** The
+gives a signed-out visitor the try back. **The full suite — 900 tests at the
+time of writing (Oct 3) — has been run against a real Postgres and passes 900/0.** The
 ones that are not api-server or model tests include the mobile library's
 filter and sort (`artifacts/reduction-mobile/lib/libraryView.test.ts`), the
 recipe box's books and page arithmetic (`recipeBox.test.ts`), the
