@@ -29,6 +29,7 @@ import { hostOf, recordExtraction, type ExtractionEvent } from "../lib/extractio
 import type { CallUsage } from "../lib/extractionConfig";
 import { countEvent } from "../lib/counters";
 import { clientKey } from "../lib/clientAddress";
+import { costBrake } from "../lib/costBrake";
 import {
   sanitizeOriginal,
   type OriginalFrom,
@@ -442,9 +443,34 @@ function extractionRecorder(req: Request, res: Response) {
     });
   });
 
-  return (next: Partial<ExtractionEvent>) => {
+  const mark = (next: Partial<ExtractionEvent>) => {
     facts = { ...(facts ?? {}), ...next };
   };
+  // A refusal before the model call un-marks: a 429 or 503 spent nothing,
+  // and a row for it would count toward the very daily brake that refused it.
+  return Object.assign(mark, { discard: () => void (facts = null) });
+}
+
+type Recorder = ReturnType<typeof extractionRecorder>;
+
+/**
+ * The brakes on a cache MISS, in front of the model call: today's (DB, every
+ * instance — lib/costBrake.ts), then this hour's (per instance, per client).
+ * A refused signed-out request gets its trial back: the throttle used to
+ * answer 429 with the try already spent, for a recipe nobody read.
+ */
+async function refuseExtraction(req: Request, res: Response, mark: Recorder): Promise<boolean> {
+  const refusal =
+    (await costBrake(userIdOf(req) ?? null, "extract")) ??
+    (overLimit(clientKey(req))
+      ? { status: 429, body: { error: "Too many extractions this hour. Try again later." } }
+      : null);
+  if (!refusal) return false;
+  mark.discard();
+  const trialId = (req as Request & { trialId?: string }).trialId;
+  if (trialId) await refundTrial(trialId).catch(() => {});
+  res.status(refusal.status).json(refusal.body);
+  return true;
 }
 
 recipesRouter.post("/extract", requireExtractionAllowance, async (req: Request, res: Response) => {
@@ -487,10 +513,7 @@ recipesRouter.post("/extract", requireExtractionAllowance, async (req: Request, 
         });
       }
 
-      if (overLimit(clientKey(req)))
-        return res
-          .status(429)
-          .json({ error: "Too many extractions this hour. Try again later." });
+      if (await refuseExtraction(req, res, mark)) return;
 
       const out = await recipeFromSource(src, pageUrl);
       const { sourceUrl: _omit, ...shareable } = out.recipe;
@@ -529,10 +552,7 @@ recipesRouter.post("/extract", requireExtractionAllowance, async (req: Request, 
         });
       }
 
-      if (overLimit(clientKey(req)))
-        return res
-          .status(429)
-          .json({ error: "Too many extractions this hour. Try again later." });
+      if (await refuseExtraction(req, res, mark)) return;
 
       // Our fetch, then Anthropic's; `via` is marked as the expensive path
       // STARTS, so a failure on it still shows up as one — otherwise the
@@ -589,10 +609,7 @@ recipesRouter.post("/extract", requireExtractionAllowance, async (req: Request, 
         });
       }
 
-      if (overLimit(clientKey(req)))
-        return res
-          .status(429)
-          .json({ error: "Too many extractions this hour. Try again later." });
+      if (await refuseExtraction(req, res, mark)) return;
 
       const out = await structureRecipe({ text: clipped, askOriginal: true });
       const { recipe, attempts, repaired } = out;
@@ -634,10 +651,7 @@ recipesRouter.post("/extract", requireExtractionAllowance, async (req: Request, 
       });
     }
 
-    if (overLimit(clientKey(req)))
-      return res
-        .status(429)
-        .json({ error: "Too many extractions this hour. Try again later." });
+    if (await refuseExtraction(req, res, mark)) return;
 
     const out = await structureRecipe({
       file: { data: clean, mediaType },
@@ -776,6 +790,8 @@ recipesRouter.post("/reextract", async (req: Request, res: Response) => {
   // this is a correction to a recipe they already hold, not a new one.
   const access = await checkAccess(req, "reextract");
   if (access.blocked) return subscriptionRequired(res, access.entitlement);
+  const braked = await costBrake(userId, "extract");
+  if (braked) return res.status(braked.status).json(braked.body);
 
   // Its own source value, so re-reads never contaminate the fraction of
   // ordinary extractions that take the expensive path — and so the cost of
@@ -901,6 +917,10 @@ recipesRouter.post("/search", async (req: Request, res: Response) => {
   const webP: Promise<{ ok: true; results: SearchResult[] } | { ok: false; error: Error }> = (async () => {
     const hit = searchCacheGet(key);
     if (hit) return { ok: true as const, results: hit };
+    // Only the web half is paid, so only it is braked: past today's budget a
+    // search still answers with the recipes somebody already read.
+    const braked = await costBrake(userIdOf(req) ?? null, "search");
+    if (braked) return { ok: false as const, error: Object.assign(new Error(braked.body.error), { refusal: braked }) };
     const results = await searchRecipes(trimmed);
     searchCache.set(key, { results, at: Date.now() });
     return { ok: true as const, results };
@@ -912,6 +932,8 @@ recipesRouter.post("/search", async (req: Request, res: Response) => {
   // recipes somebody already read are an answer on their own.
   if (!web.ok && !library.length) {
     const err = web.error;
+    const refusal = (err as { refusal?: { status: number; body: unknown } }).refusal;
+    if (refusal) return res.status(refusal.status).json(refusal.body);
     const isUserFacing = /too short|too long|different search/i.test(err.message);
     if (!isUserFacing) console.error("[recipes/search]", err);
     return res.status(isUserFacing ? 422 : 500).json({
@@ -920,7 +942,7 @@ recipesRouter.post("/search", async (req: Request, res: Response) => {
         : "Something went wrong searching for recipes.",
     });
   }
-  if (!web.ok) console.error("[recipes/search] web half failed, serving the cached half", web.error);
+  if (!web.ok && !("refusal" in web.error)) console.error("[recipes/search] web half failed, serving the cached half", web.error);
 
   const merged = mergeResults(library, web.ok ? await withCacheFlags(web.results) : []);
   let usage = new Map<string, UsageStats>();

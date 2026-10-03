@@ -799,6 +799,28 @@ balancer, the log says `[client-key] a request arrived through <address>,
 which TRUSTED_EDGE_IPS does not list` — add that address. The workspace
 dev server needs none: nothing there sits behind the load balancer.
 
+### Daily cost brakes
+
+The hourly limit above is per instance and per client; nothing in it bounds
+a DAY. `lib/costBrake.ts` does, from `extraction_events` (so every instance
+sees every other's spend), in front of every paid model call — a cache miss
+on `/extract`, `/reextract`, and the web half of `/search`:
+
+```
+EXTRACTION_DAILY_BUDGET_USD=25     # everyone's estimated spend today (UTC); 503, search too
+SIGNED_OUT_DAILY_EXTRACTIONS=150   # fresh extractions with no account, all together; 429
+ACCOUNT_DAILY_EXTRACTIONS=40       # fresh extractions by one account; 429
+```
+
+Those are the defaults when unset; `off` removes one, and anything that is
+not a positive number means the default, never "unlimited". The spend is
+the list-price ESTIMATE in `est_cost_usd`, and search's own cost is not in
+it (search writes no event row). The log says `[cost] estimated spend today
+… has passed 50% / 80% / 100%` once per instance per day. That log line is
+the only alarm this server has: set a spend limit and an email notification
+on the Anthropic Console workspace too, which no bug here can switch off. A
+database error fails the brake OPEN with one log line.
+
 ### Usage counters
 
 Anonymous daily counts (`lib/counters.ts`): one row per UTC day and name,

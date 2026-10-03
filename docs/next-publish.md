@@ -13,11 +13,13 @@ the pull and not only before the Publish.
 `7cd5d77`).** The share sheet (draft PR #13) is the one change that would
 cut build 7 off: it sets `expo.version` to 1.2.0, and the runtime version
 follows it, so from then on no update reaches a 1.1.0 binary. It is NOT on
-`main` — nor are the cook-mode keep-awake (#11) or the cost brakes (#12),
-both still drafts — so `git pull` cannot bring any of them, and nothing in
-this list merges them. On `main` itself: `expo.version` is still 1.1.0, the
-phone's `package.json` and the lockfile are unchanged since the last
-Publish, and no phone file imports a new package. The only native changes
+`main`, so `git pull` cannot bring it, and nothing in this list merges it.
+The cook-mode keep-awake (#11) and the cost brakes (#12) WERE merged on
+Oct 3 and are in this Publish. On `main` itself: `expo.version` is still
+1.1.0; the one new phone package is `expo-keep-awake`, whose native half
+is one of `expo`'s own modules and already inside build 7 (`expo` 57
+depends on it at the same version); no other phone file imports a new
+package. The only native changes
 are the icon (`65e0146`) and the dark splash colour (`94ba91b`); both live in
 the binary and wait for build 8, and an update carrying them is harmless to
 build 7. Step 9c checks the version again right before the phone update.
@@ -33,6 +35,7 @@ build 7. Step 9c checks the version again right before the phone update.
 | `ac19369` Account deletion: revoke the Sign in with Apple token | Server: the Apple callback keeps the refresh token Apple returns (new `apple_tokens` table), and deleting an account revokes it at Apple after the rows are gone; `/api/health` checks the table. Website and phone: when it could not be revoked (any account that signed in before this shipped), the "account deleted" message says to remove Reduction under Settings › Apple Account › Sign in with Apple. Privacy: "Your account" and "Deleting your account" say so, dated October 3. README "Sign in with Apple" | Step 2b's SQL **before** the pull; this Publish; the phone's wording rides the same over-the-air update. The revoke call has never run (Apple's hosts are blocked from Claude's container): the first real one is step 9b |
 | `94ba91b` Phone: the dark splash is Cocoa #211a16, and the opening starts on it | Phone: the dark launch screen colour (in the BINARY, so build 8) and the opening sequence's dark starting colour (over the air). On build 7 a dark-mode launch now steps from the old splash colour to the new one as the intro begins; build 8 removes that step | The launch build for the splash; the next over-the-air update for the opening's colour. No `expo.version` bump |
 | `a614705` Opening sequence: the pot without its bars | Phone only: the intro's pot loses the four bars, matching the new icon; the pour is unchanged | The next over-the-air update (preview, then promote); nothing on the server |
+| `0c343de` Server: daily brakes on paid model calls (PR #12) | Server only: three daily ceilings read from `extraction_events` (no new table): about $25 of estimated model spend a day for everyone (then extraction and search pause until midnight UTC, saved recipes unaffected), 150 fresh signed-out extractions a day in all, 40 fresh extractions a day per account. A cache hit never counts. Each is an env var (`EXTRACTION_DAILY_BUDGET_USD`, `SIGNED_OUT_DAILY_EXTRACTIONS`, `ACCOUNT_DAILY_EXTRACTIONS`; a number or `off`); unset means those defaults. Build 7 shows the refusal's own sentence, as it does any error. README "Daily cost brakes" | This Publish; no SQL; nothing on the phone. Owner, separately: a spend limit and alert in the Anthropic Console |
 | `13c7530` Usage: which view people cook in, and a report on coming back and cooking | Server: six more names the app may count (`recipe_opened`, `view_steps`, `ticked_*`, `finished_*`), and `GET /api/admin/usage` (README "Usage counters"). Website: the same counts from a saved recipe; `privacy.html` adds "To see, in totals, how the app is used", dated October 3. Phone: the same counts from a saved recipe | This Publish (server FIRST: the old server answers the new names 400, which the app ignores, so nothing breaks but nothing counts); the phone part rides the same over-the-air update. No SQL |
 | `3da8300` Cook mode keeps the screen on (PR #11) | Phone only: while the Step-by-Step (Cook) tab is showing, the screen does not dim or lock; released on leaving the tab, leaving the recipe or going to the background. Adds `expo-keep-awake` to the phone's `package.json` — its native half is one of `expo`'s own modules and already in build 7, so it is OTA-safe with no build and no `expo.version` bump | `pnpm install` on Replit (a new direct dependency, so step 5 will name it); the next over-the-air update (preview, then promote); nothing on the server |
 
@@ -78,16 +81,27 @@ A fast-forward; among the files, `lib/recipe-model/src/notes.ts`.
 git log --oneline -15
 ```
 Must list `3909d43`, `34405fa`, `65e0146`, `94ba91b`, `a614705`, `5f0524a`,
-`d041448`, `13c7530` and `ac19369`. Note the TOP line's short hash: steps 7,
+`d041448`, `13c7530`, `ac19369`, `3da8300` and `0c343de`. Note the TOP line's short hash: steps 7,
 8 and 10 must show it.
 
 **5.**
 ```sh
 node scripts/check-workspace-links.mjs
 ```
-Prints nothing — unless the cook-mode keep-awake change is in this pull,
-which adds `expo-keep-awake`: then it names that package. If it names
-anything, run `pnpm install` and then this again.
+Names `expo-keep-awake` (the keep-awake change adds it, and Replit's Run
+does not install). Then:
+
+**5a.**
+```sh
+pnpm install
+```
+Ends with `Done in …`.
+
+**5b.**
+```sh
+node scripts/check-workspace-links.mjs
+```
+Prints nothing now. If it still names anything, send Claude the output.
 
 **6.** Deployments → **Publish**. Wait for it to finish.
 
@@ -136,7 +150,7 @@ run step 10, and tell Claude.
 cd ~/workspace/artifacts/reduction-mobile
 ```
 ```sh
-node scripts/publish-update.mjs --channel preview --message "Notes, step notes, paywall copy, usage counts, intro pot, Apple deletion wording"
+node scripts/publish-update.mjs --channel preview --message "Notes, step notes, screen stays on while cooking, paywall copy, usage counts, intro pot, Apple deletion wording"
 ```
 Its `commit` line must match the hash from step 4, and its `runtime` line
 must start `1.1.0`. Copy the **Group ID** it ends with.
@@ -150,7 +164,9 @@ that recipe ends its ingredients with a ✎ line; searching the Recipe Box
 for a word only in the note finds it. Then a step note: Step-by-Step, on
 any card **+ Add a note to this step**, type a line, **Done** — the card
 shows it as "Your note", and it is listed under the recipe's note.
-Also: the intro (Settings › Replay intro) shows the pot with no bars;
+Also: in Step-by-Step, leave the phone alone past its auto-lock time — the
+screen stays on (it locks normally again on the Diagram tab). The intro
+(Settings › Replay intro) shows the pot with no bars;
 Settings has no "Have a code?" box.
 
 **12.** All good:
