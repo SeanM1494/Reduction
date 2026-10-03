@@ -280,15 +280,15 @@ them is the whole point:
 
 | result | meaning |
 |---|---|
-| ***n* pass, 188 skipped** | no `DATABASE_URL` at all. Fine on a machine with no Postgres. |
-| ***n*+188 pass, 0 skipped** | a local database with a current schema. This is the real gate — `pnpm run test:db` produces it. |
+| ***n* pass, 191 skipped** | no `DATABASE_URL` at all. Fine on a machine with no Postgres. |
+| ***n*+191 pass, 0 skipped** | a local database with a current schema. This is the real gate — `pnpm run test:db` produces it. |
 | **failures saying "Refusing to run database tests against …"** | `DATABASE_URL` in the shell points somewhere non-local — on Replit, that is production. Working as designed: use `pnpm run test:db`, which ignores the env var entirely. |
 | **failures naming a missing table** | a reachable local database whose schema is behind `lib/db/src/schema/schema.ts`. `test:db` re-pushes on every start, so this means a hand-run database — push it or use the script. |
 
 The total grows as suites are added — pin your expectation to the **skip
 count**, not the pass count (an earlier version of this table hard-coded
 23/39 and went stale within a week, so treat the number above as needing an
-edit whenever a database-backed suite is added). The 188 are twenty-one suites:
+edit whenever a database-backed suite is added). The 191 are twenty-one suites:
 `claim.db.test.ts` (the anonymous library), `trial.db.test.ts` (the free
 extraction), `cache.db.test.ts` (the URL alias and the cached flag),
 `extractionLog.test.ts` (the cost table), `push.db.test.ts` (timer
@@ -329,7 +329,9 @@ fresh extractions and by spend separately, keeps signed-out trials a total
 rather than a row, and never answers with an email. The eighteenth
 guards that the daily counts stay anonymous — a table with no column that
 could name anyone, an app that may report only the reel's closed list of
-names and only signed in — and that concurrent increments all land. The nineteenth guards the
+names and only signed in — and that concurrent increments all land — and (Oct 3) that the usage
+report built over the library answers totals, leaves an excluded account
+out, and never returns an account id. The nineteenth guards the
 starter reel's privacy rules case by case — one account cooking forty
 times counts once, removed saves and non-public addresses never surface, a
 paste never becomes a card, no account id or email in any answer — and
@@ -348,8 +350,8 @@ twenty-first guards that a recipe's notes are the person's alone: a
 versioned write that nothing else overwrites, refused whole when it is
 not `{ text?, steps? }` within the caps, a step's note moved into the
 recipe's (never dropped) when an edit removes the step, and gone with the
-recipe. **The full suite — 875 tests at the
-time of writing (Oct 3) — has been run against a real Postgres and passes 875/0.** The
+recipe. **The full suite — 881 tests at the
+time of writing (Oct 3) — has been run against a real Postgres and passes 881/0.** The
 ones that are not api-server or model tests include the mobile library's
 filter and sort (`artifacts/reduction-mobile/lib/libraryView.test.ts`), the
 recipe box's books and page arithmetic (`recipeBox.test.ts`), the

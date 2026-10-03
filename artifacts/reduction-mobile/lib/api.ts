@@ -14,6 +14,7 @@
  */
 
 import { EMPTY_REEL, parseReel, type ReelCounter, type ReelResponse } from './reelView';
+import type { CookCounter } from './cookCounters';
 import type { Recipe } from '@/shared/layout';
 import type { OrderPreference } from '@/shared/sequence';
 import type { OriginalRecipe } from '@/shared/original';
@@ -263,9 +264,10 @@ export const fetchReel = async (): Promise<ReelResponse> => {
   }
 };
 
-/** One of the reel's anonymous counters (the server's allow-list). Fire and
+/** One of the anonymous counters — the reel's, or the cooking view's
+ *  (lib/cookCounters.ts) — on the server's allow-list. Fire and
  *  forget: a count that does not land is a gap in a total, nothing more. */
-export const reportCounter = (name: ReelCounter): void => {
+export const reportCounter = (name: ReelCounter | CookCounter): void => {
   request('/api/counters', { method: 'POST', body: JSON.stringify({ name }) }).catch(() => {});
 };
 

@@ -30,6 +30,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { MODEL as EXTRACTION_MODEL } from "../lib/structureRecipe";
 import { windowReport } from "../lib/costReport";
 import { readCounters } from "../lib/counters";
+import { formatUsageText, readUsage } from "../lib/usage";
 import { readCrashes } from "../lib/crashReports";
 import { clientKey, keyDigest } from "../lib/clientAddress";
 import { registerReelAdmin } from "./adminReel";
@@ -569,6 +570,34 @@ adminRouter.get("/counters", async (req: Request, res: Response) => {
       return res.status(503).json({ error: 'No counters table yet. Run the SQL in README "Usage counters".', code: "schema_behind" });
     console.error("[admin:counters]", (e as Error).message);
     return res.status(500).json({ error: "Could not read the counters." });
+  }
+});
+
+/**
+ * GET /api/admin/usage?days=30&exclude=<user id>,<user id>&format=text — do
+ * people come back and cook, what share of saved recipes get cooked through,
+ * and which view they cook in (lib/usage.ts). Totals only; `exclude` leaves
+ * the operator's own accounts out by id, and the answer never contains one.
+ * `format=text` is the terminal-readable version.
+ */
+adminRouter.get("/usage", async (req: Request, res: Response) => {
+  if (!requireAdmin(req, res)) return;
+  const asked = Number(req.query.days ?? 30);
+  const days = Number.isFinite(asked) ? Math.min(365, Math.max(1, Math.floor(asked))) : 30;
+  const exclude = String(req.query.exclude ?? "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .slice(0, 20);
+  try {
+    const report = await readUsage(days, exclude);
+    if (req.query.format === "text") return res.type("text/plain").send(formatUsageText(report));
+    return res.json(report);
+  } catch (e) {
+    if ((e as { cause?: { code?: string }; code?: string })?.cause?.code === "42P01" || (e as { code?: string })?.code === "42P01")
+      return res.status(503).json({ error: 'No counters table yet. Run the SQL in README "Usage counters".', code: "schema_behind" });
+    console.error("[admin:usage]", (e as Error).message);
+    return res.status(500).json({ error: "Could not read usage." });
   }
 });
 

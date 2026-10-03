@@ -796,6 +796,27 @@ Without it nothing is counted (one `[counters]` warning per process) and
 nothing else changes; `/api/health` lists `daily_counters` and the admin
 read answers 503 `schema_behind`.
 
+**Which view people cook in** (Oct 3): the app and the website also report
+`recipe_opened`, `view_steps`, `ticked_diagram`/`ticked_steps` (each once
+per visit to a saved recipe) and `finished_diagram`/`finished_steps` (once
+per cook, in the view the last tick happened). Phone: `lib/cookCounters.ts`;
+web: `RecipeView`'s `countUsage`. A preview, the demo and the trial recipe
+report nothing.
+
+**`GET /api/admin/usage?days=30&exclude=<user id>,…&format=text`**
+(x-admin-secret, `lib/usage.ts`) puts those counts beside what the library
+already holds: of the accounts that signed up in the window, how many
+cooked one recipe, two different recipes, on two days, and 7+ days after
+joining; of the recipes saved in the window, how many were started and
+cooked through, link vs pasted/photographed, and which view each was last
+left in. Totals only — `exclude` leaves your own accounts out by id and no
+id comes back. A cook is recorded only when every step is ticked, so every
+number is a floor, and a share prints only out of 10 or more.
+
+```sh
+curl -s -H "x-admin-secret: $ADMIN_SECRET" "https://recipereduction.com/api/admin/usage?days=30&format=text"
+```
+
 ### Crash reports
 
 The phone and the website report their own errors to `POST /api/crash`

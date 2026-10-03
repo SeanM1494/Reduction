@@ -43,6 +43,7 @@ import { TitleWindow } from '@/components/TitleWindow';
 import { TitleButton } from '@/components/recipe/TitleButton';
 import { freeRecipeLine, savedCounter, usesFreeRecipe } from '@/lib/reelView';
 import { reportCounter } from '@/lib/api';
+import { createCookVisit, type CookActivity, type CookVisit } from '@/lib/cookCounters';
 import { BookPicker } from '@/components/books/BookPicker';
 import { titleProblem } from '@/shared/title';
 
@@ -99,6 +100,19 @@ export default function RecipeDetailScreen() {
 
   const isDraft = id === 'draft';
   const entry = isDraft ? null : getEntry(id);
+  // One visit to a saved recipe, for the anonymous cooking counts
+  // (lib/cookCounters.ts). Made on first use for this id, from whichever
+  // fires first: RecipeScreen's effects run before this route's.
+  const visit = useRef<{ id: string; v: CookVisit } | null>(null);
+  const visitFor = useCallback((rid: string) => {
+    if (visit.current?.id !== rid) visit.current = { id: rid, v: createCookVisit(reportCounter) };
+    return visit.current.v;
+  }, []);
+  const hasEntry = !!entry;
+  useEffect(() => {
+    if (!isDraft && hasEntry) visitFor(id).opened();
+  }, [id, isDraft, hasEntry, visitFor]);
+  const onActivity = useCallback((a: CookActivity) => visitFor(id).activity(a), [id, visitFor]);
 
   // The recipe's own step sentences, for Step-by-Step (StepsMode's
   // `sourceSteps`). Asked for only when the recipe's steps carry source
@@ -344,6 +358,7 @@ export default function RecipeDetailScreen() {
           clearNotice();
         }}
         offlineQueued={queued.includes(entry.id)}
+        onActivity={onActivity}
         onCooked={() => ask('rate')}
         onRate={(r) => {
           const before = entry.rating;

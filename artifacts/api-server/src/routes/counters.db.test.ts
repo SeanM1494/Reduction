@@ -4,7 +4,8 @@
  * What must hold: the app can report only the closed list of names, and only
  * signed in; a count has no user attached anywhere; concurrent increments
  * all land; a wall hit is counted where the 402 is written; and the admin
- * read shows totals, never a person.
+ * reads (the counts, and the usage report built on the library) show
+ * totals, never a person.
  *
  * The counters are shared totals, so each test measures the CHANGE in a
  * count rather than its value, and cleans nothing it did not create.
@@ -17,7 +18,11 @@ import { createServer, type Server } from "node:http";
 import { sql } from "drizzle-orm";
 import { getDb } from "../db";
 import { needsDatabase } from "../lib/testdb";
-import { countEvent, CLIENT_COUNTERS, isClientCounter } from "../lib/counters";
+import { countEvent, CLIENT_COUNTERS, COOK_COUNTERS, isClientCounter } from "../lib/counters";
+import { readUsage } from "../lib/usage";
+import { randomUUID } from "node:crypto";
+import { recipes, users } from "@workspace/db";
+import { inArray } from "drizzle-orm";
 import { countersRouter, resetCounterBrake } from "./counters";
 import { adminRouter, resetAdminThrottle } from "./admin";
 import { subscriptionRequired } from "../lib/billing/access";
@@ -86,7 +91,9 @@ test("counters: the app reports only the allow-listed names, and only signed in"
   assert.equal(await post("reel_tap_curated"), 204);
   await settle();
   assert.equal(await today("reel_tap_curated"), before + 1);
-  for (const n of CLIENT_COUNTERS) assert.ok(n.startsWith("reel_"), "the client list is the reel's events only");
+  for (const n of CLIENT_COUNTERS)
+    assert.ok(n.startsWith("reel_") || (COOK_COUNTERS as readonly string[]).includes(n), "the client list is the reel's and the cooking view's events only");
+  assert.equal(await post("recipe_opened"), 204, "the cooking view's events are on the list");
 });
 
 test("counters: concurrent increments all land (one row per day and name)", async (t) => {
@@ -131,6 +138,85 @@ test("counters: the admin read is totals by day, with extractions by route besid
     assert.doesNotMatch(text, /counter-user|brake-user|userId|user_id/, "no person anywhere in it");
     const wrong = await fetch(`${await listen()}/api/admin/counters`, { headers: { "x-admin-secret": "nope" } });
     assert.equal(wrong.status, 401);
+  } finally {
+    if (prev === undefined) delete process.env.ADMIN_SECRET;
+    else process.env.ADMIN_SECRET = prev;
+  }
+});
+
+const DAY = 86_400_000;
+const tiny = { title: "t", servings: 1, sections: [] };
+
+test("usage: repeat cooks, cooked-through shares and the view split, as totals", async (t) => {
+  if (!(await needsDatabase(t, "daily_counters", "users", "recipes"))) return;
+  const db = getDb();
+  const [a, b, c, me] = [randomUUID(), randomUUID(), randomUUID(), randomUUID()];
+  const now = Date.now();
+  await db.insert(users).values([a, b, c, me].map((id) => ({ id, displayName: "Usage Test" })));
+  // a: two recipes cooked, on two days, one of them 8 days after joining.
+  // b: one recipe started, never finished; one untouched, from a paste.
+  // c: nothing at all. me: cooks a lot, and is excluded.
+  await db.execute(sql`update users set created_at = now() - interval '10 days' where id = ${a}`);
+  const r = (owner: string, id: string, fields: Record<string, unknown>) => ({
+    id,
+    ownerKey: `usage-test-${owner}`,
+    userId: owner,
+    recipe: { ...tiny, sourceUrl: "https://example.invalid/r" } as never,
+    ...fields,
+  });
+  await db.insert(recipes).values([
+    r(a, "a1", { cooked: [now - 9 * DAY], mode: "steps" }),
+    r(a, "a2", { cooked: [now - 2 * DAY, now - DAY] }),
+    r(b, "b1", { done: ["s1"] }),
+    { ...r(b, "b2", {}), recipe: tiny as never },
+    r(me, "m1", { cooked: [now - DAY, now], mode: "steps" }),
+  ]);
+  try {
+    const u = await readUsage(30, [me], [a, b, c, me]);
+    assert.equal(u.excluded, 1);
+    assert.deepEqual(u.comingBack, { signedUp: 3, cookedOne: 1, cookedTwoRecipes: 1, cookedTwoDays: 1, cookedAfterWeek: 1 });
+    const link = u.cookedThrough.find((x) => x.kind === "link")!;
+    const other = u.cookedThrough.find((x) => x.kind === "other")!;
+    assert.deepEqual(link, { kind: "link", saved: 3, started: 3, cooked: 2, lastViewSteps: 1 });
+    assert.deepEqual(other, { kind: "other", saved: 1, started: 0, cooked: 0, lastViewSteps: 0 });
+    assert.deepEqual(Object.keys(u.views).sort(), [...COOK_COUNTERS].sort());
+    const text = JSON.stringify(u);
+    for (const id of [a, b, c, me]) assert.ok(!text.includes(id), "no account id in the report");
+    assert.doesNotMatch(text, /usage-test|example\.invalid/);
+  } finally {
+    await db.delete(recipes).where(inArray(recipes.userId, [a, b, c, me]));
+    await db.delete(users).where(inArray(users.id, [a, b, c, me]));
+  }
+});
+
+test("usage: the cooking-view counts sum over the window", async (t) => {
+  if (!(await needsDatabase(t, "daily_counters", "users", "recipes"))) return;
+  const before = (await readUsage(7, [], [])).views.finished_steps;
+  await countEvent("finished_steps");
+  await countEvent("finished_steps");
+  const after = (await readUsage(7, [], [])).views.finished_steps;
+  assert.equal(after - before, 2);
+});
+
+test("usage: the admin read answers JSON and text, behind the secret, with no person in either", async (t) => {
+  if (!(await needsDatabase(t, "daily_counters", "users", "recipes"))) return;
+  const prev = process.env.ADMIN_SECRET;
+  process.env.ADMIN_SECRET = SECRET;
+  resetAdminThrottle();
+  try {
+    const h = { headers: { "x-admin-secret": SECRET } };
+    const json = await fetch(`${await listen()}/api/admin/usage?days=30&exclude=someone`, h);
+    assert.equal(json.status, 200);
+    const body = (await json.json()) as { days: number; excluded: number };
+    assert.equal(body.days, 30);
+    assert.equal(body.excluded, 1);
+    const text = await fetch(`${await listen()}/api/admin/usage?format=text`, h);
+    assert.equal(text.status, 200);
+    assert.match(text.headers.get("content-type") ?? "", /text\/plain/);
+    const s = await text.text();
+    assert.match(s, /COMING BACK/);
+    assert.doesNotMatch(s, /someone|user_id|userId|@/);
+    assert.equal((await fetch(`${await listen()}/api/admin/usage`, { headers: { "x-admin-secret": "nope" } })).status, 401);
   } finally {
     if (prev === undefined) delete process.env.ADMIN_SECRET;
     else process.env.ADMIN_SECRET = prev;

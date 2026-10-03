@@ -10,7 +10,8 @@
  *
  * WHAT MAY BE COUNTED is a closed list. The server counts its own events
  * (a new save, a wall hit, a coupon redeemed); the app may report only the
- * names in `CLIENT_COUNTERS`, through POST /api/counters. Extractions are
+ * names in `CLIENT_COUNTERS` (the reel's, and since Oct 3 the cooking view's),
+ * through POST /api/counters. Extractions are
  * NOT counted here: extraction_events already records every one by route,
  * and a second count of the same thing would only drift from it — the admin
  * read joins the two.
@@ -31,6 +32,20 @@ export const SERVER_COUNTERS = [
   "coupon_redeemed",
 ] as const;
 
+/**
+ * The cooking view's events (Oct 3): which view people cook in. Each is
+ * reported at most once per visit to a saved recipe, except a finish, which
+ * is once per cook — so a total is "visits that did X", never taps.
+ */
+export const COOK_COUNTERS = [
+  "recipe_opened",
+  "view_steps",
+  "ticked_diagram",
+  "ticked_steps",
+  "finished_diagram",
+  "finished_steps",
+] as const;
+
 /** The only names the app may report. */
 export const CLIENT_COUNTERS = [
   "reel_shown",
@@ -38,6 +53,7 @@ export const CLIENT_COUNTERS = [
   "reel_tap_curated",
   "reel_saved_data",
   "reel_saved_curated",
+  ...COOK_COUNTERS,
 ] as const;
 
 export type CounterName = (typeof SERVER_COUNTERS)[number] | (typeof CLIENT_COUNTERS)[number];

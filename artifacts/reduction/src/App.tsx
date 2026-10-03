@@ -677,6 +677,7 @@ export default function App() {
               entry={entry}
               onBack={() => setOpenId(null)}
               notesEnabled={!viewingTrial}
+              countUsage={!!user && !viewingTrial}
               onUpdate={(updated) => {
                 // The trial recipe has no LIBRARY row, but it does have a
                 // row — parked under trial:<id> until signup claims it — and

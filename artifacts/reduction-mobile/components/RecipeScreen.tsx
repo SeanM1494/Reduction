@@ -68,6 +68,7 @@ import type { EntryPatch } from '@/lib/library-context';
 import { clearProgressPatch } from '@/lib/cookReset';
 import { toggleDone } from '@/lib/doneClosure';
 import { pointerFor, type Pointer, type Spotlight } from '@/lib/spotlight';
+import type { CookActivity } from '@/lib/cookCounters';
 import { TapPointer } from '@/components/demo/TapPointer';
 import { SpotRing } from '@/components/demo/SpotRing';
 import { makeReveal, RevealContext } from '@/components/demo/reveal';
@@ -158,6 +159,10 @@ interface RecipeScreenProps {
   /** Which view is up, for the route: the diagram scrolls sideways, and a
    *  swipe on it at its left edge must not be iOS's swipe-back. */
   onViewChange?: (view: 'overview' | 'cook') => void;
+  /** Which view is up and which view a step was ticked in, for the
+   *  anonymous cooking counts (lib/cookCounters.ts). Only the saved
+   *  recipe's route passes it; a preview and the demo count nothing. */
+  onActivity?: (a: CookActivity) => void;
   /** Which tab to open on, overriding the stored `mode` for THIS visit —
    *  the Recipe Box preview's "Diagram" and "Step-by-Step". Not
    *  written back: opening a recipe is not choosing a tab, and a write on
@@ -217,6 +222,7 @@ export function RecipeScreen({
   overviewFooter,
   photoEntry = null,
   onViewChange,
+  onActivity,
   initialView,
   onCooked,
   onRate,
@@ -246,7 +252,8 @@ export function RecipeScreen({
   const [view, setView] = useState<ViewMode>(initialView ?? (mode === 'steps' ? 'cook' : 'overview'));
   useEffect(() => {
     onViewChange?.(view);
-  }, [view, onViewChange]);
+    onActivity?.({ kind: 'view', view });
+  }, [view, onViewChange, onActivity]);
   useEffect(() => {
     if (modeControlled) setView(mode === 'steps' ? 'cook' : 'overview');
   }, [mode, modeControlled]);
@@ -337,6 +344,7 @@ export function RecipeScreen({
     const next = toggleDone(recipe, done, id);
     const stamped = stampCooked(cooked, doneCount, countDone(next), total);
     onUpdate(stamped === cooked ? { done: next } : { done: next, cooked: stamped });
+    if (countDone(next) > doneCount) onActivity?.({ kind: 'tick', view, finished: stamped !== cooked });
     if (asksForRating(cooked, stamped)) onCooked?.();
   };
   /** Cook mode's "Next Step": done (if not already) and the step's timer
@@ -348,6 +356,7 @@ export function RecipeScreen({
     if (stamped !== cooked) patch.cooked = stamped;
     if (timer?.stepId === stepId) patch.timer = null;
     onUpdate(patch);
+    if (countDone(next) > doneCount) onActivity?.({ kind: 'tick', view, finished: stamped !== cooked });
     if (asksForRating(cooked, stamped)) onCooked?.();
   };
   const doneSet = useMemo(() => new Set(done), [done]);

@@ -56,6 +56,9 @@ interface Props {
   /** The person's own notes. Off for the signed-out try, whose row the
    *  trial route patches and which has no notes column to speak of. */
   notesEnabled?: boolean;
+  /** Report the anonymous cooking counts (README "Usage counters"): signed
+   *  in, a library recipe. Off for the trial recipe, which has no account. */
+  countUsage?: boolean;
 }
 
 type Phase = "choose" | "diagram" | "steps" | "json";
@@ -90,9 +93,32 @@ export default function RecipeView({
   onDelete,
   canEdit = true,
   notesEnabled = true,
+  countUsage = false,
 }: Props) {
   const { recipe } = entry;
   const [phase, setPhase] = useState<Phase>("choose");
+  // Which view people cook in, as the anonymous daily counts the phone
+  // reports too (mobile lib/cookCounters.ts). One visit is this component's
+  // life (App keys it by entry id); each name once per visit, a finish once
+  // per cook. Fire and forget: a lost count is a gap in a total.
+  const sentCounts = useRef(new Set<string>());
+  const count = useCallback(
+    (name: string, once = true) => {
+      if (!countUsage) return;
+      if (once && sentCounts.current.has(name)) return;
+      sentCounts.current.add(name);
+      void fetch("/api/counters", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ name }),
+      }).catch(() => {});
+    },
+    [countUsage]
+  );
+  useEffect(() => count("recipe_opened"), [count]);
+  useEffect(() => {
+    if (phase === "steps") count("view_steps");
+  }, [phase, count]);
   const [menuOpen, setMenuOpen] = useState(false);
   const [photoSheetOpen, setPhotoSheetOpen] = useState(false);
   const [photoBusy, setPhotoBusy] = useState<"upload" | "remove" | null>(null);
@@ -307,8 +333,13 @@ export default function RecipeView({
       }
 
       onUpdate({ ...entry, done: [...next], cooked });
+      if (countDone(next) > countDone(done)) {
+        const where = phase === "steps" ? "steps" : "diagram";
+        count(`ticked_${where}`);
+        if (cooked !== (entry.cooked ?? [])) count(`finished_${where}`, false);
+      }
     },
-    [done, parents, upstreamOf, entry, onUpdate, total]
+    [done, parents, upstreamOf, entry, onUpdate, total, phase, count]
   );
 
   const doneCount = countDone(done);
