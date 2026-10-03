@@ -42,7 +42,7 @@ function devRequest(): (Run & { ready: boolean }) | null {
   return { id: 1, kind, version: null, darkStart: q.get('dark') === '1', frozenT: t === null ? undefined : Number(t), ready: q.get('ready') !== '0' };
 }
 
-export function OpeningHost() {
+export function OpeningHost({ onSettled }: { onSettled?: () => void } = {}) {
   const [run, setRun] = useState<Run | null>(null);
   const ready = useSharedValue(false);
   const splashDone = useRef(false);
@@ -68,7 +68,10 @@ export function OpeningHost() {
     launchInfo().then((info) => {
       if (cancelled) return;
       const { play, version } = info.decision;
-      if (play === 'none' || !version) return hideSplash();
+      if (play === 'none' || !version) {
+        onSettled?.();
+        return hideSplash();
+      }
       setRun({ id: 1, kind: play === 'static' ? 'static' : version, version, darkStart: info.darkStart });
       // If the first frame never comes, the app must not wait behind the
       // splash for it.
@@ -111,6 +114,7 @@ export function OpeningHost() {
       onEnded={(stats) => {
         recordRun(stats, run.kind);
         setRun(null);
+        onSettled?.();
       }}
     />
   );

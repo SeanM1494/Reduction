@@ -28,6 +28,7 @@ import { notificationTarget } from '@/lib/pushPolicy';
 import { setPurchaseHandler } from '@/lib/purchase';
 import { startStoreKitReconciler, storeKitHandler } from '@/lib/storeKit';
 import { OpeningHost } from '@/components/opening/OpeningHost';
+import { UpdateNotice } from '@/components/UpdateNotice';
 import { installCrashReporter, noteCrashRoute, reportRenderError } from '@/lib/crashReporter';
 import { bootLandingPending, markAppReady, noteAuthSettled, takeBootLanding } from '@/lib/opening/launch';
 
@@ -210,6 +211,10 @@ export default function RootLayout() {
     SpaceMono_700Bold,
   });
 
+  // claude/project-thread-210qfm branch only, never main: the "update in TestFlight" window waits
+  // for the opening sequence to finish (components/UpdateNotice.tsx).
+  const [openingDone, setOpeningDone] = useState(false);
+
   if (!fontsLoaded && !fontError) return null;
 
   return (
@@ -222,10 +227,11 @@ export default function RootLayout() {
               <ThemeProvider>
                 <AuthProvider>
                   <Gate />
+                  <UpdateNotice openingDone={openingDone} />
                 </AuthProvider>
               </ThemeProvider>
               {/* Last, so it draws over everything; it is gone once it ends. */}
-              <OpeningHost />
+              <OpeningHost onSettled={() => setOpeningDone(true)} />
             </KeyboardProvider>
           </GestureHandlerRootView>
         </QueryClientProvider>
