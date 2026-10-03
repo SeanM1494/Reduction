@@ -66,6 +66,7 @@ import { fonts } from '@/constants/colors';
 import type { Entry, StepTimer } from '@/lib/api';
 import type { EntryPatch } from '@/lib/library-context';
 import { clearProgressPatch } from '@/lib/cookReset';
+import { useKeepAwakeWhile } from '@/lib/keepAwake';
 import { toggleDone } from '@/lib/doneClosure';
 import { pointerFor, type Pointer, type Spotlight } from '@/lib/spotlight';
 import type { CookActivity } from '@/lib/cookCounters';
@@ -257,6 +258,8 @@ export function RecipeScreen({
   useEffect(() => {
     if (modeControlled) setView(mode === 'steps' ? 'cook' : 'overview');
   }, [mode, modeControlled]);
+  // Cook mode keeps the screen on while it is showing (lib/keepAwake.ts).
+  useKeepAwakeWhile(view === 'cook');
   const pickView = (v: ViewMode) => {
     setView(v);
     if (v === 'cook') stopEditing();

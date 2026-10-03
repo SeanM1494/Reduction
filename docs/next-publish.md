@@ -34,6 +34,7 @@ build 7. Step 9c checks the version again right before the phone update.
 | `94ba91b` Phone: the dark splash is Cocoa #211a16, and the opening starts on it | Phone: the dark launch screen colour (in the BINARY, so build 8) and the opening sequence's dark starting colour (over the air). On build 7 a dark-mode launch now steps from the old splash colour to the new one as the intro begins; build 8 removes that step | The launch build for the splash; the next over-the-air update for the opening's colour. No `expo.version` bump |
 | `a614705` Opening sequence: the pot without its bars | Phone only: the intro's pot loses the four bars, matching the new icon; the pour is unchanged | The next over-the-air update (preview, then promote); nothing on the server |
 | `13c7530` Usage: which view people cook in, and a report on coming back and cooking | Server: six more names the app may count (`recipe_opened`, `view_steps`, `ticked_*`, `finished_*`), and `GET /api/admin/usage` (README "Usage counters"). Website: the same counts from a saved recipe; `privacy.html` adds "To see, in totals, how the app is used", dated October 3. Phone: the same counts from a saved recipe | This Publish (server FIRST: the old server answers the new names 400, which the app ignores, so nothing breaks but nothing counts); the phone part rides the same over-the-air update. No SQL |
+| `3da8300` Cook mode keeps the screen on (PR #11) | Phone only: while the Step-by-Step (Cook) tab is showing, the screen does not dim or lock; released on leaving the tab, leaving the recipe or going to the background. Adds `expo-keep-awake` to the phone's `package.json` — its native half is one of `expo`'s own modules and already in build 7, so it is OTA-safe with no build and no `expo.version` bump | `pnpm install` on Replit (a new direct dependency, so step 5 will name it); the next over-the-air update (preview, then promote); nothing on the server |
 
 The only native changes are the icon and the dark splash, which wait for the launch build; nothing here needs an `expo.version` bump.
 
@@ -84,8 +85,9 @@ Must list `3909d43`, `34405fa`, `65e0146`, `94ba91b`, `a614705`, `5f0524a`,
 ```sh
 node scripts/check-workspace-links.mjs
 ```
-Prints nothing (no new packages). If it names anything, run `pnpm install`
-and then this again.
+Prints nothing — unless the cook-mode keep-awake change is in this pull,
+which adds `expo-keep-awake`: then it names that package. If it names
+anything, run `pnpm install` and then this again.
 
 **6.** Deployments → **Publish**. Wait for it to finish.
 
