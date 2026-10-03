@@ -1,3 +1,17 @@
+# Since the Oct 3 Publish: the share sheet is on `main` (build 8)
+
+The Oct 3 Publish and its phone update (preview group 99215eb7, promoted)
+are done; everything below this section went out in them and is kept as
+the record. Since then `main` carries:
+
+| Commit | Ships | Needs |
+|---|---|---|
+| the merge of PR #13 (Share sheet: save a recipe from Safari) | Phone: a "Reduction" entry in Safari's Share sheet (App Group `group.com.recipereduction.mobile`, extension `com.recipereduction.mobile.share`); a shared page goes through the Browse capture, a link or text reads as a paste, a signed-out share waits through sign-in. `expo.version` is **1.2.0**. Website: `privacy.html` wording | **Build 8**, run interactively (EAS signs in to Apple to register the extension and the App Group), after `pnpm install` on Replit. From here NO update reaches build 7 (1.1.0): the next phone update's `runtime` line starts `1.2.0` and only build 8 receives it. Never compiled or run on a phone before build 8; the TestFlight pass shares from Safari signed in and signed out |
+| removal of `expo-location` | Phone: an unused package with native code goes, so the binary links no location API without a purpose string | Rides build 8; no bundle imports it, so nothing on the server |
+
+Step 9c's "must print 1.1.0" below is for the Oct 3 update only; the next
+update expects `1.2.0`.
+
 # Next Publish — everything on `main` since Oct 2, and NOT the share sheet
 
 Two SQL steps, one pull, one Publish, then the phone update. From a fresh
