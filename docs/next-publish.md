@@ -1,13 +1,26 @@
-# Next Publish — recipe notes (Oct 2) and the Apple sign-in revocation (Oct 3)
+# Next Publish — everything on `main` since Oct 2, and NOT the share sheet
 
-One SQL line, one pull, one Publish, then the phone update. From a fresh
+Two SQL steps, one pull, one Publish, then the phone update. From a fresh
 Replit shell, in order; each block is one command and what it should print
 is under it. The SQL comes FIRST, before the pull: the new server reads a
-`recipes.notes` column, and against a database without it every recipes
-query fails and every library shows empty (CLAUDE.md "A new column's DDL
-runs BEFORE the deploy"). The workspace's own dev server uses production's
-database too, which is why it is before the pull and not only before the
-Publish.
+`recipes.notes` column and an `apple_tokens` table, and against a database
+without them every recipes query fails and every library shows empty
+(CLAUDE.md "A new column's DDL runs BEFORE the deploy"). The workspace's
+own dev server uses production's database too, which is why it is before
+the pull and not only before the Publish.
+
+**What stays out, and why build 7 is safe (checked Oct 3 against `main` at
+`7cd5d77`).** The share sheet (draft PR #13) is the one change that would
+cut build 7 off: it sets `expo.version` to 1.2.0, and the runtime version
+follows it, so from then on no update reaches a 1.1.0 binary. It is NOT on
+`main` — nor are the cook-mode keep-awake (#11) or the cost brakes (#12),
+both still drafts — so `git pull` cannot bring any of them, and nothing in
+this list merges them. On `main` itself: `expo.version` is still 1.1.0, the
+phone's `package.json` and the lockfile are unchanged since the last
+Publish, and no phone file imports a new package. The only native changes
+are the icon (`65e0146`) and the dark splash colour (`94ba91b`); both live in
+the binary and wait for build 8, and an update carrying them is harmless to
+build 7. Step 9c checks the version again right before the phone update.
 
 | Commit | Ships | Needs |
 |---|---|---|
@@ -18,10 +31,11 @@ Publish.
 | `65e0146` Icon: the plain pot with steam | Website: favicon, home-screen icon and nav mark become the new pot. Phone: the app icon and the sign-in mark, which are in the BINARY, so they reach phones only with the next native build (the launch build). The opening sequence is unchanged | This Publish for the website; the launch build for the phone. No `expo.version` bump (nothing a bundle calls) |
 | `d041448` Paywall: no in-app codes on iPhone, wall copy for three recipes, atomic metered save | Server: with the wall ON, saves racing for the last free recipe let exactly one through (wall off, as now, changes nothing). Phone: the "Have a code?" box is gone on iPhone (wall and Settings, guideline 3.1.1); the wall says "Your recipes are yours to keep" and its button opens the library. No new SQL | This Publish for the server; the phone part rides the next over-the-air update (preview, then promote) |
 | `ac19369` Account deletion: revoke the Sign in with Apple token | Server: the Apple callback keeps the refresh token Apple returns (new `apple_tokens` table), and deleting an account revokes it at Apple after the rows are gone; `/api/health` checks the table. Website and phone: when it could not be revoked (any account that signed in before this shipped), the "account deleted" message says to remove Reduction under Settings › Apple Account › Sign in with Apple. Privacy: "Your account" and "Deleting your account" say so, dated October 3. README "Sign in with Apple" | Step 2b's SQL **before** the pull; this Publish; the phone's wording rides the same over-the-air update. The revoke call has never run (Apple's hosts are blocked from Claude's container): the first real one is step 9b |
+| `94ba91b` Phone: the dark splash is Cocoa #211a16, and the opening starts on it | Phone: the dark launch screen colour (in the BINARY, so build 8) and the opening sequence's dark starting colour (over the air). On build 7 a dark-mode launch now steps from the old splash colour to the new one as the intro begins; build 8 removes that step | The launch build for the splash; the next over-the-air update for the opening's colour. No `expo.version` bump |
 | `a614705` Opening sequence: the pot without its bars | Phone only: the intro's pot loses the four bars, matching the new icon; the pour is unchanged | The next over-the-air update (preview, then promote); nothing on the server |
 | `13c7530` Usage: which view people cook in, and a report on coming back and cooking | Server: six more names the app may count (`recipe_opened`, `view_steps`, `ticked_*`, `finished_*`), and `GET /api/admin/usage` (README "Usage counters"). Website: the same counts from a saved recipe; `privacy.html` adds "To see, in totals, how the app is used", dated October 3. Phone: the same counts from a saved recipe | This Publish (server FIRST: the old server answers the new names 400, which the app ignores, so nothing breaks but nothing counts); the phone part rides the same over-the-air update. No SQL |
 
-The only native change is the icon, which waits for the launch build; nothing here needs an `expo.version` bump.
+The only native changes are the icon and the dark splash, which wait for the launch build; nothing here needs an `expo.version` bump.
 
 **1.**
 ```sh
@@ -62,8 +76,9 @@ A fast-forward; among the files, `lib/recipe-model/src/notes.ts`.
 ```sh
 git log --oneline -15
 ```
-Must list `3909d43`, `5f0524a`, `d041448`, `13c7530` and `ac19369`. Note the TOP line's short hash: steps 7 and 8 must
-show it.
+Must list `3909d43`, `34405fa`, `65e0146`, `94ba91b`, `a614705`, `5f0524a`,
+`d041448`, `13c7530` and `ac19369`. Note the TOP line's short hash: steps 7,
+8 and 10 must show it.
 
 **5.**
 ```sh
@@ -106,15 +121,23 @@ does appear, Replit's deployment log has an `[account:delete]` line with
 Apple's reason; send it to Claude. Signing in with Apple again afterwards
 makes a new, empty account.
 
+**9c.** Before any phone update: the app's version is still the one build
+7 runs (the share sheet would make it 1.2.0):
+```sh
+grep '"version"' ~/workspace/artifacts/reduction-mobile/app.json
+```
+Prints exactly `    "version": "1.1.0",`. Anything else: STOP, do not
+run step 10, and tell Claude.
+
 **10.** The phone update, to preview first:
 ```sh
 cd ~/workspace/artifacts/reduction-mobile
 ```
 ```sh
-node scripts/publish-update.mjs --channel preview --message "Recipe notes and step notes"
+node scripts/publish-update.mjs --channel preview --message "Notes, step notes, paywall copy, usage counts, intro pot, Apple deletion wording"
 ```
-Its `commit` line must match the hash from step 4. Copy the **Group ID** it
-ends with.
+Its `commit` line must match the hash from step 4, and its `runtime` line
+must start `1.1.0`. Copy the **Group ID** it ends with.
 
 **11.** On the phone (on preview: fully close and reopen, twice), the
 5-minute check further down ("The 5-minute check on the phone"), plus:
@@ -125,6 +148,8 @@ that recipe ends its ingredients with a ✎ line; searching the Recipe Box
 for a word only in the note finds it. Then a step note: Step-by-Step, on
 any card **+ Add a note to this step**, type a line, **Done** — the card
 shows it as "Your note", and it is listed under the recipe's note.
+Also: the intro (Settings › Replay intro) shows the pot with no bars;
+Settings has no "Have a code?" box.
 
 **12.** All good:
 ```sh
