@@ -13,14 +13,18 @@
  * says what to do when a site will not be read, with the Browse tab one tap
  * away, carrying the pasted link with it; the "Open in browser" rescue on a
  * blocked site's error lands in the same tab.
+ *
+ * A recipe shared from another app (Safari's Share sheet, lib/sharedPage.ts)
+ * lands here too, already reading, through the same `run`.
  */
 
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { router } from 'expo-router';
 import { useAuth } from '@/lib/auth-context';
 import { useLibrary } from '@/lib/library-context';
-import { extractFromUrl, extractFromText, extractFromFile, ApiError, type ExtractResult } from '@/lib/api';
+import { extractFromUrl, extractFromText, extractFromFile, extractFromPage, ApiError, type ExtractResult } from '@/lib/api';
+import type { SharedItem } from '@/lib/sharedPage';
 import { PhotoPicker } from '@/components/PhotoPicker';
 import { ExtractionProgress } from '@/components/ExtractionProgress';
 import { Paywall } from '@/components/Paywall';
@@ -37,6 +41,7 @@ export function AddNewPane({
   onOpenBrowse,
   bottomInset,
   active = true,
+  shared = null,
 }: {
   /** The wall is up (the Find screen's one predicate). */
   blocked: boolean;
@@ -45,6 +50,9 @@ export function AddNewPane({
   bottomInset: number;
   /** This folder is the one showing (the reel drifts only then). */
   active?: boolean;
+  /** A recipe shared from another app (lib/sharedPage.ts); a new token
+   *  reads it once. */
+  shared?: { item: SharedItem; token: string } | null;
 }) {
   const colors = useColors();
   const styles = makeStyles(colors);
@@ -114,6 +122,30 @@ export function AddNewPane({
     if (looksLikeUrl) run('text', () => extractFromUrl(value), value, EMPTY_NAMES);
     else run('text', () => extractFromText(value), null, names);
   };
+
+  // A share is read the moment there is nothing in the way: not while
+  // another extraction runs, and not behind the wall — it waits there, so
+  // subscribing carries straight on to it. The box shows what is being
+  // read, as if it had been pasted. Safari's page goes through the Browse
+  // tab's route (read from what the phone loaded, so a site that blocks our
+  // server still reads); a link or text, through a paste's.
+  const handledShare = useRef<string | null>(null);
+  useEffect(() => {
+    if (!shared || handledShare.current === shared.token || busy || blocked) return;
+    handledShare.current = shared.token;
+    const item = shared.item;
+    setNames(EMPTY_NAMES);
+    if (item.kind === 'text') {
+      setInput(item.text);
+      run('text', () => extractFromText(item.text), null, EMPTY_NAMES);
+    } else {
+      setInput(item.url);
+      run('text', () => (item.kind === 'page' ? extractFromPage(item.url, item.html) : extractFromUrl(item.url)), item.url, EMPTY_NAMES);
+    }
+    // run is a fresh closure each render; the share and what blocks it are
+    // what this answers to.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [shared, busy, blocked]);
 
   const submitPhoto = () => {
     if (!photo) return;

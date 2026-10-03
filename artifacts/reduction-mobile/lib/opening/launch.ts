@@ -23,6 +23,7 @@ import Constants from 'expo-constants';
 import { LAND_ON_RECIPE_BOX, OPENING_ENABLED } from './config';
 import { chooseOpening, stampFor, type Decision, type LaunchSource, type Stamps, type Version } from './cadence';
 import { isAppLink, launchLanding } from './destination';
+import { isShareLink } from '../sharedPage';
 import type { FrameStats } from './scene';
 
 const FULL_KEY = 'reduction_opening_full_shown';
@@ -84,7 +85,11 @@ async function launchSource(): Promise<LaunchSource> {
     // No notifications module answer: not a notification launch.
   }
   try {
-    if (isAppLink(await Linking.getInitialURL(), SCHEME)) return 'link';
+    const initial = await Linking.getInitialURL();
+    // The share extension's link (lib/sharedPage.ts) before the general
+    // test, which would call it a link: same outcome today, named apart.
+    if (isShareLink(initial, SCHEME)) return 'share';
+    if (isAppLink(initial, SCHEME)) return 'link';
   } catch {
     // No initial URL answer: not a link launch.
   }

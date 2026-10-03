@@ -11,7 +11,8 @@
  * paste, a search and the page open in Browse are all where they were left.
  * Nothing about the tabs is remembered once the app closes. A hand-off wins
  * over that: the Recipe Box's "nothing matched" opens My Recipes with its
- * query (?q=), and a blocked link opens Browse on that page.
+ * query (?q=), a blocked link opens Browse on that page, and a recipe
+ * shared from another app opens Add New, already reading it.
  *
  * No navigator header: the tabs and each pane's heading say where you are,
  * and on an iPhone SE the 44pt a header costs is the Browse page's. So the
@@ -34,6 +35,7 @@ import { FolderTabs, type FindTab } from '@/components/find/FolderTabs';
 import { MyRecipesPane } from '@/components/find/MyRecipesPane';
 import { AddNewPane } from '@/components/find/AddNewPane';
 import { BrowsePane } from '@/components/find/BrowsePane';
+import { onShare, takeShare, type SharedItem } from '@/lib/sharedPage';
 import { useColors } from '@/hooks/useColors';
 
 /** The tab bar is absolutely positioned ((tabs)/_layout.tsx); each pane
@@ -64,6 +66,21 @@ export default function FindScreen() {
     router.setParams({ q: undefined });
   }, [q]);
 
+  // A recipe shared from another app (lib/sharedPage.ts): taken once, here,
+  // and read by Add New. The root layout has already brought Find forward.
+  const [shared, setShared] = useState<{ item: SharedItem; token: string } | null>(null);
+  useEffect(() => {
+    const take = () => {
+      const got = takeShare();
+      if (!got) return;
+      Keyboard.dismiss();
+      setShared(got);
+      setTab('add');
+    };
+    take();
+    return onShare(take);
+  }, []);
+
   const [browseRequest, setBrowseRequest] = useState<{ url: string; token: string } | null>(null);
   const openBrowse = (url: string | null) => {
     if (url) setBrowseRequest({ url, token: `${Date.now()}` });
@@ -84,7 +101,7 @@ export default function FindScreen() {
         <MyRecipesPane prefill={minePrefill} blocked={blocked} onOpenBrowse={openBrowse} bottomInset={bottomInset} />
       </View>
       <View style={shown('add')}>
-        <AddNewPane blocked={blocked} onOpenBrowse={openBrowse} bottomInset={bottomInset} active={tab === 'add'} />
+        <AddNewPane blocked={blocked} onOpenBrowse={openBrowse} bottomInset={bottomInset} active={tab === 'add'} shared={shared} />
       </View>
       <View style={shown('browse')}>
         <BrowsePane request={browseRequest} blocked={blocked} bottomInset={bottomInset} />
