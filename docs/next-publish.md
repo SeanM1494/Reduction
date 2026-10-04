@@ -1,3 +1,11 @@
+# Since build 10 was submitted: the website catch-up (PR #15)
+
+Website only. No SQL, no phone update, no build.
+
+| Commit | Ships | Needs |
+|---|---|---|
+| the merge of PR #15 | Website: a "Coming soon to iPhone" section below the landing CTA (screenshots in `public/screens/`, features, pricing), a Support FAQ, `privacy.html` and `terms.html` wording (step notes; the browser and Share sheet as ways to add a recipe; dated Oct 4), page title and Open Graph tags | A pull and a Publish on Replit. When the App Store listing is live, "Coming soon" becomes a link |
+
 # Since the Oct 3 Publish: the share sheet is on `main` (build 8)
 
 The Oct 3 Publish and its phone update (preview group 99215eb7, promoted)
