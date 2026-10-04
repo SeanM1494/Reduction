@@ -10,8 +10,8 @@
  * paths a paste, a link or the Browse tab use — nothing new on the server.
  *
  *   page  Safari's page itself: the extension's preprocessing script runs
- *         CAPTURE_BODY (lib/pageCapture.ts, the Browse tab's capture) in the
- *         page and hands over what Safari rendered. So a site that refuses
+ *         SHARE_CAPTURE_BODY below (the Browse tab's capture, smaller) in
+ *         the page and hands over what Safari rendered. So a site that refuses
  *         our server (allrecipes.com) reads from a share exactly as it does
  *         from Browse — and is cached by content, never by URL.
  *   link  An address alone: any other app's share, or a page whose capture
@@ -30,7 +30,7 @@
  * PURE ON PURPOSE (no react-native import), so the runner tests it under node.
  */
 
-import { MAX_PAGE_CHARS, CAPTURE_BODY } from './pageCapture';
+import { MAX_PAGE_CHARS } from './pageCapture';
 
 export type SharedItem =
   | { kind: 'page'; url: string; html: string }
@@ -92,18 +92,65 @@ export function isShareLink(url: string | null | undefined, scheme: string): boo
 }
 
 /**
+ * The most a share may carry: a third of what Browse sends (Oct 4).
+ *
+ * Browse hands its capture straight to JS over the WebView bridge. A share
+ * goes a longer way: Safari passes the result to the extension, which
+ * JSON-encodes the page meta (already a JSON string, so every quote is
+ * escaped twice) and stores it in the App Group's UserDefaults before
+ * opening the app. iOS refuses a UserDefaults value of 4 MB or more, and
+ * the extension has a small memory ceiling. A 3 MB page on that path
+ * reached neither: on build 8 a share from Inspired Chef worked and one
+ * from Sally's Baking Addiction (a page with hundreds of comments) froze
+ * Safari's share step with nothing reaching the app. So a share also drops
+ * comment threads, which never hold the recipe, and stops at 1,000,000
+ * characters — escaped twice that is still far under 4 MB.
+ */
+export const SHARE_MAX_CHARS = 1_000_000;
+
+/**
+ * The share's capture, the body of `function (doc)` returning `{ url, html }`.
+ * Browse's CAPTURE_BODY (lib/pageCapture.ts) plus two things: comment
+ * threads go with the scripts and media, and when the page is still over
+ * the cap the JSON-LD (where a recipe card's structured data lives, and what
+ * the server's fast path reads) is moved to the front before the cut, so a
+ * cut can only ever lose the end of the body.
+ */
+export const SHARE_CAPTURE_BODY = `
+  var root = doc.documentElement.cloneNode(true);
+  var drop = root.querySelectorAll(
+    'script:not([type="application/ld+json"]),style,link,svg,noscript,iframe,frame,object,embed,video,audio,picture,source,canvas,template,img,#comments,.comments-area,.comment-list,.commentlist,#disqus_thread'
+  );
+  for (var i = 0; i < drop.length; i++) {
+    if (drop[i].parentNode) drop[i].parentNode.removeChild(drop[i]);
+  }
+  var html = '<!doctype html>' + root.outerHTML;
+  if (html.length > ${SHARE_MAX_CHARS}) {
+    var lds = root.querySelectorAll('script[type="application/ld+json"]');
+    var ld = '';
+    for (var j = 0; j < lds.length; j++) {
+      ld += lds[j].outerHTML;
+      if (lds[j].parentNode) lds[j].parentNode.removeChild(lds[j]);
+    }
+    html = ('<!doctype html><html><head>' + ld + '</head>' + root.outerHTML + '</html>').slice(0, ${SHARE_MAX_CHARS});
+  }
+  return { url: String(doc.location && doc.location.href || ''), html: html };
+`;
+
+/**
  * The extension's page script: expo-share-intent splices this into its
  * preprocessor's `run()`, after it has built `metas` and before it calls
- * `completionFunction`. It runs the Browse tab's capture on Safari's
- * document and adds the result to `metas`, which reaches the app as
- * `shareIntent.meta`. A capture that throws leaves the share a link.
+ * `completionFunction`. It runs the share capture on Safari's document and
+ * adds the result to `metas`, which reaches the app as `shareIntent.meta`.
+ * A capture that throws leaves the share a link.
  *
  * app.json carries this string verbatim (`preprocessorInjectJS`): JSON
  * cannot import, so sharedPage.test.ts fails when the two differ, printing
- * the value to paste.
+ * the value to paste. It is built into the EXTENSION, so a change here
+ * reaches phones only with a native build.
  */
 export const SHARE_PREPROCESS_JS =
-  `try { var reductionGot = (function (doc) { ${CAPTURE_BODY.trim()} })(document); ` +
+  `try { var reductionGot = (function (doc) { ${SHARE_CAPTURE_BODY.trim()} })(document); ` +
   `metas.${PAGE_URL_KEY} = reductionGot.url; metas.${PAGE_HTML_KEY} = reductionGot.html; } catch (e) {}`;
 
 // ——— the waiting share ———

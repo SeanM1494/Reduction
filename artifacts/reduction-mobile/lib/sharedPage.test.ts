@@ -5,6 +5,8 @@ import { join } from 'node:path';
 import {
   PAGE_HTML_KEY,
   PAGE_URL_KEY,
+  SHARE_CAPTURE_BODY,
+  SHARE_MAX_CHARS,
   SHARE_PREPROCESS_JS,
   hasPendingShare,
   isShareLink,
@@ -13,7 +15,7 @@ import {
   sharedItemFrom,
   takeShare,
 } from './sharedPage';
-import { CAPTURE_BODY, MAX_PAGE_CHARS } from './pageCapture';
+import { MAX_PAGE_CHARS } from './pageCapture';
 
 const S = 'reduction-mobile';
 
@@ -95,8 +97,8 @@ test('a share is taken once, the newest wins, and listeners hear each offer', ()
   takeShare();
 });
 
-test("the extension's page script is the Browse capture, and app.json carries it verbatim", () => {
-  assert.ok(SHARE_PREPROCESS_JS.includes(CAPTURE_BODY.trim()));
+test("the extension's page script is the share capture, and app.json carries it verbatim", () => {
+  assert.ok(SHARE_PREPROCESS_JS.includes(SHARE_CAPTURE_BODY.trim()));
   const appJson = JSON.parse(readFileSync(join(__dirname, '..', 'app.json'), 'utf8'));
   const entry = appJson.expo.plugins.find((p: unknown) => Array.isArray(p) && p[0] === 'expo-share-intent');
   assert.ok(entry, 'expo-share-intent is configured in app.json');
@@ -129,4 +131,68 @@ test('the page script runs against a document and fills the two keys', () => {
   const bare: Record<string, string> = {};
   new Function('metas', 'document', SHARE_PREPROCESS_JS)(bare, {});
   assert.deepEqual(bare, {});
+});
+
+// A document for the share capture: nodes matched by tag, id or class, so
+// the comment selectors are exercised as well as the tags.
+function shareDoc(children: { tag: string; id?: string; cls?: string; type?: string; text: string }[]) {
+  type N = (typeof children)[number] & { parentNode: { removeChild(n: N): void } | null; outerHTML: string };
+  const kids: N[] = [];
+  const html = (k: (typeof children)[number]) => `<${k.tag}${k.type ? ` type="${k.type}"` : ''}>${k.text}</${k.tag}>`;
+  const matches = (k: N, sel: string) => {
+    if (sel.startsWith('#')) return k.id === sel.slice(1);
+    if (sel.startsWith('.')) return k.cls === sel.slice(1);
+    const ld = /^script\[type="application\/ld\+json"\]$/.test(sel);
+    if (ld) return k.tag === 'script' && k.type === 'application/ld+json';
+    if (sel.startsWith('script:not')) return k.tag === 'script' && k.type !== 'application/ld+json';
+    return k.tag === sel;
+  };
+  const root = {
+    cloneNode: () => root,
+    querySelectorAll: (sel: string) => kids.filter((k) => sel.split(',').some((s) => matches(k, s.trim()))),
+    get outerHTML() {
+      return `<html>${kids.map(html).join('')}</html>`;
+    },
+  };
+  const parent = { removeChild: (n: N) => void kids.splice(kids.indexOf(n), 1) };
+  for (const c of children) kids.push({ ...c, parentNode: parent, outerHTML: html(c) });
+  return { documentElement: root, location: { href: 'https://a.example/r' } };
+}
+const share = (doc: unknown) => new Function('doc', SHARE_CAPTURE_BODY)(doc) as { url: string; html: string };
+
+test('a share drops comment threads as well as scripts and media', () => {
+  const got = share(
+    shareDoc([
+      { tag: 'script', type: 'application/ld+json', text: '{"@type":"Recipe"}' },
+      { tag: 'p', text: 'Mix the flour.' },
+      { tag: 'div', id: 'comments', text: 'Loved it! x400' },
+      { tag: 'ol', cls: 'comment-list', text: 'Me too' },
+      { tag: 'script', text: 'ads()' },
+    ]),
+  );
+  assert.match(got.html, /\{"@type":"Recipe"\}/);
+  assert.match(got.html, /Mix the flour\./);
+  assert.doesNotMatch(got.html, /Loved it|Me too|ads\(\)/);
+});
+
+test('an enormous shared page stops at the share cap, keeping its JSON-LD whatever comes first', () => {
+  const got = share(
+    shareDoc([
+      { tag: 'p', text: 'x'.repeat(SHARE_MAX_CHARS + 50) },
+      { tag: 'script', type: 'application/ld+json', text: '{"@type":"Recipe","name":"Apple Crisp"}' },
+    ]),
+  );
+  assert.equal(got.html.length, SHARE_MAX_CHARS);
+  assert.match(got.html, /^<!doctype html><html><head><script type="application\/ld\+json">\{"@type":"Recipe","name":"Apple Crisp"\}<\/script><\/head>/);
+});
+
+test('a page under the cap is captured exactly as Browse would', () => {
+  const got = share(shareDoc([{ tag: 'p', text: 'Bake.' }]));
+  assert.equal(got.html, '<!doctype html><html><p>Bake.</p></html>');
+});
+
+test('the share cap, escaped twice, stays far under the 4 MB UserDefaults ceiling', () => {
+  // Worst case: every character a quote, escaped by JSON.stringify twice.
+  const worst = JSON.stringify(JSON.stringify({ h: '"'.repeat(SHARE_MAX_CHARS) }));
+  assert.ok(Buffer.byteLength(worst) < 4_194_304, `${Buffer.byteLength(worst)} bytes`);
 });
