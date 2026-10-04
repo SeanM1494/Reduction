@@ -6,6 +6,7 @@ import {
   PAGE_HTML_KEY,
   PAGE_URL_KEY,
   SHARE_CAPTURE_BODY,
+  SHARE_CARD_TEXT_CHARS,
   SHARE_MAX_CHARS,
   SHARE_PREPROCESS_JS,
   hasPendingShare,
@@ -116,6 +117,7 @@ test('the page script runs against a document and fills the two keys', () => {
   const node = (tag: string) => ({ tag, parentNode: { removeChild: () => removed.push(tag) } });
   const document = {
     location: { href: 'https://a.example/r' },
+    querySelectorAll: () => [],
     documentElement: {
       cloneNode: () => ({
         querySelectorAll: () => [node('script'), node('img')],
@@ -156,7 +158,24 @@ function shareDoc(children: { tag: string; id?: string; cls?: string; type?: str
   };
   const parent = { removeChild: (n: N) => void kids.splice(kids.indexOf(n), 1) };
   for (const c of children) kids.push({ ...c, parentNode: parent, outerHTML: html(c) });
-  return { documentElement: root, location: { href: 'https://a.example/r' } };
+  // The live document, which the recipe-card path reads without cloning.
+  const live = kids.map((k) => ({
+    ...k,
+    textContent: k.text,
+    innerText: k.text,
+    getAttribute: (a: string) => (a === 'property' ? k.cls : a === 'content' ? k.id : null),
+  }));
+  const pick = (sel: string) =>
+    live.filter((k) =>
+      sel.startsWith('meta') ? k.tag === 'meta' : sel.split(',').some((s) => matches(k, s.trim())),
+    );
+  return {
+    documentElement: root,
+    location: { href: 'https://a.example/r' },
+    querySelectorAll: pick,
+    querySelector: (sel: string) => pick(sel)[0] ?? null,
+    body: { innerText: kids.filter((k) => k.tag !== 'script').map((k) => k.text).join('\n') },
+  };
 }
 const share = (doc: unknown) => new Function('doc', SHARE_CAPTURE_BODY)(doc) as { url: string; html: string };
 
@@ -195,4 +214,52 @@ test('the share cap, escaped twice, stays far under the 4 MB UserDefaults ceilin
   // Worst case: every character a quote, escaped by JSON.stringify twice.
   const worst = JSON.stringify(JSON.stringify({ h: '"'.repeat(SHARE_MAX_CHARS) }));
   assert.ok(Buffer.byteLength(worst) < 4_194_304, `${Buffer.byteLength(worst)} bytes`);
+});
+
+// A recipe card that the server's fast path reads (fetchSource.ts).
+const CARD = JSON.stringify({
+  '@context': 'https://schema.org',
+  '@graph': [
+    { '@type': 'WebPage', name: 'Chili' },
+    {
+      '@type': 'Recipe',
+      name: 'The Best Chili',
+      recipeIngredient: ['1 lb ground beef', '1 onion'],
+      recipeInstructions: [{ '@type': 'HowToStep', text: 'Brown the beef & onion.' }],
+    },
+  ],
+});
+
+test('a page with a recipe card shares the card, the og: tags and the text, never the page', () => {
+  const got = share(
+    shareDoc([
+      { tag: 'title', text: 'Chili <Best>' },
+      // getAttribute in this fake reads property from cls and content from id.
+      { tag: 'meta', cls: 'og:image', id: 'https://a.example/c.jpg', text: '' },
+      { tag: 'script', type: 'application/ld+json', text: '{"@type":"Organization"}' },
+      { tag: 'script', type: 'application/ld+json', text: CARD },
+      { tag: 'script', type: 'application/ld+json', text: '{"recipeIngredient":[], "recipeInstructions": [' },
+      { tag: 'p', text: 'Brown the beef.' },
+      { tag: 'div', id: 'comments', text: 'Loved it! '.repeat(400_000) },
+      { tag: 'script', text: 'ads()' },
+    ]),
+  );
+  // A four-million-character page; the share is the card plus capped text.
+  assert.ok(got.html.length < SHARE_CARD_TEXT_CHARS + 2_000, `${got.html.length} characters`);
+  assert.ok(got.html.includes(`<script type="application/ld+json">${CARD}</script>`));
+  assert.ok(got.html.includes('<title>Chili &lt;Best&gt;</title>'));
+  assert.ok(got.html.includes('<meta property="og:image" content="https://a.example/c.jpg">'));
+  // Only the block that parses and holds a recipe; never the markup or scripts.
+  assert.doesNotMatch(got.html, /Organization|ads\(\)|<p>/);
+  assert.match(got.html, /<main>[^<]*Brown the beef\.[^<]*Loved it! /);
+});
+
+test("a page whose JSON-LD holds no recipe is captured as before", () => {
+  const got = share(
+    shareDoc([
+      { tag: 'script', type: 'application/ld+json', text: '{"@type":"Article"}' },
+      { tag: 'p', text: 'Bake.' },
+    ]),
+  );
+  assert.equal(got.html, '<!doctype html><html><script type="application/ld+json">{"@type":"Article"}</script><p>Bake.</p></html>');
 });
