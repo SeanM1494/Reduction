@@ -66,6 +66,14 @@ interface Props {
 
 type DemoMode = "diagram" | "steps";
 
+/** The App Store screenshots, resized from the project's upload set. */
+const APP_SHOTS = [
+  { src: "/screens/diagram.jpg", alt: "A banana bread recipe as a diagram on iPhone, with the next step lit up" },
+  { src: "/screens/step-by-step.jpg", alt: "Step-by-Step mode showing one baking step with a timer" },
+  { src: "/screens/recipe-books.jpg", alt: "The Recipe Box, with recipes sorted into books" },
+  { src: "/screens/dark-mode.jpg", alt: "The diagram in the app's warm dark mode" },
+];
+
 export default function LandingPage({
   themeMode,
   onThemeChange,
@@ -435,6 +443,63 @@ export default function LandingPage({
             Create an account or log in
           </button>
         </div>
+        {/* The iPhone app, below the CTA for the same reason as the legal
+            links: it spends none of the fold. Says "coming soon" and links
+            nowhere until the App Store listing is live. */}
+        <section className="rd-app-promo" aria-labelledby="rd-app-promo-title">
+          <h2 id="rd-app-promo-title" className="rd-app-promo-title">
+            Coming soon to iPhone
+          </h2>
+          <p className="rd-app-promo-line">
+            The same recipes, in an app made for a phone propped on the
+            counter. One account works on both.
+          </p>
+          <div className="rd-app-shots">
+            {APP_SHOTS.map((s) => (
+              <img
+                key={s.src}
+                className="rd-app-shot"
+                src={s.src}
+                alt={s.alt}
+                width={440}
+                height={956}
+                loading="lazy"
+                decoding="async"
+              />
+            ))}
+          </div>
+          <ul className="rd-app-features">
+            <li>
+              <strong>The whole recipe as one diagram.</strong> Every
+              ingredient sits beside the step that uses it, and the next step
+              lights up as you check things off.
+            </li>
+            <li>
+              <strong>Cook one step at a time.</strong> Big cards, a timer on
+              any step that needs one, and a screen that stays awake while
+              you cook.
+            </li>
+            <li>
+              <strong>Add recipes any way you find them.</strong> A link, a
+              photo of a cookbook page or a family recipe card, pasted text,
+              or straight from Safari&rsquo;s Share button.
+            </li>
+            <li>
+              <strong>A Recipe Box that is yours.</strong> Sort recipes into
+              books, search by recipe or ingredient, and keep your own notes
+              on a recipe and on any step.
+            </li>
+            <li>
+              <strong>Easy on the eyes.</strong> A warm dark mode for
+              late-night baking. Sign in with Apple or Google.
+            </li>
+          </ul>
+          <p className="rd-app-price">
+            Your first three recipes are free, however you add them. After
+            that, Reduction is $1.99 a month, or $19.99 a year in the app.
+          </p>
+        </section>
+
         {/* Below the CTA, so it spends none of the fold (CLAUDE.md: the SE
             has +24px above the CTA's bottom and nothing else). */}
         <LegalLinks className="rd-landing-legal" />
