@@ -44,6 +44,7 @@ import { TitleButton } from '@/components/recipe/TitleButton';
 import { freeRecipeLine, savedCounter, usesFreeRecipe } from '@/lib/reelView';
 import { reportCounter } from '@/lib/api';
 import { createCookVisit, type CookActivity, type CookVisit } from '@/lib/cookCounters';
+import { maybeAskForRating, noteFinishedCook } from '@/lib/ratingPrompt';
 import { BookPicker } from '@/components/books/BookPicker';
 import { titleProblem } from '@/shared/title';
 
@@ -112,7 +113,28 @@ export default function RecipeDetailScreen() {
   useEffect(() => {
     if (!isDraft && hasEntry) visitFor(id).opened();
   }, [id, isDraft, hasEntry, visitFor]);
-  const onActivity = useCallback((a: CookActivity) => visitFor(id).activity(a), [id, visitFor]);
+  // A finished cook here asks for a rating as the screen is LEFT, never
+  // mid-cook (lib/rating.ts has the rules; ratingPrompt.ts does nothing on
+  // a binary without the native module).
+  const finishedHere = useRef(false);
+  const onActivity = useCallback(
+    (a: CookActivity) => {
+      visitFor(id).activity(a);
+      if (a.kind === 'tick' && a.finished) {
+        finishedHere.current = true;
+        void noteFinishedCook();
+      }
+    },
+    [id, visitFor],
+  );
+  useEffect(
+    () => () => {
+      const finished = finishedHere.current;
+      // After the pop has finished, so Apple's sheet lands on the library.
+      if (finished) setTimeout(() => void maybeAskForRating(true), 700);
+    },
+    [],
+  );
 
   // The recipe's own step sentences, for Step-by-Step (StepsMode's
   // `sourceSteps`). Asked for only when the recipe's steps carry source
