@@ -26,6 +26,7 @@ import { TimersCard } from '@/components/settings/TimersCard';
 import { SubscribeBox } from '@/components/SubscribeBox';
 import { LegalLinks } from '@/components/LegalLinks';
 import { FeedbackRow } from '@/components/settings/FeedbackRow';
+import { RateRow } from '@/components/settings/RateRow';
 import { manageSubscription } from '@/lib/purchase';
 import { useColors, type Colors } from '@/hooks/useColors';
 import { useBooks } from '@/lib/books-context';
@@ -265,6 +266,8 @@ export default function SettingsScreen() {
       {owner ? <IntroTestingSheet open={introTesting} onClose={() => setIntroTesting(false)} /> : null}
 
       <FeedbackRow styles={styles} />
+
+      <RateRow styles={styles} />
 
       <AppearanceCard />
 
