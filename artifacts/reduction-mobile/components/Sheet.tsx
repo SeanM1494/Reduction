@@ -37,13 +37,16 @@ interface Props {
   /** After it has finished closing and its Modal is gone — where the NEXT
    *  dialog opens from (see components/Window.tsx for why). */
   onClosed?: () => void;
+  /** Pinned under the scrolling content, so a long list never scrolls its
+   *  one action off the screen (the shopping list's Add button). */
+  footer?: React.ReactNode;
   children: React.ReactNode;
 }
 
 const IN_MS = 260;
 const OUT_MS = 200;
 
-export function Sheet({ open, title, onClose, closeLabel = 'Done', avoidKeyboard, onClosed, children }: Props) {
+export function Sheet({ open, title, onClose, closeLabel = 'Done', avoidKeyboard, onClosed, footer, children }: Props) {
   const colors = useColors();
   const styles = makeStyles(colors);
   const insets = useSafeAreaInsets();
@@ -60,8 +63,8 @@ export function Sheet({ open, title, onClose, closeLabel = 'Done', avoidKeyboard
   }, [mounted]);
   // What the sheet showed, kept on screen while it slides away after the
   // caller has already moved on.
-  const last = useRef<{ title: string; children: React.ReactNode }>({ title, children });
-  if (open) last.current = { title, children };
+  const last = useRef<{ title: string; children: React.ReactNode; footer?: React.ReactNode }>({ title, children, footer });
+  if (open) last.current = { title, children, footer };
 
   useEffect(() => {
     if (open) {
@@ -84,7 +87,7 @@ export function Sheet({ open, title, onClose, closeLabel = 'Done', avoidKeyboard
   );
 
   if (!mounted) return null;
-  const shown = open ? { title, children } : last.current;
+  const shown = open ? { title, children, footer } : last.current;
   return (
     <Modal visible transparent animationType="none" onRequestClose={onClose} statusBarTranslucent>
       <Animated.View style={[StyleSheet.absoluteFill, styles.scrimTint, scrimStyle]}>
@@ -105,6 +108,7 @@ export function Sheet({ open, title, onClose, closeLabel = 'Done', avoidKeyboard
           <ScrollView showsVerticalScrollIndicator={false} showsHorizontalScrollIndicator={false} bounces={false} keyboardShouldPersistTaps="handled">
             {shown.children}
           </ScrollView>
+          {shown.footer ? <View style={styles.footer}>{shown.footer}</View> : null}
         </Animated.View>
       </KeyboardAvoidingView>
     </Modal>
@@ -233,6 +237,7 @@ function makeStyles(colors: Colors) {
       backgroundColor: colors.borderStrong,
       marginBottom: 10,
     },
+    footer: { paddingTop: 12 },
     head: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 12 },
     title: { flex: 1, fontFamily: fonts.heading, fontSize: 17, color: colors.foreground },
     btn: {

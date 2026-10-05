@@ -17,6 +17,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { Window } from '@/components/Window';
+import { useShoppingList } from '@/lib/shopping-context';
 import { MealTypeArt } from '@/components/library/MealTypeArt';
 import { useRecipePhoto } from '@/lib/recipePhoto';
 import { sanitizeMealTypes } from '@/shared/mealTypes';
@@ -49,6 +50,10 @@ interface Props {
  */
 export function PreviewSheet({ entry, onClose, onOpen }: Props) {
   const [instant, setInstant] = useState(false);
+  const { openAddToList } = useShoppingList();
+  // Add to shopping list closes this window and opens the popup from
+  // onClosed: iOS can refuse a Modal presented while another is dismissing.
+  const addAfter = useRef<string | null>(null);
   const last = useRef<Entry | null>(entry);
   if (entry) last.current = entry;
   useEffect(() => {
@@ -56,7 +61,18 @@ export function PreviewSheet({ entry, onClose, onOpen }: Props) {
   }, [entry]);
   const shown = entry ?? last.current;
   return (
-    <Window open={entry !== null} onClose={onClose} instant={instant} padding={14} testID="preview">
+    <Window
+      open={entry !== null}
+      onClose={onClose}
+      instant={instant}
+      padding={14}
+      testID="preview"
+      onClosed={() => {
+        const id = addAfter.current;
+        addAfter.current = null;
+        if (id) openAddToList(id);
+      }}
+    >
       {shown ? (
         <PreviewBody
           entry={shown}
@@ -65,13 +81,27 @@ export function PreviewSheet({ entry, onClose, onOpen }: Props) {
             setInstant(true);
             onOpen(e, v);
           }}
+          onAddToList={(e) => {
+            addAfter.current = e.id;
+            onClose();
+          }}
         />
       ) : null}
     </Window>
   );
 }
 
-function PreviewBody({ entry, onClose, onOpen }: { entry: Entry; onClose: () => void; onOpen: Props['onOpen'] }) {
+function PreviewBody({
+  entry,
+  onClose,
+  onOpen,
+  onAddToList,
+}: {
+  entry: Entry;
+  onClose: () => void;
+  onOpen: Props['onOpen'];
+  onAddToList: (entry: Entry) => void;
+}) {
   const colors = useColors();
   const styles = makeStyles(colors);
   const recipe = entry.recipe;
@@ -167,6 +197,17 @@ function PreviewBody({ entry, onClose, onOpen }: { entry: Entry; onClose: () => 
           <Text style={[styles.btnText, styles.btnPrimaryText]}>Step-by-Step</Text>
         </Pressable>
       </View>
+      {/* Under the two ways in, so on an iPhone SE they stay in view and
+          this is the one that scrolls. */}
+      <Pressable
+        accessibilityRole="button"
+        onPress={() => onAddToList(entry)}
+        style={({ pressed }) => [styles.btn, styles.addBtn, pressed && styles.btnPressed]}
+        testID="preview-add-to-list"
+      >
+        <Feather name="shopping-cart" size={17} color={colors.foreground} />
+        <Text style={styles.btnText}>Add to shopping list</Text>
+      </Pressable>
     </View>
   );
 }
@@ -238,6 +279,7 @@ function makeStyles(colors: Colors) {
     chipMoreText: { color: colors.mutedForeground },
     cooked: { marginTop: 14, fontSize: 13, color: colors.mutedForeground },
     buttons: { flexDirection: 'row', gap: 8, marginTop: 16 },
+    addBtn: { flex: 0, flexDirection: 'row', gap: 8, marginTop: 8 },
     btn: {
       flex: 1,
       minHeight: 48,
