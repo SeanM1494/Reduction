@@ -36,3 +36,4 @@ export * from "./title";
 export * from "./books";
 export * from "./summary";
 export * from "./notes";
+export * from "./shoppingList";
