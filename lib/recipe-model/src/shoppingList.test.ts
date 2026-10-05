@@ -49,7 +49,10 @@ test("the same ingredient in two recipes is one line, summed, naming both", () =
   const b = recipe("Gravy", [{ name: "Main", ingredients: [ing("yellow onions", 1), ing("Butter", 4, "tbsp")] }]);
   const items = shoppingList([one(a), one(b)]);
   assert.equal(items.length, 2);
-  assert.deepEqual(items[0], { key: "yellow onion", name: "Yellow onion", amount: "3", from: ["Stuffing", "Gravy"] });
+  assert.equal(items[0].key, "yellow onion");
+  assert.equal(items[0].name, "Yellow onion");
+  assert.equal(items[0].amount, "3");
+  assert.deepEqual(items[0].from, ["Stuffing", "Gravy"]);
   // Different units are kept apart, never converted.
   assert.equal(items[1].amount, "½ cup + 4 Tbs");
 });
@@ -115,6 +118,25 @@ test("numbers and text for one item are both kept", () => {
     one(recipe("B", [{ name: "x", ingredients: [ing("salt", null, null, { text: "to taste" })] }])),
   ]);
   assert.equal(items[0].amount, "1 tsp + to taste");
+});
+
+test("an unticked ingredient is left out, and a line knows every ingredient in it", () => {
+  const sugarA = ing("sugar", 0.25, "cup");
+  const sugarB = ing("sugar", 0.5, "cup");
+  const salt = ing("salt", 1, "tsp");
+  const r = recipe("Pie", [
+    { name: "Crust", ingredients: [sugarA, salt] },
+    { name: "Filling", ingredients: [sugarB] },
+  ]);
+  const [sugar] = shoppingList([one(r)]);
+  assert.deepEqual(sugar.ingredients, [{ source: "Pie", id: sugarA.id }, { source: "Pie", id: sugarB.id }]);
+  // Unticking the line in the popup skips all of its ingredients.
+  const skip = new Set(sugar.ingredients.map((i) => i.id));
+  assert.deepEqual(shoppingList([{ id: "Pie", recipe: r, scale: 1, skip }]).map((i) => i.name), ["salt"]);
+  // A skip applies only to the recipe it was made for.
+  const other = recipe("Tea", [{ name: "x", ingredients: [ing("sugar", 1, "tsp")] }]);
+  const both = shoppingList([{ id: "Pie", recipe: r, scale: 1, skip }, one(other)]);
+  assert.deepEqual(both.map((i) => [i.name, i.amount]), [["salt", "1 tsp"], ["sugar", "1 tsp"]]);
 });
 
 test("plural folding merges real plurals and never invents a merge", () => {

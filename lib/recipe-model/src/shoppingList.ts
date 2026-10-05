@@ -39,6 +39,8 @@ export interface ShoppingSource {
   recipe: Recipe;
   /** servings / recipe.servings, or exactly 1 when not scaled. */
   scale: number;
+  /** Ingredient ids unticked in the add-to-list popup: left out entirely. */
+  skip?: ReadonlySet<string>;
 }
 
 export interface ShoppingItem {
@@ -50,6 +52,10 @@ export interface ShoppingItem {
   amount: string;
   /** Ids of the recipes that need it, in the order they were passed. */
   from: string[];
+  /** Every ingredient merged into this line, so the add-to-list popup can
+   *  untick a line that one recipe lists twice ("sugar" in crust and
+   *  filling) as one choice. */
+  ingredients: { source: string; id: string }[];
 }
 
 interface Part {
@@ -93,24 +99,31 @@ export function shoppingList(sources: ShoppingSource[]): ShoppingItem[] {
   const order: string[] = [];
   const items = new Map<
     string,
-    { name: string; parts: Part[]; texts: Map<string, number>; from: string[] }
+    {
+      name: string;
+      parts: Part[];
+      texts: Map<string, number>;
+      from: string[];
+      ingredients: { source: string; id: string }[];
+    }
   >();
 
   for (const src of sources) {
     const skip = componentIngredientIds(src.recipe);
     for (const section of src.recipe.sections ?? []) {
       for (const ing of section.ingredients ?? []) {
-        if (skip.has(ing.id)) continue;
+        if (skip.has(ing.id) || src.skip?.has(ing.id)) continue;
         const name = (ing.name ?? "").trim();
         if (!name) continue;
         const key = shoppingKey(name);
         let item = items.get(key);
         if (!item) {
-          item = { name, parts: [], texts: new Map(), from: [] };
+          item = { name, parts: [], texts: new Map(), from: [], ingredients: [] };
           items.set(key, item);
           order.push(key);
         }
         if (!item.from.includes(src.id)) item.from.push(src.id);
+        item.ingredients.push({ source: src.id, id: ing.id });
 
         if (ing.qty != null && Number.isFinite(ing.qty)) {
           const lo = ing.qty * src.scale;
@@ -141,7 +154,7 @@ export function shoppingList(sources: ShoppingSource[]): ShoppingItem[] {
     for (const [text, n] of it.texts) {
       pieces.push(n > 1 && isCountableText(text) ? `${n} × ${text}` : text);
     }
-    return { key, name: it.name, amount: pieces.join(" + "), from: it.from };
+    return { key, name: it.name, amount: pieces.join(" + "), from: it.from, ingredients: it.ingredients };
   });
 }
 
