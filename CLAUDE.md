@@ -489,6 +489,17 @@ sleeps does not fire until someone opens the app**, which is what happened
 before the feature existed — so nothing regressed, and nothing costs money to
 stay awake.
 
+**On the phone, the alert no longer depends on the server (Oct 5).**
+`lib/timerAlerts.ts` schedules a local notification at `endsAt` and
+reconciles the device's pending alerts against the library on every change
+(`lib/timerAlertPolicy.ts`, pure, tested), so a phone running that bundle
+rings with the app closed and the deployment asleep. It hands back the push
+token an older bundle registered, or every alert would arrive twice; the
+server's push now serves the website and older bundles only. The limit it
+states instead: a timer started on ANOTHER device rings here only after
+this phone has loaded the library. The paragraph below is still true of
+the website.
+
 **Do not describe this to a user as background notifications.** The Timers
 card in Settings states the limitation whether or not the toggle is on, and
 that copy is load-bearing rather than decorative: its first draft promised

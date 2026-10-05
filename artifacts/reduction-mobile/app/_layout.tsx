@@ -24,6 +24,7 @@ import { SpaceMono_400Regular, SpaceMono_700Bold } from '@expo-google-fonts/spac
 import { Stack, router, usePathname, useSegments } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { configureNotifications, onNotificationTap } from '@/lib/push';
+import { clearTimerAlerts, retireServerPush, syncTimerAlerts } from '@/lib/timerAlerts';
 import { notificationTarget } from '@/lib/pushPolicy';
 import { setPurchaseHandler } from '@/lib/purchase';
 import { startStoreKitReconciler, storeKitHandler } from '@/lib/storeKit';
@@ -51,8 +52,8 @@ const queryClient = new QueryClient();
 
 function RootLayoutNav() {
   const colors = useColors();
-  const { refresh } = useAuth();
-  const { settled } = useLibrary();
+  const { refresh, user } = useAuth();
+  const { settled, entries, error } = useLibrary();
   const pathname = usePathname();
   // The route PATTERN for a crash report (`/recipe/[id]`), never the path,
   // which carries a recipe's id.
@@ -102,6 +103,22 @@ function RootLayoutNav() {
   // One that waited through sign-in needs no move: this navigator opens on
   // Find, and a share launch is never moved to the Recipe Box.
   useEffect(() => onShare(() => router.navigate('/')), []);
+  // Timer alerts the phone schedules for itself (lib/timerAlerts.ts),
+  // reconciled against the library on every change. Not before the library
+  // has been read, and not over an empty list a failed first load left
+  // behind: either would cancel every running timer's alert.
+  useEffect(() => {
+    if (!settled || (error && entries.length === 0)) return;
+    void syncTimerAlerts(entries);
+  }, [settled, error, entries]);
+  // Signing out unmounts this tree: nothing of the account's should ring.
+  useEffect(() => () => void clearTimerAlerts(), []);
+  // The old bundle's push token goes back, or every alert would arrive
+  // twice — once from here and once from the server.
+  const userId = user?.id ?? null;
+  useEffect(() => {
+    if (userId) void retireServerPush(userId);
+  }, [userId]);
   // A tapped timer notification opens its recipe. Registered here, inside
   // the signed-in tree, because a timer belongs to an account's recipe and
   // there is nothing to open before sign-in.

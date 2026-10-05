@@ -1,69 +1,60 @@
 /**
- * components/settings/TimersCard.tsx — the timers toggle (the web's
- * NotificationSetting, ported).
+ * components/settings/TimersCard.tsx — the timers toggle.
  *
- * THE LIMITATION IS STATED WHETHER OR NOT IT IS SWITCHED ON, and before
- * someone relies on it rather than after they miss a timer: the server
- * sleeps when nobody is using it, so a timer that comes due long after the
- * app was closed does not fire until someone opens it again (ROADMAP, the
- * timers section — "even if the app is closed" was the first draft's
- * overselling, and the first burnt dinner would have been how someone
- * found out).
- *
- * The web's biggest case — "add it to your Home Screen first" — does not
- * exist here. In its place are the two ways a native build cannot hold a
- * token, each named plainly (lib/pushPolicy.ts).
+ * SINCE OCT 5 THE PHONE RINGS ITSELF. An alert is scheduled on the device
+ * the moment a timer starts (lib/timerAlerts.ts), so it is delivered with
+ * the app closed and the server asleep — which the server's push never
+ * could be. What it cannot do is hear about a timer started on another
+ * device until this one has loaded the library since, and the card says
+ * that rather than promising more (the first draft of the web's card said
+ * "even if the app is closed" when it was not true; now it is, here, and
+ * the remaining limit is stated just as plainly).
  */
 
 import React, { useCallback, useEffect, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { SheetButton } from '@/components/Sheet';
-import { useAuth } from '@/lib/auth-context';
-import { disablePush, enablePush, pushState } from '@/lib/push';
-import type { PushState } from '@/lib/pushPolicy';
+import { disableTimerAlerts, enableTimerAlerts, timerAlertState } from '@/lib/timerAlerts';
+import type { AlertState } from '@/lib/timerAlertPolicy';
 import { useColors, type Colors } from '@/hooks/useColors';
 import { cardShadow, fonts } from '@/constants/colors';
 
 export function TimersCard() {
   const colors = useColors();
   const styles = makeStyles(colors);
-  const { user } = useAuth();
-  const userId = user?.id ?? null;
-  const [state, setState] = useState<PushState | 'loading'>('loading');
+  const [state, setState] = useState<AlertState | 'loading'>('loading');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!userId) return;
     let alive = true;
-    pushState(userId)
+    timerAlertState()
       .then((s) => alive && setState(s))
       .catch(() => alive && setState('unsupported'));
     return () => {
       alive = false;
     };
-  }, [userId]);
+  }, []);
 
   const toggle = useCallback(async () => {
-    if (!userId) return;
     setBusy(true);
     setError(null);
     try {
-      setState(state === 'on' ? await disablePush(userId) : await enablePush(userId));
+      setState(state === 'on' ? await disableTimerAlerts() : await enableTimerAlerts());
     } catch (e) {
       setError((e as Error).message || 'Could not change that.');
     } finally {
       setBusy(false);
     }
-  }, [state, userId]);
+  }, [state]);
 
-  if (state === 'loading' || !userId) return null;
+  if (state === 'loading') return null;
 
   const caveat = (
     <Text style={styles.caveat}>
-      Alerts arrive while Reduction is open or has been used recently. The server sleeps when nobody's
-      cooking, so a timer that finishes long after you closed the app waits until you come back. Always-on
-      background alerts need a paid tier — they're planned, not built.
+      Alerts come from this phone, so they ring even with Reduction closed. A timer started on another
+      device rings here only after you've opened Reduction on this phone. With the ringer off, alerts
+      are silent.
     </Text>
   );
 
@@ -72,12 +63,6 @@ export function TimersCard() {
     body = (
       <Text style={styles.sub}>
         This device can't receive notifications. Timers still count down while the app is open.
-      </Text>
-    );
-  } else if (state === 'needs-setup') {
-    body = (
-      <Text style={styles.sub}>
-        Notifications aren't set up for this build yet. Timers still count down while the app is open.
       </Text>
     );
   } else if (state === 'denied') {
@@ -95,8 +80,8 @@ export function TimersCard() {
       <>
         <Text style={styles.sub}>
           {on
-            ? "You'll get a notification when a timer finishes, on every device you've turned this on for."
-            : 'Get a notification when a timer finishes, on every device you turn this on for.'}
+            ? "You'll get a notification on this phone when a timer finishes."
+            : 'Get a notification on this phone when a timer finishes.'}
         </Text>
         <View style={styles.toggleRow}>
           <SheetButton
