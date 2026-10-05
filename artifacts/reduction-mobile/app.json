@@ -3,7 +3,7 @@
     "name": "Reduction",
     "slug": "reduction-mobile",
     "owner": "seans-apps",
-    "version": "1.2.0",
+    "version": "1.3.0",
     "runtimeVersion": {
       "policy": "appVersion"
     },
@@ -20,7 +20,8 @@
       "supportsTablet": false,
       "bundleIdentifier": "com.recipereduction.mobile",
       "infoPlist": {
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSAlarmKitUsageDescription": "Reduction rings your cooking timers like an alarm, even when your phone is on silent."
       }
     },
     "android": {

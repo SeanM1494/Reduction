@@ -119,30 +119,115 @@ export function reconcileAlerts(
 
 /**
  * What the Settings card shows (the native app; the website keeps its own
- * push card).
+ * push card), and which arm rings.
  *
  *  - unsupported: the web build, which has no scheduled notifications.
- *  - denied: the OS said no and will not ask again — the system Settings
- *    is the only way back, so the card says that rather than offering a tap.
- *  - on: allowed, and not switched off in the card.
+ *  - denied: the OS said no to notifications and will not ask again — the
+ *    system Settings is the only way back, so the card says that rather
+ *    than offering a tap.
+ *  - alarm: chosen in the card AND AlarmKit authorized (iOS 26+). Timers
+ *    ring as system alarms instead of notifications — never both, or
+ *    every timer would sound twice.
+ *  - on: notifications allowed, and not switched off in the card.
  *  - off: switched off in the card, or never asked.
  *
  * A device that granted permission before this existed reads as ON with no
  * stored choice: the only thing Reduction ever asked permission for is
- * timers, so a yes was a yes to these.
+ * timers, so a yes was a yes to these. A chosen alarm whose authorization
+ * was later withdrawn in Settings falls back to notifications rather than
+ * to silence.
  */
-export type AlertState = "unsupported" | "denied" | "on" | "off";
+export type AlertState = "unsupported" | "denied" | "alarm" | "on" | "off";
+
+export type AlarmAuth = "authorized" | "denied" | "notDetermined" | "unavailable";
 
 export interface AlertFacts {
   platform: string;
   permission: "granted" | "denied" | "undetermined" | null;
   /** The card's own switch, as stored; null when never set. */
-  choice: "on" | "off" | null;
+  choice: "on" | "off" | "alarm" | null;
+  /** AlarmKit's authorization; "unavailable" before iOS 26, on a binary
+   *  without the module, and everywhere but iOS. */
+  alarm: AlarmAuth;
 }
 
 export function deriveAlertState(f: AlertFacts): AlertState {
   if (f.platform === "web") return "unsupported";
+  if (f.choice === "alarm" && f.alarm === "authorized") return "alarm";
   if (f.permission === "denied") return "denied";
   if (f.permission !== "granted") return "off";
   return f.choice === "off" ? "off" : "on";
+}
+
+/** Whether the card offers alarms at all: AlarmKit is there and has not
+ *  been refused (a refusal is only undone in Settings, like notifications). */
+export const alarmsOffered = (f: Pick<AlertFacts, "alarm">): boolean =>
+  f.alarm === "authorized" || f.alarm === "notDetermined";
+
+// ------------------------------------------------------------- alarms ---
+
+/**
+ * AlarmKit names an alarm by UUID and a recipe id is not one
+ * (`newEntryId`: base36 time and random). So the alarm's id is DERIVED
+ * from the recipe's — the same recipe always maps to the same alarm, with
+ * nothing stored to fall out of step. Four 32-bit FNV-1a hashes with
+ * different seeds, shaped as an RFC 9562 version-8 UUID (the "custom"
+ * version), lowercase as the native side reports ids.
+ */
+export function alarmIdFor(recipeId: string): string {
+  const words = [0x811c9dc5, 0x01000193, 0x5bd1e995, 0x27d4eb2f].map((seed, k) => {
+    let h = (seed ^ k) >>> 0;
+    for (let i = 0; i < recipeId.length; i++) {
+      h ^= recipeId.charCodeAt(i);
+      h = Math.imul(h, 0x01000193) >>> 0;
+    }
+    return h.toString(16).padStart(8, "0");
+  });
+  const hex = words.join("").split("");
+  hex[12] = "8"; // version 8
+  hex[16] = ((parseInt(hex[16], 16) & 0x3) | 0x8).toString(16); // variant 10xx
+  const h = hex.join("");
+  return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20, 32)}`;
+}
+
+/** The alarm's one line. An alarm shows a title and nothing else, so it
+ *  carries the step (what to do now) when there is one, else the recipe. */
+export function alarmTitle(a: PlannedAlert): string {
+  const step = a.body.startsWith("Time's up — ") ? a.body.slice("Time's up — ".length) : "";
+  const t = (step || a.title).trim();
+  return t.length > 40 ? `${t.slice(0, 39)}…` : t;
+}
+
+export interface ScheduledAlarm {
+  id: string;
+  /** Epoch ms; 0 when the alarm has no fixed date. */
+  fireAt: number;
+}
+
+/**
+ * The alarm arm's reconcile, the same contract as `reconcileAlerts`: what
+ * to cancel and what to schedule so AlarmKit holds exactly the plan. An
+ * alarm whose time moved is cancelled AND rescheduled under the same id —
+ * AlarmKit does not replace an id the way a notification identifier is
+ * replaced — so callers run the cancels first. Every alarm the app holds
+ * is ours (AlarmKit is per app), so anything outside the plan goes.
+ * Times are compared to the second, the precision a Date round trip
+ * through the native side is trusted with.
+ */
+export function reconcileAlarms(
+  plan: readonly PlannedAlert[],
+  scheduled: readonly ScheduledAlarm[]
+): { cancel: string[]; schedule: { id: string; fireAt: number; title: string }[] } {
+  const want = new Map(plan.map((p) => [alarmIdFor(p.data.recipeId), p]));
+  const have = new Map(scheduled.map((s) => [s.id.toLowerCase(), s.fireAt]));
+  const sameSecond = (a: number, b: number) => Math.round(a / 1000) === Math.round(b / 1000);
+  const cancel: string[] = [];
+  for (const [id, fireAt] of have) {
+    const p = want.get(id);
+    if (!p || !sameSecond(fireAt, p.endsAt)) cancel.push(id);
+  }
+  const schedule = [...want]
+    .filter(([id, p]) => !have.has(id) || !sameSecond(have.get(id)!, p.endsAt))
+    .map(([id, p]) => ({ id, fireAt: p.endsAt, title: alarmTitle(p) }));
+  return { cancel, schedule };
 }

@@ -1,9 +1,13 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
+  alarmIdFor,
+  alarmsOffered,
+  alarmTitle,
   deriveAlertState,
   MAX_TIMER_MS,
   plannedAlerts,
+  reconcileAlarms,
   reconcileAlerts,
   type AlertFacts,
   type TimedEntry,
@@ -92,7 +96,7 @@ test("reconcileAlerts: never cancels a notification that is not a timer alert", 
   assert.deepEqual(reconcileAlerts([], pending), { cancel: ["timer:r1"], schedule: [] });
 });
 
-const facts: AlertFacts = { platform: "ios", permission: "granted", choice: null };
+const facts: AlertFacts = { platform: "ios", permission: "granted", choice: null, alarm: "unavailable" };
 
 test("deriveAlertState: the web has none; denied beats any choice", () => {
   assert.equal(deriveAlertState({ ...facts, platform: "web" }), "unsupported");
@@ -108,4 +112,85 @@ test("deriveAlertState: a permission granted before this existed reads as on", (
 test("deriveAlertState: never asked, or unknown, is off — a toggle, not an alert that fails", () => {
   assert.equal(deriveAlertState({ ...facts, permission: "undetermined", choice: "on" }), "off");
   assert.equal(deriveAlertState({ ...facts, permission: null }), "off");
+});
+
+test("deriveAlertState: alarms ring only when chosen AND authorized, and beat a notification refusal", () => {
+  assert.equal(deriveAlertState({ ...facts, choice: "alarm", alarm: "authorized" }), "alarm");
+  assert.equal(deriveAlertState({ ...facts, permission: "denied", choice: "alarm", alarm: "authorized" }), "alarm");
+  // Not chosen: authorization alone switches nothing.
+  assert.equal(deriveAlertState({ ...facts, alarm: "authorized" }), "on");
+});
+
+test("deriveAlertState: an alarm choice whose authorization went falls back to notifications, not silence", () => {
+  assert.equal(deriveAlertState({ ...facts, choice: "alarm", alarm: "denied" }), "on");
+  assert.equal(deriveAlertState({ ...facts, choice: "alarm", alarm: "unavailable" }), "on");
+  assert.equal(deriveAlertState({ ...facts, permission: "denied", choice: "alarm", alarm: "denied" }), "denied");
+  assert.equal(deriveAlertState({ ...facts, platform: "web", choice: "alarm", alarm: "authorized" }), "unsupported");
+});
+
+test("alarmsOffered: only where AlarmKit is there and has not been refused", () => {
+  assert.equal(alarmsOffered({ alarm: "authorized" }), true);
+  assert.equal(alarmsOffered({ alarm: "notDetermined" }), true);
+  assert.equal(alarmsOffered({ alarm: "denied" }), false);
+  assert.equal(alarmsOffered({ alarm: "unavailable" }), false);
+});
+
+const UUID_V8 = /^[0-9a-f]{8}-[0-9a-f]{4}-8[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
+
+test("alarmIdFor: a stable, well-formed UUID per recipe, distinct across recipes", () => {
+  const a = alarmIdFor("lzq3k1-abc12345");
+  assert.match(a, UUID_V8);
+  assert.equal(alarmIdFor("lzq3k1-abc12345"), a);
+  const ids = new Set<string>();
+  for (let i = 0; i < 20_000; i++) {
+    const id = alarmIdFor(`${(1_700_000_000_000 + i * 7919).toString(36)}-${(i * 2654435761 >>> 0).toString(36)}`);
+    assert.match(id, UUID_V8);
+    ids.add(id);
+  }
+  assert.equal(ids.size, 20_000);
+  assert.match(alarmIdFor(""), UUID_V8);
+});
+
+test("alarmTitle: the step when there is one, else the recipe, kept short", () => {
+  const [withStep] = plannedAlerts([entry("r1", { stepId: "s1", endsAt: NOW + 5 })], NOW);
+  assert.equal(alarmTitle(withStep), "Simmer the sauce");
+  const [noStep] = plannedAlerts([entry("r1", { stepId: "s2", endsAt: NOW + 5 })], NOW);
+  assert.equal(alarmTitle(noStep), "Mongolian Beef");
+  const long = { ...withStep, body: `Time's up — ${"x".repeat(60)}` };
+  assert.equal(alarmTitle(long).length, 40);
+  assert.ok(alarmTitle(long).endsWith("…"));
+});
+
+test("reconcileAlarms: schedules new, keeps matching, cancels gone, and replaces a moved alarm", () => {
+  const plan = plannedAlerts(
+    [
+      entry("keep", { stepId: "s1", endsAt: NOW + 60_000 }),
+      entry("new", { stepId: "s1", endsAt: NOW + 120_000 }),
+      entry("moved", { stepId: "s1", endsAt: NOW + 300_000 }),
+    ],
+    NOW
+  );
+  const scheduled = [
+    // Upper case, as a UUID can come back from the native side; and a
+    // Date round trip that lost the milliseconds.
+    { id: alarmIdFor("keep").toUpperCase(), fireAt: NOW + 60_000 - 400 },
+    { id: alarmIdFor("moved"), fireAt: NOW + 200_000 },
+    { id: alarmIdFor("gone"), fireAt: NOW + 10_000 },
+  ];
+  const { cancel, schedule } = reconcileAlarms(plan, scheduled);
+  assert.deepEqual(cancel.sort(), [alarmIdFor("gone"), alarmIdFor("moved")].sort());
+  assert.deepEqual(
+    schedule.map((s) => [s.id, s.fireAt]).sort(),
+    [
+      [alarmIdFor("new"), NOW + 120_000],
+      [alarmIdFor("moved"), NOW + 300_000],
+    ].sort()
+  );
+  assert.equal(schedule[0].title, "Simmer the sauce");
+});
+
+test("reconcileAlarms: an empty plan cancels everything held, including an undated alarm", () => {
+  const scheduled = [{ id: alarmIdFor("a"), fireAt: 0 }, { id: alarmIdFor("b"), fireAt: NOW }];
+  assert.deepEqual(reconcileAlarms([], scheduled), { cancel: [alarmIdFor("a"), alarmIdFor("b")], schedule: [] });
+  assert.deepEqual(reconcileAlarms([], []), { cancel: [], schedule: [] });
 });

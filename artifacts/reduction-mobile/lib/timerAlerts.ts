@@ -3,9 +3,11 @@
  * decisions are lib/timerAlertPolicy.ts (pure, tested); this file asks the
  * OS and nothing else.
  *
- * NO NATIVE CHANGE: scheduling a local notification is the same
- * expo-notifications module every shipped binary already carries for the
- * push token, so this reaches phones as an over-the-air update.
+ * TWO ARMS, ONE RINGS. A local notification (the expo-notifications module
+ * every binary carries), or — chosen in Settings, iOS 26+, binaries from
+ * 1.3.0 — an AlarmKit alarm (lib/timerAlarm.ts), which rings through Silent
+ * mode and Focus with the system's alarm screen. Both are reconciled
+ * against the same plan; the one not in use is reconciled against nothing.
  *
  * THE PUSH TOKEN IS HANDED BACK. A phone that turned timers on under the
  * old bundle gave the server a push token, and the server would go on
@@ -22,9 +24,12 @@ import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Notifications from 'expo-notifications';
 import { disablePush } from './push';
+import { alarmAuth, cancelAlarm, listAlarms, requestAlarmAuth, scheduleAlarm } from './timerAlarm';
 import {
+  alarmsOffered,
   deriveAlertState,
   plannedAlerts,
+  reconcileAlarms,
   reconcileAlerts,
   type AlertFacts,
   type AlertState,
@@ -36,7 +41,7 @@ const CHOICE_KEY = 'reduction_timer_alerts';
 async function storedChoice(): Promise<AlertFacts['choice']> {
   try {
     const v = await AsyncStorage.getItem(CHOICE_KEY);
-    return v === 'on' || v === 'off' ? v : null;
+    return v === 'on' || v === 'off' || v === 'alarm' ? v : null;
   } catch {
     return null;
   }
@@ -52,9 +57,20 @@ async function permission(): Promise<AlertFacts['permission']> {
   }
 }
 
+async function facts(): Promise<AlertFacts> {
+  return { platform: Platform.OS, permission: await permission(), choice: await storedChoice(), alarm: await alarmAuth() };
+}
+
 export async function timerAlertState(): Promise<AlertState> {
   if (Platform.OS === 'web') return 'unsupported';
-  return deriveAlertState({ platform: Platform.OS, permission: await permission(), choice: await storedChoice() });
+  return deriveAlertState(await facts());
+}
+
+/** What the Settings card needs: the state, and whether to offer alarms. */
+export async function timerAlertCard(): Promise<{ state: AlertState; alarms: boolean }> {
+  if (Platform.OS === 'web') return { state: 'unsupported', alarms: false };
+  const f = await facts();
+  return { state: deriveAlertState(f), alarms: alarmsOffered(f) };
 }
 
 // The last library seen, so switching alerts on schedules the timers that
@@ -66,7 +82,11 @@ let chain: Promise<void> = Promise.resolve();
 
 async function reconcile(entries: readonly TimedEntry[]): Promise<void> {
   const state = await timerAlertState();
-  const plan = state === 'on' ? plannedAlerts(entries, Date.now()) : [];
+  const all = plannedAlerts(entries, Date.now());
+  // One arm rings, never both: the other is reconciled against nothing,
+  // which also clears what it held from before a switch.
+  const plan = state === 'on' ? all : [];
+  const alarmPlan = state === 'alarm' ? all : [];
   const pending = (await Notifications.getAllScheduledNotificationsAsync()).map((r) => ({
     identifier: r.identifier,
     data: r.content.data,
@@ -84,6 +104,12 @@ async function reconcile(entries: readonly TimedEntry[]): Promise<void> {
       },
     });
   }
+  // The alarm arm. listAlarms is [] wherever AlarmKit is unavailable, so
+  // this is a no-op there; cancels run first because a moved alarm is
+  // cancelled and rescheduled under the same id.
+  const alarms = reconcileAlarms(alarmPlan, await listAlarms());
+  for (const id of alarms.cancel) await cancelAlarm(id);
+  for (const a of alarms.schedule) await scheduleAlarm(a.id, a.fireAt, a.title);
 }
 
 /** Make the device's pending alerts match the library. Called on every
@@ -110,6 +136,17 @@ export async function enableTimerAlerts(): Promise<AlertState> {
   const asked = await Notifications.requestPermissionsAsync();
   if (!asked.granted) return asked.canAskAgain ? 'off' : 'denied';
   await AsyncStorage.setItem(CHOICE_KEY, 'on').catch(() => {});
+  await syncTimerAlerts(lastEntries);
+  return timerAlertState();
+}
+
+/** Ring as a system alarm (iOS 26+). Asks AlarmKit, not notifications: an
+ *  alarm needs no notification permission. A refusal leaves the choice as
+ *  it was. */
+export async function enableTimerAlarms(): Promise<AlertState> {
+  const auth = await requestAlarmAuth();
+  if (auth !== 'authorized') return timerAlertState();
+  await AsyncStorage.setItem(CHOICE_KEY, 'alarm').catch(() => {});
   await syncTimerAlerts(lastEntries);
   return timerAlertState();
 }
