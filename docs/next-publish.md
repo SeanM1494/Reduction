@@ -1,3 +1,11 @@
+# Branch `claude/project-thread-yjpvog`: a clear message when Anthropic's limit is hit (Oct 6, NOT on main)
+
+Server only. No SQL, no phone update, no build. Merge, then Publish.
+
+| Commit | Ships | Needs |
+|---|---|---|
+| Server: say so when Anthropic refuses for spend | When the Anthropic account's monthly limit is reached (the tier cap or the Console limit), new recipes and searches answer "Reading new recipes is paused for now. Recipes you have saved still work." instead of "Something went wrong"; a rate limit or overload says "Reduction is busy right now. Try again in a minute." One `[cost] ANTHROPIC SPEND LIMIT REACHED` log line per instance per 10 minutes, and `model_limit.spend` / `model_limit.busy` in `GET /api/admin/counters`. A link no longer makes a second, doomed fallback call when the first was refused. README "Daily cost brakes" | This Publish only. Both apps already show the server's sentence for any error. |
+
 # Since build 10 was submitted: the website catch-up (PR #15)
 
 Website only. No SQL, no phone update, no build.

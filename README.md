@@ -821,13 +821,22 @@ the only alarm this server has: set a spend limit and an email notification
 on the Anthropic Console workspace too, which no bug here can switch off. A
 database error fails the brake OPEN with one log line.
 
+**When Anthropic itself refuses** (the account's monthly spend ceiling,
+or a rate limit), `lib/modelLimit.ts` turns the SDK error into a 503 with a
+sentence ("Reading new recipes is paused for now..." for spend, "busy, try
+again in a minute" otherwise), logs `[cost] ANTHROPIC SPEND LIMIT REACHED`
+at most once per instance per 10 minutes, and counts `model_limit.spend` /
+`model_limit.busy` in the daily counters, which `/api/admin/counters`
+shows across instances. A link whose first read was refused this way does
+not try the web_fetch fallback, which would be refused the same way.
+
 ### Usage counters
 
 Anonymous daily counts (`lib/counters.ts`): one row per UTC day and name,
 and nothing that identifies anyone — privacy.html promises "totals ... not
 linked to your account or device". The server counts `save` (a new recipe
 in a library), `wall_hit.subscription_required` and `wall_hit.trial_spent`
-(where the 402 is written) and `coupon_redeemed`. The app may report only
+(where the 402 is written), `coupon_redeemed`, and `model_limit.spend` / `model_limit.busy` (Anthropic refused a paid call, `lib/modelLimit.ts`). The app may report only
 the reel's events (`reel_shown`, `reel_tap_data`/`_curated`,
 `reel_saved_data`/`_curated`) through `POST /api/counters`, signed in, 120
 an hour per account. Extractions are not counted here: `extraction_events`

@@ -30,6 +30,7 @@ import type { CallUsage } from "../lib/extractionConfig";
 import { countEvent } from "../lib/counters";
 import { clientKey } from "../lib/clientAddress";
 import { costBrake } from "../lib/costBrake";
+import { modelLimitRefusal } from "../lib/modelLimit";
 import {
   sanitizeOriginal,
   type OriginalFrom,
@@ -678,6 +679,11 @@ recipesRouter.post("/extract", requireExtractionAllowance, async (req: Request, 
     const spent = (e as { usage?: CallUsage }).usage;
     if (spent) mark({ usage: spent });
 
+    // Anthropic refused the call (its spend ceiling, or a rate limit): say
+    // that, not "something went wrong" (lib/modelLimit.ts).
+    const limited = modelLimitRefusal(e, "extract");
+    if (limited) return res.status(limited.status).json(limited.body);
+
     const err = e as Error & { details?: string[] };
     const isUserFacing =
       /URL|host|page|refused|blocked|too large|too short|recipe from that page|valid diagram/i.test(
@@ -820,6 +826,8 @@ recipesRouter.post("/reextract", async (req: Request, res: Response) => {
   } catch (e) {
     const spent = (e as { usage?: CallUsage }).usage;
     if (spent) mark({ usage: spent });
+    const limited = modelLimitRefusal(e, "reextract");
+    if (limited) return res.status(limited.status).json(limited.body);
     const err = e as Error & { details?: string[] };
     const isUserFacing =
       /URL|host|page|refused|blocked|too large|too short|recipe from that page|valid diagram/i.test(
@@ -924,7 +932,12 @@ recipesRouter.post("/search", async (req: Request, res: Response) => {
     const results = await searchRecipes(trimmed);
     searchCache.set(key, { results, at: Date.now() });
     return { ok: true as const, results };
-  })().catch((e) => ({ ok: false as const, error: e as Error }));
+  })().catch((e) => {
+    // Anthropic refusing the web half is a refusal like the brake's: the
+    // cached half still answers, and alone it gets a sentence, not a 500.
+    const limited = modelLimitRefusal(e, "search");
+    return { ok: false as const, error: limited ? Object.assign(new Error(limited.body.error), { refusal: limited }) : (e as Error) };
+  });
 
   const [library, web] = await Promise.all([libraryP, webP]);
 

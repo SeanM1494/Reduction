@@ -20,6 +20,7 @@ import type { Recipe } from "../shared/layout";
 import { fetchSource, type FetchedSource } from "./fetchSource";
 import { structureRecipe } from "./structureRecipe";
 import { isUnreadable, structureRecipeFromUrl } from "./fetchViaClaude";
+import { modelLimitOf } from "./modelLimit";
 import { emptyUsage, fallbackCall, mergeUsage, type CallUsage, type ModelCallOptions } from "./extractionConfig";
 
 export interface ReadRecipe {
@@ -108,6 +109,12 @@ export async function readRecipeAtUrl(
     // would not validate. Let Claude fetch it instead: the request comes
     // from Anthropic's infrastructure, not this Repl.
     add((selfErr as { usage?: CallUsage }).usage);
+    // Anthropic itself refused (spend ceiling, rate limit): the fallback is a
+    // second call to the same account and would be refused the same way.
+    if (modelLimitOf(selfErr)) {
+      (selfErr as { usage?: CallUsage }).usage = usage;
+      throw selfErr;
+    }
     const message = (selfErr as Error).message;
     opts.onFallback?.(reason, message);
     console.warn(`[extract] ${reason === "fetch" ? "self-fetch" : "extraction from our fetch"} failed, using web_fetch:`, message);

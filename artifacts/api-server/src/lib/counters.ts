@@ -30,6 +30,10 @@ export const SERVER_COUNTERS = [
   "wall_hit.subscription_required",
   "wall_hit.trial_spent",
   "coupon_redeemed",
+  // Anthropic refused a paid call (lib/modelLimit.ts): the account's spend
+  // ceiling, or a rate limit / overload.
+  "model_limit.spend",
+  "model_limit.busy",
 ] as const;
 
 /**
