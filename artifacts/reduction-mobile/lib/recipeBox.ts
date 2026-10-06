@@ -435,6 +435,22 @@ export function removePromptCopy(title: string, bookName: string): { heading: st
   };
 }
 
+/**
+ * The finish window's last question, after the rating (or Skip, or keeping a
+ * 👎 at the back): clear the checks for next time. ONE choice, not "back to
+ * step 1" versus "clear the diagram" — both views read the same `done`, and
+ * Step-by-Step opens on the first unchecked step (lib/cookReset.ts), so
+ * clearing is both. Never asked after Remove: the recipe has left the box.
+ */
+export function resetPromptCopy(): { heading: string; body: string } {
+  return {
+    heading: 'Start fresh next time?',
+    body: 'Clears every check, so it opens on step 1 in both the diagram and Step-by-Step. Your rating and notes stay.',
+  };
+}
+
+export const clearedToast = 'Progress cleared';
+
 export const removedToast = (title: string): string => `Removed ${title || 'recipe'}`;
 export const keptToast = (bookName: string): string => `Moved to the back of ${bookName}`;
 

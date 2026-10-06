@@ -94,7 +94,10 @@ export function stampCooked(cooked: number[], prevDone: number, nextDone: number
 // ------------------------------------------------------------------ props --
 
 /** What the recipe route's ⋮ menu can ask this screen for. */
-export type RecipeRequest = { kind: 'edit' | 'reorder' | 'servings' | 'rating' | 'notes'; n: number };
+/** `clear` is the finish window's "Start fresh" (the same write as Clear
+ *  progress, with no confirm: the window was the question); `resume` follows
+ *  an Undo of it, after the route has written the checks back. */
+export type RecipeRequest = { kind: 'edit' | 'reorder' | 'servings' | 'rating' | 'notes' | 'clear' | 'resume'; n: number };
 
 interface RecipeScreenProps {
   recipe: Recipe;
@@ -291,6 +294,15 @@ export function RecipeScreen({
     setStepNoteFor({ stepId, label });
     setStepNoteOpen(true);
   };
+  // Clear progress asks first: it wipes every check on the recipe, and the
+  // button sits where a thumb reaches for other things.
+  const [confirmClear, setConfirmClear] = useState(false);
+  // Each confirmed Clear: Step-by-Step, if it is on screen, goes back to
+  // its first card (lib/cookReset.ts says why nothing else needs telling).
+  const [clearCount, setClearCount] = useState(0);
+  // Each Undo of a Clear: Step-by-Step goes back to where a fresh mount
+  // would start, which for a finished cook is the finished card.
+  const [resumeCount, setResumeCount] = useState(0);
   useEffect(() => {
     if (!request?.n || !canEdit) return;
     if (request.kind === 'edit') {
@@ -305,16 +317,16 @@ export function RecipeScreen({
       setRatingOpen(true);
     } else if (request.kind === 'notes') {
       setNotesOpen(true);
+    } else if (request.kind === 'clear') {
+      // Progress only, exactly as the confirmed Clear below.
+      onUpdate(clearProgressPatch());
+      setClearCount((c) => c + 1);
+    } else if (request.kind === 'resume') {
+      setResumeCount((c) => c + 1);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [request?.n]);
 
-  // Clear progress asks first: it wipes every check on the recipe, and the
-  // button sits where a thumb reaches for other things.
-  const [confirmClear, setConfirmClear] = useState(false);
-  // Each confirmed Clear: Step-by-Step, if it is on screen, goes back to
-  // its first card (lib/cookReset.ts says why nothing else needs telling).
-  const [clearCount, setClearCount] = useState(0);
 
   // The diagram's press-and-hold drag: the page must not scroll under it,
   // and it scrolls the page itself while the finger is near an edge. The
@@ -746,6 +758,7 @@ export function RecipeScreen({
             ) : null
           }
           resetSignal={clearCount}
+          resumeSignal={resumeCount}
           spotlightNext={!!spotlight?.targets.has('cook:next')}
           pointerNext={pointerFor(spotlight, 'cook:next')}
         />

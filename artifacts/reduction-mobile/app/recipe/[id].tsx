@@ -33,7 +33,7 @@ import { fonts } from '@/constants/colors';
 import { PhotoSheet } from '@/components/recipe/PhotoSheet';
 import { FinishPrompt, type FinishStage } from '@/components/recipeBox/FinishPrompt';
 import { useToast } from '@/components/Toast';
-import { asksToRemove, keptToast, removedToast } from '@/lib/recipeBox';
+import { asksToRemove, clearedToast, keptToast, removedToast } from '@/lib/recipeBox';
 import { useBooks } from '@/lib/books-context';
 import { loadOriginal, type Entry } from '@/lib/api';
 import { originalStepTexts } from '@/shared/original';
@@ -57,7 +57,8 @@ export default function RecipeDetailScreen() {
   const toast = useToast();
   const { bookFor, available: booksAvailable, live: liveBooks } = useBooks();
   // The Recipe Box's finish prompt: 'rate' when a cook is stamped, 'remove'
-  // after a 👎. Remove closes it instantly, because it navigates.
+  // after a 👎, 'reset' (start fresh?) after either unless the recipe was
+  // removed. Remove closes it instantly, because it navigates.
   const [finish, setFinish] = useState<FinishStage | null>(null);
   const [finishInstant, setFinishInstant] = useState(false);
   const ask = (stage: FinishStage) => {
@@ -378,13 +379,32 @@ export default function RecipeDetailScreen() {
           // From the cooking prompt a 👎 always asks: a fresh verdict on a
           // fresh cook, even if it was 👎 before.
           if (r === -1) ask('remove');
-          else setFinish(null);
+          else ask('reset');
         }}
-        onSkip={() => setFinish(null)}
+        onSkip={() => ask('reset')}
         onKeep={() => {
-          setFinish(null);
+          ask('reset');
           toast({ message: keptToast(bookFor(entry).name) });
         }}
+        onClearProgress={() => {
+          // The checks as they were, for Undo. Undo puts back the checks
+          // only: a timer the Clear stopped stays stopped.
+          const before = entry.done;
+          setFinish(null);
+          askScreen('clear');
+          toast({
+            message: clearedToast,
+            action: {
+              label: 'Undo',
+              onPress: () => {
+                write({ done: before });
+                askScreen('resume');
+              },
+            },
+            durationMs: 5000,
+          });
+        }}
+        onKeepProgress={() => setFinish(null)}
         onRemove={() => {
           // The entry as it goes out, for Undo: the list may not hold it by
           // the time Undo is tapped (a refresh drops removed rows), and
