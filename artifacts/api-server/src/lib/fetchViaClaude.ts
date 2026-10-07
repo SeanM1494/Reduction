@@ -20,7 +20,7 @@ import { closeTruncatedJson, takeOriginal } from "./original";
 import { addUsage, effortFields, emptyUsage, resolveCall, type CallUsage, type ModelCallOptions } from "./extractionConfig";
 import { validateRecipe, type Recipe } from "../shared/layout";
 import { sanitizeMealTypes } from "../shared/mealTypes";
-import { sanitizeStepSources, sanitizeStepTimings, setRecipeTotalMinutes, stripStepSources } from "@workspace/recipe-model";
+import { boundStepSources, claimedStepCount, sanitizeStepSources, sanitizeStepTimings, setRecipeTotalMinutes, stripStepSources } from "@workspace/recipe-model";
 import { imageUrlOf } from "./fetchSource";
 
 let _client: Anthropic | null = null;
@@ -273,7 +273,11 @@ export async function structureRecipeFromUrl(
       setRecipeTotalMinutes(recipe, (recipe as { totalMinutes?: unknown }).totalMinutes);
       // A label that says "25 min" gets its timer even if the fields came back null.
       sanitizeStepTimings(recipe);
-      if (call.stepSources) sanitizeStepSources(recipe);
+      if (call.stepSources) {
+        sanitizeStepSources(recipe);
+        // A tag past the source's last step names a sentence that is not there.
+        boundStepSources(recipe, claimedStepCount(original));
+      }
       else stripStepSources(recipe);
       recipe.sourceUrl = url;
       recipe.image = fetchedImage(claimedImage, pages, url);

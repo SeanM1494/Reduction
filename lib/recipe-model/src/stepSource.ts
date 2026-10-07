@@ -82,3 +82,40 @@ export function stripStepSources<T>(recipe: T): T {
   }
   return recipe;
 }
+
+/**
+ * Drops every `src` past the end of the recipe's own method. `count` is how
+ * many steps the source has: the INSTRUCTIONS list's length on a
+ * structured-data page, otherwise the non-heading lines of the model's own
+ * `original.steps`. A tag past it names a sentence that does not exist, so
+ * it can only reorder cards or caption one with nothing — a wrong tag is
+ * worse than none (see the header). A `count` that is not a positive whole
+ * number means the count is unknown, and nothing is dropped: the gate above
+ * still applies, and a cut-off wording must not strip honest tags.
+ */
+export function boundStepSources<T>(recipe: T, count: number | null | undefined): T {
+  if (typeof count !== "number" || !Number.isInteger(count) || count < 1) return recipe;
+  const sections = (recipe as { sections?: unknown } | null)?.sections;
+  if (!Array.isArray(sections)) return recipe;
+  for (const section of sections) {
+    const nodes = (section as { nodes?: unknown } | null)?.nodes;
+    if (!Array.isArray(nodes)) continue;
+    for (const node of nodes) {
+      if (!node || typeof node !== "object") continue;
+      const v = (node as { src?: unknown }).src;
+      if (typeof v === "number" && v > count) delete (node as { src?: unknown }).src;
+    }
+  }
+  return recipe;
+}
+
+/** The number of method steps in what the model copied out as `original`
+ *  (headings excluded), or null when it gave none — unsanitised input. */
+export function claimedStepCount(original: unknown): number | null {
+  // A wording the token limit cut short has fewer steps than the recipe.
+  if ((original as { truncated?: unknown } | null | undefined)?.truncated) return null;
+  const steps = (original as { steps?: unknown } | null | undefined)?.steps;
+  if (!Array.isArray(steps)) return null;
+  const n = steps.filter((l) => l && typeof l === "object" ? !(l as { heading?: unknown }).heading : !!l).length;
+  return n > 0 ? n : null;
+}
