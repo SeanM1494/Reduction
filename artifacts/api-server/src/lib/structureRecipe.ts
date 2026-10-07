@@ -10,7 +10,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { SYSTEM_PROMPT, buildUserText, buildRepairText } from "./prompt";
 import { validateRecipe, type Recipe } from "../shared/layout";
 import { sanitizeMealTypes } from "../shared/mealTypes";
-import { sanitizeStepSources, setRecipeTotalMinutes, stripStepSources } from "@workspace/recipe-model";
+import { sanitizeStepSources, sanitizeStepTimings, setRecipeTotalMinutes, stripStepSources } from "@workspace/recipe-model";
 import { closeTruncatedJson, takeOriginal } from "./original";
 import { addUsage, effortFields, emptyUsage, resolveCall, type CallUsage, type ModelCallOptions } from "./extractionConfig";
 
@@ -157,6 +157,8 @@ export async function structureRecipe(
       recipe.mealTypes = sanitizeMealTypes(recipe.mealTypes);
       // A stated total time, through its gate: junk is dropped, not stored.
       setRecipeTotalMinutes(recipe, (recipe as { totalMinutes?: unknown }).totalMinutes);
+      // A label that says "25 min" gets its timer even if the fields came back null.
+      sanitizeStepTimings(recipe);
       // Source step numbers through their gate — or gone, when switched off.
       if (call.stepSources) sanitizeStepSources(recipe);
       else stripStepSources(recipe);

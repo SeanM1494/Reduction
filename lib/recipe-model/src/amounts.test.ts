@@ -16,11 +16,13 @@ import {
   formatMinutes,
   formatQty,
   fractionRuns,
+  ingredientAmount,
   snapQty,
   stepMinutes,
 } from "./amounts";
 import { parseAmount } from "./edits";
-import type { Ingredient, Unit } from "./layout";
+import { componentIngredientIds } from "./sequence";
+import type { Ingredient, Recipe, Unit } from "./layout";
 
 test("formatMinutes renders minutes and hours", () => {
   assert.equal(formatMinutes(12), "12 min");
@@ -30,6 +32,10 @@ test("formatMinutes renders minutes and hours", () => {
   assert.equal(formatMinutes(125), "2 hr 5 min");
   // Fractions are typeable ("1 1/2"), so they must not render as "1.5 min".
   assert.equal(formatMinutes(1.5), "2 min");
+  // Under a minute is seconds, never "0 min" or a 30-second timer called "1 min".
+  assert.equal(formatMinutes(0.5), "30 sec");
+  assert.equal(formatMinutes(0.25), "15 sec");
+  assert.equal(formatMinutes(1), "1 min");
 });
 
 test("formatMinutes returns null for anything that is not a usable number", () => {
@@ -532,4 +538,40 @@ test("fractionRuns: the fraction glyphs are marked, everything else passes throu
     assert.equal(fractionRuns(out)[0].fraction, true, out);
   }
   for (const q of [1 / 3, 2 / 3, 0.25, 0.5, 0.75]) assert.equal(fractionRuns(formatQty(q))[0].fraction, true);
+});
+
+test("ingredientAmount: a component shows no amount at any scale; everything else is formatAmount", () => {
+  // The shape the prompt asks for: the filling made separately, then named
+  // as an ingredient of the assembly with qty 1 and no unit.
+  const recipe: Recipe = {
+    title: "Pockets",
+    servings: 6,
+    sections: [
+      {
+        name: "Filling",
+        ingredients: [{ id: "f_eggs", qty: 6, unit: null, name: "large eggs" }],
+        nodes: [{ id: "f_1", label: "scramble", inputs: ["f_eggs"] }],
+        root: "f_1",
+      },
+      {
+        name: "Assembly",
+        ingredients: [
+          { id: "a_pastry", qty: 1, unit: null, name: "puff pastry sheet" },
+          { id: "a_filling", qty: 1, unit: null, name: "filling" },
+        ],
+        nodes: [{ id: "a_1", label: "fill and fold", inputs: ["a_pastry", "a_filling"] }],
+        root: "a_1",
+      },
+    ],
+  };
+  const components = componentIngredientIds(recipe);
+  const [eggs] = recipe.sections[0].ingredients;
+  const [pastry, filling] = recipe.sections[1].ingredients;
+  for (const scale of [1, 2, 0.5, 1.5]) {
+    assert.equal(ingredientAmount(filling, scale, components), "", `scale ${scale}`);
+    assert.equal(ingredientAmount(pastry, scale, components), formatAmount(pastry, scale));
+    assert.equal(ingredientAmount(eggs, scale, components), formatAmount(eggs, scale));
+  }
+  // Without the set it is exactly formatAmount — the old behaviour.
+  assert.equal(ingredientAmount(filling, 2, null), "2");
 });

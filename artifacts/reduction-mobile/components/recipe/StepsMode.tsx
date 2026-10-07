@@ -34,10 +34,10 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import type { Ingredient, Recipe, Step } from '@/shared/layout';
-import { cardSequence, type OrderPreference } from '@/shared/sequence';
+import { cardSequence, componentIngredientIds, type OrderPreference } from '@/shared/sequence';
 import { headerDoneId } from '@/shared/progress';
 import { clampSourceText, sourceTextsByStep, type StepSourceText } from '@/shared/sourceText';
-import { formatAmount, formatMinutes, stepMinutes } from '@/shared/amounts';
+import { formatMinutes, ingredientAmount, stepMinutes } from '@/shared/amounts';
 import { SheetButton } from '@/components/Sheet';
 import { AmountText } from '@/components/AmountText';
 import { ReorderView } from '@/components/recipe/ReorderView';
@@ -247,6 +247,9 @@ export function StepsMode({
   // times (shared/sourceText.ts). A long share shows its first sentences and
   // keeps the rest a tap away, per card — `expandedFor` names the card it
   // was opened on, so the next card starts folded.
+  // Another section's result ("Filling") is listed with no amount: its qty
+  // 1 is bookkeeping, and scaled it read "2 Filling" (ingredientAmount).
+  const components = useMemo(() => componentIngredientIds(recipe), [recipe]);
   const sourceTexts = useMemo(
     () => sourceTextsByStep(recipe, sourceSteps, cards.map((c) => c.stepId)),
     [recipe, sourceSteps, cards]
@@ -409,7 +412,7 @@ export function StepsMode({
               <View style={styles.prepList}>
                 {card.ingredients.map((ing) => {
                   const isDone = done.has(ing.id);
-                  const amount = formatAmount(ing, scale);
+                  const amount = ingredientAmount(ing, scale, components);
                   return (
                     <Pressable
                       key={ing.id}

@@ -71,7 +71,8 @@ import * as Haptics from "expo-haptics";
 import type { Recipe, Section, Cell } from "@/shared/layout";
 import { deriveDiagramState } from "@/shared/collapse";
 import { computeLayout } from "@/shared/layout";
-import { formatAmount } from "@/shared/amounts";
+import { ingredientAmount } from "@/shared/amounts";
+import { componentIngredientIds } from "@/shared/sequence";
 import { AmountText } from "@/components/AmountText";
 import { headerDoneId } from "@/shared/progress";
 import { noTargetsReason, validMoveTargets } from "@/shared/edits";
@@ -203,6 +204,9 @@ interface SectionDiagramProps {
   drag?: SectionDrag | null;
   /** The demo guide's ring and dimming (lib/spotlight.ts); null elsewhere. */
   spotlight?: Spotlight | null;
+  /** See DiagramCellProps. A section alone cannot know which of its
+   *  ingredients another section makes, so the recipe's view passes it. */
+  components?: ReadonlySet<string> | null;
 }
 
 /** The width a cell's content wraps at: its column(s), less the padding
@@ -222,20 +226,24 @@ function cellContent(
   colors: Colors,
   st: CellState,
   measuring: boolean,
-  w: number
+  w: number,
+  components: ReadonlySet<string> | null
 ) {
   // Gap cells are the layout's whitespace — the web paints them as empty
   // rd-gap tds. Nothing to render; the Pressable shell paints background.
   if (c.kind === "gap") return null;
   const struck = st.isDone ? styles.struck : null;
   if (c.kind === "ingredient" && c.ingredient) {
+    const amount = ingredientAmount(c.ingredient, scale, components);
     return (
       <View style={[styles.ingBody, { width: w }]}>
-        <AmountText
-          text={formatAmount(c.ingredient, scale)}
-          fontSize={AMOUNT_SIZE}
-          style={[styles.amount, { color: st.isDone ? colors.coolInk : colors.mutedForeground }]}
-        />
+        {amount ? (
+          <AmountText
+            text={amount}
+            fontSize={AMOUNT_SIZE}
+            style={[styles.amount, { color: st.isDone ? colors.coolInk : colors.mutedForeground }]}
+          />
+        ) : null}
         <Text style={[styles.name, { color: st.isDone ? colors.coolInk : colors.text }, struck]}>
           {c.ingredient.name}
         </Text>
@@ -276,7 +284,7 @@ function cellContent(
  * button that expands; in edit mode every cell is a plain button that opens
  * fields. Gaps say nothing.
  */
-function cellAccessibility(c: Cell, st: CellState, scale: number, editing: boolean) {
+function cellAccessibility(c: Cell, st: CellState, scale: number, editing: boolean, components: ReadonlySet<string> | null) {
   if (c.kind === "gap") return {};
   if (c.kind === "collapsed") {
     return {
@@ -287,7 +295,7 @@ function cellAccessibility(c: Cell, st: CellState, scale: number, editing: boole
   }
   const name =
     c.kind === "ingredient" && c.ingredient
-      ? `${formatAmount(c.ingredient, scale)} ${c.ingredient.name}${c.ingredient.note ? `, ${c.ingredient.note}` : ""}`.trim()
+      ? `${ingredientAmount(c.ingredient, scale, components)} ${c.ingredient.name}${c.ingredient.note ? `, ${c.ingredient.note}` : ""}`.trim()
       : (c.text ?? "");
   if (editing) {
     return {
@@ -310,6 +318,10 @@ function cellAccessibility(c: Cell, st: CellState, scale: number, editing: boole
 
 interface DiagramCellProps {
   cell: Cell;
+  /** `componentIngredientIds(recipe)`: ingredients that are another
+   *  section's result, drawn with no amount (recipe-model `ingredientAmount`).
+   *  One memoised set per recipe, so it never breaks the cell's memo. */
+  components: ReadonlySet<string> | null;
   /** Null for the invisible measuring copy (pass 1). */
   rect: CellRect | null;
   isDone: boolean;
@@ -349,6 +361,7 @@ interface DiagramCellProps {
  */
 const DiagramCell = memo(function DiagramCell({
   cell: c,
+  components,
   rect,
   isDone,
   ready,
@@ -369,12 +382,12 @@ const DiagramCell = memo(function DiagramCell({
 }: DiagramCellProps) {
   const st: CellState = { isDone, ready, ownerDone };
   const tappable = c.kind !== "gap";
-  const a11y = cellAccessibility(c, st, scale, editing);
+  const a11y = cellAccessibility(c, st, scale, editing, components);
   if (onMeasure) {
     const w = contentWidth(colWidth(c.col, c.colSpan, METRICS), c.kind);
     return (
       <View style={{ position: "absolute", width: w, opacity: 0 }} pointerEvents="none">
-        <View onLayout={onMeasure(c.key)}>{cellContent(c, scale, colors, st, true, w)}</View>
+        <View onLayout={onMeasure(c.key)}>{cellContent(c, scale, colors, st, true, w, components)}</View>
       </View>
     );
   }
@@ -446,7 +459,7 @@ const DiagramCell = memo(function DiagramCell({
           width: contentWidth(rect!.width, c.kind),
         }}
       >
-        {cellContent(c, scale, colors, st, false, contentWidth(rect!.width, c.kind))}
+        {cellContent(c, scale, colors, st, false, contentWidth(rect!.width, c.kind), components)}
       </View>
       {ready ? (
         <>
@@ -524,7 +537,7 @@ export function ReadyMark({ colors, top = 7, right = 8 }: { colors: Colors; top?
  *  Exported so the demo's legend paints "done" with the same value. */
 export const doneBackground = (colors: Colors): string => mix(colors.coolBg, colors.card, 0.52);
 
-export function SectionDiagram({ section, done, onToggle, scale = 1, edit = null, drag = null, spotlight = null }: SectionDiagramProps) {
+export function SectionDiagram({ section, done, onToggle, scale = 1, edit = null, drag = null, spotlight = null, components = null }: SectionDiagramProps) {
   const colors = useColors();
   const { height: windowH } = useWindowDimensions();
   // The finish strip, progressive collapse and the handoff are one pure
@@ -871,6 +884,7 @@ export function SectionDiagram({ section, done, onToggle, scale = 1, edit = null
       <DiagramCell
         key={c.key}
         cell={c}
+        components={components}
         rect={opts.measuring ? null : (opts.rect ?? rectByKey.get(c.key)!)}
         isDone={st.isDone}
         ready={st.ready}
@@ -1107,6 +1121,7 @@ export function DiagramView({ recipe, done, onToggle, scale, edit = null, spotli
   // The section with a live drag is lifted above its siblings so its ghost
   // paints over the next frame rather than under it.
   const [dragSection, setDragSection] = useState<number | null>(null);
+  const components = useMemo(() => componentIngredientIds(recipe), [recipe]);
   const dragFor = (i: number): SectionDrag | null =>
     edit
       ? {
@@ -1142,7 +1157,7 @@ export function DiagramView({ recipe, done, onToggle, scale, edit = null, spotli
           {s.header ? (
             <SectionHeaderRow section={s} done={done} onToggle={onToggle} editing={!!edit} colors={colors} />
           ) : null}
-          <SectionDiagram section={s} done={done} onToggle={onToggle} scale={scale} edit={edit} drag={dragFor(i)} spotlight={spotlight} />
+          <SectionDiagram section={s} done={done} onToggle={onToggle} scale={scale} edit={edit} drag={dragFor(i)} spotlight={spotlight} components={components} />
         </View>
       ))}
     </View>

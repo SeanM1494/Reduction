@@ -241,6 +241,25 @@ export function editableAmount(ing: Ingredient): string {
   return ing.qtyMax != null ? `${lo}\u2013${formatQty(ing.qtyMax)}` : lo;
 }
 
+/**
+ * An ingredient's amount as a person should see it, in the diagram and on a
+ * card: `formatAmount`, except for a COMPONENT — another section's finished
+ * result standing in as an ingredient ("Filling" in the assembly), which the
+ * prompt writes as qty 1 with no unit. That 1 is bookkeeping, not an amount:
+ * shown, it read "1 Filling", and scaled it read "2 Filling" or "½ Filling",
+ * as if you were to use half of what you just made. A component has no
+ * amount of its own, so it shows none. `components` is
+ * `componentIngredientIds(recipe)` (sequence.ts), passed in rather than
+ * re-derived so the matching rule stays in one place.
+ */
+export function ingredientAmount(
+  ing: Ingredient,
+  scale: number,
+  components: ReadonlySet<string> | null | undefined
+): string {
+  return components?.has(ing.id) ? "" : formatAmount(ing, scale);
+}
+
 export function countSteps(recipe: Recipe): number {
   return recipe.sections.reduce((n, s) => n + (s.nodes?.length || 0), 0);
 }
@@ -272,6 +291,9 @@ export function countAll(recipe: Recipe): number {
  */
 export function formatMinutes(min: unknown): string | null {
   if (typeof min !== "number" || !Number.isFinite(min) || min <= 0) return null;
+  // Under a minute is seconds ("garlic 30 sec" is 0.5): rounding it to whole
+  // minutes said "1 min" for a 30-second timer and "0 min" for 15 seconds.
+  if (min < 1) return `${Math.max(1, Math.round(min * 60))} sec`;
   const whole = Math.round(min);
   if (whole < 60) return `${whole} min`;
   const h = Math.floor(whole / 60);

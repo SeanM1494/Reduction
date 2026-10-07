@@ -29,6 +29,7 @@ import ServingsRow from "./ServingsRow";
 import { MEAL_TYPE_LABELS, sanitizeMealTypes } from "../shared/mealTypes";
 import { applyEdit, type EditOp } from "../shared/edits";
 import { countDone, reconcileDone } from "../shared/progress";
+import { componentIngredientIds } from "../shared/sequence";
 import { reextract } from "../lib/api";
 import ExtractionProgress from "./ExtractionProgress";
 import { lastAcceptedEntry, onSyncFailure } from "../lib/storage";
@@ -147,6 +148,7 @@ export default function RecipeView({
   const captureRef = useRef<HTMLDivElement | null>(null);
   const menuRef = useRef<HTMLDivElement | null>(null);
   const done = useMemo(() => new Set(entry.done || []), [entry.done]);
+  const components = useMemo(() => componentIngredientIds(recipe), [recipe]);
 
   const baseServings = recipe.servings;
   const servings = entry.servings ?? baseServings;
@@ -730,6 +732,7 @@ export default function RecipeView({
                 done={done}
                 preview={preview}
                 scale={scale}
+                components={components}
                 onToggle={toggle}
                 onHover={setHovered}
                 edit={
