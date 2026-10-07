@@ -11,10 +11,17 @@
  *   - stripe: cancelled now, through stripe.ts (the only file that may
  *     speak to Stripe). A failure THROWS, so the caller refuses to delete an
  *     account whose billing it could not stop.
- *   - apple (and any store): nothing a server can cancel. Apple lets only
- *     the subscriber end an App Store subscription, from the device's own
- *     settings, so the provider is returned under `manual` and the clients
- *     say so in the confirm dialog, before and after.
+ *   - google_play: cancelled now, through googlePlay.ts (Google lets the
+ *     developer stop renewal; the time already paid for runs out on
+ *     Google's side). Unlike Stripe a failure does NOT refuse the
+ *     deletion: the person can always cancel a Play subscription
+ *     themselves, so it is reported under `manual` and the phone says
+ *     where, which is better than an account nobody can delete while
+ *     Google is unreachable.
+ *   - apple (and any other store): nothing a server can cancel. Apple lets
+ *     only the subscriber end an App Store subscription, from the device's
+ *     own settings, so the provider is returned under `manual` and the
+ *     clients say so in the confirm dialog, before and after.
  *
  * Only rows that could still bill (active or grace) are touched. An expired
  * row is history, and cancelling it again would be an error at the
@@ -25,6 +32,7 @@ import { eq } from "drizzle-orm";
 import { getDb } from "../../db";
 import { subscriptions } from "@workspace/db";
 import { cancelStripeSubscriptionNow } from "./stripe";
+import { cancelPlaySubscription, GOOGLE_PLAY_PROVIDER, googlePlayConfig, productIdOfStored } from "./googlePlay";
 
 export interface CancelSummary {
   /** Providers whose subscription this server cancelled. */
@@ -48,6 +56,21 @@ export async function cancelSubscriptionsFor(userId: string): Promise<CancelSumm
         .set({ status: "expired", willNotRenew: true, updatedAt: new Date() })
         .where(eq(subscriptions.id, row.id));
       cancelled.add(row.provider);
+    } else if (row.provider === GOOGLE_PLAY_PROVIDER) {
+      const cfg = googlePlayConfig();
+      const productId = productIdOfStored(row.raw);
+      try {
+        if (!cfg || !productId) throw new Error(!cfg ? "adapter not configured" : "no product id stored");
+        await cancelPlaySubscription(cfg, row.provider_ref, productId);
+        await getDb()
+          .update(subscriptions)
+          .set({ willNotRenew: true, updatedAt: new Date() })
+          .where(eq(subscriptions.id, row.id));
+        cancelled.add(row.provider);
+      } catch (e) {
+        console.error("[billing:cancel] Google Play cancellation failed; left to the person:", (e as Error).message);
+        manual.add(row.provider);
+      }
     } else {
       manual.add(row.provider);
     }

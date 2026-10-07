@@ -43,9 +43,10 @@ installCrashReporter();
 
 // How a timer notification presents while the app is open (lib/push.ts).
 configureNotifications();
-// Who sells a subscription on this host: the App Store on an iPhone, nobody
-// anywhere else (lib/purchase.ts). Registered once, before any screen asks.
-if (Platform.OS === 'ios') setPurchaseHandler(storeKitHandler);
+// Who sells a subscription on this host: the App Store on an iPhone, Google
+// Play on Android, nobody anywhere else (lib/purchase.ts). Registered once,
+// before any screen asks.
+if (Platform.OS === 'ios' || Platform.OS === 'android') setPurchaseHandler(storeKitHandler);
 
 const queryClient = new QueryClient();
 

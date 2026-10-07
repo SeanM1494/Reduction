@@ -15,12 +15,17 @@
  */
 
 import React, { useCallback, useEffect, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { SheetButton, optionRow } from '@/components/Sheet';
 import { useAuth } from '@/lib/auth-context';
 import { purchaseAvailable, purchaseOffers, restorePurchases, startPurchase, type Offer } from '@/lib/purchase';
 import { PLAN_LABELS, type Plan } from '@/lib/purchasePolicy';
 import { LegalLinks } from '@/components/LegalLinks';
+import { STORE_WORDS, storeHostOf } from '@/lib/storeWords';
+
+const WORDS = STORE_WORDS[storeHostOf(Platform.OS)];
+/** "the App Store" / "Google Play" mid-sentence. */
+const STORE_MID = WORDS.theStore.replace(/^The /, 'the ');
 import { useColors, type Colors } from '@/hooks/useColors';
 import { fonts } from '@/constants/colors';
 
@@ -60,7 +65,7 @@ export function SubscribeBox({ center = false }: {
         await refresh();
         setMessage({ ok: true, text: what === 'buy' ? 'Subscribed. Unlimited recipes are on.' : 'Your subscription is back on this account.' });
       } else if (out.status === 'started') {
-        setMessage({ ok: true, text: 'Waiting on the App Store. Your recipes unlock as soon as it confirms.' });
+        setMessage({ ok: true, text: `Waiting on ${STORE_MID}. Your recipes unlock as soon as it confirms.` });
       } else if (out.status === 'error') {
         setMessage({ ok: false, text: out.message });
       } else if (out.status === 'unavailable') {
@@ -106,7 +111,7 @@ export function SubscribeBox({ center = false }: {
         ))}
       </View>
       <Pressable accessibilityRole="button" onPress={restore} disabled={!!busy} style={[styles.restore, center && styles.centerSelf]} testID="subscribe-restore">
-        <Text style={styles.restoreText}>{busy === 'restore' ? 'Checking the App Store…' : 'Restore purchases'}</Text>
+        <Text style={styles.restoreText}>{busy === 'restore' ? `Checking ${STORE_MID}…` : 'Restore purchases'}</Text>
       </Pressable>
       {message ? (
         <Text style={[styles.message, center && styles.centerText, { color: message.ok ? colors.coolInk : colors.dangerInk }]} accessibilityLiveRegion="polite" testID="subscribe-message">

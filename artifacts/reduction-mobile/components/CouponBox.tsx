@@ -19,6 +19,12 @@
  * check `COUPONS_OFFERED`. A code for App Store users is an Apple Offer
  * Code, redeemed by the store, never this box.
  *
+ * NOT ON ANDROID EITHER (Oct 6). Google Play's Payments policy asks the
+ * same of an app that sells through Play Billing, and its answer for a
+ * code is Play's own promo codes, redeemed in the Play Store. Hiding it
+ * there costs nothing and is the reading that cannot be rejected; the
+ * box remains for the website.
+ *
  * On success the account's entitlement is refreshed here rather than by
  * each mount point: an allowance is a fact about the account, and the wall
  * lifts because the entitlement moved, not because the box said so.
@@ -33,7 +39,7 @@ import { useColors, type Colors } from '@/hooks/useColors';
 import { fonts } from '@/constants/colors';
 
 /** Whether this host may offer the box at all; see the header. */
-export const COUPONS_OFFERED = Platform.OS !== 'ios';
+export const COUPONS_OFFERED = Platform.OS !== 'ios' && Platform.OS !== 'android';
 
 interface Props {
   onRedeemed?: (recipes: number) => void;

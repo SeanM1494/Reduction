@@ -1,6 +1,10 @@
 /**
  * lib/storeKitFlow.ts — the purchase flow, with the store behind an
- * interface so the flow can be proven under node.
+ * interface so the flow can be proven under node. One flow for both
+ * stores: the App Store and Google Play differ in what they hand back
+ * (a signed JWS, an opaque purchase token) and in what "finish" means
+ * (finish a transaction, acknowledge a purchase), and lib/storeKit.ts
+ * binds each to this interface; the order below holds for either.
  *
  * WHAT MUST HOLD, whatever the library does:
  *
@@ -14,17 +18,25 @@
  *  - The listener is the source of truth for a purchase, never the return
  *    value of the request (the library says so too): renewals, Ask to Buy
  *    approvals and unfinished transactions all arrive the same way.
+ *  - A PENDING purchase (Google Play, a payment that has not cleared) is
+ *    neither verified nor finished: it is reported as started, and the
+ *    same purchase arrives again, cleared, through the listener.
+ *  - Google Play does NOT re-deliver an unacknowledged purchase on its
+ *    own, the way StoreKit re-delivers an unfinished transaction, and
+ *    refunds one left unacknowledged for three days. So on Play the
+ *    reconciler also sweeps the store's purchases once at start
+ *    (`sweep`), and the server acknowledges too (billing/googlePlay.ts).
  */
 
 import {
   newestOwnPurchase,
   outcomeFromStoreError,
   PLAN_SKUS,
-  verifyBodyFrom,
   type Plan,
   type PurchaseOutcome,
   type StorePurchase,
 } from './purchasePolicy';
+import type { StoreWords } from './storeWords';
 
 export interface StoreError {
   code: string;
@@ -34,6 +46,8 @@ export interface StoreError {
 /** The slice of the store the flow needs. lib/storeKit.ts binds expo-iap
  *  to it; the tests bind a scripted fake. */
 export interface Store<P extends StorePurchase> {
+  /** What this store is called in the sentences the flow returns. */
+  readonly words: StoreWords;
   /** Ask the store to sell `sku` to this account. The result arrives
    *  through `onPurchase`/`onError`, not here. */
   requestSubscription(sku: string, appAccountToken: string): Promise<void>;
@@ -41,11 +55,17 @@ export interface Store<P extends StorePurchase> {
   onError(listener: (e: StoreError) => void): () => void;
   finish(p: P): Promise<void>;
   availablePurchases(): Promise<P[]>;
+  /** Google Play only: whether this purchase still needs settling (it was
+   *  never acknowledged). Absent on a store that re-delivers by itself. */
+  unfinished?(p: P): boolean;
 }
 
-export interface Verifier {
-  /** POST the signed transaction to the server. Rejects when refused. */
-  verify(body: { signedTransactionInfo: string }): Promise<void>;
+export interface Verifier<B = unknown> {
+  /** What the server is sent for this purchase, or null when it is not one
+   *  of ours, has not cleared, or carries nothing verifiable. */
+  bodyFrom(p: StorePurchase): B | null;
+  /** POST it to the server. Rejects when refused. */
+  verify(body: B): Promise<void>;
 }
 
 /**
@@ -55,7 +75,7 @@ export interface Verifier {
  * purpose.
  */
 export async function settle<P extends StorePurchase>(store: Store<P>, verifier: Verifier, p: P): Promise<boolean> {
-  const body = verifyBodyFrom(p);
+  const body = verifier.bodyFrom(p);
   if (!body) return false;
   await verifier.verify(body);
   await store.finish(p);
@@ -86,19 +106,23 @@ export function purchase<P extends StorePurchase>(
     };
     const offPurchase = store.onPurchase((p) => {
       if (p.productId !== sku) return;
+      if (p.purchaseState === 'pending') {
+        finishWith({ status: 'started' });
+        return;
+      }
       settle(store, verifier, p)
         .then((ok) => finishWith(ok ? { status: 'completed' } : { status: 'error', message: 'The purchase could not be verified.' }))
         .catch((e) => finishWith({ status: 'error', message: (e as Error).message || 'The purchase could not be recorded.' }));
     });
-    const offError = store.onError((e) => finishWith(outcomeFromStoreError(e.code, e.message)));
+    const offError = store.onError((e) => finishWith(outcomeFromStoreError(e.code, e.message, store.words)));
     store.requestSubscription(sku, userId).catch((e) => {
       const err = e as { code?: string; message?: string };
-      finishWith(err?.code ? outcomeFromStoreError(err.code, err.message) : { status: 'error', message: err?.message || 'The purchase could not be started.' });
+      finishWith(err?.code ? outcomeFromStoreError(err.code, err.message, store.words) : { status: 'error', message: err?.message || 'The purchase could not be started.' });
     });
   });
 }
 
-/** Restore: the newest of this Apple ID's purchases that is ours, verified
+/** Restore: the newest of this store account's purchases that is ours, verified
  *  and bound to this account. The account binding is the server's: a
  *  subscription already bound to another account is refused there. */
 export async function restore<P extends StorePurchase>(store: Store<P>, verifier: Verifier): Promise<PurchaseOutcome> {
@@ -107,10 +131,10 @@ export async function restore<P extends StorePurchase>(store: Store<P>, verifier
     purchases = await store.availablePurchases();
   } catch (e) {
     const err = e as { code?: string; message?: string };
-    return err?.code ? outcomeFromStoreError(err.code, err.message) : { status: 'error', message: err?.message || 'Could not read your purchases.' };
+    return err?.code ? outcomeFromStoreError(err.code, err.message, store.words) : { status: 'error', message: err?.message || 'Could not read your purchases.' };
   }
   const newest = newestOwnPurchase(purchases);
-  if (!newest) return { status: 'error', message: 'No Reduction subscription was found for this Apple ID.' };
+  if (!newest) return { status: 'error', message: `No Reduction subscription was found for this ${store.words.account}.` };
   try {
     const ok = await settle(store, verifier, newest);
     return ok ? { status: 'completed' } : { status: 'error', message: 'That purchase could not be verified.' };
@@ -135,4 +159,33 @@ export function reconcile<P extends StorePurchase>(store: Store<P>, verifier: Ve
         // Left unfinished on purpose: it comes back next launch.
       });
   });
+}
+
+/**
+ * Google Play's half of the reconciler: settle, once, every purchase of
+ * ours the store still holds unacknowledged — one whose verify or
+ * acknowledge never landed (the app closed, the network dropped). Play
+ * will not hand it back through the listener, so without this it would be
+ * refunded after three days with the person never unlocked. A store with
+ * no `unfinished` has nothing to sweep. Resolves to how many were settled.
+ */
+export async function sweep<P extends StorePurchase>(store: Store<P>, verifier: Verifier, onSettled: () => void): Promise<number> {
+  if (!store.unfinished) return 0;
+  let purchases: P[];
+  try {
+    purchases = await store.availablePurchases();
+  } catch {
+    return 0;
+  }
+  let settled = 0;
+  for (const p of purchases) {
+    if (!store.unfinished(p)) continue;
+    try {
+      if (await settle(store, verifier, p)) settled++;
+    } catch {
+      // Left as it is: the next launch sweeps it again.
+    }
+  }
+  if (settled) onSettled();
+  return settled;
 }

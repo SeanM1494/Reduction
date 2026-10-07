@@ -1,7 +1,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { PLAN_SKUS, type StorePurchase } from "./purchasePolicy";
-import { purchase, reconcile, restore, type Store, type StoreError, type Verifier } from "./storeKitFlow";
+import { googleVerifyBodyFrom, PLAN_SKUS, verifyBodyFrom, type StorePurchase } from "./purchasePolicy";
+import { purchase, reconcile, restore, sweep, type Store, type StoreError, type Verifier } from "./storeKitFlow";
+import { STORE_WORDS } from "./storeWords";
 
 const JWS = "eyJhbGciOiJFUzI1NiJ9.eyJ0cmFuc2FjdGlvbklkIjoiMSJ9.c2ln";
 interface P extends StorePurchase { transactionId: string }
@@ -9,12 +10,14 @@ const own = (id: string, sku = PLAN_SKUS.monthly, date = 1): P => ({ productId: 
 
 /** A scripted store: `requestSubscription` records the ask, and the test
  *  delivers purchases or errors through the listeners like StoreKit would. */
-function fakeStore(opts: { available?: P[]; availableThrows?: StoreError } = {}) {
+function fakeStore(opts: { available?: P[]; availableThrows?: StoreError; play?: boolean; acked?: Set<string> } = {}) {
   const purchaseListeners = new Set<(p: P) => void>();
   const errorListeners = new Set<(e: StoreError) => void>();
   const finished: string[] = [];
   const asked: Array<{ sku: string; token: string }> = [];
   const store: Store<P> = {
+    words: opts.play ? STORE_WORDS.android : STORE_WORDS.ios,
+    ...(opts.play ? { unfinished: (p: P) => !(opts.acked ?? new Set()).has(p.transactionId) } : {}),
     async requestSubscription(sku, appAccountToken) {
       asked.push({ sku, token: appAccountToken });
     },
@@ -43,11 +46,12 @@ function fakeStore(opts: { available?: P[]; availableThrows?: StoreError } = {})
     listeners: () => purchaseListeners.size + errorListeners.size,
   };
 }
-function fakeVerifier(opts: { refuse?: string } = {}) {
+function fakeVerifier(opts: { refuse?: string; play?: boolean } = {}) {
   const bodies: string[] = [];
-  const verifier: Verifier = {
+  const verifier: Verifier<{ signedTransactionInfo?: string; purchaseToken?: string }> = {
+    bodyFrom: opts.play ? googleVerifyBodyFrom : verifyBodyFrom,
     async verify(body) {
-      bodies.push(body.signedTransactionInfo);
+      bodies.push(body.signedTransactionInfo ?? body.purchaseToken ?? "");
       if (opts.refuse) throw new Error(opts.refuse);
     },
   };
@@ -132,6 +136,7 @@ test("reconcile: settles ours, ignores others, keeps a refused one unfinished, a
   let settled = 0;
   const refuseOnce = { refuse: "" };
   const verifier: Verifier = {
+    bodyFrom: verifyBodyFrom,
     async verify() {
       if (refuseOnce.refuse) throw new Error(refuseOnce.refuse);
     },
@@ -149,4 +154,86 @@ test("reconcile: settles ours, ignores others, keeps a refused one unfinished, a
   assert.deepEqual(s.finished, ["renewal"], "the refused one stays in the queue");
   off();
   assert.equal(s.listeners(), 0);
+});
+
+// ------------------------------------------------------------ Google Play ---
+
+const playOwn = (id: string, state = "purchased", sku = PLAN_SKUS.monthly, date = 1): P => ({
+  productId: sku,
+  purchaseToken: `play-token-${id}`,
+  transactionDate: date,
+  transactionId: id,
+  purchaseState: state,
+});
+
+test("play: a pending purchase is reported started, and neither verified nor acknowledged", async () => {
+  const s = fakeStore({ play: true });
+  const v = fakeVerifier({ play: true });
+  const out = purchase(s.store, v.verifier, "monthly", "user-1");
+  await tick();
+  s.deliver(playOwn("p1", "pending"));
+  assert.deepEqual(await out, { status: "started" });
+  assert.deepEqual(v.bodies, []);
+  assert.deepEqual(s.finished, []);
+  assert.equal(s.listeners(), 0);
+});
+
+test("play: a cleared purchase is verified with its token, THEN acknowledged", async () => {
+  const s = fakeStore({ play: true });
+  const v = fakeVerifier({ play: true });
+  const out = purchase(s.store, v.verifier, "yearly", "user-1");
+  await tick();
+  s.deliver(playOwn("p2", "purchased", PLAN_SKUS.yearly));
+  assert.deepEqual(await out, { status: "completed" });
+  assert.deepEqual(v.bodies, ["play-token-p2"]);
+  assert.deepEqual(s.finished, ["p2"]);
+});
+
+test("play: the reconciler settles a pending purchase only once it clears", async () => {
+  const s = fakeStore({ play: true });
+  const v = fakeVerifier({ play: true });
+  let settled = 0;
+  const off = reconcile(s.store, v.verifier, () => settled++);
+  s.deliver(playOwn("p3", "pending"));
+  await tick();
+  assert.equal(settled, 0);
+  s.deliver(playOwn("p3", "purchased"));
+  await tick();
+  assert.equal(settled, 1);
+  assert.deepEqual(s.finished, ["p3"]);
+  off();
+});
+
+test("play: the sweep settles only purchases still unacknowledged, and only ours", async () => {
+  const other: P = { ...playOwn("x"), productId: "com.example.other" };
+  const s = fakeStore({ play: true, acked: new Set(["done"]), available: [playOwn("done"), playOwn("left"), other] });
+  const v = fakeVerifier({ play: true });
+  let settled = 0;
+  assert.equal(await sweep(s.store, v.verifier, () => settled++), 1);
+  assert.deepEqual(v.bodies, ["play-token-left"]);
+  assert.deepEqual(s.finished, ["left"]);
+  assert.equal(settled, 1);
+});
+
+test("play: a sweep the server refuses leaves the purchase for next launch", async () => {
+  const s = fakeStore({ play: true, available: [playOwn("p4")] });
+  const v = fakeVerifier({ play: true, refuse: "nope" });
+  assert.equal(await sweep(s.store, v.verifier, () => {}), 0);
+  assert.deepEqual(s.finished, []);
+});
+
+test("sweep does nothing on a store that re-delivers by itself", async () => {
+  const s = fakeStore({ available: [own("t1")] });
+  const v = fakeVerifier();
+  assert.equal(await sweep(s.store, v.verifier, () => {}), 0);
+  assert.deepEqual(v.bodies, []);
+});
+
+test("play: the restore message names the Google account, not an Apple ID", async () => {
+  const s = fakeStore({ play: true, available: [] });
+  const v = fakeVerifier({ play: true });
+  assert.deepEqual(await restore(s.store, v.verifier), {
+    status: "error",
+    message: "No Reduction subscription was found for this Google account.",
+  });
 });

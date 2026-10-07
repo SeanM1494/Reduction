@@ -10,7 +10,7 @@
  */
 
 import React, { useCallback, useState } from 'react';
-import { AccessibilityInfo, Alert, Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { AccessibilityInfo, Alert, Linking, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router, useFocusEffect } from 'expo-router';
 import { useAuth } from '@/lib/auth-context';
@@ -27,6 +27,9 @@ import { SubscribeBox } from '@/components/SubscribeBox';
 import { LegalLinks } from '@/components/LegalLinks';
 import { FeedbackRow } from '@/components/settings/FeedbackRow';
 import { manageSubscription } from '@/lib/purchase';
+import { manageRoute, STORE_WORDS, storeHostOf, storeOfProvider } from '@/lib/storeWords';
+
+const HOST = storeHostOf(Platform.OS);
 import { useColors, type Colors } from '@/hooks/useColors';
 import { useBooks } from '@/lib/books-context';
 import { requestReplay } from '@/lib/opening/launch';
@@ -76,11 +79,14 @@ export default function SettingsScreen() {
   // The one place a subscription's provider is READ: for the sentence in
   // the confirm, because what deletion does to billing differs by who
   // bills. An App Store subscription is the person's to cancel — no server
-  // can — so the dialog says so before, and the farewell says so after.
+  // can — so the dialog says so before, and the farewell says so after. A
+  // Google Play one the server cancels (billing/cancel.ts), like the web's.
   const storeBilled = !!entitlement?.subscribed && entitlement.provider === 'apple';
+  // From an Android phone, the App Store is on another device.
+  const appleWhere = `${HOST === 'android' ? 'on your iPhone in ' : 'in '}${STORE_WORDS.ios.manageWhere}`;
   const confirmDeleteAccount = () => {
     const consequence = storeBilled
-      ? ' Your App Store subscription is not cancelled by this — cancel it in Settings › Apple Account › Subscriptions, or it keeps billing.'
+      ? ` Your App Store subscription is not cancelled by this — cancel it ${appleWhere}, or it keeps billing.`
       : entitlement?.subscribed
         ? ' Your subscription is cancelled.'
         : '';
@@ -95,9 +101,15 @@ export default function SettingsScreen() {
           onPress: async () => {
             try {
               const result = await deleteAccount();
+              const stores = result.manual.map(storeOfProvider);
               const remember = [
-                result.manual.length ? 'cancel the App Store subscription in Settings › Apple Account › Subscriptions' : null,
-                result.appleSignIn === 'manual' ? 'remove Reduction from Settings › Apple Account › Sign in with Apple' : null,
+                stores.includes('ios') ? `cancel the App Store subscription ${appleWhere}` : null,
+                stores.includes('android') ? `cancel the Google Play subscription in ${STORE_WORDS.android.manageWhere}` : null,
+                result.appleSignIn === 'manual'
+                  ? HOST === 'android'
+                    ? 'remove Reduction from Sign in with Apple at account.apple.com'
+                    : 'remove Reduction from Settings › Apple Account › Sign in with Apple'
+                  : null,
               ].filter(Boolean);
               if (remember.length) {
                 Alert.alert('Account deleted', `Remember to ${remember.join(', and ')}.`);
@@ -148,8 +160,16 @@ export default function SettingsScreen() {
           </Text>
         ) : null}
         {entitlement?.subscribed ? (
-          entitlement.provider === 'apple' ? (
-            // An App Store subscription is managed where it was bought.
+          manageRoute(entitlement.provider, HOST) === 'store' ? (
+            // Bought in the OTHER phone store: only that store can manage
+            // it, so say where rather than open this phone's store page.
+            <Text style={styles.subvalue}>
+              {storeOfProvider(entitlement.provider) === 'ios'
+                ? `Bought in the App Store. Manage it on your iPhone in ${STORE_WORDS.ios.manageWhere}.`
+                : `Bought in Google Play. Manage it on your Android phone in ${STORE_WORDS.android.manageWhere}.`}
+            </Text>
+          ) : manageRoute(entitlement.provider, HOST) === 'here' ? (
+            // A store subscription is managed where it was bought.
             <Pressable
               style={styles.linkRow}
               onPress={async () => {

@@ -257,6 +257,54 @@ and Access → Sandbox), a workspace server on `APPLE_IAP_ENVIRONMENT=Sandbox`
 and App Review's are exactly those), then a purchase from the wall and a
 "Restore purchases" from Settings on a second device.
 
+### Google Play subscriptions
+
+The Google Play adapter (`artifacts/api-server/src/lib/billing/googlePlay.ts`)
+looks every purchase token up with Google (Play Developer API,
+`purchases.subscriptionsv2.get`) and writes the answer to the same
+`subscriptions` table, as `provider = 'google_play'` with the token as
+`provider_ref`. Nothing the phone or a notification says is trusted: a Play
+token is opaque, not signed, so Google's answer about it is the proof. It is
+off until configured, and the Android app sells nothing until
+`GET /api/billing/config` reports `nativePurchase.android: true`.
+
+| secret | value | required |
+|---|---|---|
+| `GOOGLE_PLAY_PACKAGE_NAME` | `com.recipereduction.mobile` (app.json's `android.package`) | yes |
+| `GOOGLE_PLAY_SERVICE_ACCOUNT` | the service account's JSON key file, pasted whole (or base64 of it). The account is created in Google Cloud and invited in Play Console → Users and permissions with "View financial data" and "Manage orders and subscriptions" for this app | yes |
+| `GOOGLE_PLAY_RTDN_TOKEN` | any long random string; the notifications route exists only when it is set | for notifications |
+
+**Real-Time Developer Notifications.** In Google Cloud, create a Pub/Sub
+topic, grant `google-play-developer-notifications@system.gserviceaccount.com`
+the Publisher role on it, and name it in Play Console → Monetization setup.
+Then add a PUSH subscription to the topic whose endpoint is
+`PUBLIC_BASE_URL/api/billing/google/notifications?token=<GOOGLE_PLAY_RTDN_TOKEN>`.
+Every notification is re-read from Google, so the token keeps strangers from
+spending API quota rather than proving anything. Answers are 200 for
+anything processed or deliberately ignored, 500 only when Google could not
+be asked, because Pub/Sub retries everything else for days.
+
+**Acknowledge or it is refunded.** Play refunds a subscription purchase not
+acknowledged within three days. The server acknowledges at verify and at
+every notification; the app acknowledges after the server has verified, and
+sweeps anything still unacknowledged at each launch.
+
+**The products** are the same two ids as on the App Store
+(`com.recipereduction.mobile.plan.monthly` / `.yearly`), each a Play
+subscription with one auto-renewing base plan. The app buys the plain base
+plan, never a trial offer it was not told about (`basePlanOffer` in
+`lib/purchasePolicy.ts`). Deleting an account cancels a Play subscription
+through the API; if Google refuses, the deletion still goes ahead and the
+phone tells the person to cancel it in the Play Store.
+
+`GET /api/admin/preflight/google-play` reports what the running process
+holds (no secrets) and tries the service-account token exchange.
+
+To try it end to end: an Android build on a Play testing track, a license
+tester (Play Console → Settings → License testing), and a purchase from the
+wall. **None of this has run against Google yet**; the suite proves it
+against a loopback stub (`GOOGLE_OAUTH_TOKEN_URL`, `GOOGLE_PLAY_API_URL`).
+
 ### The legal pages
 
 The Privacy Policy and Terms of Use are static HTML in

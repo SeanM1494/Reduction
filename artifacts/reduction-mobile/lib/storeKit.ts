@@ -1,5 +1,6 @@
 /**
- * lib/storeKit.ts — the App Store handler for lib/purchase.ts, on expo-iap.
+ * lib/storeKit.ts — the store handler for lib/purchase.ts, on expo-iap:
+ * the App Store on an iPhone, Google Play on Android.
  *
  * ONLY THIS FILE IMPORTS expo-iap. The flow — verify with the server, THEN
  * finish with the store; only our products; the listener as the source of
@@ -18,6 +19,16 @@
  * how Apple's notifications name an account with no lookup table on this
  * side. A restore of a subscription bound to another account is refused by
  * the server, not reassigned.
+ *
+ * GOOGLE PLAY, THE SAME FLOW WITH THREE DIFFERENCES. The purchase token
+ * is opaque, so the server asks Google about it
+ * (POST /api/billing/google/verify) instead of checking a signature; the
+ * account rides as `obfuscatedAccountId` (the user id, which Play echoes
+ * back as obfuscatedExternalAccountId); and "finish" is ACKNOWLEDGE, which
+ * the server also does, so the client's acknowledge failing on an already
+ * acknowledged purchase is expected and swallowed. A Play subscription is
+ * bought through one of its offers, so `offers()` remembers each plan's
+ * base-plan offer token for `purchase()` to use.
  *
  * NOT VERIFIABLE FROM A CONTAINER: any of this against a real store. What
  * is proven is the flow under node and that the surfaces stay unchanged on
@@ -39,12 +50,29 @@ import {
   requestPurchase,
   type Purchase,
 } from 'expo-iap';
-import { fetchBillingConfig, verifyApplePurchase } from './api';
+import { fetchBillingConfig, verifyApplePurchase, verifyGooglePurchase } from './api';
 import type { Offer, PurchaseHandler, PurchaseOutcome } from './purchase';
-import { offersFrom, PLAN_ORDER, PLAN_SKUS, type Plan } from './purchasePolicy';
-import { purchase as runPurchase, reconcile, restore as runRestore, type Store, type Verifier } from './storeKitFlow';
+import {
+  basePlanOffer,
+  googleVerifyBodyFrom,
+  offersFrom,
+  plainPrice,
+  PLAN_ORDER,
+  PLAN_SKUS,
+  verifyBodyFrom,
+  type Plan,
+} from './purchasePolicy';
+import { purchase as runPurchase, reconcile, restore as runRestore, sweep, type Store, type Verifier } from './storeKitFlow';
+import { STORE_WORDS, storeHostOf } from './storeWords';
 
-type StorePurchase = Purchase & { transactionDate: number };
+type StorePurchase = Purchase & { transactionDate: number; isAcknowledgedAndroid?: boolean | null };
+
+const host = storeHostOf(Platform.OS);
+const isAndroid = host === 'android';
+
+/** The app's own package on Play, which the subscriptions page needs.
+ *  The same string as app.json's android.package. */
+const ANDROID_PACKAGE = 'com.recipereduction.mobile';
 
 /**
  * Dev-only trace of what the store actually answers, in the Metro console.
@@ -79,9 +107,23 @@ function describeError(e: unknown): Record<string, unknown> {
   };
 }
 
+/** Play's offer token per plan sku, from the last `offers()`. A purchase
+ *  is only ever started from a box that has fetched them. */
+const playOfferTokens = new Map<string, string>();
+
 const store: Store<StorePurchase> = {
+  words: STORE_WORDS[host],
   async requestSubscription(sku, appAccountToken) {
-    await requestPurchase({ request: { apple: { sku, appAccountToken } }, type: 'subs' });
+    if (!isAndroid) {
+      await requestPurchase({ request: { apple: { sku, appAccountToken } }, type: 'subs' });
+      return;
+    }
+    const offerToken = playOfferTokens.get(sku);
+    if (!offerToken) throw Object.assign(new Error('That plan is not available right now.'), { code: 'sku-not-found' });
+    await requestPurchase({
+      request: { google: { skus: [sku], obfuscatedAccountId: appAccountToken, subscriptionOffers: [{ sku, offerToken }] } },
+      type: 'subs',
+    });
   },
   onPurchase(listener) {
     const sub = purchaseUpdatedListener((p) => listener(p as StorePurchase));
@@ -92,18 +134,38 @@ const store: Store<StorePurchase> = {
     return () => sub.remove();
   },
   async finish(p) {
-    await finishTransaction({ purchase: p, isConsumable: false });
+    if (!isAndroid) {
+      await finishTransaction({ purchase: p, isConsumable: false });
+      return;
+    }
+    // The server has acknowledged by now (billing/googlePlay.ts); this is
+    // the belt to its braces, and Play refuses a second acknowledge.
+    if (p.isAcknowledgedAndroid) return;
+    try {
+      await finishTransaction({ purchase: p, isConsumable: false });
+    } catch (e) {
+      trace('acknowledge refused (the server may already have):', describeError(e));
+    }
   },
   async availablePurchases() {
     return (await getAvailablePurchases({ onlyIncludeActiveItemsIOS: true })) as StorePurchase[];
   },
+  ...(isAndroid ? { unfinished: (p: StorePurchase) => p.isAcknowledgedAndroid === false } : {}),
 };
 
-const verifier: Verifier = {
-  async verify(body) {
-    await verifyApplePurchase(body);
-  },
-};
+const verifier: Verifier<{ signedTransactionInfo: string } | { purchaseToken: string }> = isAndroid
+  ? {
+      bodyFrom: googleVerifyBodyFrom,
+      async verify(body) {
+        await verifyGooglePurchase(body as { purchaseToken: string });
+      },
+    }
+  : {
+      bodyFrom: verifyBodyFrom,
+      async verify(body) {
+        await verifyApplePurchase(body as { signedTransactionInfo: string });
+      },
+    };
 
 let connected: Promise<boolean> | null = null;
 /** One connection per process; the library tolerates repeats, the cost
@@ -124,7 +186,10 @@ function connect(): Promise<boolean> {
   return connected;
 }
 
-const hostCanSell = () => Platform.OS === 'ios' && Device.isDevice;
+/** A simulator cannot buy from the App Store; an Android emulator with
+ *  Google Play installed can buy from Play (test accounts), so only iOS
+ *  asks whether this is a device. */
+const hostCanSell = () => (Platform.OS === 'ios' && Device.isDevice) || isAndroid;
 
 export const storeKitHandler: PurchaseHandler = {
   async available() {
@@ -139,9 +204,15 @@ export const storeKitHandler: PurchaseHandler = {
       // preflight was just run.
       trace('available: /api/billing/config from', process.env.EXPO_PUBLIC_DOMAIN, '->', {
         nativePurchaseAvailable: cfg.nativePurchaseAvailable,
+        nativePurchase: cfg.nativePurchase,
         purchaseAvailable: cfg.purchaseAvailable,
       });
-      if (!cfg.nativePurchaseAvailable) return false;
+      // Per store, so an Android phone is never told it can sell because
+      // the APPLE adapter is configured. `nativePurchaseAvailable` is the
+      // Apple answer older iPhone builds read; a server too old to say
+      // `nativePurchase` cannot record a Play purchase at all.
+      const can = isAndroid ? cfg.nativePurchase?.android === true : (cfg.nativePurchase?.ios ?? cfg.nativePurchaseAvailable);
+      if (!can) return false;
     } catch (e) {
       trace('available: /api/billing/config FAILED', describeError(e));
       return false;
@@ -175,12 +246,26 @@ export const storeKitHandler: PurchaseHandler = {
       `fetchProducts -> ${products.length} product(s)`,
       products.map((p) => ({ id: p.id, displayPrice: p.displayPrice, type: p.type, platform: p.platform }))
     );
-    const offers = offersFrom(products.map((p) => ({ id: p.id, displayPrice: p.displayPrice })));
+    if (isAndroid) {
+      playOfferTokens.clear();
+      for (const p of products) {
+        const offer = basePlanOffer((p as { subscriptionOffers?: Parameters<typeof basePlanOffer>[0] }).subscriptionOffers);
+        if (offer?.offerTokenAndroid) playOfferTokens.set(p.id, offer.offerTokenAndroid);
+      }
+    }
+    const offers = offersFrom(
+      products
+        // A Play product with no offer to buy it through cannot be sold.
+        .filter((p) => !isAndroid || playOfferTokens.has(p.id))
+        .map((p) => ({ id: p.id, displayPrice: isAndroid ? plainPrice(p.displayPrice) : p.displayPrice }))
+    );
     if (offers.length !== skus.length) {
       trace(
         'missing from the store:',
         skus.filter((s) => !offers.some((o) => o.sku === s)),
-        '(a product Apple has not returned: agreement, status, bundle id, or propagation — the store does not say which)'
+        isAndroid
+          ? '(a product Play has not returned: not active, no active base plan, the build not on a testing track, or a tester account not signed in — Play does not say which)'
+          : '(a product Apple has not returned: agreement, status, bundle id, or propagation — the store does not say which)'
       );
     }
     return offers;
@@ -198,7 +283,7 @@ export const storeKitHandler: PurchaseHandler = {
 
   async manage(): Promise<PurchaseOutcome> {
     try {
-      await deepLinkToSubscriptions({});
+      await deepLinkToSubscriptions(isAndroid ? { packageNameAndroid: ANDROID_PACKAGE } : {});
       return { status: 'started' };
     } catch (e) {
       return { status: 'error', message: (e as Error).message || 'Could not open your subscriptions.' };
@@ -209,7 +294,8 @@ export const storeKitHandler: PurchaseHandler = {
 /**
  * The standing listener for everything the store delivers outside a
  * purchase call — renewals, Ask to Buy approvals, a transaction left
- * unfinished because the server was unreachable. Started once the account
+ * unfinished because the server was unreachable, a Play payment that has
+ * just cleared — plus, on Play, one sweep of what is still unacknowledged. Started once the account
  * is known, because verifying needs the session. Returns the unsubscribe.
  */
 export function startStoreKitReconciler(onSettled: () => void): () => void {
@@ -217,7 +303,11 @@ export function startStoreKitReconciler(onSettled: () => void): () => void {
   let off: (() => void) | null = null;
   let stopped = false;
   void connect().then((ok) => {
-    if (ok && !stopped) off = reconcile(store, verifier, onSettled);
+    if (!ok || stopped) return;
+    off = reconcile(store, verifier, onSettled);
+    // Google Play only (the store has `unfinished`): anything left
+    // unacknowledged by an earlier launch, settled before Play refunds it.
+    void sweep(store, verifier, onSettled);
   });
   return () => {
     stopped = true;

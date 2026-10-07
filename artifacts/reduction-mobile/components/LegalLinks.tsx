@@ -7,9 +7,12 @@
  */
 
 import React from 'react';
-import { Linking, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Linking, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useAuth } from '@/lib/auth-context';
-import { legalUrl, RENEWAL_TERMS } from '@/lib/legal';
+import { legalUrl } from '@/lib/legal';
+import { STORE_WORDS, storeHostOf } from '@/lib/storeWords';
+
+const RENEWAL_TERMS = STORE_WORDS[storeHostOf(Platform.OS)].renewalTerms;
 import { useColors, type Colors } from '@/hooks/useColors';
 import { fonts } from '@/constants/colors';
 

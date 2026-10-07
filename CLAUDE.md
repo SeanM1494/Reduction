@@ -280,19 +280,19 @@ them is the whole point:
 
 | result | meaning |
 |---|---|
-| ***n* pass, 203 skipped** | no `DATABASE_URL` at all. Fine on a machine with no Postgres. |
-| ***n*+203 pass, 0 skipped** | a local database with a current schema. This is the real gate — `pnpm run test:db` produces it. |
+| ***n* pass, 214 skipped** | no `DATABASE_URL` at all. Fine on a machine with no Postgres. |
+| ***n*+214 pass, 0 skipped** | a local database with a current schema. This is the real gate — `pnpm run test:db` produces it. |
 | **failures saying "Refusing to run database tests against …"** | `DATABASE_URL` in the shell points somewhere non-local — on Replit, that is production. Working as designed: use `pnpm run test:db`, which ignores the env var entirely. |
 | **failures naming a missing table** | a reachable local database whose schema is behind `lib/db/src/schema/schema.ts`. `test:db` re-pushes on every start, so this means a hand-run database — push it or use the script. |
 
 The total grows as suites are added — pin your expectation to the **skip
 count**, not the pass count (an earlier version of this table hard-coded
 23/39 and went stale within a week, so treat the number above as needing an
-edit whenever a database-backed suite is added). The 203 are twenty-two suites:
+edit whenever a database-backed suite is added). The 214 are twenty-three suites:
 `claim.db.test.ts` (the anonymous library), `trial.db.test.ts` (the free
 extraction), `cache.db.test.ts` (the URL alias and the cached flag),
 `extractionLog.test.ts` (the cost table), `push.db.test.ts` (timer
-notifications) `access.db.test.ts` (the paywall), `admin.db.test.ts` (the operator lookup), `billingApple.db.test.ts` (the App Store routes), `mobileHandoff.db.test.ts` (the mobile sign-in handoff), `account.db.test.ts` (account deletion), `photos.db.test.ts` (recipe pictures), `removed.db.test.ts` (taking a recipe out of the box) `searchLibrary.db.test.ts` (the cached half of a search and its counts) `originals.db.test.ts` (a recipe's original wording) `page.db.test.ts` (a page the phone's browser hands over) `books.db.test.ts` (recipe books), `costs.db.test.ts` (the admin cost report), `counters.db.test.ts` (the anonymous daily counts), `reel.db.test.ts` (the starter reel), `crash.db.test.ts` (crash reports), `notes.db.test.ts` (a recipe's notes) and `costBrake.db.test.ts` (the daily cost brakes). The first two are transactional guarantees — all-or-nothing
+notifications) `access.db.test.ts` (the paywall), `admin.db.test.ts` (the operator lookup), `billingApple.db.test.ts` (the App Store routes), `mobileHandoff.db.test.ts` (the mobile sign-in handoff), `account.db.test.ts` (account deletion), `photos.db.test.ts` (recipe pictures), `removed.db.test.ts` (taking a recipe out of the box) `searchLibrary.db.test.ts` (the cached half of a search and its counts) `originals.db.test.ts` (a recipe's original wording) `page.db.test.ts` (a page the phone's browser hands over) `books.db.test.ts` (recipe books), `costs.db.test.ts` (the admin cost report), `counters.db.test.ts` (the anonymous daily counts), `reel.db.test.ts` (the starter reel), `crash.db.test.ts` (crash reports), `notes.db.test.ts` (a recipe's notes) `costBrake.db.test.ts` (the daily cost brakes) and `billingGoogle.db.test.ts` (the Google Play routes). The first two are transactional guarantees — all-or-nothing
 rollback, idempotent repeats, never taking another user's rows. The third is a
 promise about correctness: that a normalised URL never serves a different page.
 The fourth guards a denominator — a cache hit that recorded a `via` would
@@ -356,8 +356,14 @@ recipe. The twenty-second guards that the daily brakes on paid model
 calls read today's use from `extraction_events`, so a row written by
 another instance refuses here, and that a refusal makes no model call,
 writes no event row (it would count toward the brake that refused it) and
-gives a signed-out visitor the try back. **The full suite — 900 tests at the
-time of writing (Oct 3) — has been run against a real Postgres and passes 900/0.** The
+gives a signed-out visitor the try back. The twenty-third guards the Google
+Play routes with Google stubbed on loopback: a purchase names one account
+and is never reassigned, a payment that has not cleared writes and
+acknowledges nothing, a plan change closes the row it replaced, a
+notification is re-read from Google rather than believed, and deleting an
+account cancels at Google or, when Google refuses, leaves it to the person
+without refusing the deletion. **The full suite — 958 tests at the
+time of writing (Oct 7) — has been run against a real Postgres and passes 958/0.** The
 ones that are not api-server or model tests include the mobile library's
 filter and sort (`artifacts/reduction-mobile/lib/libraryView.test.ts`), the
 recipe box's books and page arithmetic (`recipeBox.test.ts`), the
@@ -637,9 +643,10 @@ collisions — and nothing needs one.
 ## The paywall: three free recipes, and the rule about payment providers
 
 **ONLY `artifacts/api-server/src/lib/billing/stripe.ts` MAY IMPORT THE STRIPE SDK OR NAME A
-STRIPE-SHAPED FIELD, and only `artifacts/api-server/src/lib/billing/apple.ts` may import
+STRIPE-SHAPED FIELD, only `artifacts/api-server/src/lib/billing/apple.ts` may import
 `@apple/app-store-server-library` or name an Apple one** (`originalTransactionId`,
-`autoRenewStatus`, a `BILLING_RETRY`). Everything else asks `entitlementFor(userId)` and
+`autoRenewStatus`, a `BILLING_RETRY`), **and only `lib/billing/googlePlay.ts` may name
+a Play one** (`subscriptionState`, `acknowledgementState`, `linkedPurchaseToken`). Everything else asks `entitlementFor(userId)` and
 branches on the answer. This is a rule, not a description of the current
 state, and it exists because the app is going to the App Store — where Apple
 requires IAP for a subscription unlocking in-app functionality — and probably
@@ -858,7 +865,9 @@ verb and has to be reopened for the App Store build.
 **On mobile the same seam is `lib/purchase.ts`, the App Store handler is
 `lib/storeKit.ts`, and ONLY that file may import `expo-iap`.** The flow is
 `lib/storeKitFlow.ts`, pure, and its one rule is verify with the server
-THEN finish with the store — never the other way, or a purchase the server
+THEN finish with the store (on Android, Google Play: the same file and the
+same flow, where "finish" is acknowledge and an unacknowledged purchase is
+swept at launch because Play refunds it after three days) — never the other way, or a purchase the server
 never saw vanishes from StoreKit's queue with the money taken. The app
 sells only when `/api/billing/config` says `nativePurchaseAvailable`, which
 is the Apple adapter being configured; a wall that shows a price the

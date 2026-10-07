@@ -19,7 +19,5 @@ export function legalUrl(webUrl: string | null | undefined, page: LegalPage): st
   return `${host.replace(/\/+$/, '')}/${page}.html`;
 }
 
-/** The sentence Apple wants beside a subscription price (guideline 3.1.2):
- *  that it renews, and where it is cancelled. */
-export const RENEWAL_TERMS =
-  'Renews automatically until cancelled. Manage or cancel in your App Store account settings.';
+// The renewal sentence beside a price is per store and lives with the
+// other store sentences: STORE_WORDS[host].renewalTerms (lib/storeWords.ts).

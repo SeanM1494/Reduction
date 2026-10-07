@@ -20,7 +20,15 @@
  * subscription", after the originals were deleted). These two are the
  * replacements, under the record whose bundle id the build actually
  * carries; the old strings can never be used again on this account.
+ *
+ * GOOGLE PLAY USES THE SAME TWO IDS. Play's product ids allow lowercase
+ * letters, digits, underscores and periods, so these strings are valid
+ * there unchanged, and one table serves both stores. Each Play
+ * subscription needs one auto-renewing base plan (monthly / yearly); the
+ * app buys whichever base-plan offer `basePlanOffer` picks.
  */
+
+import { STORE_WORDS, type StoreWords } from './storeWords';
 
 export type Plan = 'monthly' | 'yearly';
 
@@ -78,6 +86,10 @@ export interface StorePurchase {
   productId: string;
   purchaseToken?: string | null;
   transactionDate: number;
+  /** 'pending' on Android while a slow payment (cash, some cards) has not
+   *  cleared. Never granted and never acknowledged in that state; the same
+   *  purchase arrives again as 'purchased' when it clears. */
+  purchaseState?: string | null;
 }
 
 /** The body for POST /api/billing/apple/verify, or null when this purchase
@@ -86,6 +98,51 @@ export function verifyBodyFrom(p: StorePurchase): { signedTransactionInfo: strin
   if (!planOf(p.productId)) return null;
   if (!looksLikeJws(p.purchaseToken)) return null;
   return { signedTransactionInfo: p.purchaseToken };
+}
+
+/** Play purchase tokens are opaque strings of a few hundred characters.
+ *  The cap only keeps an absurd one from being posted; the server
+ *  re-checks. */
+const MAX_PLAY_TOKEN = 4096;
+
+/** The body for POST /api/billing/google/verify, or null when this purchase
+ *  is not one of ours, has not cleared, or carries no token. Google's
+ *  answer about the token is the proof; nothing the phone says is. */
+export function googleVerifyBodyFrom(p: StorePurchase): { purchaseToken: string } | null {
+  if (!planOf(p.productId)) return null;
+  if (p.purchaseState && p.purchaseState !== 'purchased') return null;
+  const token = typeof p.purchaseToken === 'string' ? p.purchaseToken.trim() : '';
+  if (!token || token.length > MAX_PLAY_TOKEN) return null;
+  return { purchaseToken: token };
+}
+
+/** One of a Play subscription's offers; only the fields read here. */
+export interface PlayOffer {
+  id?: string | null;
+  basePlanIdAndroid?: string | null;
+  offerTokenAndroid?: string | null;
+  offerTagsAndroid?: string[] | null;
+}
+
+/**
+ * The offer to buy a Play subscription with: its plain base plan, never a
+ * trial or a promotion this app has not decided to run. A base-plan offer
+ * is the one with no offer id of its own (openiap reports its id as the
+ * base plan's, or nothing). When every offer is a promotion, the first one
+ * that can be bought is the fallback, rather than no plan at all.
+ */
+export function basePlanOffer<O extends PlayOffer>(offers: readonly O[] | null | undefined): O | null {
+  const buyable = (offers ?? []).filter((o) => typeof o.offerTokenAndroid === 'string' && o.offerTokenAndroid);
+  const plain = buyable.find((o) => !o.id || o.id === o.basePlanIdAndroid);
+  return plain ?? buyable[0] ?? null;
+}
+
+/** A price as the box shows it, before it adds "/month". Some store
+ *  strings already carry a period ("$1.99/month"); that part is dropped so
+ *  the box never says "/month/month". */
+export function plainPrice(price: string): string {
+  const slash = price.indexOf('/');
+  return (slash > 0 ? price.slice(0, slash) : price).trim();
 }
 
 /** For a restore: the most recent of this Apple ID's purchases that is one
@@ -112,7 +169,7 @@ export type PurchaseOutcome =
  * answered — and is reported as started: the transaction arrives later,
  * through the same listener, when the parent approves.
  */
-export function outcomeFromStoreError(code: string, message?: string | null): PurchaseOutcome {
+export function outcomeFromStoreError(code: string, message?: string | null, words: StoreWords = STORE_WORDS.ios): PurchaseOutcome {
   switch (code) {
     case 'user-cancelled':
       return { status: 'cancelled' };
@@ -125,9 +182,9 @@ export function outcomeFromStoreError(code: string, message?: string | null): Pu
       return { status: 'unavailable' };
     case 'network-error':
     case 'service-timeout':
-      return { status: 'error', message: 'The App Store could not be reached. Try again in a moment.' };
+      return { status: 'error', message: `${words.theStore} could not be reached. Try again in a moment.` };
     case 'already-owned':
-      return { status: 'error', message: 'This Apple ID already has a subscription. Use "Restore purchases".' };
+      return { status: 'error', message: `This ${words.account} already has a subscription. Use "Restore purchases".` };
     default:
       return { status: 'error', message: message || 'The purchase could not be completed.' };
   }

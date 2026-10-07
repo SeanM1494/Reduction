@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { looksLikeJws, newestOwnPurchase, offersFrom, outcomeFromStoreError, PLAN_SKUS, planOf, verifyBodyFrom } from "./purchasePolicy";
+import { basePlanOffer, googleVerifyBodyFrom, looksLikeJws, newestOwnPurchase, offersFrom, outcomeFromStoreError, plainPrice, PLAN_SKUS, planOf, verifyBodyFrom } from "./purchasePolicy";
+import { STORE_WORDS } from "./storeWords";
 
 const JWS = "eyJhbGciOiJFUzI1NiJ9.eyJ0cmFuc2FjdGlvbklkIjoiMSJ9.c2ln";
 
@@ -57,4 +58,38 @@ test("outcomeFromStoreError: a cancel is not an error, Ask to Buy is started, no
   assert.equal(outcomeFromStoreError("already-owned").status, "error");
   assert.deepEqual(outcomeFromStoreError("unknown", "boom"), { status: "error", message: "boom" });
   assert.deepEqual(outcomeFromStoreError("unknown", null), { status: "error", message: "The purchase could not be completed." });
+});
+
+test("outcomeFromStoreError: the iOS sentences are unchanged, and Android names its own store", () => {
+  assert.deepEqual(outcomeFromStoreError("network-error"), { status: "error", message: "The App Store could not be reached. Try again in a moment." });
+  assert.deepEqual(outcomeFromStoreError("already-owned"), { status: "error", message: 'This Apple ID already has a subscription. Use "Restore purchases".' });
+  assert.deepEqual(outcomeFromStoreError("network-error", null, STORE_WORDS.android), { status: "error", message: "Google Play could not be reached. Try again in a moment." });
+  assert.deepEqual(outcomeFromStoreError("already-owned", null, STORE_WORDS.android), { status: "error", message: 'This Google account already has a subscription. Use "Restore purchases".' });
+});
+
+test("googleVerifyBodyFrom sends only our products, only once cleared, only with a token", () => {
+  const base = { productId: PLAN_SKUS.yearly, purchaseToken: " tok ", transactionDate: 1 };
+  assert.deepEqual(googleVerifyBodyFrom({ ...base, purchaseState: "purchased" }), { purchaseToken: "tok" });
+  assert.deepEqual(googleVerifyBodyFrom(base), { purchaseToken: "tok" });
+  assert.equal(googleVerifyBodyFrom({ ...base, purchaseState: "pending" }), null);
+  assert.equal(googleVerifyBodyFrom({ ...base, productId: "com.example.other" }), null);
+  assert.equal(googleVerifyBodyFrom({ ...base, purchaseToken: "" }), null);
+  assert.equal(googleVerifyBodyFrom({ ...base, purchaseToken: "x".repeat(5000) }), null);
+});
+
+test("basePlanOffer picks the plain base plan over a trial, and something buyable over nothing", () => {
+  const trial = { id: "free-week", basePlanIdAndroid: "monthly", offerTokenAndroid: "t-trial" };
+  const plain = { id: "monthly", basePlanIdAndroid: "monthly", offerTokenAndroid: "t-plain" };
+  const noId = { id: null, basePlanIdAndroid: "monthly", offerTokenAndroid: "t-noid" };
+  assert.equal(basePlanOffer([trial, plain])?.offerTokenAndroid, "t-plain");
+  assert.equal(basePlanOffer([trial, noId])?.offerTokenAndroid, "t-noid");
+  assert.equal(basePlanOffer([trial])?.offerTokenAndroid, "t-trial");
+  assert.equal(basePlanOffer([{ ...plain, offerTokenAndroid: null }]), null);
+  assert.equal(basePlanOffer(null), null);
+});
+
+test("plainPrice drops a period the store already wrote", () => {
+  assert.equal(plainPrice("$1.99"), "$1.99");
+  assert.equal(plainPrice("$1.99/month"), "$1.99");
+  assert.equal(plainPrice("19,99 € / year"), "19,99 €");
 });

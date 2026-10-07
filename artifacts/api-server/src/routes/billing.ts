@@ -27,6 +27,7 @@ import {
 import { entitlementFor } from "../lib/billing/entitlement";
 import { redeemCoupon, redemptionsFor } from "../lib/billing/coupons";
 import { appleIapConfig } from "../lib/billing/apple";
+import { googlePlayConfig } from "../lib/billing/googlePlay";
 
 export const billingRouter = Router();
 
@@ -47,7 +48,12 @@ billingRouter.get("/config", (_req: Request, res: Response) => {
     // is money taken the moment the store completes it, and nothing unlocks
     // until this server verifies the signed transaction — so the app must
     // not sell while the adapter that verifies is unconfigured.
+    // It is the APPLE answer, and stays named this way because every
+    // shipped iPhone build reads it.
     nativePurchaseAvailable: appleIapConfig() !== null,
+    // Per store, so an Android phone is never told it can sell because the
+    // Apple adapter is configured (or the other way round).
+    nativePurchase: { ios: appleIapConfig() !== null, android: googlePlayConfig() !== null },
     priceLabel: "$1.99/month",
     // The public marketing/app URL, not a secret. The mobile app's Settings
     // links an EXISTING web subscriber here to manage that plan; its wall

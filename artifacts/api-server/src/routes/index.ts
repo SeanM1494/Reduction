@@ -9,6 +9,7 @@ import { trialRouter } from "./trial";
 import { pushRouter, timersRouter } from "./push";
 import { billingRouter } from "./billing";
 import { appleBillingRouter } from "./billingApple";
+import { googleBillingRouter } from "./billingGoogle";
 import { adminRouter } from "./admin";
 import { accountRouter } from "./account";
 import { booksRouter } from "./books";
@@ -64,6 +65,10 @@ router.use("/billing", billingRouter);
 // body signature — so unlike the Stripe webhook this mounts after
 // express.json() like everything else.
 router.use("/billing/apple", appleBillingRouter);
+// Google Play's two (the Android app's verify call and the Pub/Sub push of
+// Google's notifications). JSON too; the proof is Google's answer about the
+// token, looked up on every call (lib/billing/googlePlay.ts).
+router.use("/billing/google", googleBillingRouter);
 // One operator, one lookup, behind a shared secret. 404s when ADMIN_SECRET is
 // unset — see the note at the top of routes/admin.ts about why this is not an
 // authentication path.

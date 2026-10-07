@@ -240,6 +240,9 @@ export interface BillingConfig {
    *  The app must not sell when this is false: the money would be taken
    *  and nothing unlocked until the server was configured. */
   nativePurchaseAvailable?: boolean;
+  /** Per store: can THIS server record a purchase made in it? Absent from
+   *  a server older than the Google Play adapter, which can record none. */
+  nativePurchase?: { ios?: boolean; android?: boolean };
 }
 
 export const fetchBillingConfig = (): Promise<BillingConfig> => request('/api/billing/config');
@@ -306,6 +309,12 @@ export const fetchEntitlement = (): Promise<{ entitlement: Entitlement | null }>
  *  Refusals carry the server's sentence (wrong account, unverifiable). */
 export const verifyApplePurchase = (body: { signedTransactionInfo: string; signedRenewalInfo?: string }): Promise<{ ok: true; entitlement: Entitlement }> =>
   request('/api/billing/apple/verify', { method: 'POST', body: JSON.stringify(body) });
+
+/** After a Google Play purchase or a restore: the purchase token, which the
+ *  server looks up with Google (it is opaque, not signed) and binds to this
+ *  account. Refusals carry the server's sentence, as the Apple call's do. */
+export const verifyGooglePurchase = (body: { purchaseToken: string }): Promise<{ ok: true; entitlement: Entitlement }> =>
+  request('/api/billing/google/verify', { method: 'POST', body: JSON.stringify(body) });
 
 /** "N recipes free". A refused code comes back as an ApiError with the
  *  server's own sentence (unknown, expired, fully claimed, already used). */

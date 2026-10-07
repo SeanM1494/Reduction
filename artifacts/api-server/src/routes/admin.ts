@@ -26,6 +26,7 @@ import { setEnforceOverrideAudited } from "../lib/billing/entitlement";
 import { createCoupon, listCoupons, normaliseCode } from "../lib/billing/coupons";
 import { appleConfig, clientSecret, describeKeyEnv } from "../lib/apple";
 import { appleIapConfig, describeAppleIapEnv, requestAppleTestNotification } from "../lib/billing/apple";
+import { describeGooglePlayEnv, googleAccessToken, googlePlayConfig } from "../lib/billing/googlePlay";
 import Anthropic from "@anthropic-ai/sdk";
 import { MODEL as EXTRACTION_MODEL } from "../lib/structureRecipe";
 import { windowReport } from "../lib/costReport";
@@ -695,6 +696,31 @@ adminRouter.post("/preflight/apple-iap/test-notification", async (req: Request, 
   const out = await requestAppleTestNotification(cfg, environment);
   if (!out.ok) return res.status(502).json({ error: "Apple refused the request.", ...out });
   return res.json({ ok: true, environment: out.environment, testNotificationToken: out.token, next: "Watch the deployment logs for 'TEST acknowledged'." });
+});
+
+/**
+ * GET /api/admin/preflight/google-play
+ *
+ * The Play adapter's counterpart to /preflight/apple-iap: what the RUNNING
+ * PROCESS holds (package name, whether the service account parses and
+ * which account it is, whether the notifications token is set, the push
+ * endpoint to register), plus one real call — trading the service account
+ * for an access token — which is the first thing that fails when the key
+ * is wrong or revoked. Whether the account has Play Console permissions
+ * for the app is only proven by a purchase lookup. Nothing secret is
+ * disclosed.
+ */
+adminRouter.get("/preflight/google-play", async (req: Request, res: Response) => {
+  if (!requireAdmin(req, res)) return;
+  const report = describeGooglePlayEnv();
+  const cfg = googlePlayConfig();
+  if (!cfg) return res.json({ ...report, accessToken: "not attempted" });
+  try {
+    await googleAccessToken(cfg);
+    return res.json({ ...report, accessToken: "ok" });
+  } catch (e) {
+    return res.json({ ...report, accessToken: (e as Error).message });
+  }
 });
 
 // The starter reel's controls (routes/adminReel.ts), behind the same guard.

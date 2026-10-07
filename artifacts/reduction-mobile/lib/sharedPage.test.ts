@@ -196,3 +196,17 @@ test('the share cap, escaped twice, stays far under the 4 MB UserDefaults ceilin
   const worst = JSON.stringify(JSON.stringify({ h: '"'.repeat(SHARE_MAX_CHARS) }));
   assert.ok(Buffer.byteLength(worst) < 4_194_304, `${Buffer.byteLength(worst)} bytes`);
 });
+
+test("an Android share from Chrome (address only, no page) is read as a link", () => {
+  // Chrome's SEND intent carries the page's address as EXTRA_TEXT; the
+  // package reports it as a weburl, with nothing in meta.
+  assert.deepEqual(
+    sharedItemFrom({ type: "weburl", text: "https://www.example.com/best-chili/", webUrl: "https://www.example.com/best-chili/", meta: null }),
+    { kind: "link", url: "https://www.example.com/best-chili/" }
+  );
+  // Some apps put the title in front of the address.
+  assert.deepEqual(
+    sharedItemFrom({ type: "weburl", text: "The Best Chili https://www.example.com/best-chili/", webUrl: "https://www.example.com/best-chili/" }),
+    { kind: "link", url: "https://www.example.com/best-chili/" }
+  );
+});
