@@ -109,14 +109,60 @@ export function isShareLink(url: string | null | undefined, scheme: string): boo
 export const SHARE_MAX_CHARS = 1_000_000;
 
 /**
+ * What a share carries of a page's text when it carries the recipe card
+ * (below). The server reads at most 24,000 characters of a page's text
+ * (fetchSource.ts MAX_CHARS); this is that with a little room.
+ */
+export const SHARE_CARD_TEXT_CHARS = 30_000;
+
+/**
  * The share's capture, the body of `function (doc)` returning `{ url, html }`.
- * Browse's CAPTURE_BODY (lib/pageCapture.ts) plus two things: comment
- * threads go with the scripts and media, and when the page is still over
- * the cap the JSON-LD (where a recipe card's structured data lives, and what
- * the server's fast path reads) is moved to the front before the cut, so a
- * cut can only ever lose the end of the body.
+ *
+ * THE RECIPE CARD FIRST (Oct 4). When the page's JSON-LD holds a recipe —
+ * a block that parses and names both `recipeIngredient` and
+ * `recipeInstructions` — the share carries only what the server reads from
+ * such a page (fetchSource.ts sourceFromHtml): the title, the og: tags,
+ * those JSON-LD blocks, and the page's readable text (main, else article,
+ * else body; cut at SHARE_CARD_TEXT_CHARS) as a fallback should the server
+ * not accept the card. Nothing is cloned and no markup is carried, so a
+ * structured page is tens of kilobytes on the extension's path however
+ * heavy the page is. Sally's Baking Addiction froze Safari's share step at
+ * Browse's size and passed at 1,000,000 characters; Spend With Pennies
+ * failed again under that cap on Oct 4, so a structured page no longer
+ * goes anywhere near it.
+ *
+ * Otherwise, Browse's CAPTURE_BODY (lib/pageCapture.ts) plus two things:
+ * comment threads go with the scripts and media, and when the page is
+ * still over the cap the JSON-LD is moved to the front before the cut, so
+ * a cut can only ever lose the end of the body.
  */
 export const SHARE_CAPTURE_BODY = `
+  var esc = function (v) {
+    return String(v == null ? '' : v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  };
+  var card = '';
+  var found = doc.querySelectorAll('script[type="application/ld+json"]');
+  for (var k = 0; k < found.length; k++) {
+    var t = String(found[k].textContent || '');
+    if (t.indexOf('recipeIngredient') < 0 || t.indexOf('recipeInstructions') < 0) continue;
+    try { JSON.parse(t); } catch (e) { continue; }
+    card += '<script type="application/ld+json">' + t + '</script>';
+  }
+  if (card) {
+    var head = '';
+    var title = doc.querySelector('title');
+    if (title) head += '<title>' + esc(title.textContent) + '</title>';
+    var og = doc.querySelectorAll('meta[property^="og:"]');
+    for (var m = 0; m < og.length; m++) {
+      head += '<meta property="' + esc(og[m].getAttribute('property')) + '" content="' + esc(og[m].getAttribute('content')) + '">';
+    }
+    var main = doc.querySelector('main') || doc.querySelector('article') || doc.body;
+    var text = main ? String(main.innerText || main.textContent || '').slice(0, ${SHARE_CARD_TEXT_CHARS}) : '';
+    var small = '<!doctype html><html><head>' + head + card + '</head><body><main>' + esc(text) + '</main></body></html>';
+    if (small.length <= ${SHARE_MAX_CHARS}) {
+      return { url: String(doc.location && doc.location.href || ''), html: small };
+    }
+  }
   var root = doc.documentElement.cloneNode(true);
   var drop = root.querySelectorAll(
     'script:not([type="application/ld+json"]),style,link,svg,noscript,iframe,frame,object,embed,video,audio,picture,source,canvas,template,img,#comments,.comments-area,.comment-list,.commentlist,#disqus_thread'
