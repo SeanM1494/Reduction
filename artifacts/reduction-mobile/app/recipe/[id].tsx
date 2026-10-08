@@ -35,6 +35,7 @@ import { FinishPrompt, type FinishStage } from '@/components/recipeBox/FinishPro
 import { useToast } from '@/components/Toast';
 import { asksToRemove, keptToast, removedToast } from '@/lib/recipeBox';
 import { useBooks } from '@/lib/books-context';
+import { useShoppingList } from '@/lib/shopping-context';
 import { loadOriginal, type Entry } from '@/lib/api';
 import { originalStepTexts } from '@/shared/original';
 import { hasStepSources } from '@/shared/stepSource';
@@ -68,6 +69,8 @@ export default function RecipeDetailScreen() {
   const [saving, setSaving] = useState(false);
   const [draftServings, setDraftServings] = useState<number | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
+  const { view: shoppingView, openAddToList } = useShoppingList();
+  const shoppingCount = shoppingView.items.length;
   const [mealSheetOpen, setMealSheetOpen] = useState(false);
   const [photoSheetOpen, setPhotoSheetOpen] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -343,6 +346,7 @@ export default function RecipeDetailScreen() {
         sourceSteps={savedSourceSteps}
         request={request}
         photoEntry={entry}
+        onAddToList={() => openAddToList(entry.id)}
         done={entry.done}
         servings={entry.servings}
         timer={entry.timer}
@@ -435,6 +439,16 @@ export default function RecipeDetailScreen() {
               recipe has been cooked — before that it would be about a page. */}
           {entry.cooked?.length ? (
             <MenuItem label="Rating" onPress={() => menuThen(() => askScreen('rating'))} colors={colors} testID="menu-rating" />
+          ) : null}
+          {/* The way back to the list once something is on it; adding is
+              the button beside Clear progress (RecipeScreen). */}
+          {shoppingCount > 0 ? (
+            <MenuItem
+              label={`Shopping list (${shoppingCount})`}
+              onPress={() => menuThen(() => router.push('/shopping-list'))}
+              colors={colors}
+              testID="menu-shopping-list"
+            />
           ) : null}
           <MenuItem label="Notes" onPress={() => menuThen(() => askScreen('notes'))} colors={colors} testID="menu-notes" />
           <MenuItem label="Meal types" onPress={() => menuThen(() => setMealSheetOpen(true))} colors={colors} testID="menu-meal-types" />

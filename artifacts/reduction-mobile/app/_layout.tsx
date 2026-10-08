@@ -10,6 +10,7 @@ import { ThemeProvider } from '@/lib/theme-context';
 import { LibraryProvider, useLibrary } from '@/lib/library-context';
 import { BooksProvider } from '@/lib/books-context';
 import { ToastProvider } from '@/components/Toast';
+import { ShoppingListProvider } from '@/lib/shopping-context';
 import { SignInScreen } from '@/components/SignInScreen';
 import { DemoScreen } from '@/components/DemoScreen';
 import { useColors } from '@/hooks/useColors';
@@ -131,6 +132,7 @@ function RootLayoutNav() {
         <Stack.Screen name="books" options={{ title: 'Manage books' }} />
         <Stack.Screen name="demo" options={{ title: '' }} />
         <Stack.Screen name="original/[id]" options={{ title: 'Original recipe' }} />
+        <Stack.Screen name="shopping-list" options={{ title: 'Shopping list' }} />
       </Stack>
       {covered ? (
         <View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: colors.background }]} />
@@ -200,7 +202,10 @@ function Gate() {
         {/* Around the navigator, so a snackbar outlives the screen that raised
             it — a removed recipe's Undo waits in the library it lands in. */}
         <ToastProvider>
-          <RootLayoutNav />
+          {/* Inside the toast, which its "View list" note rides on. */}
+          <ShoppingListProvider>
+            <RootLayoutNav />
+          </ShoppingListProvider>
         </ToastProvider>
       </BooksProvider>
     </LibraryProvider>

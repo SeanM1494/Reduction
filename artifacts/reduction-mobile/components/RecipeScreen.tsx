@@ -157,6 +157,9 @@ interface RecipeScreenProps {
   /** The saved entry, for its photo at the top of both views (a draft has
    *  none). */
   photoEntry?: Pick<Entry, 'id' | 'photo' | 'recipe'> | null;
+  /** Saved recipes only: opens the add-to-shopping-list popup. Its button
+   *  sits beside Clear progress (Sean, Oct 5). */
+  onAddToList?: (() => void) | null;
   /** Which view is up, for the route: the diagram scrolls sideways, and a
    *  swipe on it at its left edge must not be iOS's swipe-back. */
   onViewChange?: (view: 'overview' | 'cook') => void;
@@ -222,6 +225,7 @@ export function RecipeScreen({
   above,
   overviewFooter,
   photoEntry = null,
+  onAddToList = null,
   onViewChange,
   onActivity,
   initialView,
@@ -484,7 +488,10 @@ export function RecipeScreen({
     <View style={styles.sessionRow} testID="recipe-session">
       {photoEntry ? <RecipePhotoThumb entry={photoEntry} /> : null}
       <View style={styles.sessionMain}>
-        <SheetButton label="Clear progress" onPress={() => setConfirmClear(true)} disabled={done.length === 0 && !timer} testID="recipe-clear" />
+        <View style={styles.sessionButtons}>
+          {onAddToList ? <SheetButton label="Add to list" onPress={onAddToList} testID="recipe-add-to-list" /> : null}
+          <SheetButton label="Clear progress" onPress={() => setConfirmClear(true)} disabled={done.length === 0 && !timer} testID="recipe-clear" />
+        </View>
         {strip}
         {scaledNote ? (
           <Pressable accessibilityRole="button" onPress={() => setServingsOpen(true)} style={styles.scaledNote} testID="recipe-scaled">
@@ -963,6 +970,9 @@ function makeStyles(colors: Colors) {
     scrollContent: { paddingHorizontal: 20, paddingBottom: 100 },
     sessionRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 12 },
     sessionMain: { flex: 1, alignItems: 'flex-end', gap: 6 },
+    // Add to list and Clear progress share a row, and wrap to two where a
+    // narrow phone beside a photo has no room for both.
+    sessionButtons: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'flex-end', gap: 6 },
     scaledNote: { minHeight: 44, justifyContent: 'center' },
     scaledNoteText: { fontSize: 13, color: colors.coolInk, textAlign: 'right', textDecorationLine: 'underline' },
     ratingSheet: { alignItems: 'flex-start', paddingVertical: 4 },
