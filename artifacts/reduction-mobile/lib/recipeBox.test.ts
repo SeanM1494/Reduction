@@ -43,6 +43,8 @@ import {
   keptToast,
   ratingPromptCopy,
   removePromptCopy,
+  resetPromptCopy,
+  clearedToast,
   removedToast,
   removedOn,
   removedCountLabel,
@@ -466,6 +468,14 @@ test('the rating prompt: asked exactly when a cook is stamped, worded for rated 
   assert.deepEqual(RATING_CHOICES.map((c) => c.value), [-1, 0, 1]);
   assert.deepEqual(ratingPromptCopy('Chili', null), { heading: 'How was Chili?', sub: 'Your rating decides where it sits in your recipe box.' });
   assert.equal(ratingPromptCopy('Chili', 0).sub, 'You can keep your rating or change it.');
+});
+
+test('start fresh: one question after the rating, and its toast', () => {
+  assert.deepEqual(resetPromptCopy(), {
+    heading: 'Start fresh next time?',
+    body: 'Clears every check, so it opens on step 1 in both the diagram and Step-by-Step. Your rating and notes stay.',
+  });
+  assert.equal(clearedToast, 'Progress cleared');
 });
 
 test('thumbs down: the words, and when the recipe itself asks', () => {

@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { clearProgressPatch, firstOpenCard, freshCookState } from './cookReset';
+import { clearProgressPatch, firstOpenCard, freshCookState, resumedCookState } from './cookReset';
 
 test('Clear writes the checks and the timer, and nothing else', () => {
   const patch = clearProgressPatch();
@@ -30,4 +30,15 @@ test('a reload or another device lands where the cleared entry says: the first c
   // ...and, before the clear, wherever the checks had got to.
   assert.equal(firstOpenCard(ids, new Set(['s1', 's2'])), 2);
   assert.equal(firstOpenCard(ids, new Set(ids)), 3);
+});
+
+test('an Undo of a Clear lands where a fresh mount would, remembering nothing', () => {
+  const ids = ['a', 'b', 'c'];
+  const all = resumedCookState(ids, new Set(ids));
+  assert.equal(all.cardIndex, 3); // past the end: "Every step is done"
+  assert.equal(all.passed.size, 0);
+  assert.equal(all.returnIndex, null);
+  assert.equal(all.finishedStep, null);
+  assert.equal(all.expandedFor, null);
+  assert.equal(resumedCookState(ids, new Set(['a'])).cardIndex, 1);
 });

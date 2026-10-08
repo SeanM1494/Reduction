@@ -44,7 +44,7 @@ import { ReorderView } from '@/components/recipe/ReorderView';
 import { useColors, type Colors } from '@/hooks/useColors';
 import { cardShadow, fonts } from '@/constants/colors';
 import type { StepTimer } from '@/lib/api';
-import { firstOpenCard, freshCookState } from '@/lib/cookReset';
+import { firstOpenCard, freshCookState, resumedCookState, type CookState } from '@/lib/cookReset';
 import { SpotRing } from '@/components/demo/SpotRing';
 import { TapPointer } from '@/components/demo/TapPointer';
 import type { Pointer } from '@/lib/spotlight';
@@ -163,6 +163,10 @@ interface Props {
    *  very first card (its "Before you start" card included), scrolled to
    *  the top, with nothing this screen remembered (lib/cookReset.ts). */
   resetSignal?: number;
+  /** Bumped by the parent when a Clear is undone: back to wherever a fresh
+   *  mount would start (the finished card, for a finished cook), nothing
+   *  remembered (lib/cookReset.ts `resumedCookState`). */
+  resumeSignal?: number;
   /** The demo guide is pointing at Next step (components/demo/SpotRing). */
   spotlightNext?: boolean;
   /** "Watch instead"'s pointer, when it is on Next step. */
@@ -188,6 +192,7 @@ export function StepsMode({
   sourceSteps = null,
   footer = null,
   resetSignal = 0,
+  resumeSignal = 0,
   spotlightNext = false,
   pointerNext = null,
 }: Props) {
@@ -303,11 +308,7 @@ export function StepsMode({
   const scrollRef = useRef<ScrollView>(null);
   const scrollY = useRef(0);
   const reveal = useMemo(() => makeReveal(scrollRef, scrollY), []);
-  const lastReset = useRef(resetSignal);
-  useEffect(() => {
-    if (resetSignal === lastReset.current) return;
-    lastReset.current = resetSignal;
-    const fresh = freshCookState();
+  const applyCookState = (fresh: CookState) => {
     setCardIndex(fresh.cardIndex);
     setPassed(fresh.passed);
     setReturnIndex(fresh.returnIndex);
@@ -316,7 +317,23 @@ export function StepsMode({
     notifiedForRef.current = null;
     setReordering(false);
     scrollRef.current?.scrollTo({ y: 0, animated: false });
+  };
+  const lastReset = useRef(resetSignal);
+  useEffect(() => {
+    if (resetSignal === lastReset.current) return;
+    lastReset.current = resetSignal;
+    applyCookState(freshCookState());
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [resetSignal]);
+  // The Undo lands with the restored `done` already in this render (the
+  // write is optimistic), so the first open card is read from it.
+  const lastResume = useRef(resumeSignal);
+  useEffect(() => {
+    if (resumeSignal === lastResume.current) return;
+    lastResume.current = resumeSignal;
+    applyCookState(resumedCookState(cards.map((c) => c.stepId), done));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [resumeSignal]);
 
   // ---- parallel work -------------------------------------------------------
   const parallelSuggestion = useMemo(() => {

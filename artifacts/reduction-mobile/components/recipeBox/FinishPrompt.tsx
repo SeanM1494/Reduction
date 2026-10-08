@@ -7,8 +7,11 @@
  *              answers and "Skip for now"; the current rating pre-selected.
  *   'remove' — "Take it out of your box?", after a 👎 — chosen here, or in
  *              the recipe's own rating control.
+ *   'reset'  — "Start fresh next time?", after a cook's rating, its Skip,
+ *              or a 👎 kept at the back (never after Remove: the recipe
+ *              has left the box). Clear progress or keep the checks.
  *
- * One window moving between two stages rather than two windows in a row:
+ * One window moving between its stages rather than windows in a row:
  * iOS will not present a Modal while another is still dismissing, and a
  * 👎 is exactly the moment the first would be fading out.
  *
@@ -19,11 +22,11 @@
 import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Window } from '@/components/Window';
-import { RATING_CHOICES, ratingPromptCopy, removePromptCopy } from '@/lib/recipeBox';
+import { RATING_CHOICES, ratingPromptCopy, removePromptCopy, resetPromptCopy } from '@/lib/recipeBox';
 import { useColors, type Colors } from '@/hooks/useColors';
 import { fonts } from '@/constants/colors';
 
-export type FinishStage = 'rate' | 'remove';
+export type FinishStage = 'rate' | 'remove' | 'reset';
 
 interface Props {
   stage: FinishStage | null;
@@ -36,17 +39,24 @@ interface Props {
   onSkip: () => void;
   onRemove: () => void;
   onKeep: () => void;
+  /** 'reset': clear every check for next time. */
+  onClearProgress: () => void;
+  /** 'reset': leave the checks as they are (also the scrim and back). */
+  onKeepProgress: () => void;
 }
 
-export function FinishPrompt({ stage, title, bookName, rating, instant, onRate, onSkip, onRemove, onKeep }: Props) {
+export function FinishPrompt({ stage, title, bookName, rating, instant, onRate, onSkip, onRemove, onKeep, onClearProgress, onKeepProgress }: Props) {
   const colors = useColors();
   const styles = makeStyles(colors);
-  // The scrim and the back button mean "not now": skip a rating, keep a 👎.
-  const dismiss = stage === 'remove' ? onKeep : onSkip;
+  // The scrim and the back button mean "not now": skip a rating, keep a 👎,
+  // keep the checks.
+  const dismiss = stage === 'remove' ? onKeep : stage === 'reset' ? onKeepProgress : onSkip;
   return (
     <Window open={stage !== null} onClose={dismiss} instant={instant} maxWidth={400} testID="finish-prompt">
       {stage === 'remove' ? (
         <RemoveStage title={title} bookName={bookName} onRemove={onRemove} onKeep={onKeep} styles={styles} />
+      ) : stage === 'reset' ? (
+        <ResetStage onClear={onClearProgress} onKeep={onKeepProgress} styles={styles} />
       ) : (
         <RateStage title={title} rating={rating} onRate={onRate} onSkip={onSkip} styles={styles} />
       )}
@@ -119,6 +129,34 @@ function RemoveStage({ title, bookName, onRemove, onKeep, styles }: { title: str
         testID="finish-keep-it"
       >
         <Text style={styles.secondaryText}>Keep it at the back</Text>
+      </Pressable>
+    </View>
+  );
+}
+
+function ResetStage({ onClear, onKeep, styles }: { onClear: () => void; onKeep: () => void; styles: Styles }) {
+  const copy = resetPromptCopy();
+  return (
+    <View testID="finish-reset">
+      <Text style={styles.heading} accessibilityRole="header">
+        {copy.heading}
+      </Text>
+      <Text style={styles.body}>{copy.body}</Text>
+      <Pressable
+        accessibilityRole="button"
+        onPress={onClear}
+        style={({ pressed }) => [styles.primary, pressed && styles.primaryPressed]}
+        testID="finish-reset-clear"
+      >
+        <Text style={styles.primaryText}>Clear progress</Text>
+      </Pressable>
+      <Pressable
+        accessibilityRole="button"
+        onPress={onKeep}
+        style={({ pressed }) => [styles.secondary, pressed && styles.secondaryPressed]}
+        testID="finish-reset-keep"
+      >
+        <Text style={styles.secondaryText}>Keep it as it is</Text>
       </Pressable>
     </View>
   );

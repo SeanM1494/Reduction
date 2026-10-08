@@ -43,6 +43,13 @@ export function freshCookState(): CookState {
   return { cardIndex: 0, passed: new Set(), returnIndex: null, finishedStep: null, expandedFor: null };
 }
 
+/** Step-by-Step after an Undo of a Clear: nothing remembered, like a fresh
+ *  mount, so it lands where a fresh mount would — the first card not done,
+ *  which for a finished cook is the "Every step is done" card. */
+export function resumedCookState(stepIds: string[], done: Set<string>): CookState {
+  return { ...freshCookState(), cardIndex: firstOpenCard(stepIds, done) };
+}
+
 /** Where a Step-by-Step that mounts fresh starts: the first card not done
  *  (past the end when every step is). */
 export function firstOpenCard(stepIds: string[], done: Set<string>): number {
