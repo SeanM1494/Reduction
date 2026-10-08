@@ -25,7 +25,8 @@ SHAPE
       "ingredients": [
         { "id": string, "qty": number|null, "qtyMax": number|null,
           "unit": string|null, "name": string, "text": string|null,
-          "note": string|null }
+          "note": string|null,
+          "alt": { "qty": number, "qtyMax": number|null, "unit": string }|null }
       ],
       "nodes": [
         { "id": string, "label": string, "inputs": string[],
@@ -68,7 +69,7 @@ AMOUNTS
 
 - "qty" is a decimal number. "2-1/2" is 2.5, "1/8" is 0.125, "1 3/4" is 1.75.
 - "unit" is one of: g, kg, oz, lb, ml, l, tsp, tbsp, cup, fl_oz, pinch. Use null for countable items and put the counting noun in the name: 6 / null / "large eggs", 3 / null / "garlic cloves".
-- When the source gives both US and metric, record the US amount and drop the metric. The app converts.
+- When the source gives one ingredient in both US and metric ("4.4 oz / 125 g flour"), record the amount the source lists FIRST in "qty" and "unit", and the other in "alt" ({ "qty": 125, "qtyMax": null, "unit": "g" }). Copy both numbers as written; do not convert or round one into the other. "alt" is null when the source gives a single unit. Only weights need this: for cups, spoons and other volumes, keep just the first.
 - Ranges: "qty" is the low end, "qtyMax" the high end.
 - Non-numeric amounts ("to taste", "1 can"): qty null, and put the source's words in "text".
 - Prep descriptors that are not steps go in "note": "softened", "room temperature", "finely chopped". Keep the name clean.

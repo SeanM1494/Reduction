@@ -613,6 +613,14 @@ function mergeFields(ing: Ingredient, fields: IngredientFields): Ingredient {
   if ("name" in fields) next.name = fields.name ?? "";
   if ("text" in fields) next.text = fields.text ?? null;
   if ("note" in fields) next.note = fields.note ?? null;
+  // A hand-edited amount no longer matches the second unit extracted with
+  // the old one, and showing the stale pair would be wrong. The sheet sends
+  // every field, so only a CHANGED amount clears it.
+  if (
+    ing.alt &&
+    (next.qty !== ing.qty || (next.qtyMax ?? null) !== (ing.qtyMax ?? null) || next.unit !== ing.unit)
+  )
+    next.alt = null;
   return next;
 }
 

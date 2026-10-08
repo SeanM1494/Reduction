@@ -5,7 +5,7 @@
  * scaling and display become pure functions instead of string surgery.
  */
 
-import type { Ingredient, Recipe, Unit } from "./layout";
+import { UNITS, type Ingredient, type Recipe, type Unit } from "./layout";
 
 const VULGAR: Array<[number, number, string]> = [
   [1, 8, "\u215B"],
@@ -258,6 +258,79 @@ export function ingredientAmount(
   components: ReadonlySet<string> | null | undefined
 ): string {
   return components?.has(ing.id) ? "" : formatAmount(ing, scale);
+}
+
+// ------------------------------------------------------------ unit choice --
+
+/** "Show: as written / grams / ounces". */
+export type UnitPref = "written" | "g" | "oz";
+
+const METRIC_WEIGHT = new Set<string>(["g", "kg"]);
+const US_WEIGHT = new Set<string>(["oz", "lb"]);
+
+/** Which weight system a unit belongs to, or null (volume, counts, pinch). */
+function weightSystem(unit: string | null | undefined): "g" | "oz" | null {
+  if (!unit) return null;
+  if (METRIC_WEIGHT.has(unit)) return "g";
+  if (US_WEIGHT.has(unit)) return "oz";
+  return null;
+}
+
+/** A stored `alt` that can safely be shown. Anything else is ignored, never
+ *  an error: it rides in on model output and the JSON editor. */
+function usableAlt(ing: Ingredient): NonNullable<Ingredient["alt"]> | null {
+  const a = ing.alt;
+  if (!a || typeof a !== "object") return null;
+  if (typeof a.qty !== "number" || !Number.isFinite(a.qty) || a.qty <= 0) return null;
+  if (a.qtyMax != null && (typeof a.qtyMax !== "number" || !Number.isFinite(a.qtyMax))) return null;
+  if (typeof a.unit !== "string" || !UNITS.has(a.unit)) return null;
+  return a;
+}
+
+/** True when the ingredient carries a second unit worth flipping to. */
+export function hasAltUnit(ing: Ingredient): boolean {
+  return usableAlt(ing) != null && ing.qty != null;
+}
+
+/**
+ * The ingredient as it should be DRAWN under a unit preference: the alt swaps
+ * in as the main amount when it is in the preferred weight system and the
+ * main one is not. Everything else (no alt, "as written", an ingredient
+ * already in the preferred system, a preference neither unit satisfies) comes
+ * back untouched, the same object, so "as written" is an identity.
+ * Display only; the stored recipe is never rewritten.
+ */
+export function withUnitPref(ing: Ingredient, pref: UnitPref): Ingredient {
+  if (pref === "written" || ing.qty == null) return ing;
+  const alt = usableAlt(ing);
+  if (!alt) return ing;
+  if (weightSystem(ing.unit) === pref) return ing;
+  if (weightSystem(alt.unit) !== pref) return ing;
+  return { ...ing, qty: alt.qty, qtyMax: alt.qtyMax ?? null, unit: alt.unit, alt: null };
+}
+
+/** `withUnitPref` over a whole recipe; the same object when nothing changes. */
+export function recipeWithUnitPref(recipe: Recipe, pref: UnitPref): Recipe {
+  if (pref === "written") return recipe;
+  let changed = false;
+  const sections = recipe.sections.map((s) => {
+    let sChanged = false;
+    const ingredients = s.ingredients.map((i) => {
+      const w = withUnitPref(i, pref);
+      if (w !== i) sChanged = true;
+      return w;
+    });
+    if (!sChanged) return s;
+    changed = true;
+    return { ...s, ingredients };
+  });
+  return changed ? { ...recipe, sections } : recipe;
+}
+
+/** Does any ingredient have a second unit? Decides whether the menu offers
+ *  the flip at all. */
+export function recipeHasAltUnits(recipe: Recipe): boolean {
+  return recipe.sections.some((s) => s.ingredients.some(hasAltUnit));
 }
 
 export function countSteps(recipe: Recipe): number {

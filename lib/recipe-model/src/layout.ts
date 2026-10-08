@@ -25,6 +25,10 @@ export interface Ingredient {
   text?: string | null;
   /** Prep state that is not a step: "softened", "room temperature". */
   note?: string | null;
+  /** The same amount in the source's SECOND unit, when it gave both
+   *  ("4.4oz / 125g"). Display only: qty/unit stay the amount the recipe
+   *  is built on. See amounts.ts `withUnitPref`. */
+  alt?: { qty: number; qtyMax?: number | null; unit: Unit } | null;
 }
 
 export interface Step {
