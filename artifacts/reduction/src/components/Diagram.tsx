@@ -16,7 +16,7 @@
 import React, { useLayoutEffect, useRef, useState } from "react";
 import type { Section } from "../shared/layout";
 import { deriveDiagramState } from "../shared/collapse";
-import { formatAmount, formatMinutes } from "../shared/amounts";
+import { formatMinutes, ingredientAmount } from "../shared/amounts";
 import { Amount } from "./Amount";
 
 /**
@@ -80,6 +80,10 @@ interface Props {
   onToggle: (id: string) => void;
   onHover: (id: string | null) => void;
   edit?: DiagramEdit;
+  /** `componentIngredientIds(recipe)`: ingredients that are another
+   *  section's result, drawn with no amount (ingredientAmount). A section
+   *  alone cannot know them, so the recipe's view passes them. */
+  components?: ReadonlySet<string> | null;
 }
 
 export default function Diagram({
@@ -91,6 +95,7 @@ export default function Diagram({
   onToggle,
   onHover,
   edit,
+  components = null,
 }: Props) {
   const [override, setOverride] = useState(false);
   // Ids the user has manually reopened after they qualified for collapse.
@@ -455,7 +460,7 @@ export default function Diagram({
                             {c.kind === "ingredient" ? (
                               <span className="rd-ing-body">
                                 <span className="rd-amount">
-                                  <Amount text={formatAmount(c.ingredient!, scale)} />
+                                  <Amount text={ingredientAmount(c.ingredient!, scale, components)} />
                                 </span>
                                 <span className="rd-name">
                                   {c.ingredient!.name}

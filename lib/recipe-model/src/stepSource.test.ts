@@ -29,3 +29,31 @@ test("hasStepSources is the switch: one valid tag turns source order on", () => 
   assert.equal(hasStepSources(r([{ id: "a", label: "x", inputs: [], src: 1 }])), true);
   assert.equal(stepSource({ id: "a", label: "x", inputs: [], src: 5 } as never), 5);
 });
+
+import { boundStepSources, claimedStepCount } from "./stepSource";
+
+test("boundStepSources drops tags past the end of the source's method, keeps the rest", () => {
+  const r: any = { sections: [{ nodes: [{ id: "a", src: 1 }, { id: "b", src: 3 }, { id: "c", src: 4 }, { id: "d" }] }] };
+  boundStepSources(r, 3);
+  assert.deepEqual(r.sections[0].nodes.map((n: any) => n.src), [1, 3, undefined, undefined]);
+  assert.ok(!("src" in r.sections[0].nodes[2]));
+});
+
+test("boundStepSources does nothing when the count is unknown", () => {
+  for (const c of [null, undefined, 0, -1, 2.5]) {
+    const r: any = { sections: [{ nodes: [{ id: "a", src: 9 }] }] };
+    boundStepSources(r, c as any);
+    assert.equal(r.sections[0].nodes[0].src, 9);
+  }
+});
+
+test("claimedStepCount counts steps, not headings, and is null without any", () => {
+  assert.equal(claimedStepCount({ steps: ["a", { heading: "For the sauce" }, "b"] }), 2);
+  assert.equal(claimedStepCount({ steps: [] }), null);
+  assert.equal(claimedStepCount(null), null);
+  assert.equal(claimedStepCount({}), null);
+});
+
+test("claimedStepCount is unknown for a wording the token limit cut short", () => {
+  assert.equal(claimedStepCount({ steps: ["a", "b"], truncated: true }), null);
+});

@@ -20,11 +20,11 @@
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { type Ingredient, type Recipe, type Step } from "../shared/layout";
-import { cardSequence } from "../shared/sequence";
+import { cardSequence, componentIngredientIds } from "../shared/sequence";
 import ReorderView from "./ReorderView";
 import { NoteBox } from "./RecipeNotes";
 import { STEP_NOTE_MAX, stepNote, withStepNote } from "../shared/notes";
-import { formatAmount, formatMinutes, stepMinutes } from "../shared/amounts";
+import { formatMinutes, ingredientAmount, stepMinutes } from "../shared/amounts";
 import { Amount } from "./Amount";
 import type { Entry, StepTimer } from "../lib/storage";
 
@@ -101,6 +101,8 @@ export default function StepsMode({
   canReorder = false,
   notesEnabled = false,
 }: Props) {
+  // Another section's result ("Filling") shows no amount (ingredientAmount).
+  const components = useMemo(() => componentIngredientIds(recipe), [recipe]);
   const { cards, totalActions } = useMemo(() => {
     const cards: StepCard[] = [];
     let actionNumber = 0;
@@ -358,7 +360,7 @@ export default function StepsMode({
                       onClick={() => onToggle(ing.id)}
                     >
                       <span className="rd-steps-check" aria-hidden="true" />
-                      <span className="rd-amount"><Amount text={formatAmount(ing, scale)} /></span>
+                      <span className="rd-amount"><Amount text={ingredientAmount(ing, scale, components)} /></span>
                       <span className="rd-name">
                         {ing.name}
                         {ing.note ? <em className="rd-note">, {ing.note}</em> : null}
