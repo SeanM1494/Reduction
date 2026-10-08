@@ -489,6 +489,28 @@ sleeps does not fire until someone opens the app**, which is what happened
 before the feature existed — so nothing regressed, and nothing costs money to
 stay awake.
 
+**On the phone, the alert no longer depends on the server (Oct 5).**
+`lib/timerAlerts.ts` schedules a local notification at `endsAt` and
+reconciles the device's pending alerts against the library on every change
+(`lib/timerAlertPolicy.ts`, pure, tested), so a phone running that bundle
+rings with the app closed and the deployment asleep. It hands back the push
+token an older bundle registered, or every alert would arrive twice; the
+server's push now serves the website and older bundles only. The limit it
+states instead: a timer started on ANOTHER device rings here only after
+this phone has loaded the library. The paragraph below is still true of
+the website.
+
+**Since 1.3.0 a phone can ring as a system alarm instead** (iOS 26+,
+chosen in Settings, its own permission): `modules/timer-alarm` is the
+app's own AlarmKit module, and ONLY `lib/timerAlarm.ts` may touch it —
+through `requireOptionalNativeModule`, so an older binary sees "unavailable"
+rather than a crash at import. One arm rings, never both: the reconcile
+runs each arm against the plan or against nothing. The alarm is
+ALERT-ONLY on purpose — a countdown on the Lock Screen needs a widget
+extension rendering a Live Activity for the same `AlarmAttributes`, and
+without one the system may dismiss the alarm. Adding the countdown means
+adding that target first.
+
 **Do not describe this to a user as background notifications.** The Timers
 card in Settings states the limitation whether or not the toggle is on, and
 that copy is load-bearing rather than decorative: its first draft promised

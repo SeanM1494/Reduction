@@ -11,6 +11,8 @@ expo-env.d.ts
 
 # Native
 ios/
+# ...but not a local Expo module's native source (modules/*/ios).
+!modules/*/ios/
 android/
 *.orig.*
 *.jks

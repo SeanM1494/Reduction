@@ -1,71 +1,84 @@
 /**
- * components/settings/TimersCard.tsx — the timers toggle (the web's
- * NotificationSetting, ported).
+ * components/settings/TimersCard.tsx — the timers toggle.
  *
- * THE LIMITATION IS STATED WHETHER OR NOT IT IS SWITCHED ON, and before
- * someone relies on it rather than after they miss a timer: the server
- * sleeps when nobody is using it, so a timer that comes due long after the
- * app was closed does not fire until someone opens it again (ROADMAP, the
- * timers section — "even if the app is closed" was the first draft's
- * overselling, and the first burnt dinner would have been how someone
- * found out).
+ * SINCE OCT 5 THE PHONE RINGS ITSELF. An alert is scheduled on the device
+ * the moment a timer starts (lib/timerAlerts.ts), so it is delivered with
+ * the app closed and the server asleep — which the server's push never
+ * could be. What it cannot do is hear about a timer started on another
+ * device until this one has loaded the library since, and the card says
+ * that rather than promising more (the first draft of the web's card said
+ * "even if the app is closed" when it was not true; now it is, here, and
+ * the remaining limit is stated just as plainly).
  *
- * The web's biggest case — "add it to your Home Screen first" — does not
- * exist here. In its place are the two ways a native build cannot hold a
- * token, each named plainly (lib/pushPolicy.ts).
+ * On iOS 26+ (binaries from 1.3.0) the card also offers "Ring like an
+ * alarm": AlarmKit, which rings through Silent mode — the one thing a
+ * notification cannot do in a kitchen. It is offered, never switched on by
+ * itself, because it asks its own permission.
  */
 
 import React, { useCallback, useEffect, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { SheetButton } from '@/components/Sheet';
-import { useAuth } from '@/lib/auth-context';
-import { disablePush, enablePush, pushState } from '@/lib/push';
-import type { PushState } from '@/lib/pushPolicy';
+import { disableTimerAlerts, enableTimerAlarms, enableTimerAlerts, timerAlertCard } from '@/lib/timerAlerts';
+import type { AlertState } from '@/lib/timerAlertPolicy';
 import { useColors, type Colors } from '@/hooks/useColors';
 import { cardShadow, fonts } from '@/constants/colors';
 
 export function TimersCard() {
   const colors = useColors();
   const styles = makeStyles(colors);
-  const { user } = useAuth();
-  const userId = user?.id ?? null;
-  const [state, setState] = useState<PushState | 'loading'>('loading');
+  const [state, setState] = useState<AlertState | 'loading'>('loading');
+  // iOS 26+ on a binary with the AlarmKit module, and not refused.
+  const [alarms, setAlarms] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!userId) return;
     let alive = true;
-    pushState(userId)
-      .then((s) => alive && setState(s))
+    timerAlertCard()
+      .then((c) => {
+        if (!alive) return;
+        setState(c.state);
+        setAlarms(c.alarms);
+      })
       .catch(() => alive && setState('unsupported'));
     return () => {
       alive = false;
     };
-  }, [userId]);
+  }, []);
 
-  const toggle = useCallback(async () => {
-    if (!userId) return;
+  const run = useCallback(async (change: () => Promise<AlertState>) => {
     setBusy(true);
     setError(null);
     try {
-      setState(state === 'on' ? await disablePush(userId) : await enablePush(userId));
+      setState(await change());
+      const c = await timerAlertCard();
+      setAlarms(c.alarms);
     } catch (e) {
       setError((e as Error).message || 'Could not change that.');
     } finally {
       setBusy(false);
     }
-  }, [state, userId]);
+  }, []);
 
-  if (state === 'loading' || !userId) return null;
+  if (state === 'loading') return null;
 
   const caveat = (
     <Text style={styles.caveat}>
-      Alerts arrive while Reduction is open or has been used recently. The server sleeps when nobody's
-      cooking, so a timer that finishes long after you closed the app waits until you come back. Always-on
-      background alerts need a paid tier — they're planned, not built.
+      Alerts come from this phone, so they ring even with Reduction closed. A timer started on another
+      device rings here only after you've opened Reduction on this phone.
+      {state === 'alarm' ? '' : ' With the ringer off, notifications are silent.'}
     </Text>
   );
+
+  const alarmButton = alarms ? (
+    <SheetButton
+      label={busy ? 'One moment…' : 'Ring like an alarm'}
+      onPress={() => run(enableTimerAlarms)}
+      disabled={busy}
+      testID="timers-alarm"
+    />
+  ) : null;
 
   let body: React.ReactNode;
   if (state === 'unsupported') {
@@ -74,11 +87,24 @@ export function TimersCard() {
         This device can't receive notifications. Timers still count down while the app is open.
       </Text>
     );
-  } else if (state === 'needs-setup') {
+  } else if (state === 'alarm') {
     body = (
-      <Text style={styles.sub}>
-        Notifications aren't set up for this build yet. Timers still count down while the app is open.
-      </Text>
+      <>
+        <Text style={styles.sub}>
+          Timers ring like an alarm on this phone, even on silent, with a Done button to stop them.
+        </Text>
+        <View style={styles.toggleRow}>
+          <SheetButton
+            label={busy ? 'One moment…' : 'Use notifications instead'}
+            onPress={() => run(enableTimerAlerts)}
+            disabled={busy}
+            testID="timers-notifications"
+          />
+          <SheetButton label="Turn off" onPress={() => run(disableTimerAlerts)} disabled={busy} testID="timers-toggle" />
+        </View>
+        {error ? <Text style={styles.error}>{error}</Text> : null}
+        {caveat}
+      </>
     );
   } else if (state === 'denied') {
     body = (
@@ -87,6 +113,8 @@ export function TimersCard() {
         <Text style={styles.sub}>
           Turn them back on in Settings › Notifications › Reduction. The app can't ask again.
         </Text>
+        {alarmButton ? <View style={styles.toggleRow}>{alarmButton}</View> : null}
+        {error ? <Text style={styles.error}>{error}</Text> : null}
       </>
     );
   } else {
@@ -95,16 +123,17 @@ export function TimersCard() {
       <>
         <Text style={styles.sub}>
           {on
-            ? "You'll get a notification when a timer finishes, on every device you've turned this on for."
-            : 'Get a notification when a timer finishes, on every device you turn this on for.'}
+            ? "You'll get a notification on this phone when a timer finishes."
+            : 'Get a notification on this phone when a timer finishes.'}
         </Text>
         <View style={styles.toggleRow}>
           <SheetButton
             label={busy ? 'One moment…' : on ? 'Turn off notifications' : 'Turn on notifications'}
-            onPress={toggle}
+            onPress={() => run(on ? disableTimerAlerts : enableTimerAlerts)}
             disabled={busy}
             testID="timers-toggle"
           />
+          {alarmButton}
         </View>
         {error ? <Text style={styles.error}>{error}</Text> : null}
         {caveat}
@@ -135,7 +164,7 @@ function makeStyles(colors: Colors) {
     label: { fontFamily: fonts.mono, fontSize: 11, letterSpacing: 0.44, color: colors.faint, textTransform: 'uppercase' },
     line: { fontSize: 15, lineHeight: 21, color: colors.foreground, marginTop: 2 },
     sub: { fontSize: 14, lineHeight: 20, color: colors.mutedForeground, marginTop: 2 },
-    toggleRow: { flexDirection: 'row', marginTop: 8 },
+    toggleRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 8 },
     error: { fontSize: 13.5, lineHeight: 19, color: colors.dangerInk },
     // .rd-settings-caveat: the limitation, quieter but always present.
     caveat: { fontSize: 13, lineHeight: 18, color: colors.faint, marginTop: 6 },
