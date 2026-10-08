@@ -18,6 +18,7 @@ import { MealTypeArt } from '@/components/library/MealTypeArt';
 import { PhotoError, takePhoto, type PhotoSource } from '@/lib/photo';
 import { removePhoto, uploadPhoto, type Entry } from '@/lib/api';
 import { useLibrary } from '@/lib/library-context';
+import { useBooks } from '@/lib/books-context';
 import { useRecipePhoto } from '@/lib/recipePhoto';
 import { sanitizeMealTypes } from '@/shared/mealTypes';
 import { useColors, type Colors } from '@/hooks/useColors';
@@ -30,6 +31,7 @@ export function PhotoSheet({ open, entry, onClose }: { open: boolean; entry: Ent
   const [busy, setBusy] = useState<'camera' | 'library' | 'remove' | null>(null);
   const [error, setError] = useState<string | null>(null);
   const primary = sanitizeMealTypes(entry.recipe.mealTypes)[0] ?? null;
+  const book = useBooks().bookFor(entry);
 
   const pick = async (source: PhotoSource) => {
     if (busy) return;
@@ -67,7 +69,7 @@ export function PhotoSheet({ open, entry, onClose }: { open: boolean; entry: Ent
         {current ? (
           <Image source={current} style={StyleSheet.absoluteFill} resizeMode="cover" accessibilityIgnoresInvertColors />
         ) : (
-          <MealTypeArt type={primary} size={44} />
+          <MealTypeArt type={primary} size={44} color={book.color} seed={entry.id} />
         )}
       </View>
       <SheetNote>

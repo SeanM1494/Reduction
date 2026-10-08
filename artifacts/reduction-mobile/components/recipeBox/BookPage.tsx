@@ -89,6 +89,8 @@ function RecipeFace({ entry, number, side, book, width, height }: { entry: Entry
       testID={`book-page-${entry.id}`}
       photo={photo}
       mealType={sanitizeMealTypes(recipe.mealTypes)[0] ?? null}
+      bookColor={book.color}
+      seed={entry.id}
       photoHeight={fit.photoHeight}
       badge={
         rating === 1 || rating === 0 || rating === -1 ? (

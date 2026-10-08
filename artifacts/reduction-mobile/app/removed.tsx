@@ -173,7 +173,7 @@ function RemovedRow({ entry, onRestore, onDelete, styles }: { entry: Entry; onRe
           {photo ? (
             <Image source={photo} style={StyleSheet.absoluteFill} resizeMode="cover" accessibilityIgnoresInvertColors />
           ) : (
-            <MealTypeArt type={primary} size={22} />
+            <MealTypeArt type={primary} size={22} color={book.color} seed={entry.id} />
           )}
         </View>
         <View style={styles.rowText}>
