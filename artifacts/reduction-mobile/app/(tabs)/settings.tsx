@@ -18,6 +18,7 @@ import { useLibrary } from '@/lib/library-context';
 import { AccountId } from '@/components/settings/AccountId';
 import { AppearanceCard } from '@/components/settings/AppearanceCard';
 import { BoxStyleCard } from '@/components/settings/BoxStyleCard';
+import { UnitPrefCard } from '@/components/settings/UnitPrefCard';
 import { loadRemoved } from '@/lib/api';
 import { removedCountLabel } from '@/lib/recipeBox';
 import { Feather } from '@expo/vector-icons';
@@ -194,6 +195,8 @@ export default function SettingsScreen() {
       <TimersCard />
 
       <BoxStyleCard />
+
+      <UnitPrefCard />
 
       <Pressable
         accessibilityRole="button"

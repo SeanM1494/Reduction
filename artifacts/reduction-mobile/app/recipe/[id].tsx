@@ -48,12 +48,16 @@ import { createCookVisit, type CookActivity, type CookVisit } from '@/lib/cookCo
 import { maybeAskForRating, noteFinishedCook } from '@/lib/ratingPrompt';
 import { BookPicker } from '@/components/books/BookPicker';
 import { titleProblem } from '@/shared/title';
+import { recipeHasAltUnits } from '@/shared/amounts';
+import { flipUnitPref, useUnitPref } from '@/lib/unitPref';
+import { flipLabel, flipTarget } from '@/lib/unitPrefPolicy';
 
 export default function RecipeDetailScreen() {
   // `view` is the Recipe Box preview's choice of tab for this visit.
   const { id, view: viewParam } = useLocalSearchParams<{ id: string; view?: string }>();
   const initialView = viewParam === 'cook' || viewParam === 'overview' ? viewParam : undefined;
   const colors = useColors();
+  const unitPref = useUnitPref();
   const styles = makeStyles(colors);
   const { draft, setDraft, getEntry, update, remove, restore, saveRecipe, notice, clearNotice, queued } = useLibrary();
   const toast = useToast();
@@ -476,6 +480,14 @@ export default function RecipeDetailScreen() {
             <MenuItem label="Move to another book" onPress={() => menuThen(() => setBookPickerOpen(true))} colors={colors} testID="menu-move-book" />
           ) : null}
           <MenuItem label="Reorder steps" onPress={() => menuThen(() => askScreen('reorder'))} colors={colors} testID="menu-reorder" />
+          {recipeHasAltUnits(entry.recipe) ? (
+            <MenuItem
+              label={flipLabel(flipTarget(entry.recipe, unitPref))}
+              onPress={() => menuThen(() => flipUnitPref(flipTarget(entry.recipe, unitPref)))}
+              colors={colors}
+              testID="menu-units"
+            />
+          ) : null}
           <MenuItem label="Servings" onPress={() => menuThen(() => askScreen('servings'))} colors={colors} testID="menu-servings" />
           {/* A rating is an opinion about a dish, so it is offered once the
               recipe has been cooked — before that it would be about a page. */}

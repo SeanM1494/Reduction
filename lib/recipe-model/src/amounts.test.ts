@@ -575,3 +575,53 @@ test("ingredientAmount: a component shows no amount at any scale; everything els
   // Without the set it is exactly formatAmount — the old behaviour.
   assert.equal(ingredientAmount(filling, 2, null), "2");
 });
+
+// ---------------------------------------------------------- unit choice --
+
+import { withUnitPref, recipeWithUnitPref, recipeHasAltUnits, hasAltUnit } from "./amounts";
+import type { Ingredient as AltIngredient, Recipe as AltRecipe } from "./layout";
+
+const flour: AltIngredient = {
+  id: "f", qty: 4.4, unit: "oz", name: "all purpose flour",
+  alt: { qty: 125, qtyMax: null, unit: "g" },
+};
+
+test("as written is an identity: same object back", () => {
+  assert.equal(withUnitPref(flour, "written"), flour);
+  assert.equal(formatAmount(withUnitPref(flour, "written")), "4.4 oz");
+});
+
+test("grams swaps the alt in; ounces keeps the main", () => {
+  assert.equal(formatAmount(withUnitPref(flour, "g")), "125 g");
+  assert.equal(withUnitPref(flour, "oz"), flour);
+});
+
+test("a grams-first source flips to ounces", () => {
+  const f: AltIngredient = { id: "f", qty: 125, unit: "g", name: "flour", alt: { qty: 4.4, unit: "oz" } };
+  assert.equal(formatAmount(withUnitPref(f, "oz")), "4.4 oz");
+  assert.equal(withUnitPref(f, "g"), f);
+});
+
+test("no alt, volume alt and malformed alt change nothing", () => {
+  const plain: AltIngredient = { id: "w", qty: 1, unit: "cup", name: "water" };
+  assert.equal(withUnitPref(plain, "g"), plain);
+  const vol: AltIngredient = { ...plain, alt: { qty: 240, unit: "ml" } };
+  assert.equal(withUnitPref(vol, "g"), vol);
+  const bad = { ...flour, alt: { qty: "125", unit: "g" } } as unknown as AltIngredient;
+  assert.equal(withUnitPref(bad, "g"), bad);
+  const badUnit = { ...flour, alt: { qty: 125, unit: "stone" } } as unknown as AltIngredient;
+  assert.equal(hasAltUnit(badUnit), false);
+});
+
+test("scaling applies to the swapped amount", () => {
+  assert.equal(formatAmount(withUnitPref(flour, "g"), 2), "250 g");
+});
+
+test("recipeWithUnitPref returns the same recipe when nothing flips", () => {
+  const r = { title: "t", sections: [{ name: "a", ingredients: [flour], nodes: [], root: "" }] } as unknown as AltRecipe;
+  assert.equal(recipeWithUnitPref(r, "written"), r);
+  assert.equal(recipeWithUnitPref(r, "oz"), r);
+  assert.equal(recipeWithUnitPref(r, "g").sections[0].ingredients[0].unit, "g");
+  assert.equal(r.sections[0].ingredients[0].unit, "oz");
+  assert.equal(recipeHasAltUnits(r), true);
+});

@@ -47,7 +47,8 @@ import { validateRecipe, type Recipe } from '@/shared/layout';
 import { applyEdit, type EditOp } from '@/shared/edits';
 import { countDone, reconcileDone } from '@/shared/progress';
 import type { OrderPreference } from '@/shared/sequence';
-import { countAll } from '@/shared/amounts';
+import { countAll, recipeWithUnitPref } from '@/shared/amounts';
+import { useUnitPref } from '@/lib/unitPref';
 import { titleProblem } from '@/shared/title';
 import {
   NOTE_MAX,
@@ -358,6 +359,10 @@ export function RecipeScreen({
   const total = countAll(recipe);
   const pct = total ? Math.round((doneCount / total) * 100) : 0;
   const scale = servings && recipe.servings ? servings / recipe.servings : 1;
+  // Grams or ounces for ingredients that list both: display only, and not
+  // while editing, where the box must show what is stored.
+  const unitPref = useUnitPref();
+  const shown = useMemo(() => (editing ? recipe : recipeWithUnitPref(recipe, unitPref)), [recipe, unitPref, editing]);
 
   const toggle = (id: string) => {
     const next = toggleDone(recipe, done, id);
@@ -688,7 +693,7 @@ export function RecipeScreen({
           ) : null}
           <RevealContext.Provider value={spotlight ? revealInPage : null}>
             <DiagramView
-              recipe={recipe}
+              recipe={shown}
               done={doneSet}
               onToggle={toggle}
               scale={scale}
@@ -740,7 +745,7 @@ export function RecipeScreen({
         </ScrollView>
       ) : (
         <StepsMode
-          recipe={recipe}
+          recipe={shown}
           done={doneSet}
           order={order}
           timer={timer}
