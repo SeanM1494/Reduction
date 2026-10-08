@@ -16,6 +16,7 @@ import { formatMinutes } from '@/shared/amounts';
 import { MEAL_TYPE_LABELS, sanitizeMealTypes } from '@/shared/mealTypes';
 import { ratingOf, totalMinutes } from '@/lib/libraryView';
 import { useRecipePhoto } from '@/lib/recipePhoto';
+import { useBooks } from '@/lib/books-context';
 import { MealTypeArt } from '@/components/library/MealTypeArt';
 import { useColors, type Colors } from '@/hooks/useColors';
 import { cardShadow, fonts } from '@/constants/colors';
@@ -28,6 +29,7 @@ export function RecipeCard({ entry, onPress }: { entry: Entry; onPress: () => vo
   const primary = types[0] ?? null;
   const mins = totalMinutes(entry);
   const photo = useRecipePhoto(entry);
+  const book = useBooks().bookFor(entry);
   const fav = ratingOf(entry) === 1;
 
   return (
@@ -42,7 +44,7 @@ export function RecipeCard({ entry, onPress }: { entry: Entry; onPress: () => vo
         {photo ? (
           <Image source={photo} style={StyleSheet.absoluteFill} resizeMode="cover" accessibilityIgnoresInvertColors testID="card-photo" />
         ) : (
-          <MealTypeArt type={primary} size={36} />
+          <MealTypeArt type={primary} size={36} color={book.color} seed={entry.id} />
         )}
         {fav ? (
           <View style={styles.favBadge} accessibilityLabel="Favourite" testID="card-fav">

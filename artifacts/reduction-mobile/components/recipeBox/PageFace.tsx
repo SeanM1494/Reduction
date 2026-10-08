@@ -31,6 +31,9 @@ export const FACE_PAD_X = 11;
 export interface PageFaceProps {
   photo: ImageSourcePropType | null;
   mealType: MealType | null;
+  /** The book's colour and the recipe's id, for the no-photo sketch. */
+  bookColor?: string;
+  seed?: string;
   photoHeight: number;
   /** Drawn over the picture's top-right corner (the book's rating). */
   badge?: ReactNode;
@@ -70,6 +73,8 @@ export interface PageFaceProps {
 export function PageFace({
   photo,
   mealType,
+  bookColor,
+  seed,
   photoHeight,
   badge,
   photoOverlay,
@@ -102,7 +107,7 @@ export function PageFace({
         {photo ? (
           <Image source={photo} style={StyleSheet.absoluteFill} resizeMode="cover" accessibilityIgnoresInvertColors />
         ) : (
-          <MealTypeArt type={mealType} size={Math.round(photoHeight * 0.4)} tone="light" />
+          <MealTypeArt type={mealType} size={Math.round(photoHeight * 0.4)} tone="light" color={bookColor} seed={seed} />
         )}
         {badge}
         {photoOverlay}

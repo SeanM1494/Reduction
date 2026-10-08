@@ -88,7 +88,7 @@ function PreviewBody({ entry, onClose, onOpen }: { entry: Entry; onClose: () => 
         {photo ? (
           <Image source={photo} style={StyleSheet.absoluteFill} resizeMode="cover" accessibilityIgnoresInvertColors />
         ) : (
-          <MealTypeArt type={primary} size={56} />
+          <MealTypeArt type={primary} size={56} color={book.color} seed={entry.id} />
         )}
         {rating !== null ? (
           <View style={styles.badge} testID="preview-rating">
