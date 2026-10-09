@@ -106,7 +106,7 @@ export default function LibraryScreen() {
 
   const chips = useMemo(() => {
     const out: Array<{ value: Filter; label: string }> = [{ value: 'all', label: 'All' }];
-    if (hasFavourites(entries)) out.push({ value: 'favourites', label: '★ Favourites' });
+    if (hasFavourites(entries)) out.push({ value: 'favourites', label: '★ Favorites' });
     for (const t of presentMealTypes(entries)) out.push({ value: t, label: MEAL_TYPE_LABELS[t] });
     if (hasUntagged(entries)) out.push({ value: 'untagged', label: 'Untagged' });
     return out;

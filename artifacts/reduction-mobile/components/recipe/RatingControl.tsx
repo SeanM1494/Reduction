@@ -17,7 +17,7 @@ export const RATING_UP = 1;
 const OPTIONS: Array<{ value: number; glyph: string; label: string }> = [
   { value: RATING_DOWN, glyph: '\u{1F44E}', label: 'Would not make again' },
   { value: RATING_OK, glyph: '\u{1F44C}', label: 'Fine' },
-  { value: RATING_UP, glyph: '\u{1F44D}', label: 'Favourite' },
+  { value: RATING_UP, glyph: '\u{1F44D}', label: 'Favorite' },
 ];
 
 export function RatingControl({

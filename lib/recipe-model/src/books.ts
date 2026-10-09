@@ -177,7 +177,7 @@ export class BookEditError extends Error {}
 export const bookLimitMessage = `You can have up to ${MAX_BOOKS} books. Delete or merge one to make room.`;
 
 const assertColor = (hex: string) => {
-  if (!BOOK_COLORS.some((c) => c.hex.toLowerCase() === hex.toLowerCase())) throw new BookEditError("Choose one of the book colours.");
+  if (!BOOK_COLORS.some((c) => c.hex.toLowerCase() === hex.toLowerCase())) throw new BookEditError("Choose one of the book colors.");
 };
 const liveOrThrow = (books: readonly BookDef[], id: string) => {
   const b = books.find((x) => x.id === id);
@@ -370,7 +370,7 @@ export function validateBooks(raw: unknown): string[] {
     else ids.add(b.id);
     if (typeof b.name !== "string") errors.push(`Book ${b.id} has no name.`);
     if (typeof b.color !== "string" || !BOOK_COLORS.some((c) => c.hex.toLowerCase() === b.color.toLowerCase()))
-      errors.push(`Book ${b.id} has a colour outside the set.`);
+      errors.push(`Book ${b.id} has a color outside the set.`);
     if (typeof b.position !== "number" || !Number.isFinite(b.position)) errors.push(`Book ${b.id} has no position.`);
     if (b.createdAt !== undefined && (typeof b.createdAt !== "number" || !Number.isFinite(b.createdAt))) errors.push(`Book ${b.id} has a bad createdAt.`);
     if (b.deletedAt != null && (typeof b.deletedAt !== "number" || !Number.isFinite(b.deletedAt))) errors.push(`Book ${b.id} has a bad deletedAt.`);

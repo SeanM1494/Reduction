@@ -41,7 +41,7 @@ const SORTS: Array<[SortKey, string]> = [
   ["time", "Total time"],
   ["source", "Source"],
   ["type", "Meal type"],
-  ["rating", "Favourites first"],
+  ["rating", "Favorites first"],
 ];
 
 /** The recipe's total time as its source STATED it, or null — and null
@@ -138,7 +138,7 @@ export default function MyRecipes({ library, onOpen, onFind, onPhoto }: Props) {
       <div className="rd-chip-row no-print" role="tablist" aria-label="Filter by meal type">
         <FilterChip current={filter} value="all" label="All" onPick={setFilter} />
         {hasFavourites ? (
-          <FilterChip current={filter} value="favourites" label="★ Favourites" onPick={setFilter} />
+          <FilterChip current={filter} value="favourites" label="★ Favorites" onPick={setFilter} />
         ) : null}
         {presentTypes.map((t) => (
           <FilterChip
@@ -191,7 +191,7 @@ export default function MyRecipes({ library, onOpen, onFind, onPhoto }: Props) {
                 key={entry.id}
                 className="rd-card"
                 onClick={() => onOpen(entry.id)}
-                aria-label={`${entry.recipe.title}${fav ? ", favourite" : ""}${primary ? `, ${MEAL_TYPE_LABELS[primary]}` : ""}`}
+                aria-label={`${entry.recipe.title}${fav ? ", favorite" : ""}${primary ? `, ${MEAL_TYPE_LABELS[primary]}` : ""}`}
               >
                 <span className="rd-card-face">
                   <RecipePhoto entry={entry} onPhoto={onPhoto} />

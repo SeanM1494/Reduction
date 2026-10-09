@@ -15,7 +15,7 @@ import { useColors } from '@/hooks/useColors';
 export function ColorSwatches({ value, onChange, testID = 'book-colors' }: { value: string; onChange: (hex: string) => void; testID?: string }) {
   const colors = useColors();
   return (
-    <View style={styles.grid} accessibilityRole="radiogroup" accessibilityLabel="Book colour" testID={testID}>
+    <View style={styles.grid} accessibilityRole="radiogroup" accessibilityLabel="Book color" testID={testID}>
       {BOOK_COLORS.map((c) => {
         const on = c.hex.toLowerCase() === value.toLowerCase();
         return (

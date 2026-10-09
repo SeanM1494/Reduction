@@ -99,7 +99,7 @@ export default function ManageBooksScreen() {
       ) : (
         <>
           <Text style={styles.intro}>
-            Every recipe is in one book. Rename, recolour and reorder them here; deleting a book asks where its recipes go.
+            Every recipe is in one book. Rename, recolor and reorder them here; deleting a book asks where its recipes go.
           </Text>
           {queued ? (
             <Text style={styles.queued} accessibilityLiveRegion="polite" testID="books-queued">
@@ -265,7 +265,7 @@ function BookForm({ form, books, onClose, onClosed, onDelete }: { form: Form | n
       <Text style={[styles.hint, problem ? styles.problem : null]} accessibilityLiveRegion="polite" testID="book-form-hint">
         {problem ?? `Up to ${BOOK_NAME_MAX} characters.`}
       </Text>
-      <Text style={styles.fieldLabel}>Colour</Text>
+      <Text style={styles.fieldLabel}>Color</Text>
       <ColorSwatches value={color} onChange={setColor} testID="book-form-colors" />
       <Pressable accessibilityRole="button" onPress={save} style={({ pressed }) => [styles.primary, pressed && styles.pressed]} testID="book-form-save">
         <Text style={styles.primaryText}>{form?.mode === 'add' ? 'Add book' : 'Save'}</Text>

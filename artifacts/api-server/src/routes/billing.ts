@@ -155,7 +155,7 @@ billingRouter.post("/coupon", async (req: Request, res: Response) => {
             ? "That code has expired."
             : out.code === "exhausted"
               ? "That code has been fully claimed."
-              : "We don't recognise that code.";
+              : "We don't recognize that code.";
       return res.status(422).json({ error: message, code: out.code });
     }
     void countEvent("coupon_redeemed");

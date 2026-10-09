@@ -60,7 +60,7 @@ export const SORTS: Array<[SortKey, string]> = [
   ['time', 'Total time'],
   ['source', 'Source'],
   ['type', 'Meal type'],
-  ['rating', 'Favourites first'],
+  ['rating', 'Favorites first'],
 ];
 
 export const sortLabel = (key: SortKey): string =>
