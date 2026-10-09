@@ -17,7 +17,8 @@ import { Feather } from '@expo/vector-icons';
 import { MealTypeArt } from '@/components/library/MealTypeArt';
 import { useRecipePhoto } from '@/lib/recipePhoto';
 import { sanitizeMealTypes } from '@/shared/mealTypes';
-import { RATING_EMOJI, pageA11yLabel, resultMeta, type BoxHit } from '@/lib/recipeBox';
+import { starsOf } from '@/shared/stars';
+import { starsBadge, pageA11yLabel, resultMeta, type BoxHit } from '@/lib/recipeBox';
 import { useColors, type Colors } from '@/hooks/useColors';
 import { fonts } from '@/constants/colors';
 import type { Entry } from '@/lib/api';
@@ -138,12 +139,13 @@ export function ResultRow({
   const { entry, book } = hit;
   const photo = useRecipePhoto(entry);
   const primary = sanitizeMealTypes(entry.recipe.mealTypes)[0] ?? null;
-  const rating = entry.rating === 1 || entry.rating === 0 || entry.rating === -1 ? RATING_EMOJI[String(entry.rating)] : null;
+  const stars = starsOf(entry);
+  const rating = stars !== null ? starsBadge(stars) : null;
   const meta = resultMeta(entry.recipe, entry.cooked);
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel={pageA11yLabel(entry.recipe.title, book.name, entry.recipe, entry.rating)}
+      accessibilityLabel={pageA11yLabel(entry.recipe.title, book.name, entry.recipe, stars)}
       accessibilityHint={hint}
       onPress={() => onPick(hit)}
       style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}

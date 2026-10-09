@@ -20,7 +20,7 @@ import { useLibrary } from '@/lib/library-context';
 import { MEAL_TYPE_LABELS } from '@/shared/mealTypes';
 import {
   arrangeLibrary,
-  hasFavourites,
+  hasTopRated,
   hasUntagged,
   presentMealTypes,
   sortLabel,
@@ -106,7 +106,7 @@ export default function LibraryScreen() {
 
   const chips = useMemo(() => {
     const out: Array<{ value: Filter; label: string }> = [{ value: 'all', label: 'All' }];
-    if (hasFavourites(entries)) out.push({ value: 'favourites', label: '★ Favourites' });
+    if (hasTopRated(entries)) out.push({ value: 'top', label: '★ Top rated' });
     for (const t of presentMealTypes(entries)) out.push({ value: t, label: MEAL_TYPE_LABELS[t] });
     if (hasUntagged(entries)) out.push({ value: 'untagged', label: 'Untagged' });
     return out;

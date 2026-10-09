@@ -39,6 +39,7 @@ import { loadOriginal, type Entry } from '@/lib/api';
 import { originalStepTexts } from '@/shared/original';
 import { hasStepSources } from '@/shared/stepSource';
 import { applyEdit } from '@/shared/edits';
+import { STARS_BACK, starsOf, starsPatch } from '@/shared/stars';
 import { TitleWindow } from '@/components/TitleWindow';
 import { TitleButton } from '@/components/recipe/TitleButton';
 import { freeRecipeLine, savedCounter, usesFreeRecipe } from '@/lib/reelView';
@@ -217,7 +218,7 @@ export default function RecipeDetailScreen() {
           servings={draftServings}
           timer={null}
           cooked={[]}
-          rating={null}
+          stars={null}
           mode="diagram"
           canEdit={false}
           onUpdate={(patch) => {
@@ -347,7 +348,7 @@ export default function RecipeDetailScreen() {
         servings={entry.servings}
         timer={entry.timer}
         cooked={entry.cooked ?? []}
-        rating={entry.rating ?? null}
+        stars={starsOf(entry)}
         notes={entry.notes ?? null}
         mode={entry.mode}
         order={entry.order ?? null}
@@ -361,8 +362,8 @@ export default function RecipeDetailScreen() {
         onActivity={onActivity}
         onCooked={() => ask('rate')}
         onRate={(r) => {
-          const before = entry.rating;
-          write({ rating: r });
+          const before = starsOf(entry);
+          write(starsPatch(r));
           if (asksToRemove(before, r)) ask('remove');
         }}
       />
@@ -371,13 +372,13 @@ export default function RecipeDetailScreen() {
         stage={finish}
         title={entry.recipe.title}
         bookName={bookFor(entry).name}
-        rating={entry.rating}
+        stars={starsOf(entry)}
         instant={finishInstant}
         onRate={(r) => {
-          write({ rating: r });
-          // From the cooking prompt a 👎 always asks: a fresh verdict on a
-          // fresh cook, even if it was 👎 before.
-          if (r === -1) ask('remove');
+          write(starsPatch(r));
+          // From the cooking prompt 1-2 stars always asks: a fresh verdict
+          // on a fresh cook, even if it was that low before.
+          if (r <= STARS_BACK) ask('remove');
           else setFinish(null);
         }}
         onSkip={() => setFinish(null)}
@@ -390,7 +391,7 @@ export default function RecipeDetailScreen() {
           // the time Undo is tapped (a refresh drops removed rows), and
           // restore() adopts it back from this.
           const removedAt = Date.now();
-          const snapshot: Entry = { ...entry, rating: -1, removedAt };
+          const snapshot: Entry = { ...entry, ...starsPatch(starsOf(entry) ?? 1), removedAt };
           write({ removedAt });
           setFinishInstant(true);
           setFinish(null);

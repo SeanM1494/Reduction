@@ -34,6 +34,7 @@ import type { Recipe } from "./layout";
 import { reconcileDone } from "./progress";
 import type { OrderPreference } from "./sequence";
 import { mergeNotes, type RecipeNotes } from "./notes";
+import { ratingFromStars } from "./stars";
 
 export interface SyncableEntry {
   recipe: Recipe;
@@ -45,6 +46,9 @@ export interface SyncableEntry {
   cooked?: number[];
   /** -1 | 0 | 1, or null when unrated. Last writer wins. */
   rating?: number | null;
+  /** 1-5, or null (stars.ts). The person's own rating; `rating` above is
+   *  derived from it whenever it is set. Last writer wins. */
+  stars?: number | null;
   order?: OrderPreference | null;
   /** Epoch ms when taken out of the recipe box, or null. Merged on WHETHER
    *  it is removed, never on the timestamp — see mergeEntry. */
@@ -252,7 +256,11 @@ export function mergeEntry(
    * a tap someone just made is the worse failure. Unlike the tree, nothing is
    * destroyed: the other rating was one tap and can be re-made in one tap.
    */
-  const rating = pick("rating", () => mine.rating ?? null);
+  const pickedRating = pick("rating", () => mine.rating ?? null);
+  const stars = pick("stars", () => mine.stars ?? null);
+  // `rating` follows `stars` whenever stars is set — the same derivation the
+  // server applies — so the two can never disagree after a merge.
+  const rating = stars !== null && stars !== undefined ? ratingFromStars(stars) : pickedRating;
   // Same rule and same reasoning as rating: a deliberate arrangement the
   // person just made, nothing destroyed by losing the other one, and advisory
   // besides — a stale winner is pruned on the next write and ignored by the
@@ -317,6 +325,7 @@ export function mergeEntry(
       timer,
       cooked,
       rating: rating ?? null,
+      stars: stars ?? null,
       order: order ?? null,
       removedAt,
       book: book ?? null,

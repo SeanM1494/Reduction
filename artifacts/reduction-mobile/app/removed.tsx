@@ -22,10 +22,11 @@ import { useLibrary } from '@/lib/library-context';
 import { loadRemoved, type Entry } from '@/lib/api';
 import { useRecipePhoto } from '@/lib/recipePhoto';
 import { sanitizeMealTypes } from '@/shared/mealTypes';
+import { starsOf } from '@/shared/stars';
 import { MealTypeArt } from '@/components/library/MealTypeArt';
 import { Window } from '@/components/Window';
 import { useToast } from '@/components/Toast';
-import { RATING_EMOJI, removedOn, restoredToast } from '@/lib/recipeBox';
+import { starsBadge, removedOn, restoredToast } from '@/lib/recipeBox';
 import { useBooks } from '@/lib/books-context';
 import { useColors, type Colors } from '@/hooks/useColors';
 import { fonts } from '@/constants/colors';
@@ -71,7 +72,7 @@ export default function RemovedRecipesScreen() {
     setList((prev) => (prev ?? []).filter((x) => x.id !== e.id));
     // Back where it was: its book, or — if that book was deleted — where
     // that book's recipes went, or Other (recipe-model resolveBookId).
-    toast({ message: restoredToast(e.recipe.title, bookFor(e).name, e.rating) });
+    toast({ message: restoredToast(e.recipe.title, bookFor(e).name, starsOf(e)) });
   };
   const onDelete = (e: Entry) => {
     setConfirm(null);
@@ -165,7 +166,8 @@ function RemovedRow({ entry, onRestore, onDelete, styles }: { entry: Entry; onRe
   const book = useBooks().bookFor(entry);
   const photo = useRecipePhoto(entry);
   const primary = sanitizeMealTypes(entry.recipe.mealTypes)[0] ?? null;
-  const rating = entry.rating === 1 || entry.rating === 0 || entry.rating === -1 ? RATING_EMOJI[String(entry.rating)] : null;
+  const stars = starsOf(entry);
+  const rating = stars !== null ? starsBadge(stars) : null;
   return (
     <View style={styles.row} testID={`removed-${entry.id}`}>
       <View style={styles.rowTop}>

@@ -735,6 +735,29 @@ that knows the column fails every recipes query against a database without
 it. Nullable with no default, so it is instant and harmless to the code
 already running. `/api/health` names it while it is missing.
 
+### Star ratings
+
+A recipe's rating is one to five whole stars (`recipes.stars`, recipe-model
+`stars.ts`). The older three-way `recipes.rating` (-1, 0, 1) stays, for two
+readers that predate stars: an app build that has not updated, and the
+server's "loved" counts (starter reel, search). The server writes `rating`
+FROM `stars` on every stars write (4-5 → 1, 3 → 0, 1-2 → -1); a build
+writing `rating` alone clears `stars`. Nothing is migrated or backfilled: a
+recipe rated before stars is *shown* as stars (👍 5, 👌 3, 👎 1) until its
+owner taps one. Hand-run DDL:
+
+```sql
+alter table recipes add column if not exists stars smallint;
+```
+
+**Run it BEFORE the deploy that carries it, and before pulling that commit
+into the Replit workspace**, for the reason `removed_at` gives above.
+Nullable with no default, so it is instant and harmless to the code already
+running. `/api/health` names it while it is missing. Then the order is
+server, then the phone's over-the-air update (preview first), then the
+website — an updated phone against a server without the column would send
+`stars` to a route that ignores it.
+
 ### Extraction costs
 
 Every extraction attempt and cache hit is a row in `extraction_events`

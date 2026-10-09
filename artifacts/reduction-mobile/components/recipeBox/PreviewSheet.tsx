@@ -20,9 +20,10 @@ import { Window } from '@/components/Window';
 import { MealTypeArt } from '@/components/library/MealTypeArt';
 import { useRecipePhoto } from '@/lib/recipePhoto';
 import { sanitizeMealTypes } from '@/shared/mealTypes';
+import { starsOf } from '@/shared/stars';
 import {
   PREVIEW_INGREDIENTS,
-  RATING_EMOJI,
+  starsBadge,
   keyIngredients,
   previewCookedLine,
   previewStats,
@@ -80,7 +81,7 @@ function PreviewBody({ entry, onClose, onOpen }: { entry: Entry; onClose: () => 
   const primary = sanitizeMealTypes(recipe.mealTypes)[0] ?? null;
   const stats = previewStats(recipe);
   const { names, more } = keyIngredients(recipe, PREVIEW_INGREDIENTS);
-  const rating = entry.rating === 1 || entry.rating === 0 || entry.rating === -1 ? entry.rating : null;
+  const rating = starsOf(entry);
 
   return (
     <View testID="preview-sheet">
@@ -92,7 +93,7 @@ function PreviewBody({ entry, onClose, onOpen }: { entry: Entry; onClose: () => 
         )}
         {rating !== null ? (
           <View style={styles.badge} testID="preview-rating">
-            <Text style={styles.badgeText}>{RATING_EMOJI[String(rating)]}</Text>
+            <Text style={styles.badgeText}>{starsBadge(rating)}</Text>
           </View>
         ) : null}
         <Pressable
@@ -185,7 +186,7 @@ function makeStyles(colors: Colors) {
       paddingHorizontal: 8,
       paddingVertical: 4,
     },
-    badgeText: { fontSize: 16 },
+    badgeText: { fontSize: 16, color: '#8a5a12', fontWeight: '600' },
     // On the photo, so it keeps the paper colours whatever the theme: a
     // dark disc on a dark photo would vanish.
     close: {

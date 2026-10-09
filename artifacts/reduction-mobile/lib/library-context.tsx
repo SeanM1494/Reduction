@@ -54,6 +54,7 @@ export type EntryPatch = Partial<{
   timer: StepTimer | null;
   cooked: number[];
   rating: number | null;
+  stars: number | null;
   order: OrderPreference | null;
   /** Out of the recipe box (a stamp) or back in (null). The server keeps
    *  its own stamp; what syncs is whether it is removed. */

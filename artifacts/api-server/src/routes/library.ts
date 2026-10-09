@@ -37,7 +37,7 @@ import { userIdOf } from "../middleware/session";
 import { cancelTimer, scheduleTimer } from "../lib/timerDispatch";
 import { checkAccess, subscriptionRequired } from "../lib/billing/access";
 import { recordRecipeUsed, spendRecipeAllowance } from "../lib/billing/entitlement";
-import { sanitizeStepSources, setRecipeTotalMinutes, type OriginalRecipe } from "@workspace/recipe-model";
+import { isValidStars, ratingWrite, sanitizeStepSources, setRecipeTotalMinutes, type OriginalRecipe } from "@workspace/recipe-model";
 import {
   copyExtractionOriginal,
   deleteRecipeOriginal,
@@ -188,6 +188,8 @@ function wireEntry(row: typeof recipes.$inferSelect, photo: PhotoMeta | null = n
     timer: row.timer,
     cooked: row.cooked ?? [],
     rating: row.rating ?? null,
+    /** 1-5 or null; `rating` above is derived from it (recipe-model stars.ts). */
+    stars: row.stars ?? null,
     order: row.cardOrder ?? null,
     /** Epoch ms when it was taken out of the recipe box, or null. Only the
      *  Removed list (and a write to a removed row) ever carries a non-null
@@ -287,8 +289,9 @@ export function isValidOrder(
   return true;
 }
 
-/** -1 | 0 | 1, or null for unrated. Three states, deliberately coarse — see
- *  the column comment in shared/schema.ts. */
+/** -1 | 0 | 1, or null for unrated: the pre-stars rating, still accepted
+ *  from app builds that predate stars (and clearing `stars` when it arrives
+ *  alone) — see recipe-model stars.ts `ratingWrite`. */
 const isValidRating = (v: unknown): v is number | null =>
   v === null || v === -1 || v === 0 || v === 1;
 
@@ -505,7 +508,7 @@ libraryRouter.post("/", async (req: Request, res: Response) => {
 
 libraryRouter.patch("/:id", async (req: Request, res: Response) => {
   const id = String(req.params.id);
-  const { recipe, done, servings, mode, timer, cooked, rating, order, removedAt, book, notes, ifVersion } =
+  const { recipe, done, servings, mode, timer, cooked, rating, stars, order, removedAt, book, notes, ifVersion } =
     req.body ?? {};
   if (book !== undefined && book !== null && !isValidBookId(book))
     return res.status(400).json({ error: "book must be a book id or null." });
@@ -515,6 +518,8 @@ libraryRouter.patch("/:id", async (req: Request, res: Response) => {
     return res.status(400).json({ error: "cooked must be an array of timestamps." });
   if (rating !== undefined && !isValidRating(rating))
     return res.status(400).json({ error: "rating must be -1, 0, 1, or null." });
+  if (stars !== undefined && !isValidStars(stars))
+    return res.status(400).json({ error: "stars must be a whole number from 1 to 5, or null." });
   if (order !== undefined && !isValidOrder(order))
     return res.status(400).json({ error: "order must be {sections?, branches?} or null." });
   if (removedAt !== undefined && !isValidRemovedAt(removedAt))
@@ -528,7 +533,7 @@ libraryRouter.patch("/:id", async (req: Request, res: Response) => {
     version: sql`${recipes.version} + 1` as unknown as number,
   };
   if (cooked !== undefined) patch.cooked = cooked;
-  if (rating !== undefined) patch.rating = rating;
+  Object.assign(patch, ratingWrite({ rating, stars }));
   if (order !== undefined) patch.cardOrder = order;
   if (notes !== undefined) patch.notes = notes;
 

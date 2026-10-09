@@ -2003,29 +2003,26 @@ body.rd-dragging-body {
 .rfx-tag-badge:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
 .rfx-tag-more { color: var(--muted); }
 
-/* The rating: three coarse states, sat beside the meal-type badge because
+/* The rating: five whole stars, sat beside the meal-type badge because
    both are standing facts about the recipe rather than about this cooking
    session. 44px targets — this sits under a thumb mid-kitchen. */
-.rfx-rating { display: inline-flex; gap: 6px; margin: 0 8px 10px 2px; vertical-align: top; }
+.rfx-rating { display: inline-flex; gap: 4px; margin: 0 8px 10px 2px; vertical-align: top; }
 .rfx-rating-btn {
   min-width: 44px; min-height: 44px;
   display: inline-flex; align-items: center; justify-content: center;
-  font-size: 18px; line-height: 1; cursor: pointer;
-  background: var(--card); color: var(--ink);
+  font-size: 24px; line-height: 1; cursor: pointer;
+  background: var(--card); color: var(--line-strong);
   border: 1px solid var(--line); border-radius: 12px;
-  /* Unselected sit back so the chosen one reads at a glance; full colour on
-     every option would make three equal shouts. */
-  filter: grayscale(1); opacity: .5;
-  transition: opacity .15s ease, filter .15s ease, border-color .15s ease;
+  transition: color .15s ease, border-color .15s ease;
 }
-.rfx-rating-btn:hover { opacity: .8; filter: grayscale(.4); }
+.rfx-rating-btn:hover { color: var(--warm-line); }
 .rfx-rating-btn.is-on {
-  opacity: 1; filter: none;
+  color: var(--warm-line);
   border-color: var(--line-strong); background: var(--ing-bg);
 }
 .rfx-rating-btn:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
 
-/* Favourite mark on a library card. There is no 👎 counterpart on purpose. */
+/* Top-rated mark on a library card ("★4"). A low rating has no counterpart on purpose. */
 .rd-card-fav { color: var(--warm-line); font-size: 13px; line-height: 1; }
 
 /* The step sheet's shape-changing actions. Wrapped rather than a row: four

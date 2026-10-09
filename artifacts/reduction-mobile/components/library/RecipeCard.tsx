@@ -1,7 +1,7 @@
 /**
  * components/library/RecipeCard.tsx — one saved recipe, as a card in the
  * recipe box: its picture (or the meal-type art), its name, a ★ when it is
- * a favourite. The grid's card, two across (the Recipe Box's books draw
+ * top rated. The grid's card, two across (the Recipe Box's books draw
  * their own pages, components/recipeBox/BookPage.tsx).
  *
  * What is NOT here any more: the progress bar and the step count. A card in
@@ -14,7 +14,8 @@ import React from 'react';
 import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { formatMinutes } from '@/shared/amounts';
 import { MEAL_TYPE_LABELS, sanitizeMealTypes } from '@/shared/mealTypes';
-import { ratingOf, totalMinutes } from '@/lib/libraryView';
+import { totalMinutes } from '@/lib/libraryView';
+import { starsOf, isTopRated, starsLabel } from '@/shared/stars';
 import { useRecipePhoto } from '@/lib/recipePhoto';
 import { MealTypeArt } from '@/components/library/MealTypeArt';
 import { useColors, type Colors } from '@/hooks/useColors';
@@ -28,12 +29,13 @@ export function RecipeCard({ entry, onPress }: { entry: Entry; onPress: () => vo
   const primary = types[0] ?? null;
   const mins = totalMinutes(entry);
   const photo = useRecipePhoto(entry);
-  const fav = ratingOf(entry) === 1;
+  const stars = starsOf(entry);
+  const top = isTopRated(entry);
 
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel={`${entry.recipe.title}${fav ? ', favourite' : ''}${primary ? `, ${MEAL_TYPE_LABELS[primary]}` : ''}`}
+      accessibilityLabel={`${entry.recipe.title}${top && stars !== null ? `, ${starsLabel(stars)}` : ''}${primary ? `, ${MEAL_TYPE_LABELS[primary]}` : ''}`}
       onPress={onPress}
       testID="library-card"
       style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
@@ -44,9 +46,9 @@ export function RecipeCard({ entry, onPress }: { entry: Entry; onPress: () => vo
         ) : (
           <MealTypeArt type={primary} size={36} />
         )}
-        {fav ? (
-          <View style={styles.favBadge} accessibilityLabel="Favourite" testID="card-fav">
-            <Text style={styles.favText}>★</Text>
+        {top && stars !== null ? (
+          <View style={styles.favBadge} accessibilityLabel={starsLabel(stars)} testID="card-fav">
+            <Text style={styles.favText}>★{stars}</Text>
           </View>
         ) : null}
       </View>
@@ -82,15 +84,16 @@ function makeStyles(colors: Colors) {
       position: 'absolute',
       top: 8,
       right: 8,
-      width: 26,
+      minWidth: 26,
       height: 26,
+      paddingHorizontal: 7,
       borderRadius: 13,
       backgroundColor: colors.card,
       alignItems: 'center',
       justifyContent: 'center',
       ...cardShadow,
     },
-    favText: { color: colors.warmLine, fontSize: 14, lineHeight: 16 },
+    favText: { color: colors.warmLine, fontSize: 13, lineHeight: 16, fontWeight: '600' },
     body: { paddingHorizontal: 12, paddingTop: 10, paddingBottom: 12, gap: 3 },
     title: { fontFamily: fonts.heading, fontSize: 15, lineHeight: 18, letterSpacing: -0.2, color: colors.foreground },
     meta: { fontFamily: fonts.mono, fontSize: 10.5, lineHeight: 15, color: colors.faint },

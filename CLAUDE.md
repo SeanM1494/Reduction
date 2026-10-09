@@ -280,15 +280,15 @@ them is the whole point:
 
 | result | meaning |
 |---|---|
-| ***n* pass, 203 skipped** | no `DATABASE_URL` at all. Fine on a machine with no Postgres. |
-| ***n*+203 pass, 0 skipped** | a local database with a current schema. This is the real gate — `pnpm run test:db` produces it. |
+| ***n* pass, 207 skipped** | no `DATABASE_URL` at all. Fine on a machine with no Postgres. |
+| ***n*+207 pass, 0 skipped** | a local database with a current schema. This is the real gate — `pnpm run test:db` produces it. |
 | **failures saying "Refusing to run database tests against …"** | `DATABASE_URL` in the shell points somewhere non-local — on Replit, that is production. Working as designed: use `pnpm run test:db`, which ignores the env var entirely. |
 | **failures naming a missing table** | a reachable local database whose schema is behind `lib/db/src/schema/schema.ts`. `test:db` re-pushes on every start, so this means a hand-run database — push it or use the script. |
 
 The total grows as suites are added — pin your expectation to the **skip
 count**, not the pass count (an earlier version of this table hard-coded
 23/39 and went stale within a week, so treat the number above as needing an
-edit whenever a database-backed suite is added). The 203 are twenty-two suites:
+edit whenever a database-backed suite is added). The 207 are twenty-three suites:
 `claim.db.test.ts` (the anonymous library), `trial.db.test.ts` (the free
 extraction), `cache.db.test.ts` (the URL alias and the cached flag),
 `extractionLog.test.ts` (the cost table), `push.db.test.ts` (timer
@@ -356,8 +356,11 @@ recipe. The twenty-second guards that the daily brakes on paid model
 calls read today's use from `extraction_events`, so a row written by
 another instance refuses here, and that a refusal makes no model call,
 writes no event row (it would count toward the brake that refused it) and
-gives a signed-out visitor the try back. **The full suite — 900 tests at the
-time of writing (Oct 3) — has been run against a real Postgres and passes 900/0.** The
+gives a signed-out visitor the try back. The twenty-third (`stars.db.test.ts`)
+guards the five-star rating's two-field contract: a stars write derives the
+old `rating`, a lone `rating` from an older build clears `stars`, and only
+a whole 1-5 (or null) is accepted. **The full suite — 929 tests at the
+time of writing (Oct 9) — has been run against a real Postgres and passes 929/0.** The
 ones that are not api-server or model tests include the mobile library's
 filter and sort (`artifacts/reduction-mobile/lib/libraryView.test.ts`), the
 recipe box's books and page arithmetic (`recipeBox.test.ts`), the
@@ -720,6 +723,17 @@ by id without a foreign key) and the trial's `claimed_by_user_id`. What
 stays: `admin_events`, on purpose — the audit trail of who was comped
 outlives the account. The confirm lives on the screen, not the route; the
 route asks nothing twice.
+
+**A recipe's rating is `stars` (1-5), and `rating` (-1/0/1) is derived from
+it, never the other way round.** `recipe-model/stars.ts` owns it. The server
+writes `rating` FROM `stars` on every stars write because two readers
+predate stars and must keep working: an app build that has not updated, and
+the reel's/search's "loved" counts (`rating === 1`). A lone `rating` write
+(an old build) clears `stars`. Nothing is backfilled: a row rated before
+stars is SHOWN as stars (`starsOf`: 👍 5, 👌 3, 👎 1). Every client reads
+stars through `starsOf`, never `entry.rating` directly, and writes them with
+`starsPatch` so the local entry's two fields agree. Whole stars on purpose:
+ten half-star targets are under 44px each.
 
 **A recipe's picture is never in the recipe JSON and never on the row.**
 The library list returns every entry's full JSON on each load, so bytes in

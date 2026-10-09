@@ -12,6 +12,8 @@
 
 import {
   MEAL_TYPES,
+  isTopRated,
+  starsOf,
   primaryMealType,
   recipeTotalMinutes,
   notesMatch,
@@ -26,6 +28,8 @@ export interface LibraryItem {
   savedAt: number;
   cooked?: number[] | null;
   rating?: number | null;
+  /** The five-star rating (recipe-model stars.ts); read through `starsOf`. */
+  stars?: number | null;
   /** The person's own notes; search reads them (recipe-model notes.ts). */
   notes?: RecipeNotes | null;
   recipe: {
@@ -50,17 +54,17 @@ export interface LibraryItem {
 export const inRecipeBox = (e: { removedAt?: number | null }): boolean => e.removedAt == null;
 
 export type SortKey = 'added' | 'cooked' | 'time' | 'source' | 'type' | 'rating';
-export type Filter = MealType | 'all' | 'untagged' | 'favourites';
+export type Filter = MealType | 'all' | 'untagged' | 'top';
 
 /** `added` stays first and therefore stays the default (see MyRecipes.tsx:
- *  favourites-first has no data behind it yet). */
+ *  rating-first has no data behind it yet). */
 export const SORTS: Array<[SortKey, string]> = [
   ['added', 'Recently added'],
   ['cooked', 'Recently cooked'],
   ['time', 'Total time'],
   ['source', 'Source'],
   ['type', 'Meal type'],
-  ['rating', 'Favourites first'],
+  ['rating', 'Highest rated'],
 ];
 
 export const sortLabel = (key: SortKey): string =>
@@ -81,7 +85,9 @@ export function totalMinutes(entry: LibraryItem): number | null {
 export const lastCooked = (e: LibraryItem): number =>
   e.cooked && e.cooked.length ? Math.max(...e.cooked) : 0;
 
-export const ratingOf = (e: LibraryItem): number => (typeof e.rating === 'number' ? e.rating : 0);
+/** Stars for ordering: unrated sits in the middle (3), where an unrated recipe
+ *  always sat between the 👍s and the 👎s. */
+export const sortStars = (e: LibraryItem): number => starsOf(e) ?? 3;
 
 /** Which of the eight are worth offering: a chip that filters to nothing is
  *  a dead end, so only types the library actually contains are listed. */
@@ -91,15 +97,14 @@ export function presentMealTypes(library: LibraryItem[]): MealType[] {
   return MEAL_TYPES.filter((t) => present.has(t));
 }
 
-export const hasFavourites = (library: LibraryItem[]): boolean =>
-  library.some((e) => ratingOf(e) === 1);
+export const hasTopRated = (library: LibraryItem[]): boolean => library.some(isTopRated);
 
 export const hasUntagged = (library: LibraryItem[]): boolean =>
   library.some((e) => sanitizeMealTypes(e.recipe.mealTypes).length === 0);
 
 export function matchesFilter(e: LibraryItem, filter: Filter): boolean {
   if (filter === 'all') return true;
-  if (filter === 'favourites') return ratingOf(e) === 1;
+  if (filter === 'top') return isTopRated(e);
   const types = sanitizeMealTypes(e.recipe.mealTypes);
   if (filter === 'untagged') return types.length === 0;
   // The primary drives sorting and display; ALL types widen filters.
@@ -124,10 +129,10 @@ const COMPARE: Record<SortKey, (a: LibraryItem, b: LibraryItem) => number> = {
     (primaryMealType(a.recipe.mealTypes) ?? LAST).localeCompare(
       primaryMealType(b.recipe.mealTypes) ?? LAST
     ),
-  // Favourites, then unrated, then the rejects — and within each, the most
-  // recently added. A 👎 recipe is not hidden by this sort, only ranked last;
-  // hiding it would make it unfindable.
-  rating: (a, b) => ratingOf(b) - ratingOf(a) || b.savedAt - a.savedAt,
+  // Most stars first, unrated among the 3s, the 1-2s last — and within each
+  // star count, the most recently added. A low-rated recipe is not hidden by
+  // this sort, only ranked last; hiding it would make it unfindable.
+  rating: (a, b) => sortStars(b) - sortStars(a) || b.savedAt - a.savedAt,
 };
 
 /** Filter then sort; never mutates the input. */

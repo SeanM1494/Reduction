@@ -11,6 +11,7 @@
 import React, { useMemo, useState } from "react";
 import type { Entry, PhotoMeta } from "../lib/storage";
 import { recipeTotalMinutes } from "@workspace/recipe-model";
+import { isTopRated, starsLabel, starsOf } from "../shared/stars";
 import RecipePhoto from "./RecipePhoto";
 import {
   MEAL_TYPES,
@@ -21,7 +22,7 @@ import {
 } from "../shared/mealTypes";
 
 type SortKey = "added" | "cooked" | "time" | "source" | "type" | "rating";
-type Filter = MealType | "all" | "untagged" | "favourites";
+type Filter = MealType | "all" | "untagged" | "top";
 
 interface Props {
   library: Entry[];
@@ -41,7 +42,7 @@ const SORTS: Array<[SortKey, string]> = [
   ["time", "Total time"],
   ["source", "Source"],
   ["type", "Meal type"],
-  ["rating", "Favourites first"],
+  ["rating", "Highest rated"],
 ];
 
 /** The recipe's total time as its source STATED it, or null — and null
@@ -55,13 +56,15 @@ function totalMinutes(entry: Entry): number | null {
 const lastCooked = (e: Entry): number =>
   e.cooked && e.cooked.length ? Math.max(...e.cooked) : 0;
 
-const ratingOf = (e: Entry): number => (typeof e.rating === "number" ? e.rating : 0);
+/** Stars for ordering: unrated sits in the middle (3), between the high and
+ *  the low, where an unrated recipe always sat. */
+const sortStars = (e: Entry): number => starsOf(e) ?? 3;
 
 export default function MyRecipes({ library, onOpen, onFind, onPhoto }: Props) {
   const [filter, setFilter] = useState<Filter>("all");
   const [sort, setSort] = useState<SortKey>("added");
 
-  const hasFavourites = useMemo(() => library.some((e) => ratingOf(e) === 1), [library]);
+  const hasTopRated = useMemo(() => library.some(isTopRated), [library]);
 
   const hasUntagged = useMemo(
     () => library.some((e) => sanitizeMealTypes(e.recipe.mealTypes).length === 0),
@@ -79,7 +82,7 @@ export default function MyRecipes({ library, onOpen, onFind, onPhoto }: Props) {
   const shown = useMemo(() => {
     const matches = (e: Entry): boolean => {
       if (filter === "all") return true;
-      if (filter === "favourites") return ratingOf(e) === 1;
+      if (filter === "top") return isTopRated(e);
       const types = sanitizeMealTypes(e.recipe.mealTypes);
       if (filter === "untagged") return types.length === 0;
       // The primary drives sorting and display; ALL types widen filters.
@@ -102,10 +105,11 @@ export default function MyRecipes({ library, onOpen, onFind, onPhoto }: Props) {
         (primaryMealType(a.recipe.mealTypes) ?? "￿").localeCompare(
           primaryMealType(b.recipe.mealTypes) ?? "￿"
         ),
-      // Favourites, then unrated, then the rejects — and within each, the
-      // most recently added. A 👎 recipe is not hidden by this sort, only
-      // ranked last; hiding it would make it unfindable.
-      rating: (a, b) => ratingOf(b) - ratingOf(a) || b.savedAt - a.savedAt,
+      // Most stars first, unrated among the 3s, the 1-2s last — and within
+      // each star count, the most recently added. A low-rated recipe is not
+      // hidden by this sort, only ranked last; hiding it would make it
+      // unfindable.
+      rating: (a, b) => sortStars(b) - sortStars(a) || b.savedAt - a.savedAt,
     };
     return [...list].sort(by[sort]);
   }, [library, filter, sort]);
@@ -137,8 +141,8 @@ export default function MyRecipes({ library, onOpen, onFind, onPhoto }: Props) {
           wrapped chip row two deep pushes the actual recipes below the fold. */}
       <div className="rd-chip-row no-print" role="tablist" aria-label="Filter by meal type">
         <FilterChip current={filter} value="all" label="All" onPick={setFilter} />
-        {hasFavourites ? (
-          <FilterChip current={filter} value="favourites" label="★ Favourites" onPick={setFilter} />
+        {hasTopRated ? (
+          <FilterChip current={filter} value="top" label="★ Top rated" onPick={setFilter} />
         ) : null}
         {presentTypes.map((t) => (
           <FilterChip
@@ -177,27 +181,28 @@ export default function MyRecipes({ library, onOpen, onFind, onPhoto }: Props) {
       ) : (
         // The recipe box: two cards across on a phone, more on a desk. Each
         // is its picture (or the meal-type art), its name, a ★ when
-        // favourite. Progress and step counts live on the recipe screen — a
-        // card here is for finding, not for reading state. A 👎 is NOT
+        // top rated. Progress and step counts live on the recipe screen — a
+        // card here is for finding, not for reading state. A low rating is NOT
         // shown back; it sorts and filters, it does not decorate.
         <div className="rd-grid">
           {shown.map((entry) => {
             const types = sanitizeMealTypes(entry.recipe.mealTypes);
             const primary = types[0] ?? null;
             const mins = totalMinutes(entry);
-            const fav = ratingOf(entry) === 1;
+            const stars = starsOf(entry);
+            const top = isTopRated(entry);
             return (
               <button
                 key={entry.id}
                 className="rd-card"
                 onClick={() => onOpen(entry.id)}
-                aria-label={`${entry.recipe.title}${fav ? ", favourite" : ""}${primary ? `, ${MEAL_TYPE_LABELS[primary]}` : ""}`}
+                aria-label={`${entry.recipe.title}${top && stars !== null ? `, ${starsLabel(stars)}` : ""}${primary ? `, ${MEAL_TYPE_LABELS[primary]}` : ""}`}
               >
                 <span className="rd-card-face">
                   <RecipePhoto entry={entry} onPhoto={onPhoto} />
-                  {fav ? (
+                  {top && stars !== null ? (
                     <span className="rd-card-fav" aria-hidden="true">
-                      ★
+                      ★{stars}
                     </span>
                   ) : null}
                 </span>

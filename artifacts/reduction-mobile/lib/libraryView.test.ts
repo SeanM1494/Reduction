@@ -8,7 +8,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   arrangeLibrary,
-  hasFavourites,
+  hasTopRated,
   hasUntagged,
   inRecipeBox,
   presentMealTypes,
@@ -49,37 +49,43 @@ test('recently added is the default order, and by total time the unstated sort l
   assert.deepEqual(lib.map((e) => e.id), ['old', 'new', 'mid']);
 });
 
-test('favourites first ranks 👍 then unrated then 👎, newest within each', () => {
+test('highest rated ranks 5★ to 1★ with unrated among the 3s, newest within each; old ratings count as 5/3/1', () => {
   const lib = [
     item({ id: 'reject', savedAt: 9, rating: -1 }),
     item({ id: 'fav-old', savedAt: 1, rating: 1 }),
     item({ id: 'plain', savedAt: 5 }),
-    item({ id: 'fav-new', savedAt: 2, rating: 1 }),
+    item({ id: 'four', savedAt: 7, stars: 4, rating: 1 }),
+    item({ id: 'two', savedAt: 8, stars: 2, rating: -1 }),
+    item({ id: 'fav-new', savedAt: 2, stars: 5, rating: 1 }),
   ];
   assert.deepEqual(arrangeLibrary(lib, 'all', 'rating').map((e) => e.id), [
     'fav-new',
     'fav-old',
+    'four',
     'plain',
+    'two',
     'reject',
   ]);
   // A reject is ranked last, not hidden.
-  assert.equal(arrangeLibrary(lib, 'all', 'rating').length, 4);
+  assert.equal(arrangeLibrary(lib, 'all', 'rating').length, 6);
 });
 
-test('filters: meal type matches any tag, untagged and favourites are exact', () => {
+test('filters: meal type matches any tag, untagged and top rated are exact', () => {
   const lib = [
     item({ id: 'dinner', recipe: { mealTypes: ['dinner', 'lunch'] } }),
     item({ id: 'bare', recipe: {} }),
     item({ id: 'fav', rating: 1, recipe: { mealTypes: ['dessert'] } }),
+    item({ id: 'three', stars: 3, rating: 0, recipe: { mealTypes: ['dessert'] } }),
     item({ id: 'junk', recipe: { mealTypes: ['not-a-type'] } }),
   ];
   const ids = (f: Parameters<typeof arrangeLibrary>[1]) =>
     arrangeLibrary(lib, f, 'added').map((e) => e.id).sort();
   assert.deepEqual(ids('lunch'), ['dinner']);
   assert.deepEqual(ids('untagged'), ['bare', 'junk']);
-  assert.deepEqual(ids('favourites'), ['fav']);
+  assert.deepEqual(ids('top'), ['fav']);
   assert.deepEqual(presentMealTypes(lib), ['lunch', 'dinner', 'dessert']);
-  assert.equal(hasFavourites(lib), true);
+  assert.equal(hasTopRated(lib), true);
+  assert.equal(hasTopRated([lib[0], lib[3]]), false);
   assert.equal(hasUntagged(lib), true);
   assert.equal(hasUntagged([lib[0]]), false);
 });

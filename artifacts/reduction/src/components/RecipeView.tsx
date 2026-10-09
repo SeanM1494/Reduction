@@ -25,6 +25,7 @@ import RecipeJsonEditor from "./RecipeJsonEditor";
 import EditSheet, { type EditTarget } from "./EditSheet";
 import MealTypeSheet from "./MealTypeSheet";
 import RatingControl from "./RatingControl";
+import { starsOf, starsPatch } from "../shared/stars";
 import ServingsRow from "./ServingsRow";
 import { MEAL_TYPE_LABELS, sanitizeMealTypes } from "../shared/mealTypes";
 import { applyEdit, type EditOp } from "../shared/edits";
@@ -633,8 +634,8 @@ export default function RecipeView({
                 that it would collect an opinion about a web page. */}
             {canEdit && (entry.cooked?.length ?? 0) > 0 ? (
               <RatingControl
-                rating={entry.rating}
-                onChange={(rating) => onUpdate({ ...entry, rating })}
+                stars={starsOf(entry)}
+                onChange={(stars) => onUpdate({ ...entry, ...starsPatch(stars) })}
               />
             ) : null}
             {canEdit ? (

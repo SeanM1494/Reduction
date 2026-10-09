@@ -423,6 +423,9 @@ export interface Entry {
   timer: StepTimer | null;
   cooked: number[];
   rating: number | null;
+  /** 1-5 or null (recipe-model stars.ts); `rating` is derived from it. Read
+   *  through `starsOf`, which also shows a pre-stars rating as stars. */
+  stars?: number | null;
   order: OrderPreference | null;
   version: number;
   savedAt: number;
@@ -535,6 +538,7 @@ export const patchEntry = (
     timer: StepTimer | null;
     cooked: number[];
     rating: number | null;
+    stars: number | null;
     order: OrderPreference | null;
     notes: RecipeNotes | null;
     ifVersion: number;

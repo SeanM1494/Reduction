@@ -37,7 +37,7 @@ import {
   previewCookedLine,
   searchBox,
   resultMeta,
-  RATING_CHOICES,
+  STAR_CHOICES,
   asksForRating,
   asksToRemove,
   keptToast,
@@ -86,22 +86,23 @@ test('the shelf leaves empty books out and keeps shelf order', () => {
   assert.deepEqual(shelf([], 'added'), []);
 });
 
-test('thumbs-down always goes to the back of its book, whatever the sort', () => {
+test('1-2 stars (and an old 👎) always go to the back of their book, whatever the sort', () => {
   const lib = [
     entry('down-new', { savedAt: 9, rating: -1 }, { mealTypes: ['dinner'] }),
     entry('up', { savedAt: 1, rating: 1 }, { mealTypes: ['dinner'] }),
+    entry('meh', { savedAt: 3, stars: 2, rating: -1 }, { mealTypes: ['dinner'] }),
     entry('none', { savedAt: 5, rating: null }, { mealTypes: ['dinner'] }),
     entry('down-old', { savedAt: 2, rating: -1 }, { mealTypes: ['dinner'] }),
   ];
   // Recently added would put down-new first; it goes to the back instead,
   // and the 👎s keep the sort among themselves.
-  assert.deepEqual(arrangeBook(lib, 'dinner', 'added').map((e) => e.id), ['none', 'up', 'down-new', 'down-old']);
+  assert.deepEqual(arrangeBook(lib, 'dinner', 'added').map((e) => e.id), ['none', 'up', 'down-new', 'meh', 'down-old']);
   for (const sort of ['added', 'cooked', 'time', 'source', 'type', 'rating'] as const) {
     const ids = arrangeBook(lib, 'dinner', sort).map((e) => e.id);
-    assert.deepEqual(ids.slice(-2).sort(), ['down-new', 'down-old'], `${sort}: 👎 last`);
+    assert.deepEqual(ids.slice(-3).sort(), ['down-new', 'down-old', 'meh'], `${sort}: low rated last`);
   }
-  // Un-thumbing it puts it straight back in its sorted place.
-  lib[0] = { ...lib[0], rating: 0 };
+  // Re-rating it 3★ puts it straight back in its sorted place.
+  lib[0] = { ...lib[0], stars: 3, rating: 0 };
   assert.equal(arrangeBook(lib, 'dinner', 'added')[0].id, 'down-new');
 });
 
@@ -276,9 +277,9 @@ test('page fit: larger text never shows MORE rows on the same page', () => {
 });
 
 test('the page as VoiceOver reads it', () => {
-  assert.equal(pageA11yLabel('Guacamole', 'Apps & Snacks', recipe({ totalMinutes: 15 }), 1), 'Guacamole, Apps & Snacks, 15 min, rated thumbs up');
+  assert.equal(pageA11yLabel('Guacamole', 'Apps & Snacks', recipe({ totalMinutes: 15 }), 5), 'Guacamole, Apps & Snacks, 15 min, rated 5 stars');
   assert.equal(pageA11yLabel('Toast', 'Other', recipe(), null), 'Toast, Other', 'no time and no rating: nothing invented');
-  assert.equal(pageA11yLabel('Chili', 'Dinner', recipe(), -1), 'Chili, Dinner, rated thumbs down');
+  assert.equal(pageA11yLabel('Chili', 'Dinner', recipe(), 1), 'Chili, Dinner, rated 1 star');
 });
 
 test('page turn: progress, the commit rule and the settle times, as tuned', () => {
@@ -424,10 +425,10 @@ test('preview tiles: total time only when stated, then servings and steps', () =
 test('preview cooked line: count and last date, or never — the rating after either', () => {
   const sep11 = new Date(2026, 8, 11, 19).getTime();
   const sep2 = new Date(2026, 8, 2, 19).getTime();
-  assert.equal(previewCookedLine([sep2, sep11, sep2], 1), 'Cooked 3× · last Sep 11 · your rating 👍');
+  assert.equal(previewCookedLine([sep2, sep11, sep2], 4), 'Cooked 3× · last Sep 11 · your rating ★★★★☆');
   assert.equal(previewCookedLine([sep11], null), 'Cooked 1× · last Sep 11');
   assert.equal(previewCookedLine([], null), "You haven't cooked this yet");
-  assert.equal(previewCookedLine(null, -1), "You haven't cooked this yet · your rating 👎");
+  assert.equal(previewCookedLine(null, 1), "You haven't cooked this yet · your rating ★☆☆☆☆");
 });
 
 test('search: title, ingredient and BOOK name, in shelf and page order, never a removed recipe', () => {
@@ -463,32 +464,38 @@ test('the rating prompt: asked exactly when a cook is stamped, worded for rated 
   // stampCooked returned the same list: inside the six-hour window, or not a finish.
   assert.equal(asksForRating([1, 2], [1, 2]), false);
   assert.equal(asksForRating([], []), false);
-  assert.deepEqual(RATING_CHOICES.map((c) => c.value), [-1, 0, 1]);
+  assert.deepEqual(STAR_CHOICES.map((c) => c.value), [1, 2, 3, 4, 5]);
+  assert.deepEqual(STAR_CHOICES.map((c) => c.label), ['Not for me', 'Meh', 'It was fine', 'Really good', 'Loved it']);
   assert.deepEqual(ratingPromptCopy('Chili', null), { heading: 'How was Chili?', sub: 'Your rating decides where it sits in your recipe box.' });
-  assert.equal(ratingPromptCopy('Chili', 0).sub, 'You can keep your rating or change it.');
+  assert.equal(ratingPromptCopy('Chili', 3).sub, 'You can keep your rating or change it.');
 });
 
-test('thumbs down: the words, and when the recipe itself asks', () => {
-  assert.deepEqual(removePromptCopy('Chili', 'Dinner'), {
+test('low rating: the words, and when the recipe itself asks', () => {
+  assert.equal(removePromptCopy('Chili', 'Dinner', 2).body, 'You gave Chili 2 stars. Want it gone, or kept at the back of Dinner?');
+  assert.deepEqual(removePromptCopy('Chili', 'Dinner', 1), {
     heading: 'Take it out of your box?',
-    body: 'You gave Chili a thumbs down. Want it gone, or kept at the back of Dinner?',
+    body: 'You gave Chili 1 star. Want it gone, or kept at the back of Dinner?',
     note: 'Removed recipes wait in Settings → Removed recipes. You can bring them back anytime.',
   });
   assert.equal(removedToast('Chili'), 'Removed Chili');
   assert.equal(keptToast('Dinner'), 'Moved to the back of Dinner');
-  assert.equal(asksToRemove(1, -1), true);
-  assert.equal(asksToRemove(null, -1), true);
-  assert.equal(asksToRemove(-1, -1), false);
-  assert.equal(asksToRemove(-1, null), false);
-  assert.equal(asksToRemove(0, 1), false);
+  assert.equal(asksToRemove(5, 1), true);
+  assert.equal(asksToRemove(3, 2), true);
+  assert.equal(asksToRemove(null, 1), true);
+  assert.equal(asksToRemove(1, 2), false, 'already in the range: nothing new to ask');
+  assert.equal(asksToRemove(2, null), false, 'clearing is not wanting it gone');
+  assert.equal(asksToRemove(1, 3), false, 'moving up and out is the opposite');
+  assert.equal(asksToRemove(3, 4), false);
 });
 
 test('removed recipes: the date, the count, the restore toast and the empty-library note', () => {
   assert.equal(removedOn(new Date(2026, 8, 24, 12).getTime()), 'Removed Sep 24');
   assert.equal(removedOn(null), 'Removed');
   assert.deepEqual([0, 1, 4].map(removedCountLabel), ['None', '1 recipe', '4 recipes']);
-  assert.equal(restoredToast('Chili', 'Dinner', -1), 'Chili is back, at the back of Dinner');
-  assert.equal(restoredToast('Chili', 'Dinner', 1), 'Chili is back in Dinner');
+  assert.equal(restoredToast('Chili', 'Dinner', 1), 'Chili is back, at the back of Dinner');
+  assert.equal(restoredToast('Chili', 'Dinner', 2), 'Chili is back, at the back of Dinner');
+  assert.equal(restoredToast('Chili', 'Dinner', 5), 'Chili is back in Dinner');
+  assert.equal(restoredToast('Chili', 'Dinner', null), 'Chili is back in Dinner');
   assert.equal(removedWaitingNote(0), null);
   assert.equal(removedWaitingNote(1), '1 removed recipe is waiting in Settings → Removed recipes.');
   assert.equal(removedWaitingNote(2), '2 removed recipes are waiting in Settings → Removed recipes.');

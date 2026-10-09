@@ -140,13 +140,14 @@ export const toSyncable = (e: SyncableEntry): SyncableEntry => ({
   timer: e.timer,
   cooked: e.cooked ?? [],
   rating: e.rating ?? null,
+  stars: e.stars ?? null,
   order: e.order ?? null,
   removedAt: e.removedAt ?? null,
   book: e.book ?? null,
   notes: e.notes ?? null,
 });
 
-const SYNCED_KEYS: Array<keyof SyncableEntry> = ['recipe', 'done', 'servings', 'mode', 'timer', 'cooked', 'rating', 'order', 'removedAt', 'book', 'notes'];
+const SYNCED_KEYS: Array<keyof SyncableEntry> = ['recipe', 'done', 'servings', 'mode', 'timer', 'cooked', 'rating', 'stars', 'order', 'removedAt', 'book', 'notes'];
 
 /** Did this field change? By value — except removal, which is compared on
  *  WHETHER it is removed. Its timestamp is this device's clock until the

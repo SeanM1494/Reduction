@@ -1,3 +1,16 @@
+# Not on `main` yet: five-star ratings (branch `claude/project-thread-8h4vqe`)
+
+Waits for the 1.2.0 review. Replaces 👎 👌 👍 with one to five whole stars.
+Order is fixed: **SQL, then the server, then the phone's preview update,
+then the website.** JS only: no build, no `expo.version` bump.
+
+| Ships | Needs |
+|---|---|
+| `recipes.stars` (nullable `smallint`); the server derives the old `rating` from it; phone and website draw five stars (finish prompt, ⋮ › Rating, ★ Top rated filter, Highest rated sort, ★4 badges) | SQL first, from a fresh Replit shell: `cd ~/workspace`, then `psql "$DATABASE_URL" -c "alter table recipes add column if not exists stars smallint"` (prints `ALTER TABLE`). Then pull, Publish, then `scripts/publish-update.mjs --channel preview` and promote after a phone check |
+
+Old ratings are shown as stars (👍 5, 👌 3, 👎 1) and nothing is rewritten.
+`/api/health` names the column while it is missing.
+
 # Since build 10 was submitted: the website catch-up (PR #15)
 
 Website only. No SQL, no phone update, no build.

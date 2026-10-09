@@ -34,6 +34,7 @@ import { DiagramView } from '@/components/diagram/DiagramView';
 import { ServingsRow } from '@/components/recipe/ServingsRow';
 import { RecipePhotoThumb } from '@/components/recipe/RecipePhotoThumb';
 import { RatingControl } from '@/components/recipe/RatingControl';
+import { starsPatch } from '@/shared/stars';
 import { NotesSheet } from '@/components/recipe/NotesSheet';
 import { thumbSize } from '@/components/recipe/RecipePhotoThumb';
 import { noteStripFits } from '@/lib/notesStrip';
@@ -102,7 +103,8 @@ interface RecipeScreenProps {
   servings: number | null;
   timer: StepTimer | null;
   cooked: number[];
-  rating: number | null;
+  /** The recipe's stars as shown (`starsOf`), or null. */
+  stars: number | null;
   /** The person's own notes (recipe-model notes.ts). Absent — a preview,
    *  the demo — and the page has no notes at all. */
   notes?: RecipeNotes | null;
@@ -175,9 +177,9 @@ interface RecipeScreenProps {
    *  asks for a rating here (the Recipe Box's finish prompt). */
   onCooked?: () => void;
   /** The recipe's own rating control, when the route wants to hear about
-   *  it (a change to 👎 asks whether to take it out of the box). Without
-   *  it the rating is simply written. */
-  onRate?: (rating: number | null) => void;
+   *  it (a change to 1-2 stars asks whether to take it out of the box).
+   *  Without it the rating is simply written. */
+  onRate?: (stars: number | null) => void;
   /** The demo guide pointing at something (lib/spotlight.ts): cells by id,
    *  the Step-by-Step tab as 'mode:steps', Next step as 'cook:next'. The
    *  screen draws the ring; the guide never reaches into it. */
@@ -201,7 +203,7 @@ export function RecipeScreen({
   servings,
   timer,
   cooked,
-  rating,
+  stars,
   notes,
   mode,
   order = null,
@@ -771,7 +773,7 @@ export function RecipeScreen({
           it would be an opinion about a web page). */}
       <Sheet open={ratingOpen} title="Rating" onClose={() => setRatingOpen(false)}>
         <View style={styles.ratingSheet}>
-          <RatingControl rating={rating} onChange={(r) => (onRate ? onRate(r) : onUpdate({ rating: r }))} />
+          <RatingControl stars={stars} onChange={(r) => (onRate ? onRate(r) : onUpdate(starsPatch(r)))} />
         </View>
       </Sheet>
 

@@ -21,8 +21,9 @@ import React, { memo } from 'react';
 import { Platform, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { sanitizeMealTypes } from '@/shared/mealTypes';
+import { starsOf } from '@/shared/stars';
 import { useRecipePhoto } from '@/lib/recipePhoto';
-import { cookedLabel, keyIngredients, notCookedLabel, pageFit, RATING_EMOJI, stepCount, timeLine, type Book } from '@/lib/recipeBox';
+import { cookedLabel, keyIngredients, notCookedLabel, pageFit, starsBadge, stepCount, timeLine, type Book } from '@/lib/recipeBox';
 import type { Entry } from '@/lib/api';
 import { useColors } from '@/hooks/useColors';
 import { PageFace, faceStyles } from './PageFace';
@@ -83,7 +84,7 @@ function RecipeFace({ entry, number, side, book, width, height }: { entry: Entry
     : { long: notCookedLabel(false), short: notCookedLabel(true) };
   const fit = pageFit(width, height, { title: recipe.title, time, pill }, fontScale);
   const cap = fit.maxFontScale ?? undefined;
-  const rating = entry.rating;
+  const stars = starsOf(entry);
   return (
     <PageFace
       testID={`book-page-${entry.id}`}
@@ -91,9 +92,9 @@ function RecipeFace({ entry, number, side, book, width, height }: { entry: Entry
       mealType={sanitizeMealTypes(recipe.mealTypes)[0] ?? null}
       photoHeight={fit.photoHeight}
       badge={
-        rating === 1 || rating === 0 || rating === -1 ? (
+        stars !== null ? (
           <View style={styles.badge} testID="book-page-rating">
-            <Text style={styles.badgeText} maxFontSizeMultiplier={BADGE_MAX_SCALE}>{RATING_EMOJI[String(rating)]}</Text>
+            <Text style={styles.badgeText} maxFontSizeMultiplier={BADGE_MAX_SCALE}>{starsBadge(stars)}</Text>
           </View>
         ) : null
       }
@@ -155,7 +156,7 @@ const styles = StyleSheet.create({
     shadowRadius: 3,
     shadowOffset: { width: 0, height: 1 },
   },
-  badgeText: { fontSize: 13, lineHeight: 16 },
+  badgeText: { fontSize: 13, lineHeight: 16, color: '#8a5a12', fontWeight: '600' },
   number: {
     position: 'absolute',
     bottom: 6,

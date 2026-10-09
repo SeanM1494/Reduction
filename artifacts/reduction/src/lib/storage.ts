@@ -40,8 +40,12 @@ export interface Entry {
   /** Epoch-ms timestamps of completed cook-throughs. Server-merged by union;
    *  see shared/sync.ts. */
   cooked?: number[];
-  /** -1 would-not-repeat | 0 fine | 1 favourite | null unrated. */
+  /** The pre-stars rating: -1 | 0 | 1 | null. Derived from `stars` whenever
+   *  that is set (shared/stars.ts), kept for builds that predate stars. */
   rating?: number | null;
+  /** 1-5 or null. Read through `starsOf`, which also shows a pre-stars
+   *  rating as stars. */
+  stars?: number | null;
   /** How THIS entry wants its step-by-step cards ordered where the tree
    *  leaves a choice. Entry-level twin of the editor's reorderInputs — same
    *  split as servings. Advisory; see OrderPreference in shared/sequence. */
@@ -316,6 +320,7 @@ function toEntry(row: any): Entry {
     timer: row.timer ?? null,
     cooked: Array.isArray(row.cooked) ? row.cooked : [],
     rating: typeof row.rating === "number" ? row.rating : null,
+    stars: typeof row.stars === "number" ? row.stars : null,
     order: row.order ?? null,
     notes: row.notes ?? null,
     savedAt: row.savedAt ?? Date.now(),
@@ -469,6 +474,7 @@ const toSyncable = (e: Entry): SyncableEntry => ({
   timer: e.timer,
   cooked: e.cooked ?? [],
   rating: e.rating ?? null,
+  stars: e.stars ?? null,
   order: e.order ?? null,
   notes: e.notes ?? null,
 });
@@ -488,6 +494,7 @@ function buildPatch(base: Entry | null, entry: Entry): Record<string, unknown> |
   if (changed("timer")) body.timer = entry.timer;
   if (changed("cooked")) body.cooked = entry.cooked ?? [];
   if (changed("rating")) body.rating = entry.rating ?? null;
+  if (changed("stars")) body.stars = entry.stars ?? null;
   if (changed("order")) body.order = entry.order ?? null;
   // Absent and null are the same "no note", and a write with no base sends
   // one only when there is one.
@@ -707,6 +714,7 @@ export function saveTrialRecipe(entry: Entry): void {
             timer: next.timer,
             cooked: next.cooked ?? [],
             rating: next.rating ?? null,
+            stars: next.stars ?? null,
             order: next.order ?? null,
           }),
         });

@@ -1,78 +1,78 @@
 /**
- * components/recipe/RatingControl.tsx — three states, not five, and hidden
- * until the recipe has been cooked once. The web component's header carries
- * the reasoning; the rules that survive the port: one rating per recipe (a
- * standing verdict, allowed to change), tapping the current rating clears
- * it, and 44px targets because this sits under a thumb mid-kitchen.
+ * components/recipe/RatingControl.tsx — five whole stars, and hidden until
+ * the recipe has been cooked once. Whole stars on purpose (ten half-star
+ * targets across a phone are under 44px each), and the rules that survive
+ * from the three-way control it replaced: one rating per recipe (a standing
+ * verdict, allowed to change), tapping the current rating clears it, and
+ * 44px targets because this sits under a thumb mid-kitchen.
+ *
+ * Used twice: the recipe's Rating sheet (tap the same star to clear) and the
+ * finish prompt (`clearOnRepeat={false}`: a tap there is an answer, never an
+ * undo). The word under the stars names the one chosen, so a rating is never
+ * just a count.
  */
 
 import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { STAR_WORDS, STARS_MAX } from '@/shared/stars';
 import { useColors, type Colors } from '@/hooks/useColors';
 
-export const RATING_DOWN = -1;
-export const RATING_OK = 0;
-export const RATING_UP = 1;
-
-const OPTIONS: Array<{ value: number; glyph: string; label: string }> = [
-  { value: RATING_DOWN, glyph: '\u{1F44E}', label: 'Would not make again' },
-  { value: RATING_OK, glyph: '\u{1F44C}', label: 'Fine' },
-  { value: RATING_UP, glyph: '\u{1F44D}', label: 'Favourite' },
-];
+const VALUES = Array.from({ length: STARS_MAX }, (_, i) => i + 1);
 
 export function RatingControl({
-  rating,
+  stars,
   onChange,
+  clearOnRepeat = true,
 }: {
-  rating: number | null | undefined;
-  onChange: (rating: number | null) => void;
+  stars: number | null | undefined;
+  onChange: (stars: number | null) => void;
+  clearOnRepeat?: boolean;
 }) {
   const colors = useColors();
   const styles = makeStyles(colors);
-  const current = typeof rating === 'number' ? rating : null;
+  const current = typeof stars === 'number' ? stars : null;
   return (
-    // A toolbar of three toggle buttons, not a radiogroup: tapping the current
-    // one clears it, which a radio cannot do, and a reader told "radio button"
-    // would expect one to stay chosen.
-    <View style={styles.row} accessibilityRole="toolbar" accessibilityLabel="Rate this recipe" testID="rating">
-      {OPTIONS.map(({ value, glyph, label }) => {
-        const on = current === value;
-        return (
-          <Pressable
-            key={value}
-            accessibilityRole="togglebutton"
-            aria-checked={on}
-            accessibilityLabel={label}
-            accessibilityHint={on ? "Clears your rating" : "Rates this recipe"}
-            testID={`rating-${value}`}
-            onPress={() => onChange(on ? null : value)}
-            style={[styles.btn, on && styles.btnOn]}
-          >
-            <Text style={[styles.glyph, !on && styles.glyphOff]}>{glyph}</Text>
-          </Pressable>
-        );
-      })}
+    <View style={styles.wrap}>
+      {/* A toolbar of toggle buttons, not a radiogroup: tapping the current
+          one clears it, which a radio cannot do, and a reader told "radio
+          button" would expect one to stay chosen. */}
+      <View style={styles.row} accessibilityRole="toolbar" accessibilityLabel="Rate this recipe" testID="rating">
+        {VALUES.map((value) => {
+          const filled = current !== null && value <= current;
+          const on = current === value;
+          return (
+            <Pressable
+              key={value}
+              accessibilityRole="togglebutton"
+              aria-checked={on}
+              accessibilityLabel={`${value} ${value === 1 ? 'star' : 'stars'}, ${STAR_WORDS[value]}`}
+              accessibilityHint={on && clearOnRepeat ? 'Clears your rating' : 'Rates this recipe'}
+              testID={`rating-${value}`}
+              onPress={() => onChange(on && clearOnRepeat ? null : value)}
+              style={styles.btn}
+              hitSlop={2}
+            >
+              <Text style={[styles.star, filled ? styles.starOn : styles.starOff]}>★</Text>
+            </Pressable>
+          );
+        })}
+      </View>
+      <Text style={styles.word} testID="rating-word" accessibilityElementsHidden importantForAccessibility="no">
+        {current !== null ? STAR_WORDS[current] : ' '}
+      </Text>
     </View>
   );
 }
 
 function makeStyles(colors: Colors) {
   return StyleSheet.create({
-    row: { flexDirection: 'row', gap: 6 },
-    btn: {
-      minWidth: 44,
-      minHeight: 44,
-      alignItems: 'center',
-      justifyContent: 'center',
-      borderRadius: colors.radiusButton,
-      borderWidth: 1,
-      borderColor: colors.border,
-      backgroundColor: colors.card,
-    },
-    btnOn: { borderColor: colors.borderStrong, backgroundColor: colors.muted },
-    glyph: { fontSize: 18, lineHeight: 22 },
-    // Unselected sit back so the chosen one reads at a glance; full colour on
-    // every option would make three equal shouts.
-    glyphOff: { opacity: 0.55 },
+    wrap: { alignItems: 'center', gap: 2 },
+    row: { flexDirection: 'row', gap: 4 },
+    btn: { width: 48, minHeight: 48, alignItems: 'center', justifyContent: 'center' },
+    star: { fontSize: 34, lineHeight: 40 },
+    starOn: { color: colors.warmLine },
+    // Unselected sit back so the chosen count reads at a glance.
+    starOff: { color: colors.border },
+    word: { minHeight: 20, fontSize: 14, lineHeight: 20, fontWeight: '600', color: colors.foreground },
   });
 }

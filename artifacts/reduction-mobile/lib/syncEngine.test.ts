@@ -147,10 +147,12 @@ test('buildPatch sends only what changed, plus the base version', () => {
   assert.equal(buildPatch(base, base), null);
   assert.deepEqual(buildPatch(base, { ...base, done: ['avo', 'd1'] }), { done: ['avo', 'd1'], ifVersion: 7 });
   assert.deepEqual(buildPatch(base, { ...base, mode: 'steps', rating: 1 }), { mode: 'steps', rating: 1, ifVersion: 7 });
+  // Setting stars sends the stars and the rating derived from them.
+  assert.deepEqual(buildPatch(base, { ...base, stars: 4, rating: 1 }), { rating: 1, stars: 4, ifVersion: 7 });
   // No base: everything goes, and no ifVersion (the server skips the check).
   const full = buildPatch(null, base)!;
   assert.equal(full.ifVersion, undefined);
-  assert.deepEqual(Object.keys(full).sort(), ['cooked', 'done', 'mode', 'order', 'rating', 'recipe', 'servings', 'timer']);
+  assert.deepEqual(Object.keys(full).sort(), ['cooked', 'done', 'mode', 'order', 'rating', 'recipe', 'servings', 'stars', 'timer']);
 });
 
 test('two fast taps are serialized: the second waits and carries the first ack version, no 409', async () => {

@@ -22,10 +22,16 @@ import {
   isDefaultBook,
   liveBooks,
   resolveBookId,
+  STARS_BACK,
+  STAR_WORDS,
+  isBackOfBook,
+  isValidStars,
+  starsGlyphs,
+  starsLabel,
   type BookDef,
   type Recipe,
 } from '@workspace/recipe-model';
-import { arrangeLibrary, inRecipeBox, ratingOf, searchLibrary, type LibraryItem, type SortKey } from './libraryView';
+import { arrangeLibrary, inRecipeBox, searchLibrary, type LibraryItem, type SortKey } from './libraryView';
 
 /** A book's id: a default's name (`dinner`, `other`…) or a UUID for one the
  *  person made (recipe-model books.ts). */
@@ -80,7 +86,7 @@ export function arrangeBook<T extends LibraryItem & { book?: string | null }>(
     'all',
     sort
   );
-  return [...sorted.filter((e) => ratingOf(e) !== -1), ...sorted.filter((e) => ratingOf(e) === -1)];
+  return [...sorted.filter((e) => !isBackOfBook(e)), ...sorted.filter((e) => isBackOfBook(e))];
 }
 
 /** The shelf: the account's live books in their order, each with its pages.
@@ -346,13 +352,13 @@ export function previewStats(recipe: Recipe): Array<{ value: string; label: stri
   return out;
 }
 
-/** "Cooked 3× · last Sep 11 · your rating 👍", or "You haven't cooked this
+/** "Cooked 3× · last Sep 11 · your rating ★★★★☆", or "You haven't cooked this
  *  yet" — with the rating after it either way, when there is one. */
-export function previewCookedLine(cooked: number[] | null | undefined, rating: number | null | undefined): string {
+export function previewCookedLine(cooked: number[] | null | undefined, stars: number | null | undefined): string {
   const list = (cooked ?? []).filter((t) => typeof t === 'number' && Number.isFinite(t));
   const head = list.length ? `Cooked ${list.length}× · last ${shortDate(Math.max(...list))}` : "You haven't cooked this yet";
-  const emoji = rating === 1 || rating === 0 || rating === -1 ? RATING_EMOJI[String(rating)] : null;
-  return emoji ? `${head} · your rating ${emoji}` : head;
+  const glyphs = typeof stars === 'number' && isValidStars(stars) ? starsGlyphs(stars) : '';
+  return glyphs ? `${head} · your rating ${glyphs}` : head;
 }
 
 // ---------------------------------------------------------------------------
@@ -404,12 +410,12 @@ export function resultMeta(recipe: unknown, cooked: number[] | null | undefined)
 // Finishing a recipe: the rating prompt, and what a 👎 asks.
 // ---------------------------------------------------------------------------
 
-/** The three answers, worst first — the order they sit in on screen. */
-export const RATING_CHOICES: ReadonlyArray<{ value: -1 | 0 | 1; emoji: string; label: string }> = [
-  { value: -1, emoji: '👎', label: 'Not for me' },
-  { value: 0, emoji: '👌', label: 'It was fine' },
-  { value: 1, emoji: '👍', label: 'Loved it' },
-];
+/** The five answers, fewest stars first — the order they sit in on screen.
+ *  The words are the prompt's caption for the star under the finger. */
+export const STAR_CHOICES: ReadonlyArray<{ value: number; label: string }> = [1, 2, 3, 4, 5].map((value) => ({
+  value,
+  label: STAR_WORDS[value],
+}));
 
 /**
  * Whether finishing just now asks for a rating: exactly when the cook was
@@ -419,18 +425,19 @@ export const RATING_CHOICES: ReadonlyArray<{ value: -1 | 0 | 1; emoji: string; l
  */
 export const asksForRating = (before: readonly number[], after: readonly number[]): boolean => after.length > before.length;
 
-export function ratingPromptCopy(title: string, rating: number | null | undefined): { heading: string; sub: string } {
-  const rated = rating === 1 || rating === 0 || rating === -1;
+export function ratingPromptCopy(title: string, stars: number | null | undefined): { heading: string; sub: string } {
+  const rated = typeof stars === 'number' && isValidStars(stars);
   return {
     heading: `How was ${title || 'it'}?`,
     sub: rated ? 'You can keep your rating or change it.' : 'Your rating decides where it sits in your recipe box.',
   };
 }
 
-export function removePromptCopy(title: string, bookName: string): { heading: string; body: string; note: string } {
+export function removePromptCopy(title: string, bookName: string, stars?: number | null): { heading: string; body: string; note: string } {
+  const gave = typeof stars === 'number' && isValidStars(stars) ? `${stars} ${stars === 1 ? 'star' : 'stars'}` : 'a low rating';
   return {
     heading: 'Take it out of your box?',
-    body: `You gave ${title || 'this recipe'} a thumbs down. Want it gone, or kept at the back of ${bookName}?`,
+    body: `You gave ${title || 'this recipe'} ${gave}. Want it gone, or kept at the back of ${bookName}?`,
     note: 'Removed recipes wait in Settings → Removed recipes. You can bring them back anytime.',
   };
 }
@@ -440,11 +447,15 @@ export const keptToast = (bookName: string): string => `Moved to the back of ${b
 
 /**
  * Whether a rating change in the recipe itself asks "take it out?": only a
- * change TO 👎. Re-tapping 👎 clears it (the control's toggle), and moving
- * off 👎 is the opposite of wanting it gone. From the cooking prompt,
- * choosing 👎 always asks — that is a fresh verdict on a fresh cook.
+ * change INTO the back-of-book range (1-2 stars, `STARS_BACK`). Re-tapping
+ * the same star clears it (the control's toggle), and moving up out of the
+ * range is the opposite of wanting it gone; moving between 1 and 2 asks
+ * nothing new. From the cooking prompt, choosing 1-2 stars always asks —
+ * that is a fresh verdict on a fresh cook. Both arguments are STARS (the
+ * shown value, `starsOf`), so a recipe rated 👎 before stars counts as 1.
  */
-export const asksToRemove = (before: number | null | undefined, after: number | null): boolean => after === -1 && before !== -1;
+export const asksToRemove = (before: number | null | undefined, after: number | null): boolean =>
+  after !== null && after <= STARS_BACK && !(typeof before === 'number' && before <= STARS_BACK);
 
 // ---------------------------------------------------------------------------
 // Removed recipes (Settings).
@@ -458,22 +469,22 @@ export const removedOn = (removedAt: number | null | undefined): string =>
 export const removedCountLabel = (n: number): string => (n <= 0 ? 'None' : n === 1 ? '1 recipe' : `${n} recipes`);
 
 /** A restore's toast. It goes back where it was: a 👎 to the back. */
-export const restoredToast = (title: string, bookName: string, rating: number | null | undefined): string =>
-  rating === -1 ? `${title || 'Recipe'} is back, at the back of ${bookName}` : `${title || 'Recipe'} is back in ${bookName}`;
+export const restoredToast = (title: string, bookName: string, stars: number | null | undefined): string =>
+  typeof stars === 'number' && stars <= STARS_BACK ? `${title || 'Recipe'} is back, at the back of ${bookName}` : `${title || 'Recipe'} is back in ${bookName}`;
 
 /** What an EMPTY library says when recipes were only taken out, not gone. */
 export const removedWaitingNote = (n: number): string | null =>
   n <= 0 ? null : n === 1 ? '1 removed recipe is waiting in Settings → Removed recipes.' : `${n} removed recipes are waiting in Settings → Removed recipes.`;
 
-const RATING_WORDS: Record<string, string> = { '1': 'rated thumbs up', '0': 'rated OK', '-1': 'rated thumbs down' };
-export const RATING_EMOJI: Record<string, string> = { '1': '👍', '0': '👌', '-1': '👎' };
+/** The little badge on a page, a preview and a result: "★4". */
+export const starsBadge = (stars: number): string => `★${stars}`;
 
 /** What VoiceOver reads for a page: one element, the facts that matter. */
-export function pageA11yLabel(title: string, bookName: string, recipe: unknown, rating: number | null | undefined): string {
+export function pageA11yLabel(title: string, bookName: string, recipe: unknown, stars: number | null | undefined): string {
   const parts = [title || 'Untitled recipe', bookName];
   const time = timeLine(recipe);
   if (time) parts.push(time);
-  if (rating === 1 || rating === 0 || rating === -1) parts.push(RATING_WORDS[String(rating)]);
+  if (typeof stars === 'number' && isValidStars(stars)) parts.push(starsLabel(stars));
   return parts.join(', ');
 }
 

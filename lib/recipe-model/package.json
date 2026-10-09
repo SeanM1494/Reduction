@@ -20,7 +20,8 @@
     "./title": "./src/title.ts",
     "./books": "./src/books.ts",
     "./crashReport": "./src/crashReport.ts",
-    "./notes": "./src/notes.ts"
+    "./notes": "./src/notes.ts",
+    "./stars": "./src/stars.ts"
   },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json"

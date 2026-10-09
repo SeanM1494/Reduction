@@ -17,6 +17,7 @@ import {
   text,
   jsonb,
   integer,
+  smallint,
   boolean,
   timestamp,
   index,
@@ -90,14 +91,29 @@ export const recipes = pgTable(
      */
     cooked: jsonb("cooked").$type<number[]>().notNull().default([]),
     /**
-     * The reported half: -1 (would not make again), 0 (fine), 1 (favourite),
-     * or null for unrated. Deliberately coarse — repeat cooks already outrank
-     * opinion in the ranking hierarchy, so a five-point scale would only add
-     * resolution to the weaker input. One rating per recipe, not per cook: it
-     * is a standing verdict, and the per-cook history is what `cooked`
-     * already records.
+     * The reported half, in its pre-stars form: -1 (would not make again),
+     * 0 (fine), 1 (favourite), or null for unrated. Now DERIVED from `stars`
+     * (below) whenever that is set; still the only rating a row rated
+     * before stars has. One rating per recipe, not per cook: it is a
+     * standing verdict, and the per-cook history is what `cooked` already
+     * records.
      */
     rating: integer("rating"),
+    /**
+     * The person's five-star rating, 1-5 or null (recipe-model stars.ts).
+     * `rating` above is derived from it on every write that sets it (4-5 →
+     * 1, 3 → 0, 1-2 → -1), so the readers that predate stars — an app build
+     * that has not updated, the reel's and search's "loved" counts — keep
+     * working untouched; an old build writing `rating` alone clears this.
+     * A row rated before stars has null here and is SHOWN as stars from
+     * `rating`; nothing is backfilled.
+     *
+     * HAND-RUN DDL (README "Star ratings"), BEFORE the deploy that carries
+     * it: nullable, no default, so instant — and drizzle's select() names
+     * every column, so code that knows it fails every recipes query on a
+     * database without it.
+     */
+    stars: smallint("stars"),
     /**
      * OrderPreference from shared/sequence.ts, or null. HOW THIS ENTRY wants
      * its step-by-step cards ordered where the tree leaves a choice — the

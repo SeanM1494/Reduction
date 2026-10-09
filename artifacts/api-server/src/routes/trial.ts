@@ -28,6 +28,7 @@ import { Router, type Request, type Response } from "express";
 import { and, eq, isNull } from "drizzle-orm";
 import { getDb } from "../db";
 import { recipes, trials } from "@workspace/db";
+import { isValidStars, ratingWrite } from "@workspace/recipe-model";
 import { validateRecipe, type Recipe } from "../shared/layout";
 import { pruneOrderPreference } from "../shared/sequence";
 import { isValidOrder } from "./library";
@@ -61,7 +62,7 @@ trialRouter.patch("/recipe", async (req: Request, res: Response) => {
   const trialId = readTrialId(req);
   if (!trialId) return res.status(401).json({ error: "No trial on this browser." });
 
-  const { recipe, done, servings, mode, timer, cooked, rating, order } = req.body ?? {};
+  const { recipe, done, servings, mode, timer, cooked, rating, stars, order } = req.body ?? {};
 
   if (recipe !== undefined) {
     const errors = validateRecipe(recipe);
@@ -86,6 +87,8 @@ trialRouter.patch("/recipe", async (req: Request, res: Response) => {
     return res.status(400).json({ error: "cooked must be an array of timestamps." });
   if (rating !== undefined && !isValidRating(rating))
     return res.status(400).json({ error: "rating must be -1, 0, 1, or null." });
+  if (stars !== undefined && !isValidStars(stars))
+    return res.status(400).json({ error: "stars must be a whole number from 1 to 5, or null." });
   if (order !== undefined && !isValidOrder(order))
     return res.status(400).json({ error: "order must be {sections?, branches?} or null." });
 
@@ -119,7 +122,7 @@ trialRouter.patch("/recipe", async (req: Request, res: Response) => {
       if (mode !== undefined) patch.mode = mode;
       if (timer !== undefined) patch.timer = timer;
       if (cooked !== undefined) patch.cooked = cooked;
-      if (rating !== undefined) patch.rating = rating;
+      Object.assign(patch, ratingWrite({ rating, stars }));
       if (order !== undefined || recipe !== undefined) {
         // Pruned against whatever tree the row ends up with — the same
         // guarantee, in the same place, as the done reconciliation above.
@@ -150,6 +153,7 @@ trialRouter.patch("/recipe", async (req: Request, res: Response) => {
         timer: row.timer,
         cooked: row.cooked ?? [],
         rating: row.rating ?? null,
+        stars: row.stars ?? null,
         order: row.cardOrder ?? null,
         savedAt: row.createdAt ? new Date(row.createdAt).getTime() : Date.now(),
       },
