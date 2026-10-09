@@ -26,6 +26,7 @@
  * the Find tab always did.
  */
 
+import { useTabBarClearance } from '@/hooks/useTabBarClearance';
 import React, { useEffect, useState } from 'react';
 import { Keyboard, StyleSheet, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
@@ -38,15 +39,11 @@ import { BrowsePane } from '@/components/find/BrowsePane';
 import { onShare, takeShare, type SharedItem } from '@/lib/sharedPage';
 import { useColors } from '@/hooks/useColors';
 
-/** The tab bar is absolutely positioned ((tabs)/_layout.tsx); each pane
- *  pads itself past it. */
-const TAB_BAR = 84;
-
 export default function FindScreen() {
   const colors = useColors();
   const { entitlement } = useAuth();
   const insets = useSafeAreaInsets();
-  const bottomInset = TAB_BAR + insets.bottom;
+  const bottomInset = useTabBarClearance();
 
   const [tab, setTab] = useState<FindTab>('add');
   const choose = (next: FindTab) => {

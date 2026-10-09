@@ -9,6 +9,7 @@
  * a different, permitted thing).
  */
 
+import { useTabBarClearance } from '@/hooks/useTabBarClearance';
 import React, { useCallback, useState } from 'react';
 import { AccessibilityInfo, Alert, Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -52,7 +53,7 @@ export default function SettingsScreen() {
   const owner = isOwner(user);
   const [introTesting, setIntroTesting] = useState(false);
   const { entries } = useLibrary();
-  const insets = useSafeAreaInsets();
+  const tabClearance = useTabBarClearance();
   const [manageError, setManageError] = useState<string | null>(null);
   // The Removed recipes row's count, re-read whenever Settings comes back
   // into view (a restore or a delete in that screen changes it). Unknown
@@ -126,7 +127,7 @@ export default function SettingsScreen() {
         : '—';
 
   return (
-    <ScrollView showsVerticalScrollIndicator={false} showsHorizontalScrollIndicator={false} style={styles.container} contentContainerStyle={[styles.content, { paddingBottom: 84 + insets.bottom + 24 }]}>
+    <ScrollView showsVerticalScrollIndicator={false} showsHorizontalScrollIndicator={false} style={styles.container} contentContainerStyle={[styles.content, { paddingBottom: tabClearance + 24 }]}>
       <View style={styles.section}>
         <Text style={styles.label}>Account</Text>
         <Text style={styles.value}>{user?.name || user?.email || 'Signed in'}</Text>

@@ -11,6 +11,7 @@
  * its own: one row holds the sort control and the count.
  */
 
+import { useTabBarClearance } from '@/hooks/useTabBarClearance';
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, FlatList, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { router, useFocusEffect, useNavigation } from 'expo-router';
@@ -72,10 +73,9 @@ export default function LibraryScreen() {
     navigation.setOptions({ headerShown: view !== 'books' });
   }, [navigation, view]);
   const insets = useSafeAreaInsets();
-  // The tab bar is absolutely positioned (see (tabs)/_layout.tsx), so the
-  // list pads itself past it: the classic bar is 49px plus the home
-  // indicator; on web the layout pins it at 84. Over-padding is harmless.
-  const tabBarHeight = 84 + insets.bottom;
+  // The tab bar floats over the screen (see (tabs)/_layout.tsx), so the
+  // list pads itself past it; useTabBarClearance knows which layout it is.
+  const tabBarHeight = useTabBarClearance();
   // The TOP inset has to be paid by this screen, because the category strip
   // is a plain View and the FIRST thing on it. A ScrollView gets iOS's
   // automatic content-inset adjustment and the old chips-inside-the-list
