@@ -1,16 +1,23 @@
 /**
- * app/(tabs)/settings.tsx — account, plan, timers, sign out.
+ * app/(tabs)/settings.tsx — a list of thin rows, each opening a pop-up card
+ * for its action, and the account (name and plan) as the last card.
  *
- * The Plan card sells and manages through the purchase seam
- * (lib/purchase.ts): an App Store subscription is managed in the App
- * Store's own page, a web one on the website, and only an existing
+ * Sign out and Delete account live in the Account pop-up. The plan block,
+ * the purchase seam (lib/purchase.ts) and the coupon box are the SAME
+ * components as before, moved: an App Store subscription is managed in
+ * the App Store's own page, a web one on the website, and only an existing
  * subscriber ever sees a link out (guideline 3.1.1 is about steering
  * someone toward buying elsewhere; managing what they already bought is
  * a different, permitted thing).
+ *
+ * A pop-up that leads somewhere else (a screen, an Alert) does it from
+ * `onClosed`, once the Window is gone: iOS can refuse to present a Modal
+ * while another is still dismissing.
  */
 
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useRef, useState } from 'react';
 import { AccessibilityInfo, Alert, Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Feather } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router, useFocusEffect } from 'expo-router';
 import { useAuth } from '@/lib/auth-context';
@@ -19,18 +26,27 @@ import { AccountId } from '@/components/settings/AccountId';
 import { AppearanceCard } from '@/components/settings/AppearanceCard';
 import { BoxStyleCard } from '@/components/settings/BoxStyleCard';
 import { UnitPrefCard } from '@/components/settings/UnitPrefCard';
-import { loadRemoved } from '@/lib/api';
-import { removedCountLabel } from '@/lib/recipeBox';
-import { Feather } from '@expo/vector-icons';
-import { COUPONS_OFFERED, CouponBox } from '@/components/CouponBox';
 import { TimersCard } from '@/components/settings/TimersCard';
-import { SubscribeBox } from '@/components/SubscribeBox';
-import { LegalLinks } from '@/components/LegalLinks';
 import { FeedbackRow } from '@/components/settings/FeedbackRow';
 import { RateRow } from '@/components/settings/RateRow';
+import { SettingGroup, SettingRow, SettingWindow } from '@/components/settings/SettingRow';
+import { SheetButton } from '@/components/Sheet';
+import { loadRemoved } from '@/lib/api';
+import { removedCountLabel } from '@/lib/recipeBox';
+import { COUPONS_OFFERED, CouponBox } from '@/components/CouponBox';
+import { SubscribeBox } from '@/components/SubscribeBox';
+import { LegalLinks } from '@/components/LegalLinks';
 import { manageSubscription } from '@/lib/purchase';
 import { useColors, type Colors } from '@/hooks/useColors';
 import { useBooks } from '@/lib/books-context';
+import { useBoxStyle } from '@/lib/boxStyle';
+import { useThemeState } from '@/lib/theme-context';
+import { THEME_MODES } from '@/lib/themePolicy';
+import { UNIT_PREFS } from '@/lib/unitPrefPolicy';
+import { useUnitSetting } from '@/lib/unitPref';
+import { timerAlertState } from '@/lib/timerAlerts';
+import type { AlertState } from '@/lib/timerAlertPolicy';
+import { boxSummary, planSummary, timerSummary } from '@/lib/settingsSummary';
 import { requestReplay } from '@/lib/opening/launch';
 import { isOwner } from '@/lib/opening/owner';
 import { IntroTestingSheet } from '@/components/opening/IntroTestingSheet';
@@ -46,6 +62,8 @@ const updatesModule = loadUpdates();
 const versionBase = versionLine(Constants.expoConfig?.version, Constants.nativeBuildVersion);
 const version = versionBase ? versionBase + (updatesUsable(updatesModule) ? channelSuffix(updatesModule.channel) : '') : null;
 
+type Pop = 'timers' | 'measure' | 'box' | 'look' | 'how' | 'help' | 'account';
+
 export default function SettingsScreen() {
   const colors = useColors();
   const liveBookCount = useBooks().live.length;
@@ -56,16 +74,41 @@ export default function SettingsScreen() {
   const { entries } = useLibrary();
   const insets = useSafeAreaInsets();
   const [manageError, setManageError] = useState<string | null>(null);
-  // The Removed recipes row's count, re-read whenever Settings comes back
-  // into view (a restore or a delete in that screen changes it). Unknown
-  // until read; a failed read shows no count rather than a wrong one.
+  const [pop, setPop] = useState<Pop | null>(null);
+  const boxStyle = useBoxStyle();
+  const theme = useThemeState();
+  const unitPref = useUnitSetting();
+  // What a closing pop-up hands on to: run once it has finished closing.
+  const afterClose = useRef<(() => void) | null>(null);
+  const closeThen = (next: () => void) => {
+    afterClose.current = next;
+    setPop(null);
+  };
+  const handleClosed = () => {
+    const next = afterClose.current;
+    afterClose.current = null;
+    readTimers();
+    next?.();
+  };
+  const close = () => setPop(null);
+
+  // The Timers row's value, and the Removed recipes row's count, re-read
+  // whenever Settings comes back into view or a pop-up closes. Unknown until
+  // read; a failed read shows nothing rather than a wrong value.
+  const [timerState, setTimerState] = useState<AlertState | null>(null);
+  const readTimers = useCallback(() => {
+    timerAlertState()
+      .then(setTimerState)
+      .catch(() => setTimerState(null));
+  }, []);
   const [removedCount, setRemovedCount] = useState<number | null>(null);
   useFocusEffect(
     useCallback(() => {
+      readTimers();
       loadRemoved()
         .then(({ entries: removed }) => setRemovedCount(removed.length))
         .catch(() => setRemovedCount(null));
-    }, [])
+    }, [readTimers])
   );
 
   const confirmSignOut = () => {
@@ -116,189 +159,58 @@ export default function SettingsScreen() {
     );
   };
 
-  const remaining = entitlement ? Math.max(0, entitlement.allowance - entitlement.used) : 0;
-  const planLabel = entitlement?.subscribed
-    ? 'Unlimited recipes'
-    : entitlement?.reason === 'within_allowance'
-      ? remaining === 1
-        ? '1 free recipe left'
-        : `${remaining} free recipes left`
-      : entitlement?.reason === 'exhausted'
-        ? 'Free recipes used'
-        : '—';
+  const planLabel = planSummary(entitlement);
+  const unitLabel = UNIT_PREFS.find((u) => u.pref === unitPref)?.label ?? 'As written';
+  const themeLabel = THEME_MODES.find((m) => m.mode === theme?.mode)?.label ?? 'System';
+  const who = user?.name || user?.email || 'Signed in';
 
   return (
     <ScrollView showsVerticalScrollIndicator={false} showsHorizontalScrollIndicator={false} style={styles.container} contentContainerStyle={[styles.content, { paddingBottom: 84 + insets.bottom + 24 }]}>
-      <View style={styles.section}>
-        <Text style={styles.label}>Account</Text>
-        <Text style={styles.value}>{user?.name || user?.email || 'Signed in'}</Text>
-        {user?.email && user?.name ? <Text style={styles.subvalue}>{user.email}</Text> : null}
-        <Text style={styles.subvalue} testID="settings-recipe-count">
-          {entries.length} {entries.length === 1 ? 'recipe' : 'recipes'} in your library
-        </Text>
-        {user?.id ? <AccountId id={user.id} /> : null}
-      </View>
+      <SettingGroup title="Cooking">
+        <SettingRow label="Timers" value={timerSummary(timerState)} onPress={() => setPop('timers')} testID="settings-timers" />
+        <SettingRow label="Measurements" value={unitLabel} onPress={() => setPop('measure')} testID="settings-measure" />
+      </SettingGroup>
 
-      <View style={styles.section}>
-        <Text style={styles.label}>Plan</Text>
-        <Text style={styles.value}>{planLabel}</Text>
-        {entitlement?.status === 'grace' ? (
-          // Grace is the provider's own retry window, not a timer this app
-          // runs, so the copy promises no number of days.
-          <Text style={styles.subvalue}>
-            Your last payment didn't go through. It will be retried, and nothing changes while it is.
-          </Text>
-        ) : null}
-        {entitlement?.subscribed ? (
-          entitlement.provider === 'apple' ? (
-            // An App Store subscription is managed where it was bought.
-            <Pressable
-              style={styles.linkRow}
-              onPress={async () => {
-                setManageError(null);
-                const out = await manageSubscription();
-                if (out.status === 'error') setManageError(out.message);
-              }}
-              testID="settings-manage-apple"
-            >
-              <Text style={styles.link}>Manage your subscription</Text>
-            </Pressable>
-          ) : (
-            // Only shown to an already-active subscriber managing an
-            // existing plan — never to someone without one.
-            <Pressable
-              style={styles.linkRow}
-              onPress={() => Linking.openURL(webUrl || 'https://recipereduction.com')}
-            >
-              <Text style={styles.link}>Manage your plan on the website</Text>
-            </Pressable>
-          )
-        ) : (
-          <>
-            {/* Nothing on a host that cannot sell; the plans on one that can. */}
-            <View style={styles.coupon}>
-              <SubscribeBox />
-            </View>
-            {/* The second place a code can go (the first is the wall):
-                someone given one last week comes here looking for it.
-                Never on an iPhone (CouponBox.tsx says why). */}
-            {COUPONS_OFFERED ? (
-              <View style={styles.coupon}>
-                <CouponBox />
-              </View>
-            ) : null}
-          </>
-        )}
-        {manageError ? <Text style={styles.error}>{manageError}</Text> : null}
-      </View>
+      <SettingGroup title="Your library">
+        <SettingRow label="Recipe box" value={boxSummary(boxStyle, liveBookCount)} onPress={() => setPop('box')} testID="settings-box" />
+        <SettingRow
+          label="Removed recipes"
+          value={removedCount === null ? undefined : removedCountLabel(removedCount)}
+          onPress={() => router.push('/removed')}
+          testID="settings-removed"
+        />
+      </SettingGroup>
 
-      <TimersCard />
-
-      <BoxStyleCard />
-
-      <UnitPrefCard />
-
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel={`Manage books, ${liveBookCount} ${liveBookCount === 1 ? 'book' : 'books'}`}
-        onPress={() => router.push('/books')}
-        style={({ pressed }) => [styles.section, styles.navRow, pressed && styles.navRowPressed]}
-        testID="settings-books"
-      >
-        <View style={styles.navText}>
-          <Text style={styles.label}>Manage books</Text>
-          <Text style={styles.value}>{liveBookCount === 1 ? '1 book' : `${liveBookCount} books`}</Text>
-        </View>
-        <Feather name="chevron-right" size={20} color={colors.mutedForeground} />
-      </Pressable>
-
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel={`Removed recipes${removedCount !== null ? `, ${removedCountLabel(removedCount)}` : ''}`}
-        onPress={() => router.push('/removed')}
-        style={({ pressed }) => [styles.section, styles.navRow, pressed && styles.navRowPressed]}
-        testID="settings-removed"
-      >
-        <View style={styles.navText}>
-          <Text style={styles.label}>Removed recipes</Text>
-          <Text style={styles.value} testID="settings-removed-count">
-            {removedCount === null ? ' ' : removedCountLabel(removedCount)}
-          </Text>
-        </View>
-        <Feather name="chevron-right" size={20} color={colors.mutedForeground} />
-      </Pressable>
-
-      {/* Signed out, the demo is the first screen; signed in, this is the
-          way back to it (app/demo.tsx). */}
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel="How it works: replay the guacamole demo"
-        onPress={() => router.push('/demo')}
-        style={({ pressed }) => [styles.section, styles.navRow, pressed && styles.navRowPressed]}
-        testID="settings-demo"
-      >
-        <View style={styles.navText}>
-          <Text style={styles.label}>How it works</Text>
-          <Text style={styles.value}>Replay the guacamole demo</Text>
-        </View>
-        <Feather name="chevron-right" size={20} color={colors.mutedForeground} />
-      </Pressable>
-
-      {/* Plays the opening sequence over this screen and changes nothing
-          about when it next plays by itself (lib/opening/launch.ts). A long
-          press is the owner's testing sheet, and nobody else's. */}
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel="Replay intro: the opening sequence"
-        onPress={() => {
-          void AccessibilityInfo.isReduceMotionEnabled()
-            .catch(() => false)
-            .then((reduce) => requestReplay(reduce ? 'static' : 'full'));
-        }}
-        onLongPress={owner ? () => setIntroTesting(true) : undefined}
-        delayLongPress={600}
-        style={({ pressed }) => [styles.section, styles.navRow, pressed && styles.navRowPressed]}
-        testID="settings-intro"
-      >
-        <View style={styles.navText}>
-          <Text style={styles.label}>Replay intro</Text>
-          <Text style={styles.value}>The opening, from the start</Text>
-        </View>
-        <Feather name="play" size={18} color={colors.mutedForeground} />
-      </Pressable>
+      <SettingGroup title="App">
+        <SettingRow label="Appearance" value={themeLabel} onPress={() => setPop('look')} testID="settings-look" />
+        {/* A long press is the owner's intro testing sheet, and nobody else's. */}
+        <SettingRow
+          label="How it works"
+          onPress={() => setPop('how')}
+          onLongPress={owner ? () => setIntroTesting(true) : undefined}
+          testID="settings-how"
+        />
+        <SettingRow label="Help and legal" onPress={() => setPop('help')} testID="settings-help" />
+      </SettingGroup>
       {owner ? <IntroTestingSheet open={introTesting} onClose={() => setIntroTesting(false)} /> : null}
 
-      <FeedbackRow styles={styles} />
-
-      <RateRow styles={styles} />
-
-      <AppearanceCard />
-
-      <View style={styles.legal}>
-        <LegalLinks />
-      </View>
-
-      {/* .rd-btn-danger: a real button on the card colour, not a transparent
-          box whose only edge is a line within a shade of the page. */}
       <Pressable
         accessibilityRole="button"
-        style={({ pressed }) => [styles.signOutButton, pressed && styles.signOutPressed]}
-        onPress={confirmSignOut}
-        testID="settings-sign-out"
+        accessibilityLabel={`Account, ${who}, ${planLabel}`}
+        onPress={() => setPop('account')}
+        style={({ pressed }) => [styles.account, pressed && styles.accountPressed]}
+        testID="settings-account"
       >
-        <Text style={styles.signOutText}>Sign out</Text>
-      </Pressable>
-
-      {/* Apple's 5.1.1(v): an account that can be created in the app can be
-          deleted in it. Quiet — plain text, no card — so it is findable
-          without being the loudest thing on the screen. */}
-      <Pressable
-        accessibilityRole="button"
-        style={({ pressed }) => [styles.deleteRow, pressed && { opacity: 0.6 }]}
-        onPress={confirmDeleteAccount}
-        testID="settings-delete-account"
-      >
-        <Text style={styles.deleteText}>Delete account</Text>
+        <View style={styles.accountText}>
+          <Text style={styles.label}>Account</Text>
+          <Text style={styles.value} numberOfLines={1}>
+            {who}
+          </Text>
+          <Text style={styles.subvalue} numberOfLines={1} testID="settings-plan-line">
+            {planLabel}
+          </Text>
+        </View>
+        <Feather name="chevron-right" size={20} color={colors.mutedForeground} />
       </Pressable>
 
       {/* The binary, for everyone: what a support email and the App Store
@@ -309,57 +221,176 @@ export default function SettingsScreen() {
           {version}
         </Text>
       ) : null}
+
+      <SettingWindow open={pop === 'timers'} title="Timers" onClose={close} onClosed={handleClosed} testID="pop-timers">
+        <TimersCard bare onChange={setTimerState} />
+      </SettingWindow>
+
+      <SettingWindow open={pop === 'measure'} title="Measurements" onClose={close} onClosed={handleClosed} testID="pop-measure">
+        <UnitPrefCard bare />
+      </SettingWindow>
+
+      <SettingWindow open={pop === 'box'} title="Recipe box" onClose={close} onClosed={handleClosed} testID="pop-box">
+        <BoxStyleCard bare />
+        <SheetButton
+          label={`Manage books (${liveBookCount})`}
+          onPress={() => closeThen(() => router.push('/books'))}
+          testID="settings-books"
+        />
+      </SettingWindow>
+
+      <SettingWindow open={pop === 'look'} title="Appearance" onClose={close} onClosed={handleClosed} testID="pop-look">
+        <AppearanceCard bare />
+      </SettingWindow>
+
+      <SettingWindow open={pop === 'how'} title="How it works" onClose={close} onClosed={handleClosed} testID="pop-how">
+        <Text style={styles.sub}>Watch the guacamole demo again, or play the opening from the start.</Text>
+        <SheetButton label="Replay the demo" onPress={() => closeThen(() => router.push('/demo'))} testID="settings-demo" />
+        <SheetButton
+          label="Replay the intro"
+          onPress={() =>
+            closeThen(() => {
+              void AccessibilityInfo.isReduceMotionEnabled()
+                .catch(() => false)
+                .then((reduce) => requestReplay(reduce ? 'static' : 'full'));
+            })
+          }
+          testID="settings-intro"
+        />
+      </SettingWindow>
+
+      <SettingWindow open={pop === 'help'} title="Help and legal" onClose={close} onClosed={handleClosed} testID="pop-help">
+        <FeedbackRow styles={plainRows(colors)} />
+        <RateRow styles={plainRows(colors)} />
+        <View style={styles.legal}>
+          <LegalLinks />
+        </View>
+      </SettingWindow>
+
+      <SettingWindow open={pop === 'account'} title="Account" onClose={close} onClosed={handleClosed} testID="pop-account">
+        <View style={styles.block}>
+          <Text style={styles.value}>{who}</Text>
+          {user?.email && user?.name ? <Text style={styles.subvalue}>{user.email}</Text> : null}
+          <Text style={styles.subvalue} testID="settings-recipe-count">
+            {entries.length} {entries.length === 1 ? 'recipe' : 'recipes'} in your library
+          </Text>
+        </View>
+
+        <View style={styles.block}>
+          <Text style={styles.label}>Plan</Text>
+          <Text style={styles.value}>{planLabel}</Text>
+          {entitlement?.status === 'grace' ? (
+            // Grace is the provider's own retry window, not a timer this app
+            // runs, so the copy promises no number of days.
+            <Text style={styles.subvalue}>
+              Your last payment didn't go through. It will be retried, and nothing changes while it is.
+            </Text>
+          ) : null}
+          {entitlement?.subscribed ? (
+            entitlement.provider === 'apple' ? (
+              // An App Store subscription is managed where it was bought.
+              <Pressable
+                style={styles.linkRow}
+                onPress={async () => {
+                  setManageError(null);
+                  const out = await manageSubscription();
+                  if (out.status === 'error') setManageError(out.message);
+                }}
+                testID="settings-manage-apple"
+              >
+                <Text style={styles.link}>Manage your subscription</Text>
+              </Pressable>
+            ) : (
+              // Only shown to an already-active subscriber managing an
+              // existing plan — never to someone without one.
+              <Pressable style={styles.linkRow} onPress={() => Linking.openURL(webUrl || 'https://recipereduction.com')}>
+                <Text style={styles.link}>Manage your plan on the website</Text>
+              </Pressable>
+            )
+          ) : (
+            <>
+              {/* Nothing on a host that cannot sell; the plans on one that can. */}
+              <View style={styles.coupon}>
+                <SubscribeBox />
+              </View>
+              {/* The second place a code can go (the first is the wall):
+                  someone given one last week comes here looking for it.
+                  Never on an iPhone (CouponBox.tsx says why). */}
+              {COUPONS_OFFERED ? (
+                <View style={styles.coupon}>
+                  <CouponBox />
+                </View>
+              ) : null}
+            </>
+          )}
+          {manageError ? <Text style={styles.error}>{manageError}</Text> : null}
+        </View>
+
+        {user?.id ? <AccountId id={user.id} /> : null}
+
+        <SheetButton label="Sign out" onPress={() => closeThen(confirmSignOut)} testID="settings-sign-out" />
+
+        {/* Apple's 5.1.1(v): an account that can be created in the app can be
+            deleted in it. Quiet — plain text, no card — so it is findable
+            without being the loudest thing in the pop-up. */}
+        <Pressable
+          accessibilityRole="button"
+          style={({ pressed }) => [styles.deleteRow, pressed && { opacity: 0.6 }]}
+          onPress={() => closeThen(confirmDeleteAccount)}
+          testID="settings-delete-account"
+        >
+          <Text style={styles.deleteText}>Delete account</Text>
+        </Pressable>
+      </SettingWindow>
     </ScrollView>
   );
+}
+
+/** FeedbackRow and RateRow take the caller's row styles; inside a pop-up
+ *  they are plain rows on the card, split by a hairline. */
+function plainRows(colors: Colors) {
+  return StyleSheet.create({
+    section: { paddingVertical: 0 },
+    navRow: { flexDirection: 'row', alignItems: 'center', minHeight: 56, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border },
+    navRowPressed: { opacity: 0.6 },
+    navText: { flex: 1, gap: 2 },
+    label: { fontFamily: fonts.headingMedium, fontSize: 16, color: colors.foreground },
+    value: { fontSize: 13, color: colors.mutedForeground },
+  });
 }
 
 function makeStyles(colors: Colors) {
   return StyleSheet.create({
     container: { flex: 1, backgroundColor: colors.background },
     content: { padding: 20, gap: 16 },
-    // .rd-settings-card: card colour, hairline in `border`, 15px radius and
-    // the card shadow — on parchment the shadow is what draws the edge.
-    section: {
+    // The account card: the one tall element, last on the list.
+    account: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      minHeight: 72,
       backgroundColor: colors.card,
       borderRadius: colors.radiusCard,
       borderWidth: 1,
       borderColor: colors.border,
-      paddingVertical: 16,
+      paddingVertical: 14,
       paddingHorizontal: 18,
-      gap: 4,
       ...cardShadow,
     },
+    accountPressed: { borderColor: colors.borderStrong },
+    accountText: { flex: 1, gap: 2 },
+    block: { gap: 4 },
     // The meta label in the app's mono, tracked and faint — the same voice
     // as .rd-card-meta and .rd-lib-count, not the system sans.
     label: { fontFamily: fonts.mono, fontSize: 11, letterSpacing: 0.44, color: colors.faint, textTransform: 'uppercase' },
     value: { fontFamily: fonts.headingMedium, fontSize: 17, color: colors.foreground, marginTop: 2 },
     subvalue: { fontSize: 13, color: colors.mutedForeground },
+    sub: { fontSize: 14, lineHeight: 20, color: colors.mutedForeground },
     linkRow: { marginTop: 6, minHeight: 44, justifyContent: 'center' },
     coupon: { marginTop: 12 },
     error: { fontSize: 13.5, lineHeight: 19, color: colors.dangerInk, marginTop: 6 },
     link: { fontSize: 14, color: colors.coolInk, fontFamily: fonts.headingMedium, textDecorationLine: 'underline' },
-    signOutButton: {
-      minHeight: 48,
-      backgroundColor: colors.card,
-      borderWidth: 1,
-      borderColor: colors.border,
-      borderRadius: colors.radius,
-      paddingVertical: 12,
-      alignItems: 'center',
-      justifyContent: 'center',
-      shadowColor: '#3a2418',
-      shadowOpacity: 0.07,
-      shadowRadius: 2,
-      shadowOffset: { width: 0, height: 1 },
-      elevation: 1,
-    },
-    signOutPressed: { borderColor: colors.borderStrong },
-    signOutText: { color: colors.dangerInk, fontFamily: fonts.headingMedium, fontSize: 15 },
     legal: { paddingHorizontal: 4 },
-    navRow: { flexDirection: 'row', alignItems: 'center', minHeight: 64 },
-    navRowPressed: { borderColor: colors.borderStrong },
-    navText: { flex: 1, gap: 4 },
-    deleteRow: { minHeight: 44, alignItems: 'center', justifyContent: 'center', marginTop: 4 },
+    deleteRow: { minHeight: 44, alignItems: 'center', justifyContent: 'center' },
     version: { color: colors.faint, fontSize: 13, textAlign: 'center', marginTop: 4 },
     deleteText: { color: colors.mutedForeground, fontSize: 14, textDecorationLine: 'underline' },
   });

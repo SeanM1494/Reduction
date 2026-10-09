@@ -24,7 +24,8 @@ import type { AlertState } from '@/lib/timerAlertPolicy';
 import { useColors, type Colors } from '@/hooks/useColors';
 import { cardShadow, fonts } from '@/constants/colors';
 
-export function TimersCard() {
+/** `bare`: inside a Settings pop-up, which supplies the card and the title. */
+export function TimersCard({ bare = false, onChange }: { bare?: boolean; onChange?: (state: AlertState) => void } = {}) {
   const colors = useColors();
   const styles = makeStyles(colors);
   const [state, setState] = useState<AlertState | 'loading'>('loading');
@@ -51,7 +52,9 @@ export function TimersCard() {
     setBusy(true);
     setError(null);
     try {
-      setState(await change());
+      const next = await change();
+      setState(next);
+      onChange?.(next);
       const c = await timerAlertCard();
       setAlarms(c.alarms);
     } catch (e) {
@@ -142,8 +145,8 @@ export function TimersCard() {
   }
 
   return (
-    <View style={styles.card} testID={`timers-card-${state}`}>
-      <Text style={styles.label}>Timers</Text>
+    <View style={bare ? undefined : styles.card} testID={`timers-card-${state}`}>
+      {bare ? null : <Text style={styles.label}>Timers</Text>}
       {body}
     </View>
   );

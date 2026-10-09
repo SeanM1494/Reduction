@@ -11,13 +11,14 @@ import { setUnitPref, useUnitSetting } from '@/lib/unitPref';
 import { useColors, type Colors } from '@/hooks/useColors';
 import { cardShadow, fonts } from '@/constants/colors';
 
-export function UnitPrefCard() {
+/** `bare`: inside a Settings pop-up, which supplies the card and the title. */
+export function UnitPrefCard({ bare = false }: { bare?: boolean } = {}) {
   const colors = useColors();
   const styles = makeStyles(colors);
   const pref = useUnitSetting();
   return (
-    <View style={styles.section} testID="unit-pref-card">
-      <Text style={styles.label}>Measurements</Text>
+    <View style={bare ? undefined : styles.section} testID="unit-pref-card">
+      {bare ? null : <Text style={styles.label}>Measurements</Text>}
       <View style={[optionRow, styles.row]} accessibilityRole="radiogroup" accessibilityLabel="Measurements">
         {UNIT_PREFS.map(({ pref: p, label }) => (
           <SheetOption key={p} label={label} current={pref === p} onPress={() => setUnitPref(p)} role="radio" testID={`unit-pref-${p}`} />
