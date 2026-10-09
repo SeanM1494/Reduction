@@ -49,16 +49,12 @@ import { createCookVisit, type CookActivity, type CookVisit } from '@/lib/cookCo
 import { maybeAskForRating, noteFinishedCook } from '@/lib/ratingPrompt';
 import { BookPicker } from '@/components/books/BookPicker';
 import { titleProblem } from '@/shared/title';
-import { recipeHasAltUnits } from '@/shared/amounts';
-import { flipUnitPref, useUnitPref } from '@/lib/unitPref';
-import { flipLabel, flipTarget } from '@/lib/unitPrefPolicy';
 
 export default function RecipeDetailScreen() {
   // `view` is the Recipe Box preview's choice of tab for this visit.
   const { id, view: viewParam } = useLocalSearchParams<{ id: string; view?: string }>();
   const initialView = viewParam === 'cook' || viewParam === 'overview' ? viewParam : undefined;
   const colors = useColors();
-  const unitPref = useUnitPref();
   const styles = makeStyles(colors);
   const { draft, setDraft, getEntry, update, remove, restore, saveRecipe, notice, clearNotice, queued } = useLibrary();
   const toast = useToast();
@@ -76,8 +72,7 @@ export default function RecipeDetailScreen() {
   const [saving, setSaving] = useState(false);
   const [draftServings, setDraftServings] = useState<number | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
-  const { view: shoppingView, openAddToList } = useShoppingList();
-  const shoppingCount = shoppingView.items.length;
+  const { openAddToList } = useShoppingList();
   const [mealSheetOpen, setMealSheetOpen] = useState(false);
   const [photoSheetOpen, setPhotoSheetOpen] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -96,6 +91,12 @@ export default function RecipeDetailScreen() {
   const menuThen = (next: () => void) => {
     afterMenu.current = next;
     setMenuOpen(false);
+  };
+  const [detailsOpen, setDetailsOpen] = useState(false);
+  const afterDetails = useRef<(() => void) | null>(null);
+  const detailsThen = (next: () => void) => {
+    afterDetails.current = next;
+    setDetailsOpen(false);
   };
   const [deleting, setDeleting] = useState(false);
   const [syncError, setSyncError] = useState<string | null>(null);
@@ -479,39 +480,13 @@ export default function RecipeDetailScreen() {
         </Text>
         <View style={styles.menu} accessibilityRole="menu">
           <MenuItem label="Edit recipe" onPress={() => menuThen(() => askScreen('edit'))} colors={colors} testID="menu-edit" />
-          <MenuItem label="Rename" onPress={() => menuThen(() => setTitleOpen(true))} colors={colors} testID="menu-rename" />
-          {booksAvailable === true && liveBooks.length > 1 ? (
-            <MenuItem label="Move to another book" onPress={() => menuThen(() => setBookPickerOpen(true))} colors={colors} testID="menu-move-book" />
-          ) : null}
           <MenuItem label="Reorder steps" onPress={() => menuThen(() => askScreen('reorder'))} colors={colors} testID="menu-reorder" />
-          {recipeHasAltUnits(entry.recipe) ? (
-            <MenuItem
-              label={flipLabel(flipTarget(entry.recipe, unitPref))}
-              onPress={() => menuThen(() => flipUnitPref(flipTarget(entry.recipe, unitPref)))}
-              colors={colors}
-              testID="menu-units"
-            />
-          ) : null}
           <MenuItem label="Servings" onPress={() => menuThen(() => askScreen('servings'))} colors={colors} testID="menu-servings" />
-          {/* A rating is an opinion about a dish, so it is offered once the
-              recipe has been cooked — before that it would be about a page. */}
-          {entry.cooked?.length ? (
-            <MenuItem label="Rating" onPress={() => menuThen(() => askScreen('rating'))} colors={colors} testID="menu-rating" />
-          ) : null}
-          {/* The way back to the list once something is on it; adding is
-              the button beside Clear progress (RecipeScreen). */}
-          {shoppingCount > 0 ? (
-            <MenuItem
-              label={`Shopping list (${shoppingCount})`}
-              onPress={() => menuThen(() => router.push('/shopping-list'))}
-              colors={colors}
-              testID="menu-shopping-list"
-            />
-          ) : null}
-          <MenuItem label="Notes" onPress={() => menuThen(() => askScreen('notes'))} colors={colors} testID="menu-notes" />
-          <MenuItem label="Meal types" onPress={() => menuThen(() => setMealSheetOpen(true))} colors={colors} testID="menu-meal-types" />
-          <MenuItem label="Photo" onPress={() => menuThen(() => setPhotoSheetOpen(true))} colors={colors} testID="menu-photo" />
-          <MenuItem label="Original recipe" onPress={() => menuThen(() => router.push(`/original/${entry.id}`))} colors={colors} testID="menu-original" />
+          {/* Rename, Notes, Original recipe, the shopping list and the unit
+              flip are not here: the page has the title, the notes row, the
+              original row and the cart, and Settings has Measurements. What
+              is left about the recipe itself is one step further in. */}
+          <MenuItem label="Recipe details" onPress={() => menuThen(() => setDetailsOpen(true))} colors={colors} testID="menu-details" />
           <MenuItem label="Delete recipe" danger onPress={() => menuThen(() => setConfirmDelete(true))} colors={colors} testID="menu-delete" />
         </View>
         <Pressable
@@ -519,6 +494,44 @@ export default function RecipeDetailScreen() {
           onPress={() => setMenuOpen(false)}
           style={({ pressed }) => [styles.menuClose, pressed && styles.menuItemPressed]}
           testID="menu-close"
+        >
+          <Text style={styles.menuCloseText}>Close</Text>
+        </Pressable>
+      </Window>
+
+      {/* Recipe details: the per-recipe things that have no control on the
+          page. Same rule as the menu: the next dialog opens from onClosed. */}
+      <Window
+        open={detailsOpen}
+        onClose={() => setDetailsOpen(false)}
+        onClosed={() => {
+          const next = afterDetails.current;
+          afterDetails.current = null;
+          next?.();
+        }}
+        maxWidth={360}
+        testID="recipe-details-window"
+      >
+        <Text style={styles.menuTitle} accessibilityRole="header">
+          Recipe details
+        </Text>
+        <View style={styles.menu} accessibilityRole="menu">
+          {/* A rating is an opinion about a dish, so it is offered once the
+              recipe has been cooked. */}
+          {entry.cooked?.length ? (
+            <MenuItem label="Rating" onPress={() => detailsThen(() => askScreen('rating'))} colors={colors} testID="details-rating" />
+          ) : null}
+          <MenuItem label="Meal types" onPress={() => detailsThen(() => setMealSheetOpen(true))} colors={colors} testID="details-meal-types" />
+          <MenuItem label="Photo" onPress={() => detailsThen(() => setPhotoSheetOpen(true))} colors={colors} testID="details-photo" />
+          {booksAvailable === true && liveBooks.length > 1 ? (
+            <MenuItem label="Move to another book" onPress={() => detailsThen(() => setBookPickerOpen(true))} colors={colors} testID="details-move-book" />
+          ) : null}
+        </View>
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => setDetailsOpen(false)}
+          style={({ pressed }) => [styles.menuClose, pressed && styles.menuItemPressed]}
+          testID="details-close"
         >
           <Text style={styles.menuCloseText}>Close</Text>
         </Pressable>
