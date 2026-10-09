@@ -24,7 +24,8 @@
  */
 
 import React from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import { ShoppingCartButton } from '@/components/shopping/ShoppingCartButton';
 import { useColors, type Colors } from '@/hooks/useColors';
 import { fonts } from '@/constants/colors';
 
@@ -39,6 +40,9 @@ export const FIND_TABS: ReadonlyArray<{ id: FindTab; label: string }> = [
 export function FolderTabs({ tab, onChange }: { tab: FindTab; onChange: (t: FindTab) => void }) {
   const colors = useColors();
   const styles = makeStyles(colors);
+  // The three tabs take 279pt of an iPhone SE's 288pt, so there the cart
+  // has no room; every other phone has it at the row's right edge.
+  const { width } = useWindowDimensions();
   return (
     <View style={styles.row} accessibilityRole="tablist" testID="find-tabs">
       {FIND_TABS.map(({ id, label }) => {
@@ -64,6 +68,11 @@ export function FolderTabs({ tab, onChange }: { tab: FindTab; onChange: (t: Find
           </Pressable>
         );
       })}
+      {width >= 360 ? (
+        <View style={styles.cart}>
+          <ShoppingCartButton testID="find-shopping-cart" />
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -95,6 +104,7 @@ function makeStyles(colors: Colors) {
     // The folders behind: their own tokens (Oct 1), so the dark palette
     // sets them — the cell colour with a darker edge than the cell rules.
     tabBack: { backgroundColor: colors.tabBack, borderColor: colors.tabBackLine },
+    cart: { marginLeft: 'auto', marginBottom: 2 },
     tabPressed: { borderColor: colors.borderStrong },
     label: { fontFamily: fonts.heading, fontSize: 15 },
   });

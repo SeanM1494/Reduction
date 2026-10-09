@@ -15,6 +15,7 @@
 import React, { useMemo, useState } from 'react';
 import { Platform, Pressable, ScrollView, Share, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
+import { Stack } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useShoppingList } from '@/lib/shopping-context';
 import { useLibrary } from '@/lib/library-context';
@@ -83,6 +84,23 @@ export default function ShoppingListScreen() {
 
   return (
     <View style={styles.screen}>
+      {/* Share is also up here, so a long list needs no scroll to send it. */}
+      <Stack.Screen
+        options={{
+          headerRight: () =>
+            view.items.length > 0 ? (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Share list"
+                onPress={share}
+                style={({ pressed }) => [styles.headerShare, pressed && { opacity: 0.6 }]}
+                testID="shopping-share-top"
+              >
+                <Feather name="share" size={20} color={colors.foreground} />
+              </Pressable>
+            ) : null,
+        }}
+      />
       {tabs}
       <ScrollView
         contentContainerStyle={[styles.body, { paddingBottom: 24 + insets.bottom }]}
@@ -326,6 +344,7 @@ function makeStyles(colors: Colors) {
     },
     primaryText: { fontSize: 16, fontWeight: '600', color: colors.primaryForeground },
     error: { fontSize: 14, color: colors.dangerInk, textAlign: 'center' },
+    headerShare: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
     clear: { minHeight: 44, alignItems: 'center', justifyContent: 'center' },
     clearText: { fontSize: 15, color: colors.dangerInk },
     recipeRow: { flexDirection: 'row', alignItems: 'center', gap: 10, minHeight: 60, paddingVertical: 8 },

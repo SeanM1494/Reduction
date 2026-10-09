@@ -11,6 +11,7 @@
  * its own: one row holds the sort control and the count.
  */
 
+import { ShoppingCartButton } from '@/components/shopping/ShoppingCartButton';
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, FlatList, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { router, useFocusEffect, useNavigation } from 'expo-router';
@@ -199,6 +200,7 @@ export default function LibraryScreen() {
         <Text style={styles.count} testID="library-count">
           {countLabel}
         </Text>
+        <ShoppingCartButton testID="library-shopping-cart" />
       </View>
     </View>
   );

@@ -27,6 +27,7 @@
  * Every number and rule is in lib/recipeBox.ts, under test.
  */
 
+import { ShoppingCartButton } from '@/components/shopping/ShoppingCartButton';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Keyboard, Platform, Pressable, StyleSheet, Text, View, type LayoutChangeEvent } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
@@ -297,6 +298,7 @@ export function RecipeBox({ entries, sort, onOpenSort, onOpenRecipe, onAddRecipe
             >
               <Feather name="layers" size={18} color={colors.foreground} />
             </Pressable>
+            <ShoppingCartButton testID="box-shopping-cart" />
           </View>
         </View>
       </View>

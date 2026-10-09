@@ -18,6 +18,7 @@
  * screen can produce (see the web's "Writes are confirmed, not assumed").
  */
 
+import { ShoppingCartButton } from '@/components/shopping/ShoppingCartButton';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Stack, router, useLocalSearchParams, useNavigation } from 'expo-router';
@@ -353,6 +354,8 @@ export default function RecipeDetailScreen() {
           headerTitle: () => <TitleButton title={recipeTitle} onPress={() => setTitleOpen(true)} />,
           gestureEnabled: false,
           headerRight: () => (
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+            <ShoppingCartButton testID="recipe-shopping-cart" />
             <Pressable
               accessibilityRole="button"
               accessibilityLabel="More actions"
@@ -363,6 +366,7 @@ export default function RecipeDetailScreen() {
             >
               <Feather name="more-vertical" size={22} color={colors.foreground} />
             </Pressable>
+            </View>
           ),
         }}
       />
