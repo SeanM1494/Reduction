@@ -22,6 +22,7 @@ import {
   useFonts,
 } from '@expo-google-fonts/space-grotesk';
 import { SpaceMono_400Regular, SpaceMono_700Bold } from '@expo-google-fonts/space-mono';
+import { CookingProvider } from '@/lib/cooking-context';
 import { Stack, router, usePathname, useSegments } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { configureNotifications, onNotificationTap } from '@/lib/push';
@@ -221,7 +222,9 @@ function Gate() {
         <ToastProvider>
           {/* Inside the toast, which its "View list" note rides on. */}
           <ShoppingListProvider>
-            <RootLayoutNav />
+            <CookingProvider>
+              <RootLayoutNav />
+            </CookingProvider>
           </ShoppingListProvider>
         </ToastProvider>
       </BooksProvider>

@@ -24,6 +24,8 @@ import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-nati
 import { Stack, router, useLocalSearchParams, useNavigation } from 'expo-router';
 import { usePreventRemove } from 'expo-router/react-navigation';
 import { Feather } from '@expo/vector-icons';
+import { SwitchStrip } from '@/components/cooking/SwitchStrip';
+import { useCooking } from '@/lib/cooking-context';
 import { useLibrary, type EntryPatch } from '@/lib/library-context';
 import { RecipeScreen, type RecipeRequest } from '@/components/RecipeScreen';
 import { MealTypeSheet } from '@/components/recipe/MealTypeSheet';
@@ -56,6 +58,7 @@ export default function RecipeDetailScreen() {
   const initialView = viewParam === 'cook' || viewParam === 'overview' ? viewParam : undefined;
   const colors = useColors();
   const styles = makeStyles(colors);
+  const { cookNow } = useCooking();
   const { draft, setDraft, getEntry, update, remove, restore, saveRecipe, notice, clearNotice, queued } = useLibrary();
   const toast = useToast();
   const { bookFor, available: booksAvailable, live: liveBooks } = useBooks();
@@ -372,6 +375,7 @@ export default function RecipeDetailScreen() {
         }}
       />
       <RecipeScreen
+        cookFooter={<SwitchStrip currentId={entry.id} />}
         initialView={initialView}
         recipe={entry.recipe}
         onOpenOriginal={() => router.push(`/original/${entry.id}`)}
@@ -480,6 +484,7 @@ export default function RecipeDetailScreen() {
         </Text>
         <View style={styles.menu} accessibilityRole="menu">
           <MenuItem label="Edit recipe" onPress={() => menuThen(() => askScreen('edit'))} colors={colors} testID="menu-edit" />
+          <MenuItem label="Cook now" onPress={() => menuThen(() => { cookNow(entry.id); toast({ message: 'Added to Cooking now' }); })} colors={colors} testID="menu-cook-now" />
           <MenuItem label="Reorder steps" onPress={() => menuThen(() => askScreen('reorder'))} colors={colors} testID="menu-reorder" />
           <MenuItem label="Servings" onPress={() => menuThen(() => askScreen('servings'))} colors={colors} testID="menu-servings" />
           {/* Rename, Notes, Original recipe, the shopping list and the unit
