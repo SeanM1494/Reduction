@@ -21,6 +21,7 @@ import {
   useFonts,
 } from '@expo-google-fonts/space-grotesk';
 import { SpaceMono_400Regular, SpaceMono_700Bold } from '@expo-google-fonts/space-mono';
+import { CookingProvider } from '@/lib/cooking-context';
 import { Stack, router, usePathname, useSegments } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { configureNotifications, onNotificationTap } from '@/lib/push';
@@ -200,7 +201,9 @@ function Gate() {
         {/* Around the navigator, so a snackbar outlives the screen that raised
             it — a removed recipe's Undo waits in the library it lands in. */}
         <ToastProvider>
-          <RootLayoutNav />
+          <CookingProvider>
+            <RootLayoutNav />
+          </CookingProvider>
         </ToastProvider>
       </BooksProvider>
     </LibraryProvider>

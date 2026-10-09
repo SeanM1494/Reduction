@@ -8,6 +8,7 @@ import { isLiquidGlassAvailable } from 'expo-glass-effect';
 import { Tabs } from 'expo-router';
 import { NativeTabs } from 'expo-router/unstable-native-tabs';
 import { SymbolView } from 'expo-symbols';
+import { CookingPill } from '@/components/cooking/CookingPill';
 
 // IMPORTANT: iOS 26 uses NativeTabs for native tabs with liquid glass support.
 // NativeTabs intentionally does NOT use custom design tokens — liquid glass
@@ -115,8 +116,13 @@ function ClassicTabLayout() {
 }
 
 export default function TabLayout() {
-  if (isLiquidGlassAvailable()) {
-    return <NativeTabLayout />;
-  }
-  return <ClassicTabLayout />;
+  const glass = isLiquidGlassAvailable();
+  // The cooking pill sits over the tab bar's edge, so it lives with the tabs
+  // and shows on the three tab screens only.
+  return (
+    <View style={{ flex: 1 }}>
+      {glass ? <NativeTabLayout /> : <ClassicTabLayout />}
+      <CookingPill glass={glass} />
+    </View>
+  );
 }
