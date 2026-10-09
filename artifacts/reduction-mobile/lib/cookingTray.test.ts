@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import type { Recipe } from '@workspace/recipe-model';
 import {
-  TRAY_TTL_MS, clearAll, clearOne, cookProgress, inTray, moveSignature, pin, pruneMarks, touch, trayList,
+  DONE_FRESH_MS, switchChips, TRAY_TTL_MS, clearAll, clearOne, cookProgress, inTray, moveSignature, pin, pruneMarks, touch, trayList,
   type TrayEntry, type TrayMarks,
 } from './cookingTray';
 
@@ -93,4 +93,31 @@ test('marks of deleted recipes are dropped', () => {
   const marks = touch(touch({}, 'a', NOW), 'gone', NOW);
   assert.deepEqual(Object.keys(pruneMarks(marks, new Set(['a']))), ['a']);
   assert.equal(pruneMarks(marks, new Set(['a', 'gone'])), marks);
+});
+
+test('the switch strip leaves out the recipe you are in, and is empty with nobody else', () => {
+  assert.deepEqual(switchChips([entry('a', ['s1'])], 'a', NOW), { chips: [], more: 0 });
+});
+
+test('with two others: a finished timer first, then running by when it rings, then the rest', () => {
+  const list = [
+    entry('idle', ['s1']),
+    entry('late', ['s1'], { stepId: 's2', endsAt: NOW + 600_000 }),
+    entry('soon', ['s1'], { stepId: 's2', endsAt: NOW + 60_000 }),
+    entry('rang', ['s1'], { stepId: 's2', endsAt: NOW - 1000 }),
+    entry('me', ['s1']),
+  ];
+  const { chips, more } = switchChips(list, 'me', NOW);
+  assert.deepEqual(chips.map((c) => `${c.entry.id}:${c.state}`), ['rang:done', 'soon:running']);
+  assert.equal(more, 2);
+});
+
+test('a timer that finished long ago is just another recipe, not an alarm', () => {
+  const list = [entry('old', ['s1'], { stepId: 's2', endsAt: NOW - DONE_FRESH_MS - 1 }), entry('me')];
+  assert.equal(switchChips(list, 'me', NOW).chips[0].state, 'idle');
+});
+
+test('equally idle recipes keep the tray order, newest movement first', () => {
+  const list = [entry('x', ['s1']), entry('y', ['s1']), entry('me')];
+  assert.deepEqual(switchChips(list, 'me', NOW).chips.map((c) => c.entry.id), ['x', 'y']);
 });

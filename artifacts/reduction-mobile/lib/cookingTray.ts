@@ -110,3 +110,44 @@ export function pruneMarks(marks: TrayMarks, liveIds: Set<string>): TrayMarks {
   if (keys.every((k) => liveIds.has(k))) return marks;
   return Object.fromEntries(keys.filter((k) => liveIds.has(k)).map((k) => [k, marks[k]]));
 }
+
+/** A finished timer is worth shouting about for this long; after it the
+ *  recipe is just another one that is cooking. */
+export const DONE_FRESH_MS = 30 * 60 * 1000;
+
+export type ChipState = 'done' | 'running' | 'idle';
+
+export interface SwitchChip<T extends TrayEntry> {
+  entry: T;
+  state: ChipState;
+}
+
+export function chipState(e: TrayEntry, now: number): ChipState {
+  if (!e.timer) return 'idle';
+  if (e.timer.endsAt > now) return 'running';
+  return now - e.timer.endsAt <= DONE_FRESH_MS ? 'done' : 'idle';
+}
+
+/**
+ * What the switch strip under Next step shows while cooking `currentId`:
+ * the other recipes in the tray, most urgent first — a timer that has
+ * finished, then running timers by when they ring, then the rest by latest
+ * movement — at most two as chips, and how many more there are.
+ */
+export function switchChips<T extends TrayEntry>(
+  cooking: T[],
+  currentId: string,
+  now: number
+): { chips: SwitchChip<T>[]; more: number } {
+  const rank = { done: 0, running: 1, idle: 2 } as const;
+  const others = cooking
+    .filter((e) => e.id !== currentId)
+    .map((entry, i) => ({ entry, state: chipState(entry, now), i }))
+    .sort(
+      (a, b) =>
+        rank[a.state] - rank[b.state] ||
+        (a.state === 'running' ? a.entry.timer!.endsAt - b.entry.timer!.endsAt : 0) ||
+        a.i - b.i // `cooking` is already newest movement first
+    );
+  return { chips: others.slice(0, 2).map(({ entry, state }) => ({ entry, state })), more: Math.max(0, others.length - 2) };
+}

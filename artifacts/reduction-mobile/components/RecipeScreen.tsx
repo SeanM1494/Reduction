@@ -131,6 +131,8 @@ interface RecipeScreenProps {
    *  be sent when the connection returns, so the banner is calm, not red. */
   offlineQueued?: boolean;
   isDraft?: boolean;
+  /** Under the Step-by-Step card, in flow (the cooking switch strip). */
+  cookFooter?: React.ReactNode;
   onSave?: () => void;
   /** One more sentence for the preview's banner, e.g. that saving a
    *  starter uses one of the free recipes (lib/reelView.ts). */
@@ -212,6 +214,7 @@ export function RecipeScreen({
   onDismissNotice,
   offlineQueued,
   isDraft,
+  cookFooter,
   onSave,
   onEditTitle,
   draftNote = null,
@@ -750,6 +753,7 @@ export function RecipeScreen({
           pointerNext={pointerFor(spotlight, 'cook:next')}
         />
       )}
+      {view === 'cook' ? cookFooter : null}
 
       {editing ? <EditSheet recipe={recipe} target={sheetFor} onApply={applyOp} onClose={() => setSheetFor(null)} /> : null}
 

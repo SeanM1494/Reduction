@@ -42,7 +42,7 @@ export function CookingPill({ glass }: { glass: boolean }) {
   const colors = useColors();
   const styles = makeStyles(colors);
   const insets = useSafeAreaInsets();
-  const { cooking, clearOneFromTray, clearTray } = useCooking();
+  const { cooking } = useCooking();
   const { update } = useLibrary();
   const [open, setOpen] = useState(false);
   const [now, setNow] = useState(() => Date.now());
@@ -71,8 +71,7 @@ export function CookingPill({ glass }: { glass: boolean }) {
 
   const openRecipe = (e: Entry) => {
     setOpen(false);
-    if (e.mode !== 'steps') update(e.id, { mode: 'steps' });
-    router.push(`/recipe/${e.id}`);
+    openCooking(e, update, 'push');
   };
 
   return (
@@ -104,7 +103,37 @@ export function CookingPill({ glass }: { glass: boolean }) {
         </Pressable>
       ) : null}
 
-      <Sheet open={open} title="Cooking now" onClose={() => setOpen(false)}>
+      <CookingTray open={open} onClose={() => setOpen(false)} />
+    </>
+  );
+}
+
+/** Opens a recipe in Step-by-Step. From a recipe screen it REPLACES the
+ *  screen, so switching back and forth never piles recipes on the stack. */
+export function openCooking(e: Entry, update: (id: string, p: { mode: 'steps' }) => void, how: 'push' | 'replace') {
+  if (e.mode !== 'steps') update(e.id, { mode: 'steps' });
+  if (how === 'replace') router.replace(`/recipe/${e.id}`);
+  else router.push(`/recipe/${e.id}`);
+}
+
+export function CookingTray({ open, onClose, how = 'push' }: { open: boolean; onClose: () => void; how?: 'push' | 'replace' }) {
+  const colors = useColors();
+  const styles = makeStyles(colors);
+  const { cooking, clearOneFromTray, clearTray } = useCooking();
+  const { update } = useLibrary();
+  const [now, setNow] = useState(() => Date.now());
+  const anyTimer = cooking.some((e) => e.timer && e.timer.endsAt > now);
+  useEffect(() => {
+    if (!open || !anyTimer) return;
+    const id = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, [open, anyTimer]);
+  const openRecipe = (e: Entry) => {
+    onClose();
+    openCooking(e, update, how);
+  };
+  return (
+      <Sheet open={open} title="Cooking now" onClose={onClose}>
         <View style={styles.list}>
           {cooking.map((e) => {
             const p = cookProgress(e);
@@ -151,7 +180,6 @@ export function CookingPill({ glass }: { glass: boolean }) {
           </Text>
         </View>
       </Sheet>
-    </>
   );
 }
 

@@ -23,6 +23,7 @@ import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-nati
 import { Stack, router, useLocalSearchParams, useNavigation } from 'expo-router';
 import { usePreventRemove } from 'expo-router/react-navigation';
 import { Feather } from '@expo/vector-icons';
+import { SwitchStrip } from '@/components/cooking/SwitchStrip';
 import { useCooking } from '@/lib/cooking-context';
 import { useLibrary, type EntryPatch } from '@/lib/library-context';
 import { RecipeScreen, type RecipeRequest } from '@/components/RecipeScreen';
@@ -339,6 +340,7 @@ export default function RecipeDetailScreen() {
         }}
       />
       <RecipeScreen
+        cookFooter={<SwitchStrip currentId={entry.id} />}
         initialView={initialView}
         recipe={entry.recipe}
         onOpenOriginal={() => router.push(`/original/${entry.id}`)}
