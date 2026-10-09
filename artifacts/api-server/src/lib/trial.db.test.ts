@@ -53,7 +53,7 @@ const newTrialId = () => `test-trial-${crypto.randomUUID()}`;
  * These used to be bare uuids that existed nowhere, which worked until the
  * claim started spending the account's recipe allowance — `account_access`
  * has a foreign key onto `users`, so a claim for a user who does not exist
- * now fails loudly. That is the right behaviour (the claim only ever runs
+ * now fails loudly. That is the right behavior (the claim only ever runs
  * after sign-in, so the row is always there in production) and the fixture
  * was the thing being unrealistic.
  */

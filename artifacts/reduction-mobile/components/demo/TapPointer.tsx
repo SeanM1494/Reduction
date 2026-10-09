@@ -106,7 +106,7 @@ export function TapPointer({ pointer }: { pointer: Pointer }) {
 
 /** A pointing hand: the index finger up, three fingers curled, the thumb.
  *  Cream with a dark outline in both themes — an object over the page,
- *  like the Recipe Box's paper — so it reads on amber, green and grey. */
+ *  like the Recipe Box's paper — so it reads on amber, green and gray. */
 function Hand() {
   const fill = '#fffdf6';
   const ink = '#2a2118';

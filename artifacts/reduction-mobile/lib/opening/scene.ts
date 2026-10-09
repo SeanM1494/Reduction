@@ -81,7 +81,7 @@ export function toScreen(st: Stage, x: number, y: number) {
 export interface Placed { x: number; y: number; rot: number; scale: number; opacity: number }
 
 export interface Scene {
-  /** 0 = the dark splash colour, 1 = cream: the dark-mode opening. */
+  /** 0 = the dark splash color, 1 = cream: the dark-mode opening. */
   bgCream: number;
   /** The cream background; off once the reveal has begun (the interior
    *  covers the screen by then, and the hole must show the app). */

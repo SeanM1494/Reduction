@@ -20,7 +20,7 @@
  *
  * The book's size and the spacing come from the stage's measured size
  * (`carouselGeometry`): the prototype's book where there is room for the
- * neighbours to show, a narrower one where there is not. That is a measured
+ * neighbors to show, a narrower one where there is not. That is a measured
  * layout, so the stage draws nothing until its first layout arrives — one
  * frame, once.
  *

@@ -112,7 +112,7 @@ export default function LibraryScreen() {
     return out;
   }, [entries]);
 
-  // A filter whose chip has gone (the last favourite un-starred) falls back
+  // A filter whose chip has gone (the last favorite un-starred) falls back
   // to everything rather than to an empty list with no chip lit.
   const effectiveFilter = chips.some((c) => c.value === filter) ? filter : 'all';
   // Searching spans every category: the strip hides while it runs.
@@ -161,7 +161,7 @@ export default function LibraryScreen() {
           ) : null}
         </View>
         {/* Below the empty box and its two buttons, full width: a reel
-            scrolls sideways, and inside the centred box it overflowed. */}
+            scrolls sideways, and inside the centered box it overflowed. */}
         <StarterReel
           busy={false}
           onPick={starter.open}

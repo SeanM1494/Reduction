@@ -9,7 +9,7 @@
  * invisible until the lookup fails).
  *
  * It is deliberately NOT a short handle. A user-chosen username is a real
- * feature with uniqueness, editability and collision behaviour of its own,
+ * feature with uniqueness, editability and collision behavior of its own,
  * and nothing here needs one.
  *
  * The clipboard API is unavailable on insecure origins and can be refused by

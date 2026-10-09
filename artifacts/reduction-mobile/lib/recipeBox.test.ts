@@ -247,7 +247,7 @@ test('page fit: nothing overflows the page, on every book size and every iOS tex
         if (fit.maxFontScale !== null) assert.deepEqual([fit.showServes, fit.ingredientLines], [false, 0], label);
         // The time line is never cut: its text fits the page's width.
         if (time) {
-          // A cap below 1 is not a cap iOS honours; the text is then at 1.
+          // A cap below 1 is not a cap iOS honors; the text is then at 1.
           const k = Math.min(s, Math.max(1, Math.min(fit.maxFontScale ?? Infinity, fit.timeMaxFontScale ?? Infinity)));
           assert.ok(time.length * PAGE_METRICS.timeCharPx * k <= w - 22 + 1e-9, `${label}: time too wide at ${k}`);
         }
@@ -307,17 +307,17 @@ test('carousel geometry: the prototype\'s book and spacing where there is room, 
   const roomy = carouselGeometry(390, 530, 3);
   assert.equal(roomy.bookW, 366);
   assert.equal(roomy.step, 0.92 * (309 + 40));
-  // Too short for the neighbours to show at that size: the book narrows.
+  // Too short for the neighbors to show at that size: the book narrows.
   const tight = carouselGeometry(320, 354, 3);
   assert.ok(tight.bookW < 296, `book ${tight.bookW}`);
   assert.ok(tight.bookW >= CAROUSEL.minBookPx);
-  // One book has no neighbours to make room for.
+  // One book has no neighbors to make room for.
   assert.equal(carouselGeometry(320, 354, 1).bookW, 296);
   // A preposterous stage keeps a readable book and gives up the peeks.
   assert.equal(carouselGeometry(390, 200, 3).bookW, CAROUSEL.minBookPx);
 });
 
-test('carousel geometry: over every phone-ish stage, covers never overlap and a neighbour always shows', () => {
+test('carousel geometry: over every phone-ish stage, covers never overlap and a neighbor always shows', () => {
   for (let w = 300; w <= 440; w += 10) {
     for (let h = 300; h <= 800; h += 7) {
       const g = carouselGeometry(w, h, 3);
@@ -350,7 +350,7 @@ test('loop offset: each book at its nearest copy, the handoff where it cannot be
   assert.equal(loopOffset(0, 0.3, 1), -0.3);
 });
 
-test('placement: the prototype between neighbours, gone where the loop hands a book over', () => {
+test('placement: the prototype between neighbors, gone where the loop hands a book over', () => {
   const p0 = carouselPlacement(0, 300, 3);
   assert.deepEqual(p0, { translateY: 0, scale: 1, rotateX: -0, opacity: 1, bottomTab: 0 });
   const below = carouselPlacement(1, 300, 3);

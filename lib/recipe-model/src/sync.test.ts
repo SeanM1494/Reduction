@@ -80,7 +80,7 @@ test("a re-checked id survives its own tombstone", () => {
   assert.deepEqual(merged, ["d2"]);
 });
 
-test("removal honoured on one branch cascades off dependent completions via closure repair", () => {
+test("removal honored on one branch cascades off dependent completions via closure repair", () => {
   // They retract d2; I completed d4 on top of it. Element-wise merge keeps my
   // d4 and drops their d2 — enforceClosure then retracts d4 exactly as the
   // app's own uncheck would have.

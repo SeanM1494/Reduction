@@ -53,7 +53,7 @@ export type SortKey = 'added' | 'cooked' | 'time' | 'source' | 'type' | 'rating'
 export type Filter = MealType | 'all' | 'untagged' | 'favourites';
 
 /** `added` stays first and therefore stays the default (see MyRecipes.tsx:
- *  favourites-first has no data behind it yet). */
+ *  favorites-first has no data behind it yet). */
 export const SORTS: Array<[SortKey, string]> = [
   ['added', 'Recently added'],
   ['cooked', 'Recently cooked'],
@@ -124,7 +124,7 @@ const COMPARE: Record<SortKey, (a: LibraryItem, b: LibraryItem) => number> = {
     (primaryMealType(a.recipe.mealTypes) ?? LAST).localeCompare(
       primaryMealType(b.recipe.mealTypes) ?? LAST
     ),
-  // Favourites, then unrated, then the rejects — and within each, the most
+  // Favorites, then unrated, then the rejects — and within each, the most
   // recently added. A 👎 recipe is not hidden by this sort, only ranked last;
   // hiding it would make it unfindable.
   rating: (a, b) => ratingOf(b) - ratingOf(a) || b.savedAt - a.savedAt,

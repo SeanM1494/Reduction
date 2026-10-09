@@ -35,7 +35,7 @@ interface BooksContextValue {
   queued: boolean;
   /** Which book a recipe is in, resolved and ready to draw. */
   bookFor: (entry: LibraryItem & { book?: string | null }) => Book;
-  /** Add, rename, recolour, reorder. Returns a sentence when it cannot
+  /** Add, rename, recolor, reorder. Returns a sentence when it cannot
    *  (a clash, the cap, books not available), else null. */
   edit: (change: (books: BookDef[]) => BookDef[]) => string | null;
   /** Delete or merge: needs the network, says so when it is not there. */

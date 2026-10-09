@@ -40,8 +40,8 @@ const web = (f) => path.join(root, 'artifacts/reduction/public/brand', f);
 /** Android's adaptive icon: a 108dp canvas of which only the central 66dp
  *  circle is promised to survive every launcher's mask. The mark reaches 500
  *  of the canvas's 512px from its centre, so it is scaled to 636/1024 (500 →
- *  310.5px, inside the 312.9px safe radius) and centred, over the icon's own
- *  cream as the background colour (app.json). */
+ *  310.5px, inside the 312.9px safe radius) and centered, over the icon's own
+ *  cream as the background color (app.json). */
 const ADAPTIVE_SCALE_PX = 636;
 
 const check = process.argv.includes('--check');
@@ -120,7 +120,7 @@ async function adaptive() {
 const copy = (f) => async () => fs.readFileSync(f);
 
 /** The splash's image: fully transparent, so the splash is the plain
- *  background colour (the opening sequence starts on empty cream). Not the
+ *  background color (the opening sequence starts on empty cream). Not the
  *  plugin's "no image" option: in expo-splash-screen 57 that path leaves
  *  the iOS launch screen on the SYSTEM background (white, or black in dark
  *  mode) with constraints naming a view it removed, and Android's theme

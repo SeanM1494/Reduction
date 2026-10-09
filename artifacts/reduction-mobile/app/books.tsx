@@ -2,22 +2,22 @@
  * app/books.tsx — Manage books: the person's recipe books, from Settings
  * and from the Recipe Box header.
  *
- * Every book in shelf order, with its colour and how many recipes are in
+ * Every book in shelf order, with its color and how many recipes are in
  * it, and for each: up and down (so reordering needs no drag, and reads to
- * VoiceOver as "Move Dinner up"), and Edit — the name, the colour, and
+ * VoiceOver as "Move Dinner up"), and Edit — the name, the color, and
  * "Delete or merge…". Then "Add a book", which stops at twelve and says
  * why. The rules are recipe-model books.ts; the writes go through
- * lib/booksQueue.ts, where add, rename, recolour and reorder wait out an
+ * lib/booksQueue.ts, where add, rename, recolor and reorder wait out an
  * offline spell and delete/merge do not.
  *
  * DELETING IS MERGING. A book with recipes asks where they go first — any
  * other book, a new book made there and then, or Other — and the book it
  * goes into can be renamed in the same step; nothing is deleted until that
  * is answered. An empty book goes at once. Other can be renamed and
- * recoloured and never deleted. Offline, delete and merge change nothing
+ * recolored and never deleted. Offline, delete and merge change nothing
  * and say "Connect to the internet to delete or merge books."
  *
- * Dialogs are centred windows, and the next one opens from the previous
+ * Dialogs are centered windows, and the next one opens from the previous
  * one's onClosed (CLAUDE.md: iOS can refuse a Modal presented while another
  * is dismissing).
  */
@@ -207,7 +207,7 @@ function IconButton({ label, disabled, onPress, testID, colors, icon }: { label:
   );
 }
 
-/** New book, or an existing one's name and colour (and the way to delete it). */
+/** New book, or an existing one's name and color (and the way to delete it). */
 function BookForm({ form, books, onClose, onClosed, onDelete }: { form: Form | null; books: BookDef[]; onClose: () => void; onClosed: () => void; onDelete: (id: string) => void }) {
   const colors = useColors();
   const styles = makeStyles(colors);

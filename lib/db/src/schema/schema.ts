@@ -90,7 +90,7 @@ export const recipes = pgTable(
      */
     cooked: jsonb("cooked").$type<number[]>().notNull().default([]),
     /**
-     * The reported half: -1 (would not make again), 0 (fine), 1 (favourite),
+     * The reported half: -1 (would not make again), 0 (fine), 1 (favorite),
      * or null for unrated. Deliberately coarse — repeat cooks already outrank
      * opinion in the ranking hierarchy, so a five-point scale would only add
      * resolution to the weaker input. One rating per recipe, not per cook: it
@@ -324,7 +324,7 @@ export const extractionCache = pgTable(
 );
 
 /**
- * One row per extraction attempt or cache hit. OPERATIONAL, NOT BEHAVIOURAL.
+ * One row per extraction attempt or cache hit. OPERATIONAL, NOT BEHAVIORAL.
  *
  * It exists to answer two questions before any cost tuning happens: what
  * fraction of extractions take the expensive `fetchViaClaude` path, and how
@@ -472,7 +472,7 @@ export const appleTokens = pgTable(
  * The row is keyed by the SHA-256 of the session token, never the token
  * itself, so a dump of this table does not hand over live sessions. Expiry is
  * enforced on read as well as by the sweep in server/lib/sessions.ts — a row
- * that outlives its expires_at is never honoured, whether or not the sweep
+ * that outlives its expires_at is never honored, whether or not the sweep
  * has got to it.
  */
 export const sessions = pgTable(
@@ -815,7 +815,7 @@ export const couponRedemptions = pgTable(
  * fire-and-forget on the way out, adding no latency, and swallowing its own
  * errors — a logging failure must never be the reason a request fails.
  *
- * Operational, not behavioural: no recipe ids, no URLs, no titles. It answers
+ * Operational, not behavioral: no recipe ids, no URLs, no titles. It answers
  * "would the wall have fired, and why", which is the only question it exists
  * for.
  */

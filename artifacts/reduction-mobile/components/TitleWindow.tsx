@@ -1,8 +1,8 @@
 /**
  * components/TitleWindow.tsx — naming a recipe: "Rename" in a saved
- * recipe's ⋮ menu, and the title in an unsaved preview. A centred window,
+ * recipe's ⋮ menu, and the title in an unsaved preview. A centered window,
  * because it asks something (CLAUDE.md, "A dialog that asks something is a
- * centred WINDOW").
+ * centered WINDOW").
  *
  * The rule is recipe-model `title.ts`, the same one the editor's Title field
  * and the Add New fields use: trimmed, whitespace runs collapsed, never

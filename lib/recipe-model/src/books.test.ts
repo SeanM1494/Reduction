@@ -32,7 +32,7 @@ import { mergeEntry, type SyncableEntry } from "./sync";
 const NOW = 1_700_000_000_000;
 const names = (books: readonly BookDef[]) => liveBooks(books).map((b) => b.name);
 
-// ----------------------------------------------------------- colours ----
+// ----------------------------------------------------------- colors ----
 
 const lum = (hex: string) => {
   const c = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255).map((v) => (v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4));
@@ -43,9 +43,9 @@ const contrast = (a: string, b: string) => {
   return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05);
 };
 
-test("every book colour keeps the tab's white text readable and shows on both page backgrounds", () => {
+test("every book color keeps the tab's white text readable and shows on both page backgrounds", () => {
   assert.equal(BOOK_COLORS.length, 12);
-  assert.equal(new Set(BOOK_COLORS.map((c) => c.hex.toLowerCase())).size, 12, "no colour twice");
+  assert.equal(new Set(BOOK_COLORS.map((c) => c.hex.toLowerCase())).size, 12, "no color twice");
   for (const c of BOOK_COLORS) {
     assert.ok(contrast(c.hex, "#ffffff") >= 4.5, `${c.name} ${c.hex}: white text ${contrast(c.hex, "#ffffff").toFixed(2)}:1`);
     assert.ok(contrast(c.hex, "#e8d5b2") >= 3, `${c.name} on the light page ${contrast(c.hex, "#e8d5b2").toFixed(2)}:1`);
@@ -53,7 +53,7 @@ test("every book colour keeps the tab's white text readable and shows on both pa
   }
 });
 
-test("the defaults are today's seven, in today's order and colours, all in the set", () => {
+test("the defaults are today's seven, in today's order and colors, all in the set", () => {
   assert.deepEqual(
     DEFAULT_BOOKS.map((b) => [b.id, b.name, b.color]),
     [
@@ -74,11 +74,11 @@ test("the defaults are today's seven, in today's order and colours, all in the s
   assert.equal(defaultBookIdFor([]), OTHER_BOOK_ID);
 });
 
-test("a new book takes the next colour nobody is using", () => {
+test("a new book takes the next color nobody is using", () => {
   const books = freshDefaultBooks();
   assert.equal(nextBookColor(books), "#7a4e36", "the first after the seven defaults");
-  const recoloured = recolorBook(books, "dinner", "#7a4e36");
-  assert.equal(nextBookColor(recoloured), "#a94f3a", "Dinner's old colour is free again");
+  const recolored = recolorBook(books, "dinner", "#7a4e36");
+  assert.equal(nextBookColor(recolored), "#a94f3a", "Dinner's old color is free again");
 });
 
 // ------------------------------------------------------------- names ----
@@ -98,7 +98,7 @@ test("names: trimmed, 1 to 30 characters, unique ignoring case", () => {
 
 // ------------------------------------------------------------- edits ----
 
-test("add, reorder, recolour; the cap of 12 blocks adding and says why", () => {
+test("add, reorder, recolor; the cap of 12 blocks adding and says why", () => {
   let books = freshDefaultBooks();
   books = addBook(books, { id: "soups", name: "Soups", now: NOW });
   assert.deepEqual(names(books).at(-1), "Soups");
@@ -109,10 +109,10 @@ test("add, reorder, recolour; the cap of 12 blocks adding and says why", () => {
   for (let i = 0; liveBooks(books).length < MAX_BOOKS; i++) books = addBook(books, { id: `b${i}`, name: `Book ${i}`, now: NOW + i });
   assert.equal(liveBooks(books).length, 12);
   assert.throws(() => addBook(books, { id: "b99", name: "One too many", now: NOW }), (e: Error) => e instanceof BookEditError && e.message === bookLimitMessage);
-  assert.throws(() => recolorBook(books, "soups", "#123456"), BookEditError, "only colours from the set");
+  assert.throws(() => recolorBook(books, "soups", "#123456"), BookEditError, "only colors from the set");
 });
 
-test("Other can be renamed and recoloured, never deleted", () => {
+test("Other can be renamed and recolored, never deleted", () => {
   let books = freshDefaultBooks();
   books = renameBook(books, OTHER_BOOK_ID, "Everything else");
   books = recolorBook(books, OTHER_BOOK_ID, "#6f4a6e");
@@ -161,7 +161,7 @@ test("merge: one side's edits and additions both survive; both edited the same f
   const merged = mergeBooks(o, mine, theirs);
   const soups = merged.find((b) => b.id === "soups")!;
   assert.equal(soups.name, "Soups & stews", "both renamed: mine");
-  assert.equal(soups.color, "#6f4a6e", "only theirs recoloured: theirs");
+  assert.equal(soups.color, "#6f4a6e", "only theirs recolored: theirs");
   assert.ok(names(merged).includes("Bread") && names(merged).includes("Drinks"), "both additions kept");
   assert.deepEqual(validateBooks(merged), []);
 });
@@ -234,7 +234,7 @@ test("merge repairs: two devices naming books alike get distinct names; Other al
 
 // ------------------------------------------------------- validation -----
 
-test("the server refuses a list without Other, with clashing names, stray colours or dangling destinations", () => {
+test("the server refuses a list without Other, with clashing names, stray colors or dangling destinations", () => {
   const ok = base();
   assert.deepEqual(validateBooks(ok), []);
   assert.ok(validateBooks(ok.filter((b) => b.id !== OTHER_BOOK_ID)).length);

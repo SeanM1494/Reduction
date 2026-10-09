@@ -20,7 +20,7 @@ export interface SessionUser {
  *
  * PROVIDER-AGNOSTIC ALL THE WAY TO THE UI. There is no `stripeStatus` here
  * and there must never be: `provider` is a label for a support screen, never
- * something to branch behaviour on. When the App Store build adds StoreKit,
+ * something to branch behavior on. When the App Store build adds StoreKit,
  * this type does not change.
  *
  * `enforced` is the resolved kill switch. `allowed === false && enforced ===

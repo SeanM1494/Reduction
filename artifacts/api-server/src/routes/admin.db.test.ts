@@ -417,10 +417,10 @@ test("the GET reports what the PATCH set, so the two agree", async (t) => {
 // ---------------------------------------------------------------------------
 // The Anthropic preflight.
 //
-// The real API is never called: the SDK honours ANTHROPIC_BASE_URL, so a
+// The real API is never called: the SDK honors ANTHROPIC_BASE_URL, so a
 // local stub plays the failures worth testing. What is under test is the
 // SURFACING — that the API's own words reach the operator verbatim instead
-// of collapsing into "something went wrong" — not Anthropic's behaviour.
+// of collapsing into "something went wrong" — not Anthropic's behavior.
 // ---------------------------------------------------------------------------
 
 async function stubAnthropic(

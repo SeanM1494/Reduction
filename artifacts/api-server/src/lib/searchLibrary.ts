@@ -205,7 +205,7 @@ export async function usageFor(urls: string[]): Promise<Map<string, UsageStats>>
   const acc = new Map<string, { users: Set<string>; cooks: number; loved: number; rated: number }>();
   for (const r of rows) {
     const n = normalizeUrl(r.url);
-    if (!n || !byForm.has(n)) continue; // a neighbour the ILIKE let through
+    if (!n || !byForm.has(n)) continue; // a neighbor the ILIKE let through
     const a = acc.get(n) ?? { users: new Set<string>(), cooks: 0, loved: 0, rated: 0 };
     a.users.add(r.user_id);
     a.cooks += r.cooks;

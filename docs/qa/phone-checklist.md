@@ -239,10 +239,10 @@ one phone; the whole pass takes about ten minutes plus the timer.
 - [ ] **Search in the box.** *Expect:* a result opens its book to the
   spread and outlines the page for about 1.8s; removed recipes never
   match. *Auto:* recipeBox.test.ts.
-- [ ] **Preview window** (tap a page): a centred window, the dark scrim
+- [ ] **Preview window** (tap a page): a centered window, the dark scrim
   fades in place (no "wash" rising up the screen), "Diagram" and
   "Step-by-Step" open the recipe on that tab. (C "A dialog that asks
-  something is a centred WINDOW")
+  something is a centered WINDOW")
 - [ ] **Rating prompt** after finishing a recipe: "How was <title>?". A 👎
   asks "Take it out of your box?"; "Remove it" shows a toast with Undo for
   5s. It never fires twice within six hours. *Auto:* recipeBox.test.ts,
@@ -341,8 +341,8 @@ one phone; the whole pass takes about ten minutes plus the timer.
 - [ ] **Send feedback** (smoke 16). With no mail account set up on the
   phone, iOS itself says "No Mail Accounts" — expected; the in-app
   fallback (address copied, toast) only fires when no mail app exists.
-- [ ] **Manage books:** "Add a book", rename, colour (VoiceOver reads the
-  colour names), "Move … up/down", "Delete or merge…". Offline, delete and
+- [ ] **Manage books:** "Add a book", rename, color (VoiceOver reads the
+  color names), "Move … up/down", "Delete or merge…". Offline, delete and
   merge are refused with "Connect to the internet to delete or merge
   books." *Auto:* booksQueue.test.ts, books.db.test.ts.
 - [ ] **Appearance:** System / Light / Dark / Colorblind switch live.
@@ -389,9 +389,9 @@ one phone; the whole pass takes about ten minutes plus the timer.
   book header, Settings. *Expect:* nothing under the notch or status bar.
   Chromium can only ever reach the other layout, so this is phone-only by
   definition. (C "There are TWO tab layouts")
-- [ ] **The recipe header** on iOS 26: the centred title button and ⋮.
+- [ ] **The recipe header** on iOS 26: the centered title button and ⋮.
 - [ ] **Dark mode on iOS 26:** the native tab bar and the headers take
-  their colours from the system, not from the Cocoa tokens. *Expect:*
+  their colors from the system, not from the Cocoa tokens. *Expect:*
   they sit acceptably on the `#211a16` page; report if the tab bar reads
   as a black band.
 
@@ -410,7 +410,7 @@ one phone; the whole pass takes about ten minutes plus the timer.
 ### Two devices on one account
 
 - [ ] **Check steps on both**; un-check on one while the other is stale.
-  *Expect:* the union of checks, and the un-check honoured. *Auto:*
+  *Expect:* the union of checks, and the un-check honored. *Auto:*
   sync.test.ts, syncEngine.test.ts — two real phones prove the focus
   refetch. (C Sync)
 - [ ] **Edit the tree on both.** *Expect:* one keeps its edit and says so;
@@ -420,7 +420,7 @@ one phone; the whole pass takes about ten minutes plus the timer.
 ### Over-the-air updates
 
 - [ ] **After a publish**, close and reopen the app twice. *Expect:* the
-  new behaviour on the second launch; the app still talks to the
+  new behavior on the second launch; the app still talks to the
   deployment (not the dev server). Only ever publish with
   `node scripts/publish-update.mjs`. (RM "Over-the-air updates"; C OTA)
 - [ ] **Settings ends with "Version 1.1.0 (build N)"** for everyone.

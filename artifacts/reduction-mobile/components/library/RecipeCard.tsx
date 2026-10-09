@@ -1,7 +1,7 @@
 /**
  * components/library/RecipeCard.tsx — one saved recipe, as a card in the
  * recipe box: its picture (or the meal-type art), its name, a ★ when it is
- * a favourite. The grid's card, two across (the Recipe Box's books draw
+ * a favorite. The grid's card, two across (the Recipe Box's books draw
  * their own pages, components/recipeBox/BookPage.tsx).
  *
  * What is NOT here any more: the progress bar and the step count. A card in

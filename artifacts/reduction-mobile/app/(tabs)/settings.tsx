@@ -272,7 +272,7 @@ export default function SettingsScreen() {
         <LegalLinks />
       </View>
 
-      {/* .rd-btn-danger: a real button on the card colour, not a transparent
+      {/* .rd-btn-danger: a real button on the card color, not a transparent
           box whose only edge is a line within a shade of the page. */}
       <Pressable
         accessibilityRole="button"
@@ -311,7 +311,7 @@ function makeStyles(colors: Colors) {
   return StyleSheet.create({
     container: { flex: 1, backgroundColor: colors.background },
     content: { padding: 20, gap: 16 },
-    // .rd-settings-card: card colour, hairline in `border`, 15px radius and
+    // .rd-settings-card: card color, hairline in `border`, 15px radius and
     // the card shadow — on parchment the shadow is what draws the edge.
     section: {
       backgroundColor: colors.card,

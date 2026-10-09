@@ -32,7 +32,7 @@ interface Props {
   onPhoto?: (id: string, photo: PhotoMeta) => void;
 }
 
-/** `added` stays first and therefore stays the default. Favourites-first
+/** `added` stays first and therefore stays the default. Favorites-first
  *  looks obviously better and has no data behind it yet — deliberately left
  *  alone until real libraries exist to judge it against. */
 const SORTS: Array<[SortKey, string]> = [
@@ -102,7 +102,7 @@ export default function MyRecipes({ library, onOpen, onFind, onPhoto }: Props) {
         (primaryMealType(a.recipe.mealTypes) ?? "￿").localeCompare(
           primaryMealType(b.recipe.mealTypes) ?? "￿"
         ),
-      // Favourites, then unrated, then the rejects — and within each, the
+      // Favorites, then unrated, then the rejects — and within each, the
       // most recently added. A 👎 recipe is not hidden by this sort, only
       // ranked last; hiding it would make it unfindable.
       rating: (a, b) => ratingOf(b) - ratingOf(a) || b.savedAt - a.savedAt,
@@ -177,7 +177,7 @@ export default function MyRecipes({ library, onOpen, onFind, onPhoto }: Props) {
       ) : (
         // The recipe box: two cards across on a phone, more on a desk. Each
         // is its picture (or the meal-type art), its name, a ★ when
-        // favourite. Progress and step counts live on the recipe screen — a
+        // favorite. Progress and step counts live on the recipe screen — a
         // card here is for finding, not for reading state. A 👎 is NOT
         // shown back; it sorts and filters, it does not decorate.
         <div className="rd-grid">

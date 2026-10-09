@@ -1,6 +1,6 @@
 /**
- * components/books/ColorSwatches.tsx — the twelve book colours, as 44pt
- * swatches. A fixed set rather than a colour wheel (recipe-model
+ * components/books/ColorSwatches.tsx — the twelve book colors, as 44pt
+ * swatches. A fixed set rather than a color wheel (recipe-model
  * BOOK_COLORS): every one keeps a tab's white text readable, which a free
  * choice could not promise. Each reads its name to VoiceOver ("Plum,
  * selected"), and the chosen one carries a check, not only an outline.

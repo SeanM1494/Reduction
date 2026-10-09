@@ -5,7 +5,7 @@
  * package is a second dependency to track for a surface that is one setter,
  * one sender and a key generator, and a narrow local declaration also fails
  * loudly if a future call reaches for something not declared here — which is
- * the behaviour worth having at a boundary that fails silently at runtime.
+ * the behavior worth having at a boundary that fails silently at runtime.
  */
 declare module "web-push" {
   export interface PushSubscriptionLike {

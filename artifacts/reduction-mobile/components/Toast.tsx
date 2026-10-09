@@ -100,7 +100,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
 const styles = StyleSheet.create({
   wrap: { position: 'absolute', left: 12, right: 12, alignItems: 'center' },
   // Dark in both themes, like the prototype: it has to stand off whatever
-  // is under it, paper or night. Its colour is the theme's `toastBg`: on
+  // is under it, paper or night. Its color is the theme's `toastBg`: on
   // the dark page it is a step LIGHTER than the page, not darker.
   toast: {
     flexDirection: 'row',

@@ -108,7 +108,7 @@ interface RecipeScreenProps {
   notes?: RecipeNotes | null;
   mode: 'diagram' | 'steps';
   /** Tonight's card-order preference (entry.order), advisory — see
-   *  shared/sequence.ts. Honoured here; written by the Reorder view, which
+   *  shared/sequence.ts. Honored here; written by the Reorder view, which
    *  is not ported yet. */
   order?: OrderPreference | null;
   /** Every write goes through here as a partial entry — the same shape

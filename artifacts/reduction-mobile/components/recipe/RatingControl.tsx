@@ -71,7 +71,7 @@ function makeStyles(colors: Colors) {
     },
     btnOn: { borderColor: colors.borderStrong, backgroundColor: colors.muted },
     glyph: { fontSize: 18, lineHeight: 22 },
-    // Unselected sit back so the chosen one reads at a glance; full colour on
+    // Unselected sit back so the chosen one reads at a glance; full color on
     // every option would make three equal shouts.
     glyphOff: { opacity: 0.55 },
   });

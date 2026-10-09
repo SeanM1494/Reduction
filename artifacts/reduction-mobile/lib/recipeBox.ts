@@ -7,7 +7,7 @@
  *
  * A recipe is in exactly ONE book — the page counts and turns depend on it
  * — and since Sep 29 the books are the person's own (recipe-model books.ts):
- * named, coloured, ordered, and stored. A recipe's placement decides; one
+ * named, colored, ordered, and stored. A recipe's placement decides; one
  * without a placement falls back to its primary meal type's default book.
  * Meal types stay the extraction's guess and a search tag.
  */
@@ -139,7 +139,7 @@ const shortDate = (ms: number): string => {
 
 /** "Cooked 3× · Sep 11", or on a narrow page "3× · Sep 11" (the pill's tint
  *  says "cooked"). Null when it has never been cooked — the page then says
- *  "Not cooked yet" in grey. */
+ *  "Not cooked yet" in gray. */
 export function cookedLabel(cooked: number[] | null | undefined, short = false): string | null {
   const list = (cooked ?? []).filter((t) => typeof t === 'number' && Number.isFinite(t));
   if (!list.length) return null;
@@ -147,7 +147,7 @@ export function cookedLabel(cooked: number[] | null | undefined, short = false):
   return short ? `${list.length}× · ${last}` : `Cooked ${list.length}× · ${last}`;
 }
 
-/** The grey pill of a page never cooked; short where "3× · Sep 11" is. */
+/** The gray pill of a page never cooked; short where "3× · Sep 11" is. */
 export const notCookedLabel = (short: boolean): string => (short ? 'Not cooked' : 'Not cooked yet');
 
 /** "last Sep 11" for the preview line. */
@@ -239,7 +239,7 @@ export interface PageFit {
 }
 
 const floor2 = (x: number): number => Math.floor(x * 100) / 100;
-/** A cap worth passing: only above the default size (iOS honours none
+/** A cap worth passing: only above the default size (iOS honors none
  *  below 1), and only where it is lower than the text would be. */
 const capBelow = (cap: number, k: number): number | null => (k > 1 && cap < k ? Math.max(1, cap) : null);
 
@@ -543,9 +543,9 @@ export function bookGeometry(bookW: number): { bookW: number; pageW: number; pag
 }
 
 /** The carousel's tuning: the prototype's numbers, plus the one thing the
- *  prototype did not need — a floor on how much of a neighbour shows. */
+ *  prototype did not need — a floor on how much of a neighbor shows. */
 export const CAROUSEL = {
-  /** Neighbours sit this fraction of (cover + gap) away. */
+  /** Neighbors sit this fraction of (cover + gap) away. */
   spacing: 0.92,
   gap: 40,
   shrink: 0.14,
@@ -560,7 +560,7 @@ export const CAROUSEL = {
   cancelMs: 260,
   /** With two books, a swipe DOWN gives this much and springs back. */
   edgeRubber: 0.12,
-  /** The least of a neighbour's cover that must show; its tab adds ~19px
+  /** The least of a neighbor's cover that must show; its tab adds ~19px
    *  more, which makes the peek a 44px target. */
   minPeekPx: 28,
   tabPx: 22,
@@ -575,7 +575,7 @@ export const CAROUSEL = {
  * stageW × stageH holding a shelf of `books`.
  *
  * The width is the prototype's — min(stage − 24, 380) — unless the stage is
- * too short to show the neighbours, and then the book gets narrower rather
+ * too short to show the neighbors, and then the book gets narrower rather
  * than the peeks vanishing. On a phone the app has the room (the prototype's
  * size survives everywhere measured); a small window does not.
  *
@@ -583,14 +583,14 @@ export const CAROUSEL = {
  *  - adjacent covers never overlap and leave room for one tab between them:
  *    step ≥ 0.93c + 22 + 4. One tab, not two — the front book's tab is at
  *    its top LEFT and the book above's at its bottom RIGHT, side by side;
- *  - a neighbour shows at least `minPeekPx` of its cover:
+ *  - a neighbor shows at least `minPeekPx` of its cover:
  *    step ≤ stageH/2 + 0.43c − minPeekPx.
  * Together: c ≤ stageH − 2·minPeek − 52. The prototype's spacing sits
  * between the two on every phone measured, so it is what governs there.
  */
 export function carouselGeometry(stageW: number, stageH: number, books: number) {
   const { shrink, tabPx, minPeekPx, spacing, gap, maxBookPx, minBookPx } = CAROUSEL;
-  const far = 1 - shrink; // a neighbour's scale
+  const far = 1 - shrink; // a neighbor's scale
   const clearance = tabPx + 4;
   const widthCap = Math.min(stageW - 24, maxBookPx);
   const coverMax =
@@ -610,7 +610,7 @@ export function carouselGeometry(stageW: number, stageH: number, books: number) 
  * A book's offset from the carousel's position `pos`, in books: 0 in front,
  * 1 the next one down, −1 the one above. The loop is endless, so each book
  * is drawn at the copy of itself NEAREST the position — which is what lets
- * three books fill both neighbours and a fourth rise into place from below
+ * three books fill both neighbors and a fourth rise into place from below
  * without anything ever being re-assigned at a moment that could show.
  *
  * Two books break the symmetry on purpose (ROADMAP): the other one always
@@ -627,7 +627,7 @@ export function loopOffset(index: number, pos: number, count: number): number {
 
 /** Where a book at offset `o` is drawn: the prototype's translateY o × step,
  *  scale 1 − 0.14|o|, rotateX −10°·o and opacity 1 − 0.45|o| between the
- *  neighbours; beyond them it is gone by 1.5, which is exactly where the
+ *  neighbors; beyond them it is gone by 1.5, which is exactly where the
  *  loop hands a book from one end to the other. With two books the one
  *  above is gone by 0.5 (see `loopOffset`). The tab under a book appears
  *  once it is above the front one. */

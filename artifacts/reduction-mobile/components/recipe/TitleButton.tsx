@@ -7,7 +7,7 @@
  *
  * One line, truncated BEFORE the pencil so the pencil never wraps away; at
  * least 44pt tall and 120pt wide however short the title, and never wider
- * than the bar leaves it, centred on iOS or leading elsewhere
+ * than the bar leaves it, centered on iOS or leading elsewhere
  * (lib/headerTitle.ts); and to VoiceOver a button called "Rename recipe"
  * whose value is the title.
  */

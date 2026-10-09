@@ -285,7 +285,7 @@ function makeStyles(colors: Colors) {
     // Read at arm's length across a counter: body size, generous leading.
     lineText: { flex: 1, fontSize: 17, lineHeight: 25, color: colors.foreground },
     // Information, not a warning: nothing is wrong when a long recipe is
-    // cut short, so no warm (alarm) colour.
+    // cut short, so no warm (alarm) color.
     note: {
       marginTop: 16,
       gap: 12,

@@ -1,5 +1,5 @@
 /* Logic Cooking — all styles.
-   Colour lives in the token block below. Change --warm-line to retune the
+   Color lives in the token block below. Change --warm-line to retune the
    "do this now" accent; everything else follows. */
 
 *,
@@ -545,13 +545,13 @@ input, select, textarea { font-size: 16px; }
   box-shadow: 0 1px 2px rgba(var(--shadow-rgb), .22),
               0 14px 30px -12px rgba(var(--shadow-rgb), .34);
   /* No -webkit-overflow-scrolling: touch. It used to be here, and it is the
-     prime suspect for the page-coloured bars flashing at both edges of the
+     prime suspect for the page-colored bars flashing at both edges of the
      diagram on iOS when a step completes. The property opts the scroller
      into the legacy composited path whose documented failure mode is exactly
      that: unpainted tiles during content changes, showing whatever is behind
      the scroller — the page — until the compositor catches up. The frame's
      own background is opaque card, so any DOM-level gap (a fading cell, a
-     momentary width mismatch) would flash CARD-coloured; bars in PAGE colour
+     momentary width mismatch) would flash CARD-colored; bars in PAGE color
      mean the frame's own paint was missing, which only the compositor can do.
      Momentum scrolling has been the default for all overflow scrollers since
      iOS 13, so removing it costs nothing there. */
@@ -2013,7 +2013,7 @@ body.rd-dragging-body {
   font-size: 18px; line-height: 1; cursor: pointer;
   background: var(--card); color: var(--ink);
   border: 1px solid var(--line); border-radius: 12px;
-  /* Unselected sit back so the chosen one reads at a glance; full colour on
+  /* Unselected sit back so the chosen one reads at a glance; full color on
      every option would make three equal shouts. */
   filter: grayscale(1); opacity: .5;
   transition: opacity .15s ease, filter .15s ease, border-color .15s ease;
@@ -2025,7 +2025,7 @@ body.rd-dragging-body {
 }
 .rfx-rating-btn:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
 
-/* Favourite mark on a library card. There is no 👎 counterpart on purpose. */
+/* Favorite mark on a library card. There is no 👎 counterpart on purpose. */
 .rd-card-fav { color: var(--warm-line); font-size: 13px; line-height: 1; }
 
 /* The step sheet's shape-changing actions. Wrapped rather than a row: four

@@ -431,7 +431,7 @@ adminRouter.get("/preflight/anthropic", async (req: Request, res: Response) => {
 
   const started = Date.now();
   try {
-    // The SDK honours ANTHROPIC_BASE_URL from the environment, which is also
+    // The SDK honors ANTHROPIC_BASE_URL from the environment, which is also
     // what lets the test suite point this at a stub instead of the real API.
     const client = new Anthropic({ apiKey: key, maxRetries: 0, timeout: 15_000 });
     const answer = await client.messages.create({
