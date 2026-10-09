@@ -1,3 +1,7 @@
+# Pending: privacy page says a recipe is cached whether or not it is saved
+
+Website only. No SQL, no phone update, no build. `public/privacy.html` (Retention) now says a recipe we read is cached, unlinked to any account, whether or not you save it, until replaced, and that account deletion does not remove it. Ships with the next website Publish.
+
 # Since build 10 was submitted: the website catch-up (PR #15)
 
 Website only. No SQL, no phone update, no build.
