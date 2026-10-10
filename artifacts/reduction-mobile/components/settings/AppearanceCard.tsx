@@ -15,14 +15,15 @@ import { THEME_MODES } from '@/lib/themePolicy';
 import { useColors, type Colors } from '@/hooks/useColors';
 import { cardShadow, fonts } from '@/constants/colors';
 
-export function AppearanceCard() {
+/** `bare`: inside a Settings pop-up, which supplies the card and the title. */
+export function AppearanceCard({ bare = false }: { bare?: boolean } = {}) {
   const colors = useColors();
   const styles = makeStyles(colors);
   const theme = useThemeState();
   if (!theme) return null;
   return (
-    <View style={styles.section} testID="appearance-card">
-      <Text style={styles.label}>Appearance</Text>
+    <View style={bare ? undefined : styles.section} testID="appearance-card">
+      {bare ? null : <Text style={styles.label}>Appearance</Text>}
       <View style={[optionRow, styles.row]} accessibilityRole="radiogroup" accessibilityLabel="Color theme">
         {THEME_MODES.map(({ mode, label }) => (
           <SheetOption key={mode} label={label} current={theme.mode === mode} onPress={() => theme.setMode(mode)} role="radio" testID={`theme-${mode}`} />

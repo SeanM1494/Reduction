@@ -12,13 +12,14 @@ import { setBoxStyle, useBoxStyle } from '@/lib/boxStyle';
 import { useColors, type Colors } from '@/hooks/useColors';
 import { cardShadow, fonts } from '@/constants/colors';
 
-export function BoxStyleCard() {
+/** `bare`: inside a Settings pop-up, which supplies the card and the title. */
+export function BoxStyleCard({ bare = false }: { bare?: boolean } = {}) {
   const colors = useColors();
   const styles = makeStyles(colors);
   const style = useBoxStyle();
   return (
-    <View style={styles.section} testID="box-style-card">
-      <Text style={styles.label}>Recipe box style</Text>
+    <View style={bare ? undefined : styles.section} testID="box-style-card">
+      {bare ? null : <Text style={styles.label}>Recipe box style</Text>}
       <View style={[optionRow, styles.row]} accessibilityRole="radiogroup" accessibilityLabel="Recipe box style">
         {BOX_STYLES.map(({ view, label }) => (
           <SheetOption key={view} label={label} current={style === view} onPress={() => setBoxStyle(view)} role="radio" testID={`box-style-${view}`} />
