@@ -1,7 +1,7 @@
 /**
  * components/library/RecipeCard.tsx — one saved recipe, as a card in the
  * recipe box: its picture (or the meal-type art), its name, a ★ when it is
- * a favourite. The grid's card, two across (the Recipe Box's books draw
+ * a favorite. The grid's card, two across (the Recipe Box's books draw
  * their own pages, components/recipeBox/BookPage.tsx).
  *
  * What is NOT here any more: the progress bar and the step count. A card in
@@ -35,7 +35,7 @@ export function RecipeCard({ entry, onPress }: { entry: Entry; onPress: () => vo
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel={`${entry.recipe.title}${fav ? ', favourite' : ''}${primary ? `, ${MEAL_TYPE_LABELS[primary]}` : ''}`}
+      accessibilityLabel={`${entry.recipe.title}${fav ? ', favorite' : ''}${primary ? `, ${MEAL_TYPE_LABELS[primary]}` : ''}`}
       onPress={onPress}
       testID="library-card"
       style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
@@ -47,7 +47,7 @@ export function RecipeCard({ entry, onPress }: { entry: Entry; onPress: () => vo
           <MealTypeArt type={primary} size={36} color={book.color} seed={entry.id} />
         )}
         {fav ? (
-          <View style={styles.favBadge} accessibilityLabel="Favourite" testID="card-fav">
+          <View style={styles.favBadge} accessibilityLabel="Favorite" testID="card-fav">
             <Text style={styles.favText}>★</Text>
           </View>
         ) : null}

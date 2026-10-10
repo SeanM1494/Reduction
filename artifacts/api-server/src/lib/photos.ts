@@ -237,7 +237,7 @@ export async function fetchPagePhoto(imageUrl: string): Promise<Buffer> {
  * Fetch and store a page photo for a recipe. Never throws: this runs
  * fire-and-forget after a save, and from the on-demand route, and in both
  * places a failure means "no photo yet", which the card already handles.
- * Logged with the reason so a site that always fails can be recognised.
+ * Logged with the reason so a site that always fails can be recognized.
  */
 export async function capturePagePhoto(ownerKey: string, id: string, imageUrl: string): Promise<PhotoMeta | null> {
   try {

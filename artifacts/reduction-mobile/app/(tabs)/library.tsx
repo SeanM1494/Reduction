@@ -107,13 +107,13 @@ export default function LibraryScreen() {
 
   const chips = useMemo(() => {
     const out: Array<{ value: Filter; label: string }> = [{ value: 'all', label: 'All' }];
-    if (hasFavourites(entries)) out.push({ value: 'favourites', label: '★ Favourites' });
+    if (hasFavourites(entries)) out.push({ value: 'favourites', label: '★ Favorites' });
     for (const t of presentMealTypes(entries)) out.push({ value: t, label: MEAL_TYPE_LABELS[t] });
     if (hasUntagged(entries)) out.push({ value: 'untagged', label: 'Untagged' });
     return out;
   }, [entries]);
 
-  // A filter whose chip has gone (the last favourite un-starred) falls back
+  // A filter whose chip has gone (the last favorite un-starred) falls back
   // to everything rather than to an empty list with no chip lit.
   const effectiveFilter = chips.some((c) => c.value === filter) ? filter : 'all';
   // Searching spans every category: the strip hides while it runs.
@@ -162,7 +162,7 @@ export default function LibraryScreen() {
           ) : null}
         </View>
         {/* Below the empty box and its two buttons, full width: a reel
-            scrolls sideways, and inside the centred box it overflowed. */}
+            scrolls sideways, and inside the centered box it overflowed. */}
         <StarterReel
           busy={false}
           onPick={starter.open}

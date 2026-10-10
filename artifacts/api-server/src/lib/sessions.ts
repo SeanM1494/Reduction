@@ -7,7 +7,7 @@
  * hashes exist, applied to the thing that actually grants access.
  *
  * Expiry is enforced twice, deliberately:
- *   - on read, so an expired row is never honoured no matter what else is
+ *   - on read, so an expired row is never honored no matter what else is
  *     true, and is deleted the moment it is seen
  *   - by a periodic sweep, so rows nobody reads again do not accumulate
  * A created_at column that nothing ever acts on is not an expiry policy.

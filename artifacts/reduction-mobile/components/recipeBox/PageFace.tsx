@@ -18,7 +18,7 @@ import { MealTypeArt } from '@/components/library/MealTypeArt';
 import { fonts } from '@/constants/colors';
 import { useColors } from '@/hooks/useColors';
 
-// The same in both themes, 6:1 or better on either paper. The two greys are
+// The same in both themes, 6:1 or better on either paper. The two grays are
 // theme tokens (`paperMuted`, `paperFaint`): on the darker paper they had
 // to darken to keep 4.5:1 (Oct 1).
 export const INK = '#2a2118';

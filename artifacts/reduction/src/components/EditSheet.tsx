@@ -417,7 +417,7 @@ function IngredientFieldsForm({
       </div>
 
       {/* Delete is last, is the only red thing in the sheet, and says why it
-          cannot happen rather than going grey with no explanation. The
+          cannot happen rather than going gray with no explanation. The
           blocker is computed from the candidate tree, so it is the same
           answer the server would give. */}
       <div className="rd-field">

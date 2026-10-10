@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { HEADER_LEFT_PT, HEADER_RIGHT_PT, HEADER_SIDE_PT, TITLE_MIN_PT, titleButtonMaxWidth } from './headerTitle';
 
-test('a centred title (iOS) leaves the wider side free on both sides', () => {
+test('a centered title (iOS) leaves the wider side free on both sides', () => {
   for (const w of [320, 375, 390, 393, 430]) {
     const max = titleButtonMaxWidth(w, true);
     assert.ok(max + 2 * HEADER_SIDE_PT <= w, `${w}: ${max}`);

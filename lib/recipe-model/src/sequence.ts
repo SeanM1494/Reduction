@@ -132,7 +132,7 @@ export function componentIngredientIds(recipe: Recipe): Set<string> {
  * A cycle cannot be ordered and must not hang or drop sections. If one
  * exists — two sections each claiming to be an ingredient of the other, which
  * a bad parse can certainly produce — the remaining sections are emitted in
- * their original order. That is no worse than today's behaviour, and every
+ * their original order. That is no worse than today's behavior, and every
  * section still appears exactly once.
  */
 export function sectionOrder(recipe: Recipe, prefer?: OrderPreference): number[] {
@@ -155,7 +155,7 @@ export function sectionOrder(recipe: Recipe, prefer?: OrderPreference): number[]
    * terms of this one. The two differ on a corner: the batch loop emits
    * every already-ready section before anything it unblocked mid-pass, while
    * one-at-a-time selection would interleave them. sequence.test.ts pins the
-   * batch behaviour, and an ordering that shifted for people who never
+   * batch behavior, and an ordering that shifted for people who never
    * expressed a preference would be this feature's one way to break users who
    * never touched it.
    */
@@ -286,7 +286,7 @@ export function sectionSequence(recipe: Recipe, prefer?: OrderPreference): Seque
  * interleave the way the recipe does (sauté the filling, scramble the eggs,
  * cut the pastry, fill, THEN beat the egg wash and brush it on) instead of
  * a component section running whole before its consumer. The edges are
- * the same two kinds `sectionSequence` honours — a step's step-inputs, and
+ * the same two kinds `sectionSequence` honors — a step's step-inputs, and
  * a component ingredient's whole section (through its root, which every
  * other step of that section feeds) — so the invariant holds by
  * construction: a step never follows a step that consumes its output.
@@ -460,7 +460,7 @@ export interface BranchChoice {
 /**
  * Where this recipe actually leaves the cook a choice. The reorder view is
  * built from this rather than from its own reading of the tree, so what gets
- * a drag handle and what the walk will honour cannot disagree — the same
+ * a drag handle and what the walk will honor cannot disagree — the same
  * single-authority rule as validMoveTargets, with the walk as the authority.
  */
 export function branchChoices(recipe: Recipe): BranchChoice[] {

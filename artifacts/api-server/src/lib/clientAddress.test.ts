@@ -1,7 +1,7 @@
 /**
  * lib/clientAddress.test.ts — the per-client key (Sep 30). The chains below
  * are the SIX real X-Forwarded-For values the deployment reported, through
- * both hostnames, so a change that stops recognising what Replit actually
+ * both hostnames, so a change that stops recognizing what Replit actually
  * sends fails here first.
  */
 

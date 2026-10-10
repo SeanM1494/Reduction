@@ -227,7 +227,7 @@ function makeStyles(colors: Colors) {
       paddingVertical: 4,
     },
     badgeText: { fontSize: 16 },
-    // On the photo, so it keeps the paper colours whatever the theme: a
+    // On the photo, so it keeps the paper colors whatever the theme: a
     // dark disc on a dark photo would vanish.
     close: {
       position: 'absolute',

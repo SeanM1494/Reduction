@@ -1,7 +1,7 @@
 /**
  * books.ts — the recipe box's books, as the person owns them.
  *
- * WHAT A BOOK IS. A named, coloured, ordered place a recipe sits in. Every
+ * WHAT A BOOK IS. A named, colored, ordered place a recipe sits in. Every
  * recipe is in exactly one (the page numbering and the flip depend on it).
  * An account's books are ONE versioned document (`recipe_books` on the
  * server, a single-document write queue on the phone), and a recipe names
@@ -9,10 +9,10 @@
  * orphan anything.
  *
  * THE DEFAULTS are today's seven meal-type books, under the ids the phone
- * already used (`breakfast` … `other`), with the same names and colours, so
+ * already used (`breakfast` … `other`), with the same names and colors, so
  * an account that never customises sees exactly what it saw before. A
  * default book is hidden while empty; a book the person made is shown empty
- * ("Room for one more"). "Other" can be renamed and recoloured and can never
+ * ("Room for one more"). "Other" can be renamed and recolored and can never
  * be deleted: it is where anything without a better home goes.
  *
  * DELETING NEVER TOUCHES A RECIPE. A deleted book stays in the document as
@@ -57,8 +57,8 @@ export const MAX_LIVE_BOOKS_STORED = MAX_BOOKS * 2;
 export const MAX_BOOK_ENTRIES = 200;
 
 /**
- * The colours a book can be. A book is an object, like its cream pages, so
- * the colour does not follow the theme — and its tab carries 11px white
+ * The colors a book can be. A book is an object, like its cream pages, so
+ * the color does not follow the theme — and its tab carries 11px white
  * text, so every one here is 4.5:1 or better against white, and stays
  * visible on both page backgrounds (books.test.ts computes all three). The
  * first seven are the defaults' own. Dropped when chosen (Sep 29): sage
@@ -82,7 +82,7 @@ export const BOOK_COLORS: ReadonlyArray<{ name: string; hex: string }> = [
 export const colorName = (hex: string): string =>
   BOOK_COLORS.find((c) => c.hex.toLowerCase() === hex.toLowerCase())?.name ?? "Custom";
 
-/** Today's seven, exactly: ids, names, colours, order. */
+/** Today's seven, exactly: ids, names, colors, order. */
 export const DEFAULT_BOOKS: readonly BookDef[] = [
   { id: "breakfast", name: "Breakfast", color: "#986d29", position: 0, createdAt: 0 },
   { id: "lunch", name: "Lunch", color: "#657c51", position: 1, createdAt: 0 },
@@ -163,7 +163,7 @@ export function bookNameProblem(books: readonly BookDef[], raw: unknown, exceptI
   return clash ? `You already have a book called ${clash.name}.` : null;
 }
 
-/** The first colour no live book is using; round the set again when all are. */
+/** The first color no live book is using; round the set again when all are. */
 export function nextBookColor(books: readonly BookDef[]): string {
   const used = new Set(liveBooks(books).map((b) => b.color.toLowerCase()));
   const free = BOOK_COLORS.find((c) => !used.has(c.hex.toLowerCase()));
@@ -177,7 +177,7 @@ export class BookEditError extends Error {}
 export const bookLimitMessage = `You can have up to ${MAX_BOOKS} books. Delete or merge one to make room.`;
 
 const assertColor = (hex: string) => {
-  if (!BOOK_COLORS.some((c) => c.hex.toLowerCase() === hex.toLowerCase())) throw new BookEditError("Choose one of the book colours.");
+  if (!BOOK_COLORS.some((c) => c.hex.toLowerCase() === hex.toLowerCase())) throw new BookEditError("Choose one of the book colors.");
 };
 const liveOrThrow = (books: readonly BookDef[], id: string) => {
   const b = books.find((x) => x.id === id);
@@ -282,7 +282,7 @@ const same = (a: unknown, b: unknown) => JSON.stringify(a ?? null) === JSON.stri
  * server's list as `theirs`, and sends the result.
  *
  *  - A book only one side has is kept (made on that device).
- *  - Name, colour, position: one side changed it → that side; both → mine
+ *  - Name, color, position: one side changed it → that side; both → mine
  *    (the later write — last change wins).
  *  - Deletion beats an edit: deleted on either side stays deleted. Both
  *    deleted it with different destinations: one side changed its mind
@@ -356,7 +356,7 @@ export function repairBooks(books: readonly BookDef[]): BookDef[] {
 const ID_RE = /^[A-Za-z0-9_-]{1,64}$/;
 
 /** What a server checks before storing a list: shape, bounds, a live
- *  Other, clean unique live names, colours from the set, destinations that
+ *  Other, clean unique live names, colors from the set, destinations that
  *  exist. Empty when it is fine. */
 export function validateBooks(raw: unknown): string[] {
   if (!Array.isArray(raw)) return ["books must be a list."];
@@ -370,7 +370,7 @@ export function validateBooks(raw: unknown): string[] {
     else ids.add(b.id);
     if (typeof b.name !== "string") errors.push(`Book ${b.id} has no name.`);
     if (typeof b.color !== "string" || !BOOK_COLORS.some((c) => c.hex.toLowerCase() === b.color.toLowerCase()))
-      errors.push(`Book ${b.id} has a colour outside the set.`);
+      errors.push(`Book ${b.id} has a color outside the set.`);
     if (typeof b.position !== "number" || !Number.isFinite(b.position)) errors.push(`Book ${b.id} has no position.`);
     if (b.createdAt !== undefined && (typeof b.createdAt !== "number" || !Number.isFinite(b.createdAt))) errors.push(`Book ${b.id} has a bad createdAt.`);
     if (b.deletedAt != null && (typeof b.deletedAt !== "number" || !Number.isFinite(b.deletedAt))) errors.push(`Book ${b.id} has a bad deletedAt.`);

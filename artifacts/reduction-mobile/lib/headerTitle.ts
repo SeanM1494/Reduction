@@ -21,7 +21,7 @@ export const HEADER_RIGHT_PT = 64;
 /** A short title ("Pho") still gets a target this wide. */
 export const TITLE_MIN_PT = 120;
 
-export function titleButtonMaxWidth(screenWidth: number, centred: boolean): number {
-  const room = centred ? screenWidth - 2 * HEADER_SIDE_PT : screenWidth - HEADER_LEFT_PT - HEADER_RIGHT_PT;
+export function titleButtonMaxWidth(screenWidth: number, centered: boolean): number {
+  const room = centered ? screenWidth - 2 * HEADER_SIDE_PT : screenWidth - HEADER_LEFT_PT - HEADER_RIGHT_PT;
   return Math.max(TITLE_MIN_PT, Math.floor(room));
 }

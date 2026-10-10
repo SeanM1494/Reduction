@@ -54,7 +54,7 @@ const MOUSE_SLOP = 4;
  *  the *page* scrolls — and it has to be done here because the drag suppresses
  *  native touch scrolling for its whole duration, so on a short screen a step
  *  one row further down would be unreachable too. Measured on an iPhone SE the
- *  next step down is already off screen when an ingredient is centred, so this
+ *  next step down is already off screen when an ingredient is centered, so this
  *  is not a nicety. */
 const EDGE_PX = 44;
 const EDGE_SPEED = 14;

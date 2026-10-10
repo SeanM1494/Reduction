@@ -39,7 +39,7 @@ export function CoachLegend() {
   const colors = useColors();
   const done = doneBackground(colors);
   return (
-    <View style={styles.legend} accessibilityLabel="Steps show three states: grey when something it needs is still outstanding, amber when it can be done now, and struck through in green once it is done.">
+    <View style={styles.legend} accessibilityLabel="Steps show three states: gray when something it needs is still outstanding, amber when it can be done now, and struck through in green once it is done.">
       <Swatch label="not yet" bg={colors.card} border={colors.border} color={colors.foreground} colors={colors} />
       <Swatch label="do this now" bg={colors.warmBg} border={colors.warmLine} color={colors.warmInk} colors={colors} ring />
       <Swatch label="done" bg={done} border={colors.border} color={colors.coolInk} colors={colors} struck />

@@ -22,7 +22,7 @@
  *
  * FAILS SHARED, NEVER SPOOFABLE. No listed address in the chain, nothing valid
  * left of it, no header, or no (valid) setting: the key is the socket's peer —
- * the shared bucket this replaced, which is merely today's behaviour. When the
+ * the shared bucket this replaced, which is merely today's behavior. When the
  * setting is present but no listed address appears, the log names the entry
  * where one should have been (see `edgeCandidate`) so the fix is a secret
  * edit. A client address is never logged; where a key must be shown, it

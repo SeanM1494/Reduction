@@ -67,7 +67,7 @@ function RootLayoutNav() {
   // in the process is the one that counts (a sign-in later in the session
   // lands nowhere new). Recorded in a lazy initializer — once, before this
   // tree's effects, and not a side effect the React Compiler may memoize.
-  // The navigator mounts on Find first, so a cover the page colour hides
+  // The navigator mounts on Find first, so a cover the page color hides
   // that one frame until the move is made; a notification or a link has
   // already gone where it points, and is never moved.
   const [covered, setCovered] = useState(() => {
@@ -232,7 +232,7 @@ function Gate() {
   );
 }
 
-/** Before sign-in is known, which can wait on the network: the page colour,
+/** Before sign-in is known, which can wait on the network: the page color,
  *  and a spinner only once the wait is long enough to notice (300ms), so a
  *  quick launch never flashes one. Never a blank screen after the reveal. */
 function Loading() {

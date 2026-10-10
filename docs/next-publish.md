@@ -49,7 +49,7 @@ Oct 3 and are in this Publish. On `main` itself: `expo.version` is still
 is one of `expo`'s own modules and already inside build 7 (`expo` 57
 depends on it at the same version); no other phone file imports a new
 package. The only native changes
-are the icon (`65e0146`) and the dark splash colour (`94ba91b`); both live in
+are the icon (`65e0146`) and the dark splash color (`94ba91b`); both live in
 the binary and wait for build 8, and an update carrying them is harmless to
 build 7. Step 9c checks the version again right before the phone update.
 
@@ -62,7 +62,7 @@ build 7. Step 9c checks the version again right before the phone update.
 | `65e0146` Icon: the plain pot with steam | Website: favicon, home-screen icon and nav mark become the new pot. Phone: the app icon and the sign-in mark, which are in the BINARY, so they reach phones only with the next native build (the launch build). The opening sequence is unchanged | This Publish for the website; the launch build for the phone. No `expo.version` bump (nothing a bundle calls) |
 | `d041448` Paywall: no in-app codes on iPhone, wall copy for three recipes, atomic metered save | Server: with the wall ON, saves racing for the last free recipe let exactly one through (wall off, as now, changes nothing). Phone: the "Have a code?" box is gone on iPhone (wall and Settings, guideline 3.1.1); the wall says "Your recipes are yours to keep" and its button opens the library. No new SQL | This Publish for the server; the phone part rides the next over-the-air update (preview, then promote) |
 | `ac19369` Account deletion: revoke the Sign in with Apple token | Server: the Apple callback keeps the refresh token Apple returns (new `apple_tokens` table), and deleting an account revokes it at Apple after the rows are gone; `/api/health` checks the table. Website and phone: when it could not be revoked (any account that signed in before this shipped), the "account deleted" message says to remove Reduction under Settings › Apple Account › Sign in with Apple. Privacy: "Your account" and "Deleting your account" say so, dated October 3. README "Sign in with Apple" | Step 2b's SQL **before** the pull; this Publish; the phone's wording rides the same over-the-air update. The revoke call has never run (Apple's hosts are blocked from Claude's container): the first real one is step 9b |
-| `94ba91b` Phone: the dark splash is Cocoa #211a16, and the opening starts on it | Phone: the dark launch screen colour (in the BINARY, so build 8) and the opening sequence's dark starting colour (over the air). On build 7 a dark-mode launch now steps from the old splash colour to the new one as the intro begins; build 8 removes that step | The launch build for the splash; the next over-the-air update for the opening's colour. No `expo.version` bump |
+| `94ba91b` Phone: the dark splash is Cocoa #211a16, and the opening starts on it | Phone: the dark launch screen color (in the BINARY, so build 8) and the opening sequence's dark starting color (over the air). On build 7 a dark-mode launch now steps from the old splash color to the new one as the intro begins; build 8 removes that step | The launch build for the splash; the next over-the-air update for the opening's color. No `expo.version` bump |
 | `a614705` Opening sequence: the pot without its bars | Phone only: the intro's pot loses the four bars, matching the new icon; the pour is unchanged | The next over-the-air update (preview, then promote); nothing on the server |
 | `0c343de` Server: daily brakes on paid model calls (PR #12) | Server only: three daily ceilings read from `extraction_events` (no new table): about $100 of estimated model spend a day for everyone (Sean, Oct 3; was $25 in the PR) (then extraction and search pause until midnight UTC, saved recipes unaffected), 150 fresh signed-out extractions a day in all, 40 fresh extractions a day per account. A cache hit never counts. Each is an env var (`EXTRACTION_DAILY_BUDGET_USD`, `SIGNED_OUT_DAILY_EXTRACTIONS`, `ACCOUNT_DAILY_EXTRACTIONS`; a number or `off`); unset means those defaults. Build 7 shows the refusal's own sentence, as it does any error. README "Daily cost brakes" | This Publish; no SQL; nothing on the phone. Owner, separately: a spend limit and alert in the Anthropic Console |
 | `13c7530` Usage: which view people cook in, and a report on coming back and cooking | Server: six more names the app may count (`recipe_opened`, `view_steps`, `ticked_*`, `finished_*`), and `GET /api/admin/usage` (README "Usage counters"). Website: the same counts from a saved recipe; `privacy.html` adds "To see, in totals, how the app is used", dated October 3. Phone: the same counts from a saved recipe | This Publish (server FIRST: the old server answers the new names 400, which the app ignores, so nothing breaks but nothing counts); the phone part rides the same over-the-air update. No SQL |
@@ -495,7 +495,7 @@ first:
 
 No commit in this list changes native code, so none needs a new build or
 an `expo.version` bump. The one native thing still waiting is the dark
-splash colour (ROADMAP "Dark mode: Cocoa"), for the next build.
+splash color (ROADMAP "Dark mode: Cocoa"), for the next build.
 
 **Revert of the Expo Go change, if it is ever wanted back:**
 `git revert --no-edit 4ccd674` — then Publish. (Tell Claude, so GitHub gets

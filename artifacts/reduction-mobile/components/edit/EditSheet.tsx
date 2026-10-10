@@ -186,7 +186,7 @@ function Blocked({ text }: { text: string }) {
 }
 
 /** A field's small label, with an optional quieter hint after it. Its
- *  colours are the theme's: they were light-mode literals until Oct 1, so in
+ *  colors are the theme's: they were light-mode literals until Oct 1, so in
  *  dark mode they drew dark brown on the dark sheet. */
 function SubLabel({ children, hint }: { children: React.ReactNode; hint?: string }) {
   const colors = useColors();
@@ -730,7 +730,7 @@ function makeStyles(colors: Colors) {
     fieldRaised: { zIndex: 10, elevation: 10 },
     label: { fontSize: 12.5, fontWeight: '600', color: colors.mutedForeground, marginBottom: 5 },
     hint: { fontWeight: '400', color: colors.faint },
-    // .rd-field-input: 44px, 16px (the input floor), page colour on a hairline.
+    // .rd-field-input: 44px, 16px (the input floor), page color on a hairline.
     input: {
       minHeight: 44,
       fontSize: 16,

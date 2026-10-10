@@ -196,7 +196,7 @@ test('Reduce Motion: the still for 0.5s, then a 0.4s crossfade', () => {
   assert.equal(staticOpacity(0.9, STATIC.hold, STATIC.fade), 0);
 });
 
-test('the dark-mode opening fades from the splash colour to cream first', () => {
+test('the dark-mode opening fades from the splash color to cream first', () => {
   const st = PHONES['iPhone 13'];
   const s = (t: number) => sceneAt(FULL, t, st, PARTS.full, PARTS.bubbles, 0, 0.25, FADE_LEVELS);
   assert.equal(s(-0.25).bgCream, 0);

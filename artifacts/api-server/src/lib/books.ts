@@ -76,7 +76,7 @@ export type PutBooksResult =
  * Replace the list, if `ifVersion` still matches. A stale write gets the
  * current list back (the 409 body), and the phone merges (mergeBooks) and
  * retries — the server never merges. Validated here whatever the client
- * did: shape, a live Other, clean unique names, colours from the set.
+ * did: shape, a live Other, clean unique names, colors from the set.
  */
 export async function putBooks(userId: string, books: unknown, ifVersion: number): Promise<PutBooksResult> {
   const errors = validateBooks(books);

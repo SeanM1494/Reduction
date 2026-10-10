@@ -898,7 +898,7 @@ export function parseAmount(input: string): ParsedAmount {
   const single = parseNumber(raw);
   if (single != null) return { qty: single, qtyMax: null, text: null };
 
-  // Not a number in any form we recognise — keep it exactly as typed. This is
+  // Not a number in any form we recognize — keep it exactly as typed. This is
   // the "to taste" / "1 (14 oz) can" case validateRecipe's `text` exists for.
   return { qty: null, qtyMax: null, text: raw };
 }

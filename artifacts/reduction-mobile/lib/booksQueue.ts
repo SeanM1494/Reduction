@@ -174,7 +174,7 @@ export function createBooksQueue(api: BooksTransport, events: BooksEvents, optio
         }
       }).then(() => (dirty ? flush() : undefined)),
 
-    /** Add, rename, recolour, reorder: shown at once, sent through the
+    /** Add, rename, recolor, reorder: shown at once, sent through the
      *  queue, merged on a 409, kept through an offline window. `edit` may
      *  throw a BookEditError (a clash, the cap), which the caller shows. */
     edit(change: (books: BookDef[]) => BookDef[]) {

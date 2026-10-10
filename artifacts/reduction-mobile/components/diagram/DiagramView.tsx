@@ -39,11 +39,11 @@
  * scroller's offset. Nothing in the grid moves during the drag. Both
  * scrollers — the frame's and the page's — scroll themselves while the
  * finger loiters near an edge, because on a phone the next step down is
- * off screen the moment an ingredient is centred (measured on the web on an
+ * off screen the moment an ingredient is centered (measured on the web on an
  * iPhone SE; same geometry here).
  * The first version drew hairlines in `border` directly on the page — which
  * is within a shade of the page — and painted ingredient cells in the page
- * colour, so on a phone the grid had no outlines and the sticky column was
+ * color, so on a phone the grid had no outlines and the sticky column was
  * loose text. Every value here has a named counterpart in index.css; if one
  * changes there, change it here.
  */
@@ -119,7 +119,7 @@ const GHOST_WIDTH = 150;
 const EMPTY_TARGETS: ReadonlySet<string> = new Set();
 
 /**
- * color-mix(in srgb, a W%, b) for two hex colours. The dark theme's cool and
+ * color-mix(in srgb, a W%, b) for two hex colors. The dark theme's cool and
  * warm tokens are rgba with their own transparency and composite correctly
  * over the card on their own, so anything that is not plain hex is returned
  * as it is.
@@ -355,7 +355,7 @@ interface DiagramCellProps {
  * measured in the RN-web build) because the cells were closures over the
  * section's `done` set. This component takes the three booleans `stateOf`
  * derives instead of the set, plus references that hold their identity
- * across renders — the layout's Cell, the solved rect, the memoised colour
+ * across renders — the layout's Cell, the solved rect, the memoised color
  * object, the shared pulse value and a ref-backed toggle — so React's
  * shallow compare skips every cell whose state did not move.
  */
@@ -439,7 +439,7 @@ const DiagramCell = memo(function DiagramCell({
         borderLeftColor: isDone ? colors.coolLine : colors.borderStrong,
       }}
     >
-      {/* The content sits in an absolute box with no height, centred by
+      {/* The content sits in an absolute box with no height, centered by
           arithmetic rather than by justifyContent. Inside a box of definite
           height, Yoga measures a child text against that height (FitContent
           — CalculateLayout.cpp) and iOS lays out only the lines that fit,
@@ -505,8 +505,8 @@ const DiagramCell = memo(function DiagramCell({
 });
 
 /**
- * Colorblind mode's non-colour "ready" cue: the web's `.rd-op.is-ready
- * .rd-mark` triangle, top right, in the warm line colour. Colour alone
+ * Colorblind mode's non-color "ready" cue: the web's `.rd-op.is-ready
+ * .rd-mark` triangle, top right, in the warm line color. Color alone
  * cannot carry "you can do this now" for someone who cannot tell the warm
  * ring from the cool one, so the shape does. Exported for the strip.
  */

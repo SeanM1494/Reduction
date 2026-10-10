@@ -22,9 +22,9 @@
  * WHAT MAY BE DRAGGED IS DECIDED BY sequence.ts, NOT HERE
  *
  * `branchChoices` and `freeSectionIndices` come from the same module as the
- * walk that will honour the result — the single-authority rule from
+ * walk that will honor the result — the single-authority rule from
  * validMoveTargets, with the walk as the authority. A row only gets a grip
- * when the walk can actually honour a move of it, so movability is visible
+ * when the walk can actually honor a move of it, so movability is visible
  * BEFORE the gesture, not discovered at the drop. (That is one better than
  * the ingredient drag, which lights targets at pickup; see ROADMAP for
  * whether it should adopt the grip too.) Sections inside a name link get no
@@ -163,7 +163,7 @@ export default function ReorderView({ recipe, entry, done, onUpdate, onClose }: 
       }
     },
     resolve: {
-      // Both target sets restate what the walk can honour: any other section
+      // Both target sets restate what the walk can honor: any other section
       // for a free section (a free section is in no link, so every position
       // in the displayed order is realisable), and only the sibling roots of
       // the same convergence for a branch.

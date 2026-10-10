@@ -49,7 +49,7 @@ test('recently added is the default order, and by total time the unstated sort l
   assert.deepEqual(lib.map((e) => e.id), ['old', 'new', 'mid']);
 });
 
-test('favourites first ranks 👍 then unrated then 👎, newest within each', () => {
+test('favorites first ranks 👍 then unrated then 👎, newest within each', () => {
   const lib = [
     item({ id: 'reject', savedAt: 9, rating: -1 }),
     item({ id: 'fav-old', savedAt: 1, rating: 1 }),
@@ -66,7 +66,7 @@ test('favourites first ranks 👍 then unrated then 👎, newest within each', (
   assert.equal(arrangeLibrary(lib, 'all', 'rating').length, 4);
 });
 
-test('filters: meal type matches any tag, untagged and favourites are exact', () => {
+test('filters: meal type matches any tag, untagged and favorites are exact', () => {
   const lib = [
     item({ id: 'dinner', recipe: { mealTypes: ['dinner', 'lunch'] } }),
     item({ id: 'bare', recipe: {} }),

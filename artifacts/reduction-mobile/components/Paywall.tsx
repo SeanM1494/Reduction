@@ -10,7 +10,7 @@
  * the SubscribeBox renders nothing and the wall only states the limit. A
  * user who subscribed on the web still unlocks here automatically through
  * the shared entitlement check (auth-context.tsx); that is not a purchase
- * flow, just recognising an existing one.
+ * flow, just recognizing an existing one.
  *
  * It offers a code (components/CouponBox.tsx) only where `COUPONS_OFFERED`
  * says so, which is never on an iPhone: a code of our own that unlocks

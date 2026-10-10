@@ -5,7 +5,7 @@
  * The shape is the Recipe Box's book tab (Book.tsx): rounded top corners,
  * joined to what is under it. The pane is the PAGE itself (Sep 29: the
  * cream pane read as a white slab across the tan app), so the chosen tab is
- * the page's colour with no line between it and the pane — the front
+ * the page's color with no line between it and the pane — the front
  * folder — and the others sit behind it: a shade DARKER than the page in
  * light (borderStrong, text in full foreground, 8.3:1), the raised card
  * brown of the cells in dark (`tabBack`, muted text 6.7:1, edge
@@ -98,11 +98,11 @@ function makeStyles(colors: Colors) {
       borderWidth: 1,
       borderBottomWidth: 0,
     },
-    // The front folder: the pane's colour, drawn 1pt over the pane's edge so
+    // The front folder: the pane's color, drawn 1pt over the pane's edge so
     // no line separates them.
     tabActive: { backgroundColor: colors.background, borderColor: colors.borderStrong, marginBottom: -1, paddingBottom: 1 },
     // The folders behind: their own tokens (Oct 1), so the dark palette
-    // sets them — the cell colour with a darker edge than the cell rules.
+    // sets them — the cell color with a darker edge than the cell rules.
     tabBack: { backgroundColor: colors.tabBack, borderColor: colors.tabBackLine },
     cart: { marginLeft: 'auto', marginBottom: 2 },
     tabPressed: { borderColor: colors.borderStrong },

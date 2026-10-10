@@ -11,7 +11,7 @@
  * is money taken; what unlocks the app is the server verifying the signed
  * transaction (POST /api/billing/apple/verify), which 503s until the Apple
  * adapter is configured. So `available()` asks the server first and only
- * then the store, and the wall never shows a price it cannot honour.
+ * then the store, and the wall never shows a price it cannot honor.
  *
  * THE ACCOUNT TOKEN. `appAccountToken` = the user's id (a v4 UUID, which is
  * what StoreKit requires of it) rides inside the signed transaction and is

@@ -54,7 +54,7 @@ export interface Entitlement {
   subscribed: boolean;
   status: SubStatus | null;
   /** Which provider is paying for this, when one is. Display and support
-   *  only — never branch app behaviour on it. */
+   *  only — never branch app behavior on it. */
   provider: string | null;
   allowance: number;
   used: number;
@@ -87,7 +87,7 @@ export function paywallEnforcedGlobally(): boolean {
  * Instead: grace IS the provider's retry window, by definition. `past_due`
  * maps to 'grace' and stays there until the provider itself says the
  * subscription ended. There is no timer here to get wrong, and changing the
- * retry policy in the Stripe Dashboard changes this app's behaviour with no
+ * retry policy in the Stripe Dashboard changes this app's behavior with no
  * deploy.
  */
 const ENTITLING: ReadonlySet<SubStatus> = new Set<SubStatus>(["active", "grace"]);

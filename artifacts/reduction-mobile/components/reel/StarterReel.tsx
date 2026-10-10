@@ -493,7 +493,7 @@ function makeStyles(colors: Colors) {
       shadowOffset: { width: 0, height: 1 },
     },
     badgeText: { fontSize: 12, lineHeight: 15, fontWeight: '600', color: '#2a2118' },
-    // The page's muted grey (the time, the serves line): a theme token, darker
+    // The page's muted gray (the time, the serves line): a theme token, darker
     // on the dark paper (Oct 1).
     site: { fontSize: 11, lineHeight: 15, color: colors.paperMuted },
   });

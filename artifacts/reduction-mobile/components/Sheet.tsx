@@ -16,7 +16,7 @@
  * FADES where it is and only the card slides up, both from one progress
  * value, and closing reverses it before the Modal goes. Reduce Motion
  * keeps a short fade and does not slide. A dialog that asks something is a
- * centred window instead (components/Window.tsx).
+ * centered window instead (components/Window.tsx).
  */
 
 import React, { useEffect, useRef, useState } from 'react';
@@ -115,7 +115,7 @@ export function Sheet({ open, title, onClose, closeLabel = 'Done', avoidKeyboard
   );
 }
 
-/** The web's `.rd-btn`: a small bordered button on the card colour. 44px
+/** The web's `.rd-btn`: a small bordered button on the card color. 44px
  *  tall whatever its label, because it sits under a thumb. */
 export function SheetButton({
   label,

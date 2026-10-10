@@ -4,7 +4,7 @@
  *
  * Same data, same `done` set as the diagram — this just walks it as a card
  * sequence instead of a table. The order comes from shared/sequence.ts
- * (`cardSequence`, honouring `entry.order` as an advisory tie-break), which
+ * (`cardSequence`, honoring `entry.order` as an advisory tie-break), which
  * derives it from computeLayout's own columns and rows and then orders the
  * sections so a component is made before the section that consumes it. A
  * queue that hands you "bake" before "mix the dry ingredients" is wrong in a

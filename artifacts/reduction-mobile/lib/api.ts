@@ -117,7 +117,7 @@ async function request(path: string, init?: RequestInit, timeoutMs: number = REQ
 
   // Two things can stop this request and they mean opposite things, so the
   // controller is ours and the caller's signal is chained onto it: a
-  // timeout is a failure to report, a cancel is a decision to honour
+  // timeout is a failure to report, a cancel is a decision to honor
   // silently. Chaining rather than passing the caller's signal straight
   // through is what keeps the timeout working for a cancellable call.
   const external = init?.signal ?? null;
