@@ -121,3 +121,8 @@ test('equally idle recipes keep the tray order, newest movement first', () => {
   const list = [entry('x', ['s1']), entry('y', ['s1']), entry('me')];
   assert.deepEqual(switchChips(list, 'me', NOW).chips.map((c) => c.entry.id), ['x', 'y']);
 });
+
+test('pruning against an empty library (not loaded yet) keeps every mark', () => {
+  const marks = { a: { at: 1 }, b: { at: 2 } };
+  assert.equal(pruneMarks(marks, new Set()), marks);
+});
