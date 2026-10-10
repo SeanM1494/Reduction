@@ -19,7 +19,6 @@ import { useTabBarClearance } from '@/hooks/useTabBarClearance';
 import React, { useCallback, useRef, useState } from 'react';
 import { AccessibilityInfo, Alert, Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router, useFocusEffect } from 'expo-router';
 import { useAuth } from '@/lib/auth-context';
 import { useLibrary } from '@/lib/library-context';
