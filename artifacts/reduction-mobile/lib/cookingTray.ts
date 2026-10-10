@@ -106,6 +106,11 @@ export function clearAll(marks: TrayMarks, ids: string[]): TrayMarks {
 /** Marks for recipes that no longer exist are dropped so the stored map
  *  does not grow for ever. */
 export function pruneMarks(marks: TrayMarks, liveIds: Set<string>): TrayMarks {
+  // No recipes known is "the library has not loaded", not "all were deleted":
+  // pruning then wipes every mark, and the wipe is persisted. That is how a
+  // hard close emptied the tray for good (the marks of a recipe that really
+  // goes are pruned the next time any other recipe is known).
+  if (liveIds.size === 0) return marks;
   const keys = Object.keys(marks);
   if (keys.every((k) => liveIds.has(k))) return marks;
   return Object.fromEntries(keys.filter((k) => liveIds.has(k)).map((k) => [k, marks[k]]));

@@ -36,7 +36,7 @@ const CookingContext = createContext<CookingState | null>(null);
 export function CookingProvider({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
   const userId = user?.id ?? null;
-  const { entries } = useLibrary();
+  const { entries, settled } = useLibrary();
   const [marks, setMarks] = useState<TrayMarks>({});
   const [loaded, setLoaded] = useState(false);
   const [now, setNow] = useState(() => Date.now());
@@ -72,7 +72,7 @@ export function CookingProvider({ children }: { children: React.ReactNode }) {
 
   // See movement. A recipe met for the first time is remembered, not marked.
   useEffect(() => {
-    if (!loaded) return;
+    if (!loaded || !settled) return;
     const t = Date.now();
     let next = marks;
     for (const e of entries) {
@@ -83,7 +83,7 @@ export function CookingProvider({ children }: { children: React.ReactNode }) {
     }
     const pruned = pruneMarks(next, new Set(entries.map((e) => e.id)));
     if (pruned !== marks) setMarks(pruned);
-  }, [entries, loaded, marks]);
+  }, [entries, loaded, settled, marks]);
 
   // Re-evaluate the clock once a minute so an old mark expires on screen.
   useEffect(() => {
