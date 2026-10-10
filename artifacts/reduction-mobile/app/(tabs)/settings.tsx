@@ -15,6 +15,7 @@
  * while another is still dismissing.
  */
 
+import { useTabBarClearance } from '@/hooks/useTabBarClearance';
 import React, { useCallback, useRef, useState } from 'react';
 import { AccessibilityInfo, Alert, Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
@@ -72,7 +73,7 @@ export default function SettingsScreen() {
   const owner = isOwner(user);
   const [introTesting, setIntroTesting] = useState(false);
   const { entries } = useLibrary();
-  const insets = useSafeAreaInsets();
+  const tabClearance = useTabBarClearance();
   const [manageError, setManageError] = useState<string | null>(null);
   const [pop, setPop] = useState<Pop | null>(null);
   const boxStyle = useBoxStyle();
@@ -165,7 +166,7 @@ export default function SettingsScreen() {
   const who = user?.name || user?.email || 'Signed in';
 
   return (
-    <ScrollView showsVerticalScrollIndicator={false} showsHorizontalScrollIndicator={false} style={styles.container} contentContainerStyle={[styles.content, { paddingBottom: 84 + insets.bottom + 24 }]}>
+    <ScrollView showsVerticalScrollIndicator={false} showsHorizontalScrollIndicator={false} style={styles.container} contentContainerStyle={[styles.content, { paddingBottom: tabClearance + 24 }]}>
       <SettingGroup title="Cooking">
         <SettingRow label="Timers" value={timerSummary(timerState)} onPress={() => setPop('timers')} testID="settings-timers" />
         <SettingRow label="Measurements" value={unitLabel} onPress={() => setPop('measure')} testID="settings-measure" />
