@@ -6,7 +6,7 @@
  * underneath as normal. It owns the native splash's exit: the splash stays
  * up until this launch is decided (lib/opening/launch.ts, capped at 400ms
  * once the app is active), then either hides at once (no sequence) or
- * hides on the sequence's first frame, which is the same colour.
+ * hides on the sequence's first frame, which is the same color.
  *
  * Settings' "Replay intro" and the testing sheet play it here too, over
  * whatever screen is open, touching no stamps.
@@ -32,7 +32,7 @@ interface Run {
 /** Web, development only: `?opening=full|quick|static` plays that version
  *  regardless of the stamps, `&t=2.4` freezes it on that frame, `&ready=0`
  *  keeps the app "not ready" (the hold), `&dark=1` opens from the dark
- *  splash colour. For screenshots in Chromium; never in a build. */
+ *  splash color. For screenshots in Chromium; never in a build. */
 function devRequest(): (Run & { ready: boolean }) | null {
   if (Platform.OS !== 'web' || !__DEV__ || typeof window === 'undefined') return null;
   const q = new URLSearchParams(window.location.search);

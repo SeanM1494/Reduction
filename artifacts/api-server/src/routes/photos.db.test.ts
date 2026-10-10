@@ -98,7 +98,7 @@ async function saveRecipe(userId: string, recipe: Record<string, unknown> = RECI
   return { id, entry: r.body.entry };
 }
 
-/** A solid-colour image of the given size, as PNG bytes. */
+/** A solid-color image of the given size, as PNG bytes. */
 async function png(width: number, height: number, color = 0xff8800ff): Promise<Buffer> {
   return new Jimp({ width, height, color }).getBuffer("image/png");
 }

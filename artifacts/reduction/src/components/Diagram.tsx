@@ -236,7 +236,7 @@ export default function Diagram({
   const showTable = treeDone ? override : true;
 
   /**
-   * The one place a cell's behaviour is decided, which is why edit mode hooks
+   * The one place a cell's behavior is decided, which is why edit mode hooks
    * in here rather than anywhere else. In edit mode a tap opens fields and
    * never toggles `done` — someone who wanders in and taps around must not
    * quietly complete their recipe, and `aria-pressed` goes with it, because

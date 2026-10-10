@@ -12,7 +12,7 @@
  *
  * Cream paper in both themes: a book is a physical object. In dark mode the
  * paper is a step darker (`paper`, Cocoa, Oct 1) so it does not glare off
- * the page; its inks are the same except the greys (`paperMuted`,
+ * the page; its inks are the same except the grays (`paperMuted`,
  * `paperFaint`), darkened there to keep 4.5:1. The paper darkens a little
  * toward the spine on each side (`paperSpine`).
  */

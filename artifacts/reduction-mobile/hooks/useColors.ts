@@ -12,7 +12,7 @@ import { useThemeState } from '@/lib/theme-context';
  * on its own, as it always did. Colorblind mode swaps the warm/cool
  * "ready vs. done" accents for a blue/orange pair the web defines under
  * [data-colorblind="true"], on top of whichever base is active, and sets
- * `colorblind` so the diagram can add its non-colour ready cue.
+ * `colorblind` so the diagram can add its non-color ready cue.
  *
  * Memoised on (base, colorblind), so the object's identity is stable
  * across renders — DiagramView's memoised cells depend on that: a fresh

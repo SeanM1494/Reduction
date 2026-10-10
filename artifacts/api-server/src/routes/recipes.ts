@@ -722,7 +722,7 @@ export async function withCacheFlags(results: SearchResult[]): Promise<SearchRes
     hits = await cachedAmong(results.map((r) => r.url));
   } catch (e) {
     // A cache lookup failing must not fail the search. Everything is simply
-    // unmarked, which is exactly the behaviour before this existed.
+    // unmarked, which is exactly the behavior before this existed.
     console.error("[search:cacheFlags]", e);
     return results;
   }

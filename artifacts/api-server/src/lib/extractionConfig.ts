@@ -36,7 +36,7 @@ export const EXTRACTION_MAX_TOKENS = 16_000;
 export const DEFAULT_EFFORT: ExtractionEffort = "low";
 
 /** EXTRACTION_EFFORT as a level, or null for "the model's default"
- *  ("default"). Unset — or anything unrecognised, since a typo in a secret
+ *  ("default"). Unset — or anything unrecognized, since a typo in a secret
  *  must not take extraction down — is DEFAULT_EFFORT. */
 export function extractionEffort(env: NodeJS.ProcessEnv = process.env): ExtractionEffort | null {
   const raw = env.EXTRACTION_EFFORT?.trim().toLowerCase();

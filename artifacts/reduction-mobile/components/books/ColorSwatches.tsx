@@ -1,6 +1,6 @@
 /**
- * components/books/ColorSwatches.tsx — the twelve book colours, as 44pt
- * swatches. A fixed set rather than a colour wheel (recipe-model
+ * components/books/ColorSwatches.tsx — the twelve book colors, as 44pt
+ * swatches. A fixed set rather than a color wheel (recipe-model
  * BOOK_COLORS): every one keeps a tab's white text readable, which a free
  * choice could not promise. Each reads its name to VoiceOver ("Plum,
  * selected"), and the chosen one carries a check, not only an outline.
@@ -15,7 +15,7 @@ import { useColors } from '@/hooks/useColors';
 export function ColorSwatches({ value, onChange, testID = 'book-colors' }: { value: string; onChange: (hex: string) => void; testID?: string }) {
   const colors = useColors();
   return (
-    <View style={styles.grid} accessibilityRole="radiogroup" accessibilityLabel="Book colour" testID={testID}>
+    <View style={styles.grid} accessibilityRole="radiogroup" accessibilityLabel="Book color" testID={testID}>
       {BOOK_COLORS.map((c) => {
         const on = c.hex.toLowerCase() === value.toLowerCase();
         return (

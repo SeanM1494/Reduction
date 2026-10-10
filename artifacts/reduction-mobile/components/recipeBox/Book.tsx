@@ -80,7 +80,7 @@ interface Props {
   /** For VoiceOver's next/previous book actions (the shelf wires them). */
   onNextBook?: () => void;
   onPrevBook?: () => void;
-  /** Outline this page in the book's colour, fading over ~1.8s — where a
+  /** Outline this page in the book's color, fading over ~1.8s — where a
    *  search result landed. A new token replays it. */
   highlight?: { page: number; token: number } | null;
   /** Only the book in front takes touches; the peeking ones are pictures,
@@ -376,7 +376,7 @@ export function Book({ book, pages, spread, onSpreadChange, onOpenPage, onBlankP
 }
 
 /** The prototype's search highlight: an outline inset 4px, in the book's
- *  colour, in over the first 15%, held to 70%, gone by 1.8s. It never
+ *  color, in over the first 15%, held to 70%, gone by 1.8s. It never
  *  takes a touch. Reduce Motion keeps it, without the fade in. */
 function PageOutline({ left, width, height, color }: { left: number; width: number; height: number; color: string }) {
   const reduceMotion = useReducedMotion();

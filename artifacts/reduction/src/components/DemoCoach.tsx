@@ -339,7 +339,7 @@ export function CoachLegend() {
         </tbody>
       </table>
       <p className="rd-sr-only">
-        Steps show three states: grey when something it needs is still
+        Steps show three states: gray when something it needs is still
         outstanding, amber when it can be done now, and struck through in
         green once it is done.
       </p>

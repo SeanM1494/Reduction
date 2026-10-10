@@ -6,7 +6,7 @@
  * mode, on unmount and on going to the background, back on when the app
  * returns. Each caller holds its own tag, so one screen releasing never
  * releases another's hold. A failure to take the lock is swallowed: a
- * screen that dims is the old behaviour, never a reason to break cooking.
+ * screen that dims is the old behavior, never a reason to break cooking.
  *
  * The native half (ExpoKeepAwake) is one of `expo`'s own modules and was
  * already linked into every binary; the direct dependency only lets this

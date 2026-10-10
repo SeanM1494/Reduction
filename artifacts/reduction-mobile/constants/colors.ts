@@ -74,7 +74,7 @@ const colors = {
     // StarterReel): paper in both themes, toned down a step in dark.
     paper: '#fbf6ea',
     paperSpine: '#f4ecdb',
-    // The paper's two greys and the "Not cooked yet" pill (PageFace,
+    // The paper's two grays and the "Not cooked yet" pill (PageFace,
     // BookPage, StarterReel), literals there until Oct 1: the time, serves
     // and steps, the site; and the "+N more", the page number, the blank
     // page. Light is exactly the old literals (themeTokens.test.ts).
@@ -143,14 +143,14 @@ const colors = {
     paper: '#ebdfc6',
     // The same step toward the spine as light's (#fbf6ea -> #f4ecdb).
     paperSpine: '#e4d5b7',
-    // The lightest grey that keeps small text at 4.5:1 on the darker paper
-    // (4.53:1; the light greys measured 3.15:1 and 2.15:1 here, Oct 1).
-    // At that floor the two greys meet: dark mode has one paper grey.
+    // The lightest gray that keeps small text at 4.5:1 on the darker paper
+    // (4.53:1; the light grays measured 3.15:1 and 2.15:1 here, Oct 1).
+    // At that floor the two grays meet: dark mode has one paper gray.
     // The pill keeps light's tint, a step above the paper; 4.69:1 on it.
     paperMuted: '#706150',
     paperFaint: '#706150',
     paperPill: '#ece3d0',
-    // The pinned column's colour: the old #2a2118 all but vanished on the
+    // The pinned column's color: the old #2a2118 all but vanished on the
     // new page (1.1:1); this is a step above it (1.6:1) with white text 10:1.
     toastBg: '#463930',
   },
@@ -209,7 +209,7 @@ export const fonts = {
  * The web card's shadow (.rd-card: 0 1px 2px .18 + 0 9px 22px -11px .34),
  * folded into the one shadow React Native draws. Spread onto any card-like
  * surface. It matters more here than on the web: `border` is within a shade
- * of the page colour, so on parchment a card with no shadow has no edge at
+ * of the page color, so on parchment a card with no shadow has no edge at
  * all (see DiagramView's header for the same finding on the diagram).
  * Android ignores the shadow props and uses `elevation`.
  */

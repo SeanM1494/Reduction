@@ -2,11 +2,11 @@
  * lib/themeTokens.test.ts — every token the light palette has, the dark one
  * has too (Oct 1). `useColors` casts the palettes to one type, so TypeScript
  * would let a token added to light alone through, and every component that
- * reads it would get `undefined` in dark mode — a colourless surface, or a
+ * reads it would get `undefined` in dark mode — a colorless surface, or a
  * crash where a value is used as a string. Checked when Cocoa added five
  * tokens; kept so the next one cannot slip.
  *
- * And the paper's text (Oct 1): the greys on the Recipe Box pages and the
+ * And the paper's text (Oct 1): the grays on the Recipe Box pages and the
  * reel's cards were literals until they became `paperMuted`, `paperFaint`
  * and `paperPill`. Light must render exactly as before — its values ARE the
  * old literals — and dark's small text must clear 4.5:1 on dark paper.
@@ -18,7 +18,7 @@ import colors from '../constants/colors';
 
 const isColour = (v: unknown) => typeof v === 'string' && /^(#[0-9a-f]{6}|rgba\(\d+,\s?\d+,\s?\d+,\s?(0|1|0?\.\d+)\))$/i.test(v);
 
-test('light and dark carry the same tokens, every one a real colour', () => {
+test('light and dark carry the same tokens, every one a real color', () => {
   assert.deepEqual(Object.keys(colors.dark).sort(), Object.keys(colors.light).sort());
   for (const scheme of ['light', 'dark'] as const) {
     for (const [k, v] of Object.entries(colors[scheme])) assert.ok(isColour(v), `${scheme}.${k} = ${String(v)}`);

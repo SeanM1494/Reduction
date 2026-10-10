@@ -84,7 +84,7 @@ const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b)
  *     tombstones: `myRecentUnclears` covers the base-less case and my own
  *     uncheck-vs-their-stale-set case.
  *
- * The result of honouring removals can violate upstream-closure — their
+ * The result of honoring removals can violate upstream-closure — their
  * removal of an input can strand my completion that was built on it — so
  * `mergeEntry` runs a closure repair against the winning tree afterwards.
  * The repair IS the app's own uncheck semantics: retracting a step retracts
@@ -135,7 +135,7 @@ export function mergeDone(
 /**
  * Drops every done id whose upstream chain is not fully done, cascading —
  * the same rule the app's own un-check applies. Run after a merge that
- * honoured a removal, so a completion built on a retracted input is
+ * honored a removal, so a completion built on a retracted input is
  * retracted with it rather than left as a done step with undone inputs.
  */
 export function enforceClosure(recipe: Recipe, done: string[]): string[] {
@@ -305,7 +305,7 @@ export function mergeEntry(
 
   // Whatever tree won: done is reconciled against it (no id the tree lost),
   // then closure-repaired (no done step with an undone input — see
-  // enforceClosure for why honouring removals makes this necessary).
+  // enforceClosure for why honoring removals makes this necessary).
   const reconciled = enforceClosure(recipe, reconcileDone(recipe, done).done);
 
   return {

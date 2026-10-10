@@ -5,8 +5,8 @@
  *
  * A sheet, because it is a list of choices (CLAUDE.md: a dialog that asks
  * one thing is a Window; a list or a form is a Sheet). Every live book with
- * its colour, the current one ticked, and "Create a new book" — a name and
- * a colour, made and chosen in one tap. Making a book is an ordinary books
+ * its color, the current one ticked, and "Create a new book" — a name and
+ * a color, made and chosen in one tap. Making a book is an ordinary books
  * edit (lib/booksQueue.ts), so it works offline and syncs later; the choice
  * itself is the caller's: the preview keeps it until Save, a move writes it
  * through the sync engine.

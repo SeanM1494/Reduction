@@ -1,5 +1,5 @@
 /**
- * components/Window.tsx — a dialog as a centred window: the scrim FADES in
+ * components/Window.tsx — a dialog as a centered window: the scrim FADES in
  * where it is and the card fades in from 94% scale, both from one progress
  * value; closing reverses it. The Modal itself does no animation.
  *
@@ -32,7 +32,7 @@ interface Props {
   padding?: number;
   testID?: string;
   /** A window with a text field rises clear of the keyboard, as a Sheet
-   *  with `avoidKeyboard` does — centred over it, the field is under it. */
+   *  with `avoidKeyboard` does — centered over it, the field is under it. */
   avoidKeyboard?: boolean;
   /** After it has finished closing and its Modal is gone. Open the NEXT
    *  dialog from here, never in the same breath as closing this one: iOS

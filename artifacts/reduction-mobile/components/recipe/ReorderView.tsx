@@ -16,8 +16,8 @@
  *
  * WHAT MAY BE DRAGGED IS DECIDED BY sequence.ts, NOT HERE. `branchChoices`
  * and `freeSectionIndices` come from the same module as the walk that will
- * honour the result, so a row gets a grip only when the walk can actually
- * honour a move of it — movability is visible BEFORE the gesture, and no
+ * honor the result, so a row gets a grip only when the walk can actually
+ * honor a move of it — movability is visible BEFORE the gesture, and no
  * drop is ever rejected after the fact.
  *
  * THE GESTURE: press and hold a row with a grip (gesture-handler's Pan,
@@ -73,7 +73,7 @@ interface RowModel {
   movable: boolean;
   aside: string | null;
   isDone: boolean;
-  /** Ids this row may be dropped on — what the walk can honour. */
+  /** Ids this row may be dropped on — what the walk can honor. */
   targets: string[];
   /** For a step row: the convergence its branch belongs to. */
   choice: { stepId: string; branchRoots: string[] } | null;

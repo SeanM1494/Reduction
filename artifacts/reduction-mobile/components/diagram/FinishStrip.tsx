@@ -9,7 +9,7 @@
  * tail out of editing would make "bake" the one step you cannot fix.
  *
  * `focus` (the web's `.is-focus`, once the tree part is done) changes
- * colour only. CLAUDE.md: nothing may resize under a fingertip, and the
+ * color only. CLAUDE.md: nothing may resize under a fingertip, and the
  * strip is exactly what the finger reaches for after the handoff tap.
  */
 

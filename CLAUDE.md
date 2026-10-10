@@ -95,7 +95,7 @@ and close the ones that can be closed:
   always `pnpm install`, and the check now says so instead of esbuild.
 - **`DATABASE_URL` is set in this shell, to a non-local placeholder.** The
   test guard refuses it (outcome three in the table below), which LOOKS like
-  the designed behaviour and hides a broken skip path — that is how
+  the designed behavior and hides a broken skip path — that is how
   `@workspace/db`'s import-time throw went unnoticed. The skip path is
   `env -u DATABASE_URL pnpm test`, and the skip count is the assertion.
 - **This shell is root; Replit's is not.** Postgres refuses to run as root,
@@ -121,7 +121,7 @@ and close the ones that can be closed:
   on a lockfile that matched none of their configs. Every override now
   lives in the workspace file and the lockfile records the merged set.
   The fix first shipped with `packageManager: pnpm@10.33.0` as well, to
-  make every environment resolve with one pnpm; pnpm 10 honours that
+  make every environment resolve with one pnpm; pnpm 10 honors that
   field by installing that version of itself before doing anything, and
   on Replit that self-install dies with SIGABRT and retries for ever —
   every pnpm command, including the install. Removed the same day. The
@@ -862,7 +862,7 @@ THEN finish with the store — never the other way, or a purchase the server
 never saw vanishes from StoreKit's queue with the money taken. The app
 sells only when `/api/billing/config` says `nativePurchaseAvailable`, which
 is the Apple adapter being configured; a wall that shows a price the
-server cannot honour is the same bug from the other side. The product ids
+server cannot honor is the same bug from the other side. The product ids
 live in `lib/purchasePolicy.ts` and App Store Connect, nowhere else.
 
 ## This app is mobile-first
@@ -964,7 +964,7 @@ accommodate afterwards.
   `zIndex`/`elevation`. Chromium painted the top card on top (measured with
   `elementFromPoint`, so the check passed); a real iPhone painted the peeks
   OVER it, so the card you saw was the one behind, a third card's title
-  ghosted through its translucent neighbour, and the card being dragged was
+  ghosted through its translucent neighbor, and the card being dragged was
   invisible. `zIndex` against a statically positioned sibling is not a
   promise the three platforms keep the same way — document order among
   absolute siblings is. The book's page turn is the live example: the pages
@@ -985,7 +985,7 @@ accommodate afterwards.
   is a SIBLING of anything scrollable, never a cell in one — a pan inside a
   scroller fights the scroller — and its search results REPLACE the shelf
   rather than scrolling over it.
-- **A dialog that asks something is a centred WINDOW
+- **A dialog that asks something is a centered WINDOW
   (`components/Window.tsx`); a list of choices or a form is a `Sheet`; and
   no Modal animates itself.** A Modal's own "slide" moves the whole layer,
   so the dark scrim visibly rose up the screen behind the card — "the
@@ -1287,7 +1287,7 @@ full-bleed cream `#efe2c8`, square corners on purpose — iOS applies its own
 mask), `reduction-mark.svg` (the same without the background), and a
 1024px PNG of each. **The PNGs are rendered from the SVGs, never edited by
 hand**, and **the App Store icon (`reduction-icon-1024.png`) must have NO
-alpha channel** — colour type RGB, not RGBA; App Store Connect refuses an
+alpha channel** — color type RGB, not RGBA; App Store Connect refuses an
 icon with one, even a fully opaque one. Every icon, splash, favicon and
 in-app mark either side ships is COPIED or RESIZED from those four by
 `scripts/brand-icons.mjs` (premultiplied area-averaging, because the mark's
@@ -1346,7 +1346,7 @@ live and never deletable, on the phone and in `validateBooks` on the
 server. The list is ONE versioned document (the server never merges; the
 phone's `mergeBooks` does, on a 409), and **delete and merge are never
 queued**: offline they change nothing and say so, where add, rename,
-recolour and reorder wait out the offline window.
+recolor and reorder wait out the offline window.
 
 ## Cooking order is not section order
 
@@ -1504,7 +1504,7 @@ proofs. The rules that must survive any refactor:
   user's intent, which only the client has.
 - **`done` merges element-wise against the base, then closure-repairs.**
   Additions from both sides survive (union); a removal by one side beats the
-  other's unchanged copy (that is an explicit un-check, honoured in both
+  other's unchanged copy (that is an explicit un-check, honored in both
   directions); and `enforceClosure` then retracts any completion built on a
   retracted input — the app's own uncheck cascade, applied to the merge.
   Plain union was tried first and resurrection of un-checks is why it lost.
@@ -1587,7 +1587,7 @@ rather than rendering a message inline.
 
 **That applies to anything that appears next to a field, not just errors.**
 The link-consequence warning was written in flow first and moved "Done" by
-122px on an SE — same defect, different colour. `Field` takes a `notice` as
+122px on an SE — same defect, different color. `Field` takes a `notice` as
 well as `messages`, and both share the one absolute slot.
 
 **Not everything in the editor hangs off a cell.** Ingredients and steps are
@@ -1620,7 +1620,7 @@ the finger to have stayed within 10px, inside the browser's own pan slop, so no
 native scroll has begun yet. Suppressing native scroll for the whole drag is
 also why the drag has to scroll the page itself near the viewport edges: on an
 iPhone SE the next step down is already off screen when an ingredient is
-centred.
+centered.
 
 **Edit mode must never be quiet.** Tapping a cell means *mark done* everywhere
 else in the app. When it temporarily means something else, the bar, the frame

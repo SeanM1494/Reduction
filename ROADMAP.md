@@ -204,7 +204,7 @@ engine.)
 
 **Phase 1, fourth slice — SHIPPED (Sep 11): Cook mode is the web's
 StepsMode.** `components/recipe/StepsMode.tsx`: one card per step from
-`cardSequence` (honouring `entry.order` when present), ingredients as
+`cardSequence` (honoring `entry.order` when present), ingredients as
 checkable rows on the card framed "Add: … Then <step>.", the "builds on"
 line, a persisted timer with the parallel-work suggestion from another
 section and a one-tap "Back to timer", the finished card, and the cooked
@@ -219,7 +219,7 @@ the Reorder view that WRITES `entry.order` (it needs a drag list).
 (`components/recipe/ReorderView.tsx`), reached from Cook mode's Reorder
 button: rows from `sectionOrder`/`stepSequence` under the current
 preference, a grip only where `branchChoices`/`freeSectionIndices` say the
-walk can honour a move, a press-and-hold drag (gesture-handler's Pan
+walk can honor a move, a press-and-hold drag (gesture-handler's Pan
 activated after 250ms, so the list still scrolls) with a ghost, lit
 targets, hit-testing by rows measured in window space at pickup, and edge
 auto-scroll so a section can cross a 30-step list; writes `entry.order`
@@ -279,7 +279,7 @@ The device number (the 110ms worst frame) is still the phone's to give.
 (e) DONE (Sep 12) — the cosmetic pass on Settings, the paywall and Find,
 against the Phase 0 audit: Settings' meta labels are Space Mono 11 tracked
 and faint, its cards carry radiusCard and the card shadow, and Sign out is
-a real .rd-btn-danger (card colour, hairline, light shadow) rather than a
+a real .rd-btn-danger (card color, hairline, light shadow) rather than a
 transparent box; the paywall carries the card shadow with the web's 20px
 title and 15px body; Find's paste box has a strong edge and the shadow,
 its buttons radiusButton, its error the danger tokens rather than the
@@ -352,7 +352,7 @@ servings clearing), and a section rename all landed; an empty name
 showed the validator's sentence under its field with the Done button
 moving 0px and nothing written; a delete that the tree forbids is
 disabled with its reason; thirteen writes, all 200, none conflicting.
-Not verified: the keyboard's behaviour over the sheet on a real phone —
+Not verified: the keyboard's behavior over the sheet on a real phone —
 Chromium has no soft keyboard.
 
 **The press-and-hold drag — ported (Sep 16).** In edit mode, holding an
@@ -376,7 +376,7 @@ pickup, the scroller's offset and how far the page has scrolled since.
 Both scrollers scroll themselves while the finger loiters near an edge
 — the frame sideways so a step off to the right is reachable, the page
 vertically so the next step down is — because on a phone the next step
-is already off screen when an ingredient is centred (the web measured
+is already off screen when an ingredient is centered (the web measured
 it on an SE; the geometry is the same here). Verified in Chromium at
 iPhone 13 against real writes, the row read back after each: a tap in
 edit mode still opens the sheet; lime held, lifted with two steps lit
@@ -418,7 +418,7 @@ wifi): one tap online (landed, v2); block; three taps (kept, banner, no
 notice, nothing in the DB through an interval retry at 10s); another
 device's change applied in SQL (unchecks one, checks another); foreground
 → GET then one PATCH, DB v4 with the phone's three adds plus the other
-device's check, and its uncheck honoured — 4/12 on screen matching the
+device's check, and its uncheck honored — 4/12 on screen matching the
 row. Then the same with no foreground event: the interval retry sent the
 stale version, got a 409, retried, landed merged. And the expiry, waited
 out in real time: a tap with the route still blocked was on screen with
@@ -500,7 +500,7 @@ no queue at all; it still fails and rolls back at once.
   means the server can record it**: `/api/billing/config` now carries
   `nativePurchaseAvailable`, true only when the Apple adapter is
   configured, and the app sells nothing until it is — a store purchase
-  is money taken, and the wall must never show a price it cannot honour.
+  is money taken, and the wall must never show a price it cannot honor.
   The wall grows the two plans — each one IS the purchase button, since
   the store's own sheet is the confirmation and a second Subscribe step
   would only be a tap between the person and the price they chose — and
@@ -727,7 +727,7 @@ menu, meal-type fallback otherwise; nothing hotlinked, no backfill.
 - **Stage 2 — cards, tab strip, two-column grid, photo menu, both
   clients: DONE Sep 22.** The card is its picture (or the meal-type art,
   `lib/mealTypeArt.ts` on each client — same tints, same Feather glyphs),
-  its name, a ★ when favourite, and one line of meal type and time.
+  its name, a ★ when favorite, and one line of meal type and time.
   DECIDED while building: the progress bar and the step count came off
   the card — a card in a box is for finding a recipe, its state is on the
   recipe screen. The category strip is pinned above the mobile list (a
@@ -834,7 +834,7 @@ DECIDED (Sep 23):
   allowance. Merged on whether it is removed, never on when (shared/sync.ts).
 
 DECIDED (Sep 23, after the step-1 push):
-- **Cover colours**: the prototype's hues, darkened in lightness only to
+- **Cover colors**: the prototype's hues, darkened in lightness only to
   4.6:1 for the 11px white tab text — Breakfast `#986d29`, Lunch `#657c51`,
   Apps & Snacks `#477d7b`, Salads `#5a7f43`; Dinner `#a94f3a`, Desserts
   `#8e4f6f` and Other `#6a6575` already passed and are unchanged. The
@@ -876,7 +876,7 @@ DECIDED (Sep 23, after the step-1 push):
     the classic and native tab layouts the same screen: NativeTabs never
     had a header there.
   - **The book shrinks before the peeks vanish.** Width is the prototype's
-    min(screen − 24, 380) unless the stage is too short for a neighbour to
+    min(screen − 24, 380) unless the stage is too short for a neighbor to
     show 28px of cover plus its tab; then the book narrows, never below
     220px (`carouselGeometry`). As the app (no URL bar) no phone measured
     shrinks — iPhone 13 peeks 98/119px, SE 52/73px; only the SE's
@@ -903,7 +903,7 @@ DECIDED (Sep 23, after the step-1 push):
     asked for. So the grid, which still opens on the stored tab, is
     unaffected.
   - **Six ingredients** before "+N more" (the page has room for three).
-  - **A centred window, not a bottom sheet** (decided on the phone, Sep 24).
+  - **A centered window, not a bottom sheet** (decided on the phone, Sep 24).
     The first cut used the app's Sheet, whose Modal slides the WHOLE layer
     up — so the dark shading itself rose up the screen behind the card. Now
     the shading fades where it is and the card fades in from 94% scale;
@@ -921,7 +921,7 @@ DECIDED (Sep 23, after the step-1 push):
   reuses the Find tab's `searchLibrary` and adds the book's NAME, so
   "dessert" finds the book; removed recipes never match. A result opens
   its book to its spread with no slide and no turn, and outlines the page
-  in the book's colour for ~1.8s. Nothing found → "Search the web for it"
+  in the book's color for ~1.8s. Nothing found → "Search the web for it"
   → the Find tab with the query filled in and the web search run once.
   (Since Sep 28: "Look for it elsewhere" → Find › My Recipes with the
   query — suggestions from the cache, then a web search in Browse.)
@@ -1082,7 +1082,7 @@ select via, attempts, count(*) from extraction_events
  where not cached group by via, attempts;
 ```
 
-It is **operational, not behavioural**: host rather than URL, and no trial
+It is **operational, not behavioral**: host rather than URL, and no trial
 id. It had no user id either, as a boundary, until cost made the case for
 one (Sep 30, "Launch readiness" below): a nullable `user_id`, nulled when
 the account is deleted, read only by the admin cost route as ids.
@@ -1629,7 +1629,7 @@ Tapping the current rating clears it.
 
 A 👍 marks the library card; **a 👎 never does.** The rating still sorts and
 filters, it just does not decorate — a library that shows your rejects back
-at you is a worse library. "Favourites first" is an available sort and
+at you is a worse library. "Favorites first" is an available sort and
 deliberately **not** the default: it looks obviously better and has no data
 behind it yet, so `added` stays until real libraries exist to judge against.
 The rejects rank last under that sort rather than being hidden, because
@@ -1694,18 +1694,18 @@ through a recipe's steps.
 ## Known cosmetic issue, tabled: the edge bars on step completion
 
 **Status: tabled as cosmetic, not active work.** Still present after
-`41e9633`, still page-coloured. iOS/WebKit only; never reproduced on desktop
+`41e9633`, still page-colored. iOS/WebKit only; never reproduced on desktop
 or in this container (no WebKit here).
 
 **Symptom:** completing a step that finishes a branch flashes bars at BOTH
-edges of the diagram for ~1s. The bars are the colour of the *page*
+edges of the diagram for ~1s. The bars are the color of the *page*
 background, not the card.
 
 **The discriminator — whoever picks this up should start here:** the frame's
 own background is opaque card, so any DOM-level cause (a fading cell, a
-momentary width mismatch, a shadow) flashes **card**-coloured. **Page**-
-coloured bars mean the frame's own paint was absent, which only the
-compositor can produce. Check the bar's colour before theorising.
+momentary width mismatch, a shadow) flashes **card**-colored. **Page**-
+colored bars mean the frame's own paint was absent, which only the
+compositor can produce. Check the bar's color before theorising.
 
 **Three mechanisms were found. Two were real defects, fixed and kept
 regardless; the third is where the bug still lives:**
@@ -1717,10 +1717,10 @@ regardless; the third is where the bug still lives:**
    prevention; the transform was never needed.
 2. **The entrance fade** (`ad437fd`) — real defect, kept. Re-mounted rows
    faded from opacity 0 for a full second at both edges. Now 450ms, from
-   0.35, no transform. Would have flashed **card**-coloured, so it was not
+   0.35, no transform. Would have flashed **card**-colored, so it was not
    this bug — but it was a genuine both-edges blank.
 3. **Compositor tile blanking** (`41e9633`) — the surviving diagnosis,
-   consistent with the colour. The collapse resizes the table (419 → 400
+   consistent with the color. The collapse resizes the table (419 → 400
    and back, measured), and the composited scroller shows unpainted tiles
    until it catches up. `-webkit-overflow-scrolling: touch` (the legacy
    opt-in with exactly this documented failure mode) was removed; the bug
@@ -1937,9 +1937,9 @@ person owns. The decisions, all confirmed before building:
   the account's row with `ON CONFLICT (user_id) DO NOTHING` — five devices
   loading at once make one row (tested) — and only the request that
   inserted it places the existing recipes, removed ones too, by meal type.
-  Same ids, names and colours: nothing looks different until someone
+  Same ids, names and colors: nothing looks different until someone
   customises.
-- **Other is permanent**: renamed and recoloured, never deleted.
+- **Other is permanent**: renamed and recolored, never deleted.
 - **Deleting is merging**: a book with recipes asks first where they go
   (another book, a new book made there and then, or Other), and the book
   they go into can be renamed in the same step; an empty book goes at
@@ -1953,7 +1953,7 @@ person owns. The decisions, all confirmed before building:
 - **Empty books**: a default hides while empty (as the seven always did); a
   book the person made stays on its "Room for one more" page.
 - **Names** 1–30 characters, trimmed, unique ignoring case (the title
-  rule's own tidy). **Twelve colours**, each with white tab text at 4.5:1 or
+  rule's own tidy). **Twelve colors**, each with white tab text at 4.5:1 or
   better and visible on both page backgrounds (computed in the test); the
   defaults keep theirs; a new book takes the next unused one.
 - **Reordering** by up/down buttons, no dragging. **Long-press on a book
@@ -1969,7 +1969,7 @@ person owns. The decisions, all confirmed before building:
   on a 409. The list is one versioned document with its own queue on the
   same rules (lib/booksQueue.ts). **Delete and merge need a connection**:
   offline they change nothing and say "Connect to the internet to delete
-  or merge books." (tested). Add, rename, recolour and reorder wait out an
+  or merge books." (tested). Add, rename, recolor and reorder wait out an
   offline spell like any edit.
 - **A recipe's book is the account's own**: it never reaches the
   extraction cache or anything another account can read.
@@ -2004,7 +2004,7 @@ website); this finishes it. Decided:
 - **(Superseded the same day: the splash is now plain; see "The opening
   sequence".) The splash is the mark on the ICON's cream, `#efe2c8`, 240pt wide**
   (was the app's tan `#e8d5b2` at 200). The icon zooms into the splash on
-  launch, so matching the icon's colour makes that one continuous surface;
+  launch, so matching the icon's color makes that one continuous surface;
   the parchment of the first screen is a shade darker and follows a moment
   later. 240pt spans about half an SE's width (the drawing is ~70% of its
   square) and was small at 200 on a 390pt phone. **Dark mode is
@@ -2017,7 +2017,7 @@ website); this finishes it. Decided:
   them, so a bundle is equally safe on a binary with either icon. 1.1.0 has
   not reached the App Store, so the new build is another 1.1.0 build (EAS
   numbers builds remotely).
-- **The Android adaptive foreground is the mark at 636/1024, centred**, so
+- **The Android adaptive foreground is the mark at 636/1024, centered**, so
   nothing leaves the 66dp safe circle (measured: 311px from centre against
   a 313px radius), over `#efe2c8`. There is no Android build yet; no
   monochrome (themed) icon and no notification icon either — both are
@@ -2027,7 +2027,7 @@ website); this finishes it. Decided:
   64pt.** It reads smaller than the old mark, which filled its square; a
   larger one waits on the item below.
 - **Logged, not fixed: on an iPhone SE the sign-in screen's top is cut
-  off** — its content is centred and taller than the screen, so the mark
+  off** — its content is centered and taller than the screen, so the mark
   sits at y=−12 (Chromium, 320×568). It was already so with the old mark,
   at the same size; the fix is a scroll view on the sign-in screen, which
   is auth UI and was out of scope.
@@ -2041,13 +2041,13 @@ square and all, like the app's; the manifest declares no `maskable` icon,
 because the artwork reaches the edge of the 40% circle a maskable icon
 promises to keep — a maskable one would be the mark scaled down on the
 cream, the Android treatment above, when Android Chrome install is taken
-up. `theme-color` and the manifest's colours moved from `#F0E2C8` to the
+up. `theme-color` and the manifest's colors moved from `#F0E2C8` to the
 icon's `#efe2c8` (one unit apart). Removed: the old mark's transparent,
 dark and inverted SVGs and its 64px PNG, and `public/favicon.svg`,
 Replit's orange placeholder, which nothing referenced. Not changed: the
 legal pages call the product "Recipe Reduction" in their header where
 both apps say "Reduction"; there is no social preview (`og:image`) image
-anywhere, and none was added; the push BADGE is the full-colour 32px icon,
+anywhere, and none was added; the push BADGE is the full-color 32px icon,
 where Android draws a badge as a white silhouette (it will show as a
 white square there — a silhouette is a new drawing).
 
@@ -2100,7 +2100,7 @@ splash stays up only until the launch is decided (capped at 400 ms once the
 app is active). If the app is not ready when the reveal comes due, the
 sequence holds on the dark bubbling frame for up to 1.5 s, then reveals
 whatever the app is showing. Before sign-in state is known, that is the
-page colour with a spinner that appears only after 300 ms, so a quick launch
+page color with a spinner that appears only after 300 ms, so a quick launch
 never flashes one. Measured in Chromium, with every API answer held back 6 s:
 the reveal waited 1.5 s and showed the spinner, never a blank screen.
 
@@ -2488,7 +2488,7 @@ the SAME TitleWindow the ⋮ item opens — one window, one rule, one write
 path. It must be 44pt tall, truncate on one line before the pencil so the
 pencil never wraps off, and say "Rename" to VoiceOver. ⋮ → Rename stays,
 for anyone who looks there. Risks: an accidental tap costs one Cancel; on
-iOS 26 the title is centred and the target is the text's width, which for
+iOS 26 the title is centered and the target is the text's width, which for
 a short title may be small (pad it to at least 120pt). No server or model
 change; an OTA. Not added to the Recipe Box preview sheet, as asked.
 
@@ -2503,7 +2503,7 @@ title, so it leaves 92pt free on BOTH sides (206pt on a 390pt phone, 136pt
 on an SE); Android and the web lead with it, so it runs from the back arrow
 to ⋮. Chromium can only exercise the leading case (measured with a 130-
 character title beside a real back button: never over the arrow or ⋮, 44pt
-tall, no sideways scroll, at all three sizes, light and dark); the centred
+tall, no sideways scroll, at all three sizes, light and dark); the centered
 iOS layout, VoiceOver and the native header's own sizing of a custom title
 are the phone's to confirm.
 
@@ -2557,7 +2557,7 @@ Decisions:
 - **Code before SQL is safe**: the writer falls back to the old columns
   (measured against a database without them), the route answers 503, and
   `/api/health` names the four columns.
-- **No caps, no behaviour change.** Search (`POST /api/recipes/search`) also
+- **No caps, no behavior change.** Search (`POST /api/recipes/search`) also
   calls the model and is not in this table; that is a separate question.
 
 `GET /api/admin/costs` is README "Extraction costs". The privacy policy
@@ -2827,7 +2827,7 @@ Ranked for this setup:
   only one that is behind.
 - Not done: a "check for update now" button, which would need
   `Updates.checkForUpdateAsync`/`fetchUpdateAsync`/`reloadAsync` — allowed
-  by the binary, but a behaviour change nobody asked for.
+  by the binary, but a behavior change nobody asked for.
 
 ## The amber hint under the diagram is gone (Oct 1)
 
@@ -2883,7 +2883,7 @@ cell: a ready cell is `#673b30` (was `#5a342b`), a done cell `#41392c`
 Amount…) were light-mode literals, dark brown on the dark sheet at 2.5:1;
 they now take `mutedForeground`/`faint` (6.7:1).
 
-**Contrast, from the rendered colours** (pixels sampled from the iPhone 13
+**Contrast, from the rendered colors** (pixels sampled from the iPhone 13
 screenshots match the tokens exactly; translucent tints composited over
 what they sit on):
 
@@ -2917,7 +2917,7 @@ not, both on the paper and both the paper's own inks (constants in
 yet", the meta line) was already 3.85:1 on light paper and is 3.15:1 on
 `#ebdfc6`, and its faintest ink 2.15:1. OPEN: darken the paper's two inks
 in dark mode only, or accept it — not changed, because the paper's
-colour was the instruction and the inks were not.
+color was the instruction and the inks were not.
 
 **Left alone:** the meal-type art tiles (illustrations with their own dark
 tones), the solid red delete buttons and the white text on book tabs, the
@@ -2952,7 +2952,7 @@ tokens. Not changed; it would be the same five values in `--page`,
 `--card`, the lines and ink if wanted.
 
 **Only the phone can check:** iOS 26's native tab bar and headers (Liquid
-Glass takes its colours from the system, not these tokens — Chromium only
+Glass takes its colors from the system, not these tokens — Chromium only
 ever renders the classic layout); how the splash step looks; legibility on
 a real OLED screen across a counter; WebKit's rendering of the hairline
 edges at 3x. Chromium (iPhone 13, Pixel 5, SE): the diagram, Step-by-Step,
@@ -2960,11 +2960,11 @@ the Recipe Box, Settings, the ⋮ dialog, the Servings sheet, the guided
 demo and the empty library before and after, no page-level sideways
 scroll on any.
 
-## Dark mode: the paper's grey text (Oct 1)
+## Dark mode: the paper's gray text (Oct 1)
 
-**The owner's call:** small grey text on the Recipe Box pages and the
+**The owner's call:** small gray text on the Recipe Box pages and the
 reel's cards must be at least 4.5:1 in dark mode, where the paper is the
-darker `#ebdfc6`; light mode stays exactly as it is. The page's greys were
+darker `#ebdfc6`; light mode stays exactly as it is. The page's grays were
 literals in `PageFace.tsx`/`BookPage.tsx`/`StarterReel.tsx`; they are now
 tokens, `paperMuted` (the time, "Serves N · N steps", the reel's site),
 `paperFaint` ("+N more", the page number, the blank page) and `paperPill`
@@ -2982,28 +2982,28 @@ not draw the paper (it is a theme sheet) and is unchanged.
 Sampled from rendered pixels in Chromium (iPhone 13, Pixel 5, SE profiles);
 light screenshots before and after are pixel-identical.
 
-- **The lightest passing grey, so at the floor the two greys meet.** Dark
-  mode now has one paper grey; the muted/faint step survives in light only.
+- **The lightest passing gray, so at the floor the two grays meet.** Dark
+  mode now has one paper gray; the muted/faint step survives in light only.
   Keeping a step would mean darkening `paperMuted` below the floor's
   lightest (about 5:1 for a visible difference), which brings the time line
   close to the ingredient line's ink.
 - **The fold.** On a right-hand page the first letter or two sit on the
   shading toward the spine (`paperSpine #e4d5b7`), about 4.1-4.3:1 there.
-  Clearing 4.5:1 on the spine colour too needs `#695b4b` (5.0:1 on the
+  Clearing 4.5:1 on the spine color too needs `#695b4b` (5.0:1 on the
   paper). Not done: the owner asked for 4.5:1 on the paper.
-- **Not changed, reported: the "Cooked N× · date" pill** (the book's colour
-  on a 12% tint of it) is below 4.5:1 in dark for 10 of 12 book colours —
+- **Not changed, reported: the "Cooked N× · date" pill** (the book's color
+  on a 12% tint of it) is below 4.5:1 in dark for 10 of 12 book colors —
   Honey 3.07, Fern 3.08, Terracotta 3.53, Teal 3.11, Leaf 3.06, Berry 3.89,
   Slate 3.69, Cocoa 4.53, Raspberry 4.22, Plum 4.68, Caramel 3.81, Olive
   3.70 — and in light for 7 (Honey 3.69, Fern 3.70, Terracotta 4.29, Teal
   3.75, Leaf 3.72, Slate 4.45, Olive 4.46). Dropping the tint alone gains
-  0.4-0.7; passing needs a darker ink per colour (up to 22% toward black
-  for Honey, Fern, Teal, Leaf), which is a decision about the book colours,
+  0.4-0.7; passing needs a darker ink per color (up to 22% toward black
+  for Honey, Fern, Teal, Leaf), which is a decision about the book colors,
   not a token. **The rating badge** is an emoji on a near-white disc; it has
-  no text colour to measure (the reel's like count on it is about 14:1).
-- **Light mode, for the owner to decide:** the same greys measure 3.85:1
+  no text color to measure (the reel's like count on it is about 14:1).
+- **Light mode, for the owner to decide:** the same grays measure 3.85:1
   (`#8a7a66`) and 2.63:1 (`#a8977f`) on `#fbf6ea`, and the pill 3.26:1.
-  4.5:1 would take `#7e6f5d` for both greys (lightness 52 → 48 for the
+  4.5:1 would take `#7e6f5d` for both grays (lightness 52 → 48 for the
   muted, a small step; 63 → 48 for the faint, a quarter darker, so the two
   would meet as they now do in dark) and `#726352` for the pill's text.
 
@@ -3270,7 +3270,7 @@ line and the page number, in both themes.
 **What it actually was.** Not the SE's width as such: the old rule
 (`pageLayout`) knew only the page's WIDTH and had two settings, tuned for
 the SE's one-book page (141×237). With two or more books the carousel
-narrows the book so the neighbours can peek (`carouselGeometry`, down to
+narrows the book so the neighbors can peek (`carouselGeometry`, down to
 `minBookPx` 220), and at 320×568 that page is **103×176**. React Native
 then squeezed the flow rows to make room for the pinned pill: time 4px
 tall, serves 10px, ingredients 4px (measured). At 375×667 in Chromium the
@@ -3459,7 +3459,7 @@ WebKit is not installed here.
   it now" was the hint under every diagram until Oct 1), and colorblind mode already
   swaps it for orange. Options: keep it; soften the warm tokens on mobile
   only (`constants/colors.ts`, no logic); or make the hint copy say "red".
-  Not changed, on purpose — it is a colour decision, not a bug.
+  Not changed, on purpose — it is a color decision, not a bug.
 
 - ~~**The servings stepper does not exist, and scaling is unreachable.**~~
   **Done.** `artifacts/reduction/src/components/ServingsRow.tsx`, above the first section
@@ -3618,7 +3618,7 @@ WebKit is not installed here.
   third instance of the `recipe.servings` / `entry.servings` split.
 
   Two interaction details worth keeping if this is ever reworked: **the grip
-  appears only on rows the walk can actually honour a move of**
+  appears only on rows the walk can actually honor a move of**
   (`branchChoices` / `freeSectionIndices`, from the same module as the walk —
   the validMoveTargets single-authority rule), so movability is visible
   before the gesture rather than discovered at the drop; and the **empty
@@ -3668,7 +3668,7 @@ WebKit is not installed here.
 
   Also in the same commit, two store-passage settings in `app.json`: a
   branded splash (the transparent brand mark on the app's background
-  colour, light and dark) where a blank white screen used to show before
+  color, light and dark) where a blank white screen used to show before
   the parchment appeared, and the standard export-compliance declaration
   (`ITSAppUsesNonExemptEncryption: false` — the app uses only standard
   HTTPS), so every TestFlight upload does not stop to ask. Both need a
@@ -3830,7 +3830,7 @@ WebKit is not installed here.
   Stripe Checkout, a real card, a real Stripe-delivered webhook, and the
   signature verification against a genuine payload. What IS proven is the
   entitlement arithmetic, the monotonic counter, the concurrent-spend guard,
-  the claim/loophole behaviour, the kill switch in both directions, shadow
+  the claim/loophole behavior, the kill switch in both directions, shadow
   logging, coupon redemption including the once-per-account index, and the
   Stripe status translation. **Before switching anything on**, run a test-mode
   checkout end to end and confirm a webhook writes a `subscriptions` row.

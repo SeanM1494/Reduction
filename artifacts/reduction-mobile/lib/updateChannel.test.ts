@@ -13,7 +13,7 @@ import {
 } from './updateChannel';
 
 /** A phone: the saved override, whether a preview update is downloaded,
- *  and every call, in order. Each behaviour can be made to fail. */
+ *  and every call, in order. Each behavior can be made to fail. */
 function phone(opts: {
   start?: string | null;
   previewHas?: 'update' | 'nothing' | 'rollback';

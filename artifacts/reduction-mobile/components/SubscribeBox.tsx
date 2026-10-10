@@ -25,7 +25,7 @@ import { useColors, type Colors } from '@/hooks/useColors';
 import { fonts } from '@/constants/colors';
 
 export function SubscribeBox({ center = false }: {
-  /** Centre everything under the wall's centred copy; Settings' Plan card
+  /** Centre everything under the wall's centered copy; Settings' Plan card
    *  keeps the start alignment of the card it sits in. */
   center?: boolean;
 } = {}) {

@@ -432,7 +432,7 @@ CREATE INDEX IF NOT EXISTS recipes_source_url_trgm_idx
 An account's books are one versioned document in `recipe_books` (one row
 per account: the list, with tombstones for deleted books that say where
 their recipes went), and each recipe's book is a row in
-`recipe_placements`, by book id. The rules — defaults, colours, names,
+`recipe_placements`, by book id. The rules — defaults, colors, names,
 resolution, the merge — are recipe-model `books.ts`; storage is
 `artifacts/api-server/src/lib/books.ts`; the routes are `GET /api/books`
 (creates the seven defaults on first read, idempotently, and places the

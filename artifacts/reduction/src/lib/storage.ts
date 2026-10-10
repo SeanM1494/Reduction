@@ -40,7 +40,7 @@ export interface Entry {
   /** Epoch-ms timestamps of completed cook-throughs. Server-merged by union;
    *  see shared/sync.ts. */
   cooked?: number[];
-  /** -1 would-not-repeat | 0 fine | 1 favourite | null unrated. */
+  /** -1 would-not-repeat | 0 fine | 1 favorite | null unrated. */
   rating?: number | null;
   /** How THIS entry wants its step-by-step cards ordered where the tree
    *  leaves a choice. Entry-level twin of the editor's reorderInputs — same
